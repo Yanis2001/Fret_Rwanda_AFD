@@ -6,8 +6,7 @@
 ################################################################################
 
 token <- Sys.getenv("GITHUB_PAT")
-
-# Bonjour
+system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
 
 # ==============================================================================
 # PARTIE 0 : INSTALLATION ET CHARGEMENT DES PACKAGES
