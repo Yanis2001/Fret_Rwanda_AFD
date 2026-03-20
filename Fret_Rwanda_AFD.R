@@ -27,7 +27,8 @@ packages_requis <- c(
   "lwgeom",       # Opérations géométriques avancées
   "tidygraph",    # Manipuler et d’analyser des graphes
   "geodata",      # Frontières administratives GADM
-  "rnaturalearth"
+  "rnaturalearth",
+  "aws.s3"        # Accès aux données en ligne sur SSP Cloud
 )
 
 # Fonction pour installer les packages manquants
@@ -128,8 +129,20 @@ cat("=== PARTIE 2 : Chargement des données routières ===\n")
 cat("Chargement du fichier rwanda-latest.osm.pbf...\n")
 cat("(Cela peut prendre 1-3 minutes)\n")
 
-# Chemin vers le fichier (à adapter si nécessaire)
-chemin_pbf <- "data/raw/rwanda-260315.osm.pbf"
+# Chemin vers le fichier 
+
+# Accès aux données stockées sur Onyxia
+
+save_object(
+  object = "data/raw/rwanda-260315.osm.pbf",
+  bucket = "yanisdumas",
+  file = "rwanda-260315.osm.pbf",
+  region = "",
+  use_https = TRUE,
+  base_url = "minio.lab.sspcloud.fr"
+)
+
+chemin_pbf <- "rwanda-260315.osm.pbf"
 
 # Vérifier que le fichier existe
 if (!file.exists(chemin_pbf)) {
