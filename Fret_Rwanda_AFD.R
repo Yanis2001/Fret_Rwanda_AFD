@@ -5,6 +5,7 @@
 # DATE : Mars 2024
 ################################################################################
 
+# Pour retrouver le dossier GitHub : system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
 token <- Sys.getenv("GITHUB_PAT")
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
 
