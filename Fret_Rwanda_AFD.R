@@ -6,8 +6,11 @@
 ################################################################################
 
 # Pour retrouver le dossier GitHub : system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+
 token <- Sys.getenv("GITHUB_PAT")
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
+
+# Pour charger l'option Git dans l'onglet en haut à droite, ouvrir le projet dans File -> Open Project
 
 # ==============================================================================
 # PARTIE 0 : INSTALLATION ET CHARGEMENT DES PACKAGES
