@@ -2,7 +2,8 @@
 # PROJET : Réseau Routier pour Modélisation du Commerce de Fret - Rwanda
 # OBJECTIF : Créer un graphe routier avec coûts de transport généralisés
 # AUTEUR : Yanis
-# DATE : Mars 2024
+# DATE : Mars 2026
+
 ################################################################################
 
 # Pour retrouver le dossier GitHub : system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
@@ -31,7 +32,9 @@ packages_requis <- c(
   "tidygraph",    # Manipuler et d’analyser des graphes
   "geodata",      # Frontières administratives GADM
   "rnaturalearth",
-  "aws.s3"        # Accès aux données en ligne sur SSP Cloud
+  "aws.s3",       # Accès aux données en ligne sur SSP Cloud
+  "duckdb",       # Base de données analytique embarquée
+  "DBI"           # Interface SQL standard
 )
 
 # Fonction pour installer les packages manquants
@@ -54,6 +57,35 @@ set.seed(123)           # Pour reproductibilité des données fictives
 
 
 cat("✓ Tous les packages sont chargés\n\n")
+
+
+# ==============================================================================
+# PARTIE 0 BIS : CONNEXION DUCKDB
+# ==============================================================================
+# On crée un fichier DuckDB persistant. Toutes les tables intermédiaires et
+# les résultats analytiques y seront stockés. Cela permet :
+#   1. De reprendre l'analyse sans tout recalculer
+#   2. D'interroger les résultats directement en SQL
+#   3. D'exporter en Parquet/CSV via COPY TO sans passer par R
+
+cat("=== Connexion DuckDB ===\n")
+
+DB_PATH <- "reseau_rwanda.duckdb"
+con     <- dbConnect(duckdb(), dbdir = DB_PATH)
+
+# Active l'extension spatiale DuckDB (optionnel, pour des requêtes spatiales futures)
+# dbExecute(con, "INSTALL spatial; LOAD spatial;")
+
+cat("✓ DuckDB connecté :", DB_PATH, "\n\n")
+
+# Fonction utilitaire : écrire un data.frame dans DuckDB (remplace ou crée)
+duck_write <- function(df, table_name) {
+  dbWriteTable(con, table_name, df, overwrite = TRUE)
+  invisible(df)
+}
+
+# Fonction utilitaire : requête SQL → data.frame R
+duck_query <- function(sql) dbGetQuery(con, sql)
 
 
 # ==============================================================================
@@ -102,6 +134,9 @@ VITESSES_REFERENCE <- tibble(
   vitesse_kmh = c(100, 60, 40, 60, 40, 50, 35, 45, 25, 30, 20)
 )
 
+# Stocker les vitesses de référence dans DuckDB pour les jointures SQL
+duck_write(VITESSES_REFERENCE, "vitesses_reference")
+
 # --- Facteurs d'ajustement de vitesse selon pente ---
 FACTEURS_PENTE <- list(
   plat = 1.0,         # -2% à +2%
@@ -117,7 +152,7 @@ FACTEUR_CONSO_PENTE <- 1.5  # % d'augmentation par % de pente
 # Coût supplémentaire par mètre de dénivelé positif (litres/m)
 CONSO_PAR_METRE_D_PLUS <- 0.03
 
-cat("✓ Paramètres du modèle définis\n\n")
+cat("✓ Paramètres définis et table vitesses_reference chargée dans DuckDB\n\n")
 
 
 # ==============================================================================
@@ -231,45 +266,40 @@ routes_rwanda <- routes_rwanda_raw %>%
 
 cat("✓ Attributs extraits\n")
 
-#Vérification des colonnes présentes dans routes_rwanda
-glimpse(routes_rwanda)
+# On sépare la partie attributaire (sans géométrie) pour travailler en SQL
+attrs_df <- routes_attrs_raw %>% st_drop_geometry()
+duck_write(attrs_df, "routes_attrs_raw")
 
-# --- Harmonisation du type de surface ---
-# Beaucoup de valeurs manquantes dans OSM pour la surface
-# On impute selon le type de route
+# Harmonisation surface + imputation selon type de route — tout en SQL
+attrs_clean <- duck_query("
+  SELECT
+    osm_id,
+    name,
+    road_type,
+    maxspeed,
+    lanes,
+    oneway,
+    CASE
+      WHEN surface IN ('paved','asphalt','concrete')           THEN 'paved'
+      WHEN surface IN ('gravel','compacted','fine_gravel')     THEN 'gravel'
+      WHEN surface IN ('unpaved','dirt','earth','ground')      THEN 'unpaved'
+      -- Imputation selon type de route si surface manquante
+      WHEN surface IS NULL AND road_type IN ('motorway','trunk','primary') THEN 'paved'
+      WHEN surface IS NULL AND road_type = 'secondary'                     THEN 'gravel'
+      WHEN surface IS NULL AND road_type IN ('tertiary','unclassified')    THEN 'unpaved'
+      ELSE 'unpaved'
+    END AS surface
+  FROM routes_attrs_raw
+")
 
-routes_rwanda <- routes_rwanda %>%
-  mutate(
-    # Harmonisation des valeurs de surface existantes
-    surface_clean = case_when(
-      surface %in% c("paved", "asphalt", "concrete") ~ "paved",
-      surface %in% c("gravel", "compacted", "fine_gravel") ~ "gravel",
-      surface %in% c("unpaved", "dirt", "earth", "ground") ~ "unpaved",
-      TRUE ~ NA_character_
-    ),
-    
-    # Imputation des valeurs manquantes selon type de route
-    surface_final = case_when(
-      !is.na(surface_clean) ~ surface_clean,
-      road_type %in% c("motorway", "trunk", "primary") ~ "paved",
-      road_type == "secondary" ~ "gravel",
-      road_type %in% c("tertiary", "unclassified") ~ "unpaved",
-      TRUE ~ "unpaved"  # Par défaut
-    )
-  ) %>%
-  select(-surface, -surface_clean) %>%
-  rename(surface = surface_final)
+# Réintégration de la géométrie (on ne peut pas la stocker dans DuckDB standard)
+routes_rwanda <- routes_attrs_raw %>%
+  select(osm_id, geometry) %>%
+  left_join(attrs_clean, by = "osm_id") %>%
+  st_as_sf() %>%
+  st_transform(crs = 32735)
 
-
-# --- Projection vers un CRS métrique (UTM Zone 35S pour Rwanda) ---
-# EPSG:32735 = WGS 84 / UTM zone 35S
-# Nécessaire pour calculs de distances et pentes en mètres
-
-routes_rwanda <- st_transform(routes_rwanda, crs = 32735)
-
-cat("✓ Nettoyage terminé:", nrow(routes_rwanda), "segments conservés\n")
-cat("✓ Projection:", st_crs(routes_rwanda)$input, "\n\n")
-
+cat("✓ Nettoyage terminé:", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
 
 # ==============================================================================
 # PARTIE 4 : ACQUISITION DES DONNÉES D'ÉLÉVATION
