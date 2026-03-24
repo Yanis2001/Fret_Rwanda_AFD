@@ -637,10 +637,14 @@ cat("✓ Réseau créé — nœuds :", igraph::vcount(reseau_rwanda),
 # ==============================================================================
 # Les données OSM contiennent fréquemment des erreurs topologiques :
 #   1. Routes qui se croisent sans nœud d'intersection (pont raté, erreur de saisie)
-#   2. Extrémités de routes proches mais pas connectées (gap de quelques mètres)
-#   3. Nœuds intermédiaires inutiles (points de degré 2 sur une ligne droite)
+#   2. Nœuds intermédiaires inutiles (points de degré 2 sur une ligne droite)
 # Ces erreurs créent des composantes connexes multiples (le réseau est "fragmenté")
 # et empêchent les algorithmes de plus court chemin de trouver des itinéraires.
+#
+# Note : le snapping (st_snap) a été retiré car son coût O(n²) bloque l'exécution
+# sur un réseau national. Les gaps de quelques mètres entre extrémités sont rares
+# dans les fichiers PBF OSM bien maintenus ; les croisements sans nœud (résolus par
+# to_spatial_subdivision) représentent l'essentiel des problèmes de connectivité.
 
 cat("=== PARTIE 5 BIS : Corrections topologiques ===\n")
 
@@ -648,87 +652,76 @@ cat("=== PARTIE 5 BIS : Corrections topologiques ===\n")
 # to_spatial_subdivision() détecte les croisements de routes sans nœud commun
 # et crée des nœuds aux points d'intersection. C'est l'opération fondamentale
 # pour connecter des routes qui se croisent physiquement.
-reseau_subdivise <- reseau_rwanda %>% convert(to_spatial_subdivision)
-cat("  Après subdivision :", igraph::count_components(reseau_subdivise), "composantes\n")
+# Complexité O(n log n) grâce à l'indexation spatiale R-tree — ne bloque pas,
+# mais reste l'étape la plus longue sur un réseau national (~quelques minutes).
 
-# ── Étape 2 : Snapping des extrémités proches ─────────────────────────────────
-# st_snap() "aimante" les géométries proches en deçà d'un seuil de tolérance.
-# Appliqué progressivement (du plus fin au plus large) pour éviter de connecter
-# des routes parallèles proches (ex : voies séparées d'une autoroute).
-snapper_reseau <- function(reseau, tolerance_m) {
-  aretes_sf <- reseau %>% activate("edges") %>% st_as_sf()
-  aretes_snapped <- aretes_sf %>%
-    mutate(
-      # Déplace les extrémités de chaque géométrie vers les géométries
-      # voisines dans un rayon de tolerance_m
-      geometry = st_snap(geometry, geometry, tolerance = tolerance_m)
-    ) %>%
-    st_make_valid() %>%
-    filter(st_geometry_type(geometry) == "LINESTRING") %>%
-    filter(!st_is_empty(geometry))
-  # Reconstruction du réseau depuis les arêtes corrigées
-  as_sfnetwork(aretes_snapped, directed = FALSE) %>%
-    activate("edges") %>%
-    mutate(longueur_m = as.numeric(st_length(geometry)))
-}
-
-# Barre de progression pour les seuils de snapping
-pb_snap <- progress_bar$new(
-  format = "  Snapping [:bar] :percent | Seuil :current/:total m",
-  total = length(c(10, 20, 30)),
-  clear = FALSE,
-  width = 40
+cat("  Étape 1/3 : subdivision aux intersections...\n")
+pb_subdiv <- progress_bar$new(
+  format = "  Subdivision [:bar] :percent | durée : :elapsed",
+  total  = 1,       # Opération atomique : 1 seul tick à la fin
+  clear  = FALSE,
+  width  = 60
 )
 
-# Trois passes de snapping avec des tolérances croissantes :
-#   10m  → corrige les micro-gaps (erreurs de numérisation fine)
-#   20m → corrige les gaps de précision GPS
-#   30m → corrige les gaps de saisie manuelle grossière
-reseau_snap <- reseau_subdivise
-for (seuil in c(10, 20, 30)) {
-  tryCatch({
-    reseau_snap <- snapper_reseau(reseau_snap, seuil) %>%
-      convert(to_spatial_subdivision)  # Subdivision après chaque snap (nouveaux nœuds)
-    cat("  Seuil", seuil, "m →", igraph::count_components(reseau_snap), "composantes\n")
-  }, error = function(e) cat("  ⚠ Seuil", seuil, "m échoué\n"))
-  pb_snap$tick()
-}
+reseau_subdivise <- reseau_rwanda %>%
+  convert(to_spatial_subdivision)
 
-# ── Étape 3 : Suppression des pseudo-nœuds ────────────────────────────────────
+pb_subdiv$tick()
+cat("  → ", igraph::count_components(reseau_subdivise), "composantes après subdivision\n")
+
+# ── Étape 2 : Suppression des pseudo-nœuds ────────────────────────────────────
 # Un pseudo-nœud (degré 2) est un nœud connecté à exactement 2 arêtes.
 # Il n'est pas topologiquement nécessaire (pas une vraie intersection) et alourdit
 # le graphe. to_spatial_smooth() les supprime et fusionne les arêtes adjacentes.
-reseau_lisse <- reseau_snap %>% convert(to_spatial_smooth)
-cat("  Après lissage :", igraph::count_components(reseau_lisse), "composantes\n")
+# Peut être long si la subdivision a créé beaucoup de nouveaux nœuds.
 
-# ── Étape 4 : Extraction de la composante géante ──────────────────────────────
-# Même après corrections, le réseau peut rester fragmenté (routes isolées).
-# On conserve uniquement la plus grande composante connexe (composante géante),
-# qui couvre la quasi-totalité du territoire national.
-composantes_finales <- igraph::components(reseau_lisse %>% as_tbl_graph())
-id_geante     <- which.max(composantes_finales$csize)
-noeuds_geante <- which(composantes_finales$membership == id_geante)
-pct_noeuds    <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse) * 100, 1)
-cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
-
-# Barre de progression pour le filtrage des nœuds (si beaucoup de nœuds)
-pb_filter <- progress_bar$new(
-  format = "  Filtrage des nœuds [:bar] :percent",
-  total = igraph::vcount(reseau_lisse),
-  clear = FALSE,
-  width = 40
+cat("  Étape 2/3 : suppression des pseudo-nœuds...\n")
+pb_lisse <- progress_bar$new(
+  format = "  Lissage    [:bar] :percent | durée : :elapsed",
+  total  = 1,
+  clear  = FALSE,
+  width  = 60
 )
 
-# Filtrage du réseau sur la composante géante
+reseau_lisse <- reseau_subdivise %>%
+  convert(to_spatial_smooth)
+
+pb_lisse$tick()
+cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissage\n")
+
+# ── Étape 3 : Extraction de la composante géante ──────────────────────────────
+# Même après corrections, le réseau peut rester fragmenté (routes isolées,
+# pistes sans connexion au réseau principal). On conserve uniquement la plus
+# grande composante connexe (composante géante), qui couvre la quasi-totalité
+# du territoire national.
+
+cat("  Étape 3/3 : extraction de la composante géante...\n")
+
+composantes_finales <- igraph::components(reseau_lisse %>% as_tbl_graph())
+id_geante           <- which.max(composantes_finales$csize)
+noeuds_geante       <- which(composantes_finales$membership == id_geante)
+pct_noeuds          <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse) * 100, 1)
+
+cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
+
+pb_geante <- progress_bar$new(
+  format = "  Filtrage   [:bar] :percent | durée : :elapsed",
+  total  = length(noeuds_geante),
+  clear  = FALSE,
+  width  = 60
+)
+
 reseau_rwanda <- reseau_lisse %>%
   activate("nodes") %>%
-  filter({row_number() %in% noeuds_geante
-         pb_filter$tick()  # Mise à jour de la barr
-         }) %>%
-  mutate(node_id = row_number())   # Réindexation des nœuds après filtrage
+  filter({
+    pb_geante$tick(n = sum(row_number() %in% noeuds_geante))
+    row_number() %in% noeuds_geante
+  }) %>%
+  mutate(node_id = row_number())
 
-cat("✓ Réseau corrigé\n\n")
-
+cat("✓ Réseau corrigé —",
+    igraph::vcount(reseau_rwanda), "nœuds,",
+    igraph::ecount(reseau_rwanda), "arêtes\n\n")
 
 # ==============================================================================
 # PARTIE 6 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
