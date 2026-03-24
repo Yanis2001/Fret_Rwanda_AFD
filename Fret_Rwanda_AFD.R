@@ -51,7 +51,8 @@ packages_requis <- c(
   "aws.s3",        # Accès aux objets stockés sur SSP Cloud (MinIO compatible S3)
   "duckdb",        # Base analytique embarquée — moteur SQL sans serveur
   "DBI",           # Interface R standard pour les bases de données (pilote DuckDB)
-  "scales"         # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
+  "scales",         # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
+  "progress"       # Barre de progression
 )
 
 # Fonction d'installation conditionnelle : n'installe que les packages absents
@@ -601,6 +602,14 @@ aretes_courtes <- aretes_avant %>% filter(longueur_m <= 5000)  # Conservées tel
 aretes_longues <- aretes_avant %>% filter(longueur_m >  5000)  # À subdiviser
 crs_reseau     <- st_crs(aretes_longues)
 
+# Initialisation de la barre de progression
+pb <- progress_bar$new(
+  format = "Subdivision des arêtes [:bar] :percent en :elapsed | ETA: :eta",
+  total = nrow(aretes_longues),
+  clear = FALSE,
+  width = 60
+)
+
 if (nrow(aretes_longues) > 0) {
   aretes_subdiv_list <- vector("list", nrow(aretes_longues))
   for (i in seq_len(nrow(aretes_longues))) {
@@ -609,6 +618,8 @@ if (nrow(aretes_longues) > 0) {
       aretes_longues[i,] %>% st_drop_geometry(),
       crs = crs_reseau, max_length = 2000   # 2km maximum par sous-segment
     )
+    # Mise à jour de la barre de progression
+    pb$tick()
   }
   # Recombinaison : arêtes courtes inchangées + nouvelles arêtes subdivisions
   routes_final  <- bind_rows(aretes_courtes, bind_rows(aretes_subdiv_list))
@@ -661,6 +672,14 @@ snapper_reseau <- function(reseau, tolerance_m) {
     mutate(longueur_m = as.numeric(st_length(geometry)))
 }
 
+# Barre de progression pour les seuils de snapping
+pb_snap <- progress_bar$new(
+  format = "  Snapping [:bar] :percent | Seuil :current/:total m",
+  total = length(c(10, 20, 30)),
+  clear = FALSE,
+  width = 40
+)
+
 # Trois passes de snapping avec des tolérances croissantes :
 #   10m  → corrige les micro-gaps (erreurs de numérisation fine)
 #   20m → corrige les gaps de précision GPS
@@ -672,6 +691,7 @@ for (seuil in c(10, 20, 30)) {
       convert(to_spatial_subdivision)  # Subdivision après chaque snap (nouveaux nœuds)
     cat("  Seuil", seuil, "m →", igraph::count_components(reseau_snap), "composantes\n")
   }, error = function(e) cat("  ⚠ Seuil", seuil, "m échoué\n"))
+  pb_snap$tick()
 }
 
 # ── Étape 3 : Suppression des pseudo-nœuds ────────────────────────────────────
@@ -691,10 +711,20 @@ noeuds_geante <- which(composantes_finales$membership == id_geante)
 pct_noeuds    <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse) * 100, 1)
 cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
 
+# Barre de progression pour le filtrage des nœuds (si beaucoup de nœuds)
+pb_filter <- progress_bar$new(
+  format = "  Filtrage des nœuds [:bar] :percent",
+  total = igraph::vcount(reseau_lisse),
+  clear = FALSE,
+  width = 40
+)
+
 # Filtrage du réseau sur la composante géante
 reseau_rwanda <- reseau_lisse %>%
   activate("nodes") %>%
-  filter(row_number() %in% noeuds_geante) %>%
+  filter({row_number() %in% noeuds_geante
+         pb_filter$tick()  # Mise à jour de la barr
+         }) %>%
   mutate(node_id = row_number())   # Réindexation des nœuds après filtrage
 
 cat("✓ Réseau corrigé\n\n")
