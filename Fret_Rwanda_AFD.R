@@ -101,6 +101,10 @@ con <- dbConnect(duckdb(), dbdir = DB_PATH)
 
 cat("✓ DuckDB connecté :", DB_PATH, "\n\n")
 
+# Répertoire de sortie local (évite les erreurs de permissions sur /mnt/)
+DIR_OUTPUT <- "outputs"
+dir.create(DIR_OUTPUT, showWarnings = FALSE, recursive = TRUE)
+
 # ── Fonctions utilitaires DuckDB ──────────────────────────────────────────────
 
 # Écrit un data.frame R dans DuckDB (crée ou remplace la table).
@@ -1165,7 +1169,7 @@ carte_hierarchie <- creer_fond_carte() +
   tm_title("Réseau Routier du Rwanda\nHiérarchie des routes") +
   tm_layout(legend.outside=TRUE, frame=TRUE) +
   tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_hierarchie, "/mnt/user-data/outputs/carte_hierarchie_rwanda.png",
+tmap_save(carte_hierarchie, file.path(DIR_OUTPUT,"carte_hierarchie_rwanda.png"),
           width=3000, height=2400, dpi=300)
 
 # ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
@@ -1180,7 +1184,7 @@ carte_couts <- creer_fond_carte() +
   tm_title("Coûts de Transport Généralisés par km") +
   tm_layout(legend.outside=TRUE, frame=TRUE) +
   tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_couts, "/mnt/user-data/outputs/carte_couts_rwanda.png",
+tmap_save(carte_couts, file.path(DIR_OUTPUT,"carte_couts_rwanda.png"),
           width=3000, height=2400, dpi=300)
 
 # ── Carte 3 : Catégories de pente ─────────────────────────────────────────────
@@ -1195,7 +1199,7 @@ carte_pentes <- creer_fond_carte() +
   tm_title("Pentes du Réseau Routier") +
   tm_layout(legend.outside=TRUE, frame=TRUE) +
   tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_pentes, "/mnt/user-data/outputs/carte_pentes_rwanda.png",
+tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
           width=3000, height=2400, dpi=300)
 
 cat("✓ 3 cartes générées\n\n")
@@ -1224,36 +1228,36 @@ duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 
 # Export GeoPackage (format géospatial ouvert, compatible QGIS/ArcGIS/GRASS)
 # Seul st_write() peut exporter des géométries (DuckDB ne les supporte pas encore)
-st_write(aretes_finales, "/mnt/user-data/outputs/reseau_rwanda_aretes.gpkg",
+st_write(aretes_finales, file.path(DIR_OUTPUT,"reseau_rwanda_aretes.gpkg"),
          delete_dsn=TRUE, quiet=TRUE)
 
 noeuds_finaux <- reseau_rwanda %>%
   activate("nodes") %>%
   st_as_sf() %>%
   select(node_id, is_warehouse, warehouse_name, warehouse_type)
-st_write(noeuds_finaux, "/mnt/user-data/outputs/reseau_rwanda_noeuds.gpkg",
+st_write(noeuds_finaux, file.path(DIR_OUTPUT, "reseau_rwanda_noeuds.gpkg"),
          delete_dsn=TRUE, quiet=TRUE)
 
 # Exports CSV depuis DuckDB via COPY TO
 # HEADER = TRUE : inclure les noms de colonnes en première ligne du fichier
 dbExecute(con, "
   COPY (SELECT * FROM matrice_od)
-  TO '/mnt/user-data/outputs/matrice_od_long.csv' (FORMAT CSV, HEADER)
+  TO file.path(DIR_OUTPUT,'matrice_od_long.csv') (FORMAT CSV, HEADER)
 ")
 dbExecute(con, "
   COPY (SELECT * FROM aretes_finales)
-  TO '/mnt/user-data/outputs/aretes_finales.csv' (FORMAT CSV, HEADER)
+  TO file.path(DIR_OUTPUT,'aretes_finales.csv') (FORMAT CSV, HEADER)
 ")
 
 # Exports Parquet depuis DuckDB
 # Lisible directement avec : Python → pd.read_parquet() ; R → arrow::read_parquet()
 dbExecute(con, "
   COPY (SELECT * FROM aretes_finales)
-  TO '/mnt/user-data/outputs/aretes_finales.parquet' (FORMAT PARQUET)
+  TO file.path(DIR_OUTPUT, 'aretes_finales.parquet') (FORMAT PARQUET)
 ")
 dbExecute(con, "
   COPY (SELECT * FROM matrice_od)
-  TO '/mnt/user-data/outputs/matrice_od.parquet' (FORMAT PARQUET)
+  TO file.path(DIR_OUTPUT, 'matrice_od.parquet') (FORMAT PARQUET)
 ")
 
 cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
@@ -1876,7 +1880,7 @@ carte_fret <- creer_fond_carte() +
   tm_compass(position = c("right", "top"))
 
 tmap_save(carte_fret,
-          "/mnt/user-data/outputs/carte_trafic_fret.png",
+          file.path(DIR_OUTPUT,"carte_trafic_fret.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("✓ Carte trafic fret sauvegardée\n")
 
@@ -1978,7 +1982,7 @@ if (k > 0) {
     tm_compass(position = c("right", "top"))
   
   tmap_save(carte_od,
-            "/mnt/user-data/outputs/carte_flux_od.png",
+            file.path(DIR_OUTPUT,"carte_flux_od.png"),
             width = 3000, height = 2400, dpi = 300)
   cat("✓ Carte flux OD sauvegardée (", k, "flux représentés)\n")
   
@@ -2017,7 +2021,7 @@ g1 <- flux_par_secteur_df %>%
     panel.grid.minor   = element_blank()
   )
 
-ggsave("/mnt/user-data/outputs/graphique_flux_secteurs.png",
+ggsave(file.path(DIR_OUTPUT,"graphique_flux_secteurs.png"),
        g1, width = 11, height = 6, dpi = 300)
 cat("✓ Graphique flux secteurs sauvegardé\n")
 
@@ -2059,7 +2063,7 @@ g2 <- recap_zones %>%
     panel.grid.major.y = element_blank()
   )
 
-ggsave("/mnt/user-data/outputs/graphique_offre_demande.png",
+ggsave(file.path(DIR_OUTPUT,"graphique_offre_demande.png"),
        g2, width = 13, height = 8, dpi = 300)
 cat("✓ Graphique offre/demande sauvegardé\n")
 
@@ -2112,7 +2116,7 @@ g3 <- ggplot(flux_heatmap,
     legend.position = "right"
   )
 
-ggsave("/mnt/user-data/outputs/heatmap_flux_od.png",
+ggsave(file.path(DIR_OUTPUT,"heatmap_flux_od.png"),
        g3, width = 13, height = 11, dpi = 300)
 cat("✓ Heatmap flux OD sauvegardée\n")
 
@@ -2150,7 +2154,7 @@ g4 <- offre_long %>%
     legend.position = "right"
   )
 
-ggsave("/mnt/user-data/outputs/graphique_composition_sectorielle.png",
+ggsave(file.path(DIR_OUTPUT,"graphique_composition_sectorielle.png"),
        g4, width = 14, height = 8, dpi = 300)
 cat("✓ Graphique composition sectorielle sauvegardé\n\n")
 
@@ -2162,19 +2166,19 @@ cat("✓ Graphique composition sectorielle sauvegardé\n\n")
 cat("Export des données du modèle de fret...\n")
 
 write.csv(as.data.frame(A),
-          "/mnt/user-data/outputs/table_io_coefficients.csv",
+          file.path(DIR_OUTPUT,"table_io_coefficients.csv"),
           row.names = TRUE)
 write.csv(recap_io,
-          "/mnt/user-data/outputs/table_io_recap.csv",
+          file.path(DIR_OUTPUT,"table_io_recap.csv"),
           row.names = FALSE)
 write.csv(as.data.frame(flux_total) %>% rownames_to_column("Zone"),
-          "/mnt/user-data/outputs/matrice_flux_gravitaire_musd.csv",
+          file.path(DIR_OUTPUT,"matrice_flux_gravitaire_musd.csv"),
           row.names = FALSE)
 write.csv(as.data.frame(flux_tonnes_total) %>% rownames_to_column("Zone"),
-          "/mnt/user-data/outputs/matrice_flux_fret_tonnes.csv",
+          file.path(DIR_OUTPUT,"matrice_flux_fret_tonnes.csv"),
           row.names = FALSE)
 write.csv(recap_zones,
-          "/mnt/user-data/outputs/offre_demande_zones.csv",
+          file.path(DIR_OUTPUT,"offre_demande_zones.csv"),
           row.names = FALSE)
 
 aretes_fret_export <- reseau_rwanda %>%
@@ -2186,7 +2190,7 @@ aretes_fret_export <- reseau_rwanda %>%
          volume_tonnes, classe_trafic)
 
 st_write(aretes_fret_export,
-         "/mnt/user-data/outputs/reseau_rwanda_avec_fret.gpkg",
+         file.path(DIR_OUTPUT,"reseau_rwanda_avec_fret.gpkg"),
          delete_dsn = TRUE, quiet = TRUE)
 
 cat("✓ Données exportées\n\n")
