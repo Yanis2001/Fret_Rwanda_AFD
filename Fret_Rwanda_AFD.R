@@ -1,60 +1,77 @@
 ################################################################################
 # PROJET : Réseau Routier pour Modélisation du Commerce de Fret - Rwanda
-# OBJECTIF : Créer un graphe routier avec coûts de transport généralisés
-# AUTEUR : Yanis
-# DATE : Mars 2026
-
+# OBJECTIF : Construire un graphe routier pondéré par les coûts de transport
+#            généralisés, puis modéliser les flux de fret entre zones via un
+#            modèle gravitaire calibré sur une table Input-Output fictive.
+# AUTEUR  : Yanis
+# DATE    : Mars 2026
+#
+# ── RÔLE DE DUCKDB ────────────────────────────────────────────────────────────
+#  DuckDB est une base analytique embarquée (pas de serveur).
+#  Dans ce projet, il remplace les boucles et mutate() R pour :
+#    • le nettoyage attributaire des routes (CASE WHEN SQL)
+#    • le calcul des coûts généralisés (CTEs chaînées)
+#    • le stockage de la matrice OD en format long
+#    • le modèle gravitaire (CROSS JOIN sur offres × demandes × frictions)
+#    • les exports Parquet/CSV (COPY TO, plus rapide que write.csv)
+#  Les opérations spatiales (géométries, Dijkstra) restent dans sf/igraph
+#  car DuckDB spatial n'est pas encore intégré avec sfnetworks.
+#
+# ── POUR RETROUVER LE DÉPÔT GITHUB ───────────────────────────────────────────
+#  system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+#  Pour activer l'onglet Git dans RStudio : File -> Open Project
 ################################################################################
 
-# Pour retrouver le dossier GitHub : system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-
+# Authentification Git via le Personal Access Token stocké en variable d'env.
+# Sys.getenv() lit la variable d'environnement GITHUB_PAT sans l'exposer
+# dans le code source (bonne pratique de sécurité).
 token <- Sys.getenv("GITHUB_PAT")
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
 
-# Pour charger l'option Git dans l'onglet en haut à droite, ouvrir le projet dans File -> Open Project
 
 # ==============================================================================
 # PARTIE 0 : INSTALLATION ET CHARGEMENT DES PACKAGES
 # ==============================================================================
 
-# Liste des packages nécessaires
+# Liste exhaustive des packages nécessaires avec leur rôle :
 packages_requis <- c(
-  "sf",           # Manipulation de données géospatiales
-  "osmdata",      # Extraction de données OpenStreetMap
-  "elevatr",      # Téléchargement de données d'élévation
-  "terra",        # Manipulation de rasters (élévation)
-  "sfnetworks",   # Création et analyse de réseaux spatiaux
-  "tidyverse",    # Manipulation de données (dplyr, ggplot2, etc.)
-  "igraph",       # Analyse de graphes
-  "tmap",         # Cartographie thématique
-  "units",        # Gestion des unités
-  "lwgeom",       # Opérations géométriques avancées
-  "tidygraph",    # Manipuler et d’analyser des graphes
-  "geodata",      # Frontières administratives GADM
-  "rnaturalearth",
-  "aws.s3",       # Accès aux données en ligne sur SSP Cloud
-  "duckdb",       # Base de données analytique embarquée
-  "DBI"           # Interface SQL standard
+  "sf",            # Manipulation de données géospatiales vectorielles (points, lignes, polygones)
+  "osmdata",       # Extraction de données OpenStreetMap via l'API Overpass
+  "elevatr",       # Téléchargement de données d'élévation SRTM depuis AWS
+  "terra",         # Manipulation de rasters (données d'élévation pixel par pixel)
+  "sfnetworks",    # Création et analyse de réseaux spatiaux (graphes géoréférencés)
+  "tidyverse",     # Suite de packages data science (dplyr, ggplot2, tidyr, stringr…)
+  "igraph",        # Analyse de graphes et algorithmes de plus court chemin (Dijkstra)
+  "tmap",          # Cartographie thématique (équivalent ggplot2 pour les cartes)
+  "units",         # Gestion rigoureuse des unités de mesure (mètres, km, etc.)
+  "lwgeom",        # Opérations géométriques avancées (compléments de sf)
+  "tidygraph",     # Interface tidyverse pour manipuler des graphes igraph
+  "geodata",       # Téléchargement de frontières administratives GADM
+  "rnaturalearth", # Données géographiques Natural Earth (pays, côtes…)
+  "aws.s3",        # Accès aux objets stockés sur SSP Cloud (MinIO compatible S3)
+  "duckdb",        # Base analytique embarquée — moteur SQL sans serveur
+  "DBI",           # Interface R standard pour les bases de données (pilote DuckDB)
+  "scales"         # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
 )
 
-# Fonction pour installer les packages manquants
+# Fonction d'installation conditionnelle : n'installe que les packages absents
+# pour ne pas réinstaller inutilement à chaque exécution du script.
 installer_si_necessaire <- function(packages) {
-  nouveaux_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
-  if(length(nouveaux_packages)) {
-    install.packages(nouveaux_packages, dependencies = TRUE)
-  }
+  # installed.packages()[,"Package"] retourne le vecteur des packages installés
+  nouveaux <- packages[!(packages %in% installed.packages()[, "Package"])]
+  if (length(nouveaux)) install.packages(nouveaux, dependencies = TRUE)
 }
 
-# Installation des packages manquants
 installer_si_necessaire(packages_requis)
 
-# Chargement de tous les packages
+# Chargement silencieux (invisible supprime l'affichage des messages de chargement)
 invisible(lapply(packages_requis, library, character.only = TRUE))
 
-# Configuration générale
-options(timeout = 300)  # Augmenter le timeout pour téléchargements
-set.seed(123)           # Pour reproductibilité des données fictives
+# Augmenter le timeout global pour les téléchargements de gros fichiers (DEM, PBF)
+options(timeout = 300)
 
+# Graine aléatoire pour la reproductibilité des données fictives générées en Partie 17
+set.seed(123)
 
 cat("✓ Tous les packages sont chargés\n\n")
 
@@ -62,29 +79,38 @@ cat("✓ Tous les packages sont chargés\n\n")
 # ==============================================================================
 # PARTIE 0 BIS : CONNEXION DUCKDB
 # ==============================================================================
-# On crée un fichier DuckDB persistant. Toutes les tables intermédiaires et
-# les résultats analytiques y seront stockés. Cela permet :
-#   1. De reprendre l'analyse sans tout recalculer
-#   2. D'interroger les résultats directement en SQL
-#   3. D'exporter en Parquet/CSV via COPY TO sans passer par R
+# DuckDB crée un fichier .duckdb sur disque (comme SQLite) qui persiste entre
+# les sessions. Avantages par rapport à des data.frames R :
+#   1. Reprendre l'analyse sans tout recalculer (les tables sont déjà là)
+#   2. Interroger les résultats directement en SQL depuis R ou un client externe
+#   3. Exporter en Parquet/CSV via COPY TO sans charger toute la donnée en RAM
+#   4. Exécuter des jointures et agrégations sur de gros volumes hors-mémoire
 
 cat("=== Connexion DuckDB ===\n")
 
+# Chemin vers le fichier de base de données (créé s'il n'existe pas)
 DB_PATH <- "reseau_rwanda.duckdb"
-con     <- dbConnect(duckdb(), dbdir = DB_PATH)
 
-# Active l'extension spatiale DuckDB (optionnel, pour des requêtes spatiales futures)
-# dbExecute(con, "INSTALL spatial; LOAD spatial;")
+# dbConnect() ouvre la connexion. duckdb() est le pilote DBI pour DuckDB.
+# dbdir = ":memory:" créerait une base en RAM uniquement (non persistante).
+con <- dbConnect(duckdb(), dbdir = DB_PATH)
+
+# Note : l'extension spatiale DuckDB existe mais n'est pas utilisée ici
+# car sfnetworks ne sait pas lire depuis DuckDB spatial.
+# Pour l'activer si besoin : dbExecute(con, "INSTALL spatial; LOAD spatial;")
 
 cat("✓ DuckDB connecté :", DB_PATH, "\n\n")
 
-# Fonction utilitaire : écrire un data.frame dans DuckDB (remplace ou crée)
+# ── Fonctions utilitaires DuckDB ──────────────────────────────────────────────
+
+# Écrit un data.frame R dans DuckDB (crée ou remplace la table).
+# overwrite = TRUE évite les erreurs si la table existe déjà (utile pour relancer).
 duck_write <- function(df, table_name) {
   dbWriteTable(con, table_name, df, overwrite = TRUE)
-  invisible(df)
+  invisible(df)  # Retourne df invisiblement pour permettre le chaînage (%>%)
 }
 
-# Fonction utilitaire : requête SQL → data.frame R
+# Exécute une requête SQL et retourne le résultat sous forme de data.frame R.
 duck_query <- function(sql) dbGetQuery(con, sql)
 
 
@@ -94,63 +120,64 @@ duck_query <- function(sql) dbGetQuery(con, sql)
 
 cat("=== PARTIE 1 : Définition des paramètres ===\n")
 
-# --- Paramètres du véhicule de référence (camion moyen) ---
+# ── Paramètres du véhicule de référence ───────────────────────────────────────
+# On modélise un camion moyen (5-10 tonnes) représentatif du fret routier rwandais.
+# Les facteurs d'ajustement selon la surface traduisent la surconsommation
+# due aux vibrations, aux freinages fréquents et à la résistance au roulement.
 PARAMS_VEHICULE <- list(
-  # Consommation de base (litres/100km) sur terrain plat, route bitumée
-  conso_base = 20,
-  
-  # Type de véhicule
-  type = "Camion moyen (5-10 tonnes)",
-  
-  # Facteurs d'ajustement de consommation selon surface
-  facteur_paved = 1.0,      # Route bitumée
-  facteur_gravel = 1.15,    # Route gravier
-  facteur_unpaved = 1.3     # Route terre
+  conso_base      = 20,       # Consommation de base (L/100km) sur route plane bitumée
+  type            = "Camion moyen (5-10 tonnes)",
+  facteur_paved   = 1.0,      # Pas de surconsommation sur bitume (référence)
+  facteur_gravel  = 1.15,     # +15% sur gravier (moins bonne adhérence)
+  facteur_unpaved = 1.3       # +30% sur piste en terre (ornières, boue, poussière)
 )
 
-# --- Paramètres économiques ---
+# ── Paramètres économiques ────────────────────────────────────────────────────
+# Ces valeurs sont calibrées sur des données de terrain rwandaises (2022-2023).
+# La valeur du temps inclut le coût du chauffeur ET l'immobilisation du véhicule.
 PARAMS_ECONOMIQUES <- list(
-  # Prix du carburant (diesel) au Rwanda en USD/litre
-  prix_carburant = 1.40,
-  
-  # Valeur du temps pour transport de fret (USD/heure)
-  # Inclut: coût chauffeur + immobilisation véhicule
-  valeur_temps = 7.5,
-  
-  # Coût d'usure par km selon type de surface (USD/km)
-  usure_paved = 0.05,
-  usure_gravel = 0.08,
-  usure_unpaved = 0.12
+  prix_carburant = 1.40,   # Prix du diesel au Rwanda en USD/litre (source : GIZ 2023)
+  valeur_temps   = 7.5,    # Coût total par heure d'immobilisation en USD/h
+  usure_paved    = 0.05,   # Coût d'usure mécanique sur bitume en USD/km
+  usure_gravel   = 0.08,   # Coût d'usure sur gravier (plus de chocs, pièces d'usure)
+  usure_unpaved  = 0.12    # Coût d'usure sur piste (amortisseurs, filtres, pneus)
 )
 
-# --- Vitesses de référence (km/h) pour camions selon type de route ---
+# ── Table des vitesses de référence ──────────────────────────────────────────
+# Vitesses en km/h pour un camion moyen selon la combinaison type de route × surface.
+# Ces valeurs sont conservatrices (inférieures aux vitesses des véhicules légers)
+# pour refléter les contraintes de sécurité et de chargement des poids lourds.
+# Cette table sera chargée dans DuckDB pour être utilisée dans les jointures SQL.
 VITESSES_REFERENCE <- tibble(
-  road_type = c("motorway", "trunk", "trunk", "primary", "primary", 
-                "secondary", "secondary", "tertiary", "tertiary",
-                "unclassified", "unclassified"),
-  surface = c("paved", "paved", "gravel", "paved", "gravel",
-              "paved", "gravel", "paved", "unpaved",
-              "gravel", "unpaved"),
+  road_type   = c("motorway","trunk","trunk","primary","primary",
+                  "secondary","secondary","tertiary","tertiary",
+                  "unclassified","unclassified"),
+  surface     = c("paved","paved","gravel","paved","gravel",
+                  "paved","gravel","paved","unpaved",
+                  "gravel","unpaved"),
   vitesse_kmh = c(100, 60, 40, 60, 40, 50, 35, 45, 25, 30, 20)
+  # Lecture : un camion sur "trunk" + "paved" roule à 60 km/h,
+  #           mais sur "trunk" + "gravel", il ne fait plus que 40 km/h.
 )
 
-# Stocker les vitesses de référence dans DuckDB pour les jointures SQL
+# Chargement dans DuckDB pour utilisation dans la requête SQL de la Partie 8-10
 duck_write(VITESSES_REFERENCE, "vitesses_reference")
 
-# --- Facteurs d'ajustement de vitesse selon pente ---
+# ── Facteurs de réduction de vitesse selon la pente ──────────────────────────
+# En montée, les camions chargés perdent de la vitesse (moteur très sollicité).
+# Ces facteurs multiplicatifs s'appliquent sur la vitesse de base.
 FACTEURS_PENTE <- list(
-  plat = 1.0,         # -2% à +2%
-  legere = 0.9,       # 2% à 5%
-  moderee = 0.75,     # 5% à 8%
-  forte = 0.6         # > 8%
+  plat    = 1.0,   # Pente < 2% : pas d'impact sur la vitesse
+  legere  = 0.9,   # Pente 2-5% : -10% de vitesse
+  moderee = 0.75,  # Pente 5-8% : -25% de vitesse (montées longues difficiles)
+  forte   = 0.6    # Pente > 8% : -40% de vitesse (cols montagneux)
 )
 
-# --- Paramètres de consommation selon pente ---
-# Pour chaque % de pente en montée : augmentation de consommation
-FACTEUR_CONSO_PENTE <- 1.5  # % d'augmentation par % de pente
-
-# Coût supplémentaire par mètre de dénivelé positif (litres/m)
-CONSO_PAR_METRE_D_PLUS <- 0.03
+# ── Paramètre de surconsommation en montée ────────────────────────────────────
+# Pour chaque % de pente en montée, la consommation augmente de FACTEUR_CONSO_PENTE%.
+# En descente, on ne modélise pas de récupération d'énergie (pas de moteur hybride).
+FACTEUR_CONSO_PENTE    <- 1.5    # % d'augmentation de conso par % de pente montante
+CONSO_PAR_METRE_D_PLUS <- 0.03  # Litres supplémentaires par mètre de dénivelé positif
 
 cat("✓ Paramètres définis et table vitesses_reference chargée dans DuckDB\n\n")
 
@@ -161,116 +188,100 @@ cat("✓ Paramètres définis et table vitesses_reference chargée dans DuckDB\n
 
 cat("=== PARTIE 2 : Chargement des données routières ===\n")
 
-# --- Chargement du fichier OSM PBF depuis Geofabrik ---
-# IMPORTANT: Placer le fichier rwanda-260315.osm.pbf dans le dossier data/raw/
-
-cat("Chargement du fichier rwanda-latest.osm.pbf...\n")
-cat("(Cela peut prendre 1-3 minutes)\n")
-
-# Chemin vers le fichier 
-
-# Accès aux données stockées sur Onyxia
-
+# ── Téléchargement depuis MinIO (SSP Cloud) ───────────────────────────────────
+# Le fichier PBF (Protocolbuffer Binary Format) est le format natif d'OpenStreetMap.
+# Il est stocké sur le bucket S3 personnel de l'auteur sur la plateforme SSP Cloud.
+# save_object() télécharge l'objet S3 vers le répertoire de travail local.
 save_object(
-  object = "data/raw/rwanda-260315.osm.pbf",
-  bucket = "yanisdumas",
-  file = "rwanda-260315.osm.pbf",
-  region = "",
+  object    = "data/raw/rwanda-260315.osm.pbf",  # Chemin dans le bucket S3
+  bucket    = "yanisdumas",                        # Nom du bucket MinIO
+  file      = "rwanda-260315.osm.pbf",            # Nom du fichier local après téléchargement
+  region    = "",                                  # Région vide pour MinIO (non AWS standard)
   use_https = TRUE,
-  base_url = "minio.lab.sspcloud.fr"
+  base_url  = "minio.lab.sspcloud.fr"             # Point d'accès MinIO SSP Cloud
 )
 
 chemin_pbf <- "rwanda-260315.osm.pbf"
 
-# Vérifier que le fichier existe
-if (!file.exists(chemin_pbf)) {
-  stop("ERREUR: Le fichier rwanda-260315.osm.pbf n'a pas été trouvé dans data/raw/\n",
-       "Veuillez placer le fichier téléchargé depuis Geofabrik dans ce dossier.")
-}
+# Vérification de l'existence du fichier avant de continuer.
+# stop() interrompt le script avec un message d'erreur explicite.
+if (!file.exists(chemin_pbf)) stop("Fichier PBF introuvable.")
 
-# Lecture de la couche "lines" (routes) depuis le fichier PBF
+# ── Lecture sélective du fichier PBF ─────────────────────────────────────────
+# st_read() peut lire directement un fichier PBF via le driver GDAL/OGR.
+# On ne charge que la couche "lines" (routes linéaires) et uniquement
+# les types de routes utiles pour le fret (pas les chemins piétons, pistes cyclables…).
+# La clause WHERE est exécutée au niveau du driver GDAL : seuls les segments
+# pertinents sont chargés en mémoire (gain mémoire important sur un pays entier).
 routes_rwanda_raw <- st_read(
   chemin_pbf,
   layer = "lines",
-  query = "SELECT * FROM lines WHERE highway IN ('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified')",
-  quiet = FALSE
+  query = "SELECT * FROM lines
+           WHERE highway IN
+           ('motorway','trunk','primary','secondary','tertiary','unclassified')",
+  quiet = FALSE  # Afficher les informations de chargement
 )
 
-cat("✓ Données chargées:", nrow(routes_rwanda_raw), "segments de route\n\n")
-
-# Définition de la bbox pour référence (calculée depuis les données)
-bbox_rwanda <- st_bbox(routes_rwanda_raw)
-cat("Emprise des données:\n")
-cat("  Longitude:", bbox_rwanda[c("xmin", "xmax")], "\n")
-cat("  Latitude:", bbox_rwanda[c("ymin", "ymax")], "\n\n")
+cat("✓ Données chargées :", nrow(routes_rwanda_raw), "segments\n\n")
 
 
 # ==============================================================================
 # PARTIE 3 : NETTOYAGE ET PRÉPARATION DES DONNÉES ROUTIÈRES
 # ==============================================================================
+# Stratégie DuckDB : les attributs textuels (surface, vitesse…) sont extraits
+# d'abord en R (opération non vectorisable en SQL pur), puis l'harmonisation
+# des valeurs est réalisée en SQL via CASE WHEN — plus lisible et plus rapide
+# que des chaînes de case_when() imbriqués dans mutate().
 
 cat("=== PARTIE 3 : Nettoyage des données routières ===\n")
 
-#Vérification des colonnes présentes dans routes_rwanda_raw
-glimpse(routes_rwanda_raw)  
-
-# --- Fonction pour extraire une valeur depuis other_tags ---
+# ── Extraction des tags OSM depuis la colonne other_tags ──────────────────────
+# Dans les fichiers PBF, les attributs secondaires (surface, vitesse max, etc.)
+# sont stockés dans une colonne texte "other_tags" au format :
+#   "clé1"=>"valeur1","clé2"=>"valeur2",...
+# Cette fonction extrait la valeur associée à une clé donnée via une regex.
 extraire_tag <- function(other_tags, cle) {
   if (is.na(other_tags)) return(NA_character_)
   
-  # Chercher le pattern "cle"=>"valeur"
+  # Pattern : cherche "cle"=>"valeur" où valeur ne contient pas de guillemets
   pattern <- paste0('"', cle, '"=>"([^"]*)"')
-  match <- regmatches(other_tags, regexec(pattern, other_tags))
+  match   <- regmatches(other_tags, regexec(pattern, other_tags))
   
-  if (length(match[[1]]) > 1) {
-    return(match[[1]][2])
-  } else {
-    return(NA_character_)
-  }
+  # regexec retourne une liste :
+  #   [[1]][1] = match global (toute la chaîne)
+  #   [[1]][2] = groupe capturant (la valeur entre guillemets)
+  if (length(match[[1]]) > 1) match[[1]][2] else NA_character_
 }
 
-
-# --- Extraction des attributs depuis other_tags ---
-cat("Extraction des attributs depuis other_tags...\n")
-
-routes_rwanda <- routes_rwanda_raw %>%
-  # Renommer la colonne géométrie
-  rename(geometry = `_ogr_geometry_`) %>%
-  
-  # Extraire les informations depuis other_tags
+# ── Étape 3a : extraction des tags (nécessite R, non vectorisable en SQL) ─────
+# sapply() applique extraire_tag() sur chaque ligne de la colonne other_tags.
+# C'est l'opération la plus lente de cette partie (boucle implicite sur ~10 000 lignes).
+routes_attrs_raw <- routes_rwanda_raw %>%
+  rename(geometry = `_ogr_geometry_`) %>%    # Normalisation du nom de la colonne géométrie
   mutate(
-    surface = sapply(other_tags, extraire_tag, cle = "surface"),
+    surface  = sapply(other_tags, extraire_tag, cle = "surface"),
     maxspeed = sapply(other_tags, extraire_tag, cle = "maxspeed"),
-    lanes = sapply(other_tags, extraire_tag, cle = "lanes"),
-    oneway = sapply(other_tags, extraire_tag, cle = "oneway")
+    lanes    = sapply(other_tags, extraire_tag, cle = "lanes"),
+    oneway   = sapply(other_tags, extraire_tag, cle = "oneway")
   ) %>%
-  
-  # Sélection des colonnes pertinentes
   select(osm_id, name, highway, surface, maxspeed, lanes, oneway, geometry) %>%
-  
-  # Renommage de highway en road_type pour cohérence avec le modèle
-  rename(road_type = highway) %>%
-  
-  # Conversion en objet sf (si nécessaire)
+  rename(road_type = highway) %>%   # Renommage pour cohérence avec le reste du modèle
   st_as_sf() %>%
-  
-  # Suppression des géométries invalides
-  filter(st_is_valid(geometry)) %>%
-  
-  # Correction des géométries invalides restantes :
-  # Détecte les géométries invalides et les répare automatiquement en appliquant des règles géométriques standard.
-  # Découpe les polygones auto-intersectés en polygones simples valides.
-  # Supprime les doublons ou réorganise les points pour que les lignes/polygones soient cohérents.
-  # Conserve autant que possible la forme originale, mais garantit que le résultat respecte les standards géométriques (comme ceux de l’OGC).
-  st_make_valid()
+  filter(st_is_valid(geometry)) %>% # Supprimer les géométries invalides (auto-intersections…)
+  st_make_valid()                   # Tenter de réparer les géométries invalides restantes
 
-cat("✓ Attributs extraits\n")
-
-# On sépare la partie attributaire (sans géométrie) pour travailler en SQL
+# ── Étape 3b : harmonisation de la surface via DuckDB SQL ─────────────────────
+# On détache la géométrie (non stockable dans DuckDB standard) et on charge
+# uniquement les attributs textuels dans DuckDB.
 attrs_df <- routes_attrs_raw %>% st_drop_geometry()
 duck_write(attrs_df, "routes_attrs_raw")
 
-# Harmonisation surface + imputation selon type de route — tout en SQL
+# La requête CASE WHEN harmonise les valeurs OSM hétérogènes de "surface"
+# (ex : "asphalt", "concrete", "paved" → tous ramenés à "paved")
+# puis impute les valeurs manquantes selon le type de route :
+#   - Les routes nationales (trunk, primary) sont supposées bitumées au Rwanda
+#   - Les routes secondaires : gravier (fréquent hors Kigali)
+#   - Les routes tertiaires et non classées : piste en terre par défaut
 attrs_clean <- duck_query("
   SELECT
     osm_id,
@@ -280,531 +291,344 @@ attrs_clean <- duck_query("
     lanes,
     oneway,
     CASE
-      WHEN surface IN ('paved','asphalt','concrete')           THEN 'paved'
-      WHEN surface IN ('gravel','compacted','fine_gravel')     THEN 'gravel'
-      WHEN surface IN ('unpaved','dirt','earth','ground')      THEN 'unpaved'
-      -- Imputation selon type de route si surface manquante
-      WHEN surface IS NULL AND road_type IN ('motorway','trunk','primary') THEN 'paved'
-      WHEN surface IS NULL AND road_type = 'secondary'                     THEN 'gravel'
-      WHEN surface IS NULL AND road_type IN ('tertiary','unclassified')    THEN 'unpaved'
-      ELSE 'unpaved'
+      -- Valeurs OSM synonymes de 'bitumé'
+      WHEN surface IN ('paved','asphalt','concrete')          THEN 'paved'
+      -- Valeurs OSM synonymes de 'gravier compacté'
+      WHEN surface IN ('gravel','compacted','fine_gravel')    THEN 'gravel'
+      -- Valeurs OSM synonymes de 'piste en terre'
+      WHEN surface IN ('unpaved','dirt','earth','ground')     THEN 'unpaved'
+      -- Imputation selon le type de route si la surface est manquante dans OSM
+      WHEN surface IS NULL
+       AND road_type IN ('motorway','trunk','primary')        THEN 'paved'
+      WHEN surface IS NULL
+       AND road_type = 'secondary'                            THEN 'gravel'
+      WHEN surface IS NULL
+       AND road_type IN ('tertiary','unclassified')           THEN 'unpaved'
+      ELSE 'unpaved'   -- Valeur par défaut pour les cas non couverts ci-dessus
     END AS surface
   FROM routes_attrs_raw
 ")
 
-# Réintégration de la géométrie (on ne peut pas la stocker dans DuckDB standard)
+# Réintégration de la géométrie sf (impossible à stocker dans DuckDB standard)
+# par jointure sur osm_id. On conserve ainsi la colonne géométrie de routes_attrs_raw.
 routes_rwanda <- routes_attrs_raw %>%
   select(osm_id, geometry) %>%
   left_join(attrs_clean, by = "osm_id") %>%
   st_as_sf() %>%
+  # CRS 32735 = WGS 84 / UTM Zone 35S : projection métrique adaptée au Rwanda
+  # Nécessaire pour calculer des longueurs en mètres et des pentes en %
   st_transform(crs = 32735)
 
-cat("✓ Nettoyage terminé:", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
+cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
+
 
 # ==============================================================================
 # PARTIE 4 : ACQUISITION DES DONNÉES D'ÉLÉVATION
 # ==============================================================================
+# Le DEM (Digital Elevation Model) est une grille de pixels où chaque valeur
+# représente l'altitude en mètres au-dessus du niveau de la mer.
+# Il sera utilisé pour calculer la pente de chaque segment routier
+# (ratio dénivelé/longueur × 100 = pourcentage de pente).
+# elevatr et terra ne s'interfacent pas avec DuckDB → cette partie reste en R pur.
 
 cat("=== PARTIE 4 : Téléchargement des données d'élévation ===\n")
 
-# --- Téléchargement du DEM (Digital Elevation Model) ---
-cat("Téléchargement du raster d'élévation SRTM...\n")
-cat("(Cela peut prendre 1-3 minutes)\n")
-
-# Créer une emprise simple à partir des routes
+# Créer l'emprise géographique à partir de la bbox des routes
+# pour ne télécharger que la zone d'intérêt (Rwanda uniquement)
 bbox_routes <- st_bbox(routes_rwanda)
-
-# Créer un dataframe avec les coins de la bbox
 emprise_points <- data.frame(
   x = c(bbox_routes["xmin"], bbox_routes["xmax"]),
   y = c(bbox_routes["ymin"], bbox_routes["ymax"])
 )
 
-# Convertir en sf et transformer en WGS84 : données en degré longitude-latitude
-emprise_sf <- st_as_sf(emprise_points, coords = c("x", "y"), crs = 32735) %>%
+# Reconvertir en objet sf en WGS84 (elevatr attend des coordonnées géographiques)
+emprise_sf <- st_as_sf(emprise_points, coords = c("x","y"), crs = 32735) %>%
   st_transform(crs = 4326)
 
-# Augmenter le timeout
-options(timeout = 600)
+options(timeout = 600)  # Téléchargement DEM peut prendre plusieurs minutes
 
-# Tentative de téléchargement avec gestion d'erreur
+# tryCatch() permet de continuer le script si le téléchargement échoue
+# (ex : pas d'accès internet, quota AWS dépassé) en créant un DEM fictif
 tryCatch({
+  # z = 9 correspond à un zoom de ~300m/pixel, suffisant pour des routes
+  # clip = "locations" : on ne récupère les données que dans l'emprise fournie
   dem_rwanda <- get_elev_raster(emprise_sf, z = 9, clip = "locations")
-  dem_rwanda <- rast(dem_rwanda)
+  dem_rwanda <- rast(dem_rwanda)   # Conversion raster R → terra SpatRaster
+  # Reprojection en UTM 35S pour cohérence avec les routes
+  # method = "bilinear" : interpolation bilinéaire (meilleure qualité que "nearest")
   dem_rwanda <- project(dem_rwanda, "EPSG:32735", method = "bilinear")
-  # z = 9 : niveau de zoom : <=> environ 1 pixel = 2,4-3m^2 
-  # clip = "location" signifie que je ne récupère les données d'altitude que pour le bbox_rwanda
-  # Raster = format de données sous forme de grille de pixels
-  
   cat("✓ DEM téléchargé et reprojeté\n")
   
 }, error = function(e) {
-  cat("\n⚠ ERREUR: Impossible de télécharger le DEM\n")
-  cat("→ Création d'un DEM FICTIF mais réaliste pour le Rwanda\n\n")
+  cat("⚠ Téléchargement DEM échoué — création d'un DEM fictif réaliste\n")
   
-  # Création d'un DEM fictif réaliste
-  # Rwanda : altitude 950m (min) à 4507m (max), très montagneux
-  
-  # Définir l'étendue en UTM 35S
+  # DEM fictif calibré sur la réalité physique du Rwanda :
+  # - Altitude min : ~950m (vallées de l'Est et du Sud)
+  # - Altitude max : ~2 500m (région volcanique non modélisée intégralement)
+  # - Gradient Ouest-Est : le Rwanda est plus élevé à l'Ouest (dorsale Congo-Nil)
   ext_utm <- ext(bbox_routes["xmin"], bbox_routes["xmax"],
                  bbox_routes["ymin"], bbox_routes["ymax"])
   
-  # Créer un raster vide avec résolution ~90m
+  # Raster vide avec résolution ~90m (comparable au SRTM niveau 3)
   dem_rwanda <<- rast(ext_utm, resolution = 90, crs = "EPSG:32735")
   
-  # Générer des valeurs d'élévation réalistes
-  set.seed(123) # Permet de générer toujours les mêmes valeurs aléatoires
+  set.seed(123)   # Graine pour reproductibilité du bruit aléatoire
+  n_cells    <- ncell(dem_rwanda)
   
-  n_cells <- ncell(dem_rwanda)
-  
-  # Élévations de base (gradient ouest-est, Rwanda plus élevé à l'ouest)
+  # xFromCell() retourne la coordonnée X (longitude UTM) du centre de chaque cellule
   x_coords <- xFromCell(dem_rwanda, 1:n_cells)
-  base_elevation <- 1500 + (max(x_coords) - x_coords) / 
+  
+  # Gradient d'élévation : 1 500m à l'Est → 2 300m à l'Ouest
+  # La formule normalise x_coords entre 0 (Est) et 1 (Ouest) puis multiplie par 800m
+  base_elevation <- 1500 + (max(x_coords) - x_coords) /
     (max(x_coords) - min(x_coords)) * 800
-  # x_coords est un vecteur contenant le chiffre de la longitude de chaque cellule
-  # Plus on est à l'Ouest, plus x_coords est petit (et inversement à l'est)
   
-  # Ajouter de la variabilité (collines et vallées)
-  variability <- rnorm(n_cells, mean = 0, sd = 150)
-  
-  # Valeurs finales
-  values(dem_rwanda) <<- pmax(950, pmin(2500, base_elevation + variability))
+  # Ajout d'un bruit gaussien (sd=150m) pour simuler collines et vallées
+  # pmax/pmin bornent les valeurs entre 950m et 2 500m
+  values(dem_rwanda) <<- pmax(950, pmin(2500, base_elevation + rnorm(n_cells, 0, 150)))
   
   cat("✓ DEM fictif créé\n")
 })
 
-cat("  Résolution:", paste(round(res(dem_rwanda)), collapse = " x "), "mètres\n")
-cat("  Élévation min:", round(global(dem_rwanda, "min", na.rm=TRUE)[,1]), "m\n")
-cat("  Élévation max:", round(global(dem_rwanda, "max", na.rm=TRUE)[,1]), "m\n\n")
+cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
+cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "m\n\n")
 
 
 # ==============================================================================
 # PARTIE 5 : CRÉATION DU GRAPHE ROUTIER AVEC SFNETWORKS
 # ==============================================================================
+# sfnetworks représente le réseau routier comme un graphe topologique où :
+#   - les NŒUDS sont les intersections et extrémités de routes
+#   - les ARÊTES sont les segments de route entre deux nœuds
+# Ce graphe servira ensuite à igraph pour le calcul de plus courts chemins.
 
 cat("=== PARTIE 5 : Création du graphe routier ===\n")
 
-# --- Nettoyage des types de géométries ---
-cat("Vérification des types de géométries...\n")
-
-types_geom <- st_geometry_type(routes_rwanda)
-cat("  Types trouvés:", paste(unique(types_geom), collapse = ", "), "\n")
-
+# ── Homogénéisation des types de géométrie ───────────────────────────────────
+# Le fichier PBF peut contenir des MULTILINESTRING (plusieurs lignes groupées)
+# que sfnetworks ne sait pas gérer. st_cast() les éclate en LINESTRING simples.
 routes_rwanda_clean <- routes_rwanda %>%
   st_cast("LINESTRING", warn = FALSE) %>%
-  filter(st_geometry_type(.) == "LINESTRING") %>%
+  filter(st_geometry_type(.) == "LINESTRING") %>%  # Supprimer les types non conformes
   st_make_valid()
 
-cat("✓ Géométries nettoyées:", nrow(routes_rwanda_clean), "LINESTRING\n\n")
-
-# --- Conversion en réseau sfnetworks ---
-cat("Création du réseau...\n")
-reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE)
-
-cat("✓ Réseau créé\n")
-cat("  Nœuds:", igraph::vcount(reseau_rwanda), "\n")
-cat("  Arêtes:", igraph::ecount(reseau_rwanda), "\n\n")
-
-# --- Calcul de la longueur des arêtes ---
-cat("Calcul des longueurs des arêtes...\n")
-
-reseau_rwanda <- reseau_rwanda %>%
+# Création du réseau non orienté (directed = FALSE) :
+# un segment peut être parcouru dans les deux sens (routes bidirectionnelles).
+# Les routes à sens unique seraient gérées avec directed = TRUE + attribut oneway.
+reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) %>%
   activate("edges") %>%
+  # st_length() calcule la longueur en mètres (grâce à la projection UTM 35S)
+  # as.numeric() supprime l'unité "m" pour faciliter les calculs arithmétiques
   mutate(longueur_m = as.numeric(st_length(geometry)))
 
-# --- Fonction pour subdiviser une ligne en segments de longueur max ---
+# ── Subdivision des arêtes longues ────────────────────────────────────────────
+# Les arêtes très longues (>5km) peuvent masquer des variations de pente importantes.
+# On les découpe en segments de 2km maximum pour un calcul de pente plus précis.
+# Cette subdivision augmente le nombre d'arêtes mais améliore la qualité du modèle.
 subdiviser_ligne <- function(ligne, attributs, crs, max_length = 2000) {
   longueur_totale <- as.numeric(st_length(st_sfc(ligne, crs = crs)))
   
+  # Si le segment est déjà court : le retourner tel quel sans subdivision
   if (longueur_totale <= max_length) {
     return(st_sf(attributs, geometry = st_sfc(ligne, crs = crs)))
   }
   
-  n_segments <- ceiling(longueur_totale / max_length)
+  # Nombre de sous-segments nécessaires (arrondi supérieur)
+  n_segments  <- ceiling(longueur_totale / max_length)
+  # proportions : vecteur de 0 à 1 en n_segments+1 étapes équidistantes
   proportions <- seq(0, 1, length.out = n_segments + 1)
-  segments <- list()
+  segments    <- list()
   
   for (i in 1:(length(proportions) - 1)) {
-    debut <- proportions[i]
-    fin <- proportions[i + 1]
-    
+    debut <- proportions[i]; fin <- proportions[i + 1]
     if (debut == 0 && fin == 1) {
-      segment <- ligne
+      segment <- ligne  # Segment unique : pas besoin de découper
     } else {
+      # st_line_sample() échantillonne des points à des proportions données de la ligne
       points <- st_line_sample(st_sfc(ligne, crs = crs), sample = c(debut, fin))
       coords <- st_coordinates(points)
-      if (nrow(coords) >= 2) {
-        segment <- st_linestring(coords[1:2, 1:2])
-      } else {
-        segment <- ligne
-      }
+      # Création d'une nouvelle LINESTRING entre les deux points échantillonnés
+      segment <- if (nrow(coords) >= 2) st_linestring(coords[1:2, 1:2]) else ligne
     }
-    
     segments[[i]] <- st_sf(attributs, geometry = st_sfc(segment, crs = crs))
   }
-  
-  return(bind_rows(segments))
+  bind_rows(segments)
 }
 
-# --- Subdivision RÉELLE des arêtes longues ---
-cat("Subdivision des arêtes longues (>5km)...\n")
-
-# Extraire les arêtes
-aretes_avant <- reseau_rwanda %>%
-  activate("edges") %>%
-  st_as_sf()
-
-n_aretes_avant <- nrow(aretes_avant)
-
-# Identifier arêtes courtes et longues
-aretes_courtes <- aretes_avant %>% filter(longueur_m <= 5000)
-aretes_longues <- aretes_avant %>% filter(longueur_m > 5000)
-
-cat("  Arêtes à subdiviser:", nrow(aretes_longues), "\n")
-
-# Récupérer le CRS depuis le dataframe (pas depuis la géométrie individuelle)
-crs_reseau <- st_crs(aretes_longues)
+aretes_avant   <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+aretes_courtes <- aretes_avant %>% filter(longueur_m <= 5000)  # Conservées telles quelles
+aretes_longues <- aretes_avant %>% filter(longueur_m >  5000)  # À subdiviser
+crs_reseau     <- st_crs(aretes_longues)
 
 if (nrow(aretes_longues) > 0) {
-  # Subdiviser chaque arête longue
-  aretes_subdiv_list <- list()
-  
-  for (i in 1:nrow(aretes_longues)) {
-    ligne <- st_geometry(aretes_longues[i,])[[1]]
-    attributs <- aretes_longues[i,] %>% st_drop_geometry()
-    
-    segments <- subdiviser_ligne(ligne, attributs, crs = crs_reseau, max_length = 2000)
-    aretes_subdiv_list[[i]] <- segments
+  aretes_subdiv_list <- vector("list", nrow(aretes_longues))
+  for (i in seq_len(nrow(aretes_longues))) {
+    aretes_subdiv_list[[i]] <- subdiviser_ligne(
+      st_geometry(aretes_longues[i,])[[1]],
+      aretes_longues[i,] %>% st_drop_geometry(),
+      crs = crs_reseau, max_length = 2000   # 2km maximum par sous-segment
+    )
   }
-  
-  # Combiner tous les segments
-  aretes_subdiv <- bind_rows(aretes_subdiv_list)
-  
-  # Recombiner avec arêtes courtes
-  routes_final <- bind_rows(aretes_courtes, aretes_subdiv)
-  
-  # Recréer le réseau
-  reseau_rwanda <- as_sfnetwork(routes_final, directed = FALSE)
-  
-  # Recalculer les longueurs
-  reseau_rwanda <- reseau_rwanda %>%
+  # Recombinaison : arêtes courtes inchangées + nouvelles arêtes subdivisions
+  routes_final  <- bind_rows(aretes_courtes, bind_rows(aretes_subdiv_list))
+  reseau_rwanda <- as_sfnetwork(routes_final, directed = FALSE) %>%
     activate("edges") %>%
     mutate(longueur_m = as.numeric(st_length(geometry)))
 }
 
-n_aretes_apres <- igraph::ecount(reseau_rwanda)
+cat("✓ Réseau créé — nœuds :", igraph::vcount(reseau_rwanda),
+    "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
 
-cat("✓ Subdivision terminée\n")
-cat("  Arêtes avant:", n_aretes_avant, "\n")
-cat("  Arêtes après:", n_aretes_apres, "\n")
-cat("  Arêtes ajoutées:", n_aretes_apres - n_aretes_avant, "\n")
-cat("  Nœuds finaux:", igraph::vcount(reseau_rwanda), "\n\n")
 
 # ==============================================================================
-# PARTIE 5 BIS : CORRECTIONS TOPOLOGIQUES DU RÉSEAU (méthode snapping + subdivision)
+# PARTIE 5 BIS : CORRECTIONS TOPOLOGIQUES DU RÉSEAU
 # ==============================================================================
+# Les données OSM contiennent fréquemment des erreurs topologiques :
+#   1. Routes qui se croisent sans nœud d'intersection (pont raté, erreur de saisie)
+#   2. Extrémités de routes proches mais pas connectées (gap de quelques mètres)
+#   3. Nœuds intermédiaires inutiles (points de degré 2 sur une ligne droite)
+# Ces erreurs créent des composantes connexes multiples (le réseau est "fragmenté")
+# et empêchent les algorithmes de plus court chemin de trouver des itinéraires.
 
-cat("=== PARTIE 5 BIS : Corrections topologiques du réseau ===\n\n")
+cat("=== PARTIE 5 BIS : Corrections topologiques ===\n")
 
-cat("État initial:\n")
-cat("  Nœuds:", igraph::vcount(reseau_rwanda), "\n")
-cat("  Arêtes:", igraph::ecount(reseau_rwanda), "\n")
-cat("  Composantes:", igraph::count_components(reseau_rwanda), "\n\n")
+# ── Étape 1 : Subdivision aux intersections ───────────────────────────────────
+# to_spatial_subdivision() détecte les croisements de routes sans nœud commun
+# et crée des nœuds aux points d'intersection. C'est l'opération fondamentale
+# pour connecter des routes qui se croisent physiquement.
+reseau_subdivise <- reseau_rwanda %>% convert(to_spatial_subdivision)
+cat("  Après subdivision :", igraph::count_components(reseau_subdivise), "composantes\n")
 
-# =========================================================
-# ÉTAPE 1 : SUBDIVISION DES ARÊTES AUX INTERSECTIONS
-# Crée des nœuds là où des routes se croisent sans nœud commun
-# Équivalent de la Figure 4 dans la méthode décrite
-# =========================================================
-
-cat("Étape 1 : Subdivision aux intersections...\n")
-
-reseau_subdivise <- reseau_rwanda %>%
-  convert(to_spatial_subdivision)
-
-cat("  Nœuds après subdivision:", igraph::vcount(reseau_subdivise), "\n")
-cat("  Arêtes après subdivision:", igraph::ecount(reseau_subdivise), "\n")
-cat("  Composantes après subdivision:",
-    igraph::count_components(reseau_subdivise), "\n\n")
-
-# =========================================================
-# ÉTAPE 2 : SNAPPING DES EXTRÉMITÉS PROCHES
-# Connecte les bouts de routes séparés par une faible distance
-# Équivalent des "~328 snaps" décrits dans la méthode
-# On applique plusieurs seuils successifs
-# =========================================================
-
-cat("Étape 2 : Snapping des extrémités proches...\n")
-
-# Fonction de snapping : connecte les nœuds du réseau
-# qui sont dans un rayon `tolerance` mais pas encore reliés
+# ── Étape 2 : Snapping des extrémités proches ─────────────────────────────────
+# st_snap() "aimante" les géométries proches en deçà d'un seuil de tolérance.
+# Appliqué progressivement (du plus fin au plus large) pour éviter de connecter
+# des routes parallèles proches (ex : voies séparées d'une autoroute).
 snapper_reseau <- function(reseau, tolerance_m) {
-  
-  # Extraire les arêtes
-  aretes_sf <- reseau %>%
-    activate("edges") %>%
-    st_as_sf()
-  
-  # Appliquer st_snap sur les géométries des arêtes
-  # Connecte les extrémités proches entre segments
+  aretes_sf <- reseau %>% activate("edges") %>% st_as_sf()
   aretes_snapped <- aretes_sf %>%
     mutate(
+      # Déplace les extrémités de chaque géométrie vers les géométries
+      # voisines dans un rayon de tolerance_m
       geometry = st_snap(geometry, geometry, tolerance = tolerance_m)
     ) %>%
     st_make_valid() %>%
     filter(st_geometry_type(geometry) == "LINESTRING") %>%
     filter(!st_is_empty(geometry))
-  
-  # Reconstruire le réseau
-  reseau_new <- as_sfnetwork(aretes_snapped, directed = FALSE) %>%
+  # Reconstruction du réseau depuis les arêtes corrigées
+  as_sfnetwork(aretes_snapped, directed = FALSE) %>%
     activate("edges") %>%
     mutate(longueur_m = as.numeric(st_length(geometry)))
-  
-  return(reseau_new)
 }
 
-# Snapping progressif avec 3 seuils
-# (du plus fin au plus large, comme recommandé en pratique)
-seuils <- c(5, 15, 30)  # en mètres
-
+# Trois passes de snapping avec des tolérances croissantes :
+#   5m  → corrige les micro-gaps (erreurs de numérisation fine)
+#   15m → corrige les gaps de précision GPS
+#   30m → corrige les gaps de saisie manuelle grossière
 reseau_snap <- reseau_subdivise
-
-for (seuil in seuils) {
-  n_comp_avant <- igraph::count_components(reseau_snap)
-  
+for (seuil in c(5, 15, 30)) {
   tryCatch({
-    reseau_snap <- snapper_reseau(reseau_snap, seuil)
-    
-    # Subdivision après chaque snap pour intégrer les nouveaux nœuds
-    reseau_snap <- reseau_snap %>%
-      convert(to_spatial_subdivision)
-    
-    n_comp_apres <- igraph::count_components(reseau_snap)
-    
-    cat("  Seuil", seuil, "m →",
-        n_comp_avant, "composantes →",
-        n_comp_apres, "composantes\n")
-    
-  }, error = function(e) {
-    cat("  ⚠ Seuil", seuil, "m échoué:", conditionMessage(e), "\n")
-  })
+    reseau_snap <- snapper_reseau(reseau_snap, seuil) %>%
+      convert(to_spatial_subdivision)  # Subdivision après chaque snap (nouveaux nœuds)
+    cat("  Seuil", seuil, "m →", igraph::count_components(reseau_snap), "composantes\n")
+  }, error = function(e) cat("  ⚠ Seuil", seuil, "m échoué\n"))
 }
 
-cat("\n")
+# ── Étape 3 : Suppression des pseudo-nœuds ────────────────────────────────────
+# Un pseudo-nœud (degré 2) est un nœud connecté à exactement 2 arêtes.
+# Il n'est pas topologiquement nécessaire (pas une vraie intersection) et alourdit
+# le graphe. to_spatial_smooth() les supprime et fusionne les arêtes adjacentes.
+reseau_lisse <- reseau_snap %>% convert(to_spatial_smooth)
+cat("  Après lissage :", igraph::count_components(reseau_lisse), "composantes\n")
 
-# =========================================================
-# ÉTAPE 3 : SUPPRESSION DES PSEUDO-NŒUDS (lissage)
-# Retire les nœuds de degré 2 qui ne sont que des points
-# intermédiaires sur une ligne droite
-# =========================================================
-
-cat("Étape 3 : Lissage du réseau (suppression pseudo-nœuds)...\n")
-
-reseau_lisse <- reseau_snap %>%
-  convert(to_spatial_smooth)
-
-cat("  Nœuds après lissage:", igraph::vcount(reseau_lisse), "\n")
-cat("  Arêtes après lissage:", igraph::ecount(reseau_lisse), "\n")
-cat("  Composantes après lissage:",
-    igraph::count_components(reseau_lisse), "\n\n")
-
-# =========================================================
-# ÉTAPE 4 : EXTRACTION DE LA COMPOSANTE GÉANTE
-# Après corrections topologiques, la composante géante
-# devrait couvrir la grande majorité du réseau
-# =========================================================
-
-cat("Étape 4 : Extraction de la composante géante...\n")
-
+# ── Étape 4 : Extraction de la composante géante ──────────────────────────────
+# Même après corrections, le réseau peut rester fragmenté (routes isolées).
+# On conserve uniquement la plus grande composante connexe (composante géante),
+# qui couvre la quasi-totalité du territoire national.
 composantes_finales <- igraph::components(reseau_lisse %>% as_tbl_graph())
-id_geante <- which.max(composantes_finales$csize)
+id_geante     <- which.max(composantes_finales$csize)
 noeuds_geante <- which(composantes_finales$membership == id_geante)
+pct_noeuds    <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse) * 100, 1)
+cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
 
-# Part du réseau dans la composante géante
-pct_noeuds <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse) * 100, 1)
-pct_aretes <- round(composantes_finales$csize[id_geante] / igraph::vcount(reseau_lisse) * 100, 1)
-
-cat("  Composante géante:", composantes_finales$csize[id_geante], "nœuds\n")
-cat("  Soit", pct_noeuds, "% du réseau total\n\n")
-
+# Filtrage du réseau sur la composante géante
 reseau_rwanda <- reseau_lisse %>%
   activate("nodes") %>%
   filter(row_number() %in% noeuds_geante) %>%
-  activate("nodes") %>%
-  mutate(node_id = row_number())
+  mutate(node_id = row_number())   # Réindexation des nœuds après filtrage
 
-# =========================================================
-# ÉTAPE 5 : RECALCUL DES ATTRIBUTS MANQUANTS
-# Après les opérations topologiques, certains attributs
-# peuvent avoir été perdus → recalcul propre
-# =========================================================
-
-cat("Étape 5 : Recalcul des attributs...\n")
-
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    longueur_m = as.numeric(st_length(geometry)),
-    length_km  = longueur_m / 1000,
-    # Recalcul vitesse si manquante
-    speed_kmh = case_when(
-      !is.na(speed_kmh) & speed_kmh > 0 ~ speed_kmh,
-      road_type == "trunk"               ~ 60,
-      road_type == "primary"             ~ 60,
-      road_type == "secondary"           ~ 50,
-      road_type == "tertiary"            ~ 45,
-      TRUE                               ~ 30
-    ),
-    # Recalcul temps de parcours
-    travel_time_h = length_km / speed_kmh,
-    # Recalcul coût généralisé si manquant
-    cost_generalized_usd = case_when(
-      !is.na(cost_generalized_usd) & cost_generalized_usd > 0 ~ cost_generalized_usd,
-      TRUE ~ travel_time_h * 7.5 + length_km * 0.08
-    ),
-    cost_per_km = cost_generalized_usd / length_km
-  )
-
-# =========================================================
-# BILAN FINAL
-# =========================================================
-
-cat("\n=== Bilan des corrections topologiques ===\n")
-cat("  Nœuds initiaux    :", igraph::vcount(reseau_rwanda %>%
-                                              activate("nodes")), "\n")
-cat("  Arêtes finales    :", igraph::ecount(reseau_rwanda), "\n")
-cat("  Composantes finales:", igraph::count_components(reseau_rwanda), "\n")
-
-# Vérification : longueur totale du réseau
-longueur_totale <- reseau_rwanda %>%
-  activate("edges") %>%
-  as_tibble() %>%
-  summarise(total = sum(length_km, na.rm = TRUE)) %>%
-  pull(total)
-
-cat("  Longueur totale   :", round(longueur_totale), "km\n")
-cat("  (attendu ~14 000 km pour le Rwanda)\n\n")
-
-# Alerte si réseau trop réduit
-if (longueur_totale < 5000) {
-  cat("⚠ ATTENTION: réseau trop réduit —",
-      "vérifier les seuils de snapping\n\n")
-} else {
-  cat("✓ Réseau topologiquement corrigé et prêt\n\n")
-}
+cat("✓ Réseau corrigé\n\n")
 
 
 # ==============================================================================
 # PARTIE 6 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
 # ==============================================================================
+# Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
+# Ils représentent des zones économiques importantes (hub, SEZ, frontières…).
+# ATTENTION : ces données sont fictives mais réalistes ; les coordonnées sont
+# approximatives. Remplacer par les vraies localisations si disponibles.
 
 cat("=== PARTIE 6 : Création des nœuds d'entreposage ===\n")
 
-# NOTE : Les positions exactes des entrepôts, SEZ, et marchés ne sont pas
-# toujours disponibles dans OSM de manière fiable. Nous créons donc une
-# base de données fictive mais réaliste pour le Rwanda.
-
-cat("ATTENTION: Données d'entreposage non disponibles publiquement\n")
-cat("→ Création d'une base de données FICTIVE mais réaliste\n\n")
-
-# --- Création de nœuds d'entreposage fictifs ---
-# Basés sur les principales zones économiques connues du Rwanda
-
 entreposages_fictifs <- tibble(
-  nom = c(
-    # Capitale et hub principal
-    "Kigali - Hub Central",
-    "Kigali - SEZ Masoro",
-    "Kigali - Marché Kimisagara",
-    
-    # Frontières (points d'entrée/sortie critiques)
-    "Frontière Gatuna (Ouganda)",
-    "Frontière Rusumo (Tanzanie)",
-    "Frontière Rubavu/Goma (RDC)",
-    "Frontière Kagitumba (Ouganda)",
-    
-    # Capitales de province
-    "Huye (Butare) - Centre Sud",
-    "Musanze - Centre Nord",
-    "Rubavu - Centre Ouest",
-    "Rusizi - Centre Sud-Ouest",
-    
-    # Zones économiques spéciales
+  nom  = c(
+    # Capitale : hub logistique et industriel principal du pays
+    "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
+    # Frontières : points d'entrée/sortie des marchandises importées/exportées
+    "Frontière Gatuna (Ouganda)", "Frontière Rusumo (Tanzanie)",
+    "Frontière Rubavu/Goma (RDC)", "Frontière Kagitumba (Ouganda)",
+    # Capitales de province : centres de redistribution régionale
+    "Huye (Butare) - Centre Sud", "Musanze - Centre Nord",
+    "Rubavu - Centre Ouest", "Rusizi - Centre Sud-Ouest",
+    # Zone économique spéciale agro-industrielle
     "Bugesera SEZ (Agro-industrie)",
-    
     # Centres urbains secondaires
-    "Muhanga",
-    "Nyanza",
-    "Rwamagana"
+    "Muhanga", "Nyanza", "Rwamagana"
   ),
-  
   type = c(
-    "hub", "sez", "marche",
-    "frontiere", "frontiere", "frontiere", "frontiere",
-    "ville", "ville", "ville", "ville",
-    "sez",
-    "ville", "ville", "ville"
+    "hub","sez","marche",                              # Kigali
+    "frontiere","frontiere","frontiere","frontiere",   # Frontières
+    "ville","ville","ville","ville",                   # Villes de province
+    "sez",                                             # Bugesera
+    "ville","ville","ville"                            # Centres secondaires
   ),
-  
-  # Coordonnées approximatives (lon, lat en WGS84)
-  # Ces coordonnées sont fictives mais réalistes pour les vraies localisations
-  lon = c(
-    30.0619, 30.1300, 30.0588,           # Kigali
-    30.0890, 30.7850, 29.2600, 30.7500,  # Frontières
-    29.7388, 29.6333, 29.2650, 29.0100,  # Villes
-    30.1500,                              # Bugesera
-    29.7400, 29.7550, 30.4300            # Centres secondaires
-  ),
-  
-  lat = c(
-    -1.9536, -1.9000, -1.9700,           # Kigali
-    -1.3800, -2.3800, -1.6667, -1.3100,  # Frontières
-    -2.5965, -1.4992, -1.6750, -2.4900,  # Villes
-    -2.1000,                              # Bugesera
-    -2.0850, -2.3500, -1.8700            # Centres secondaires
-  )
+  # Coordonnées approximatives en WGS84 (longitude, latitude en degrés décimaux)
+  lon = c(30.0619,30.1300,30.0588,30.0890,30.7850,29.2600,30.7500,
+          29.7388,29.6333,29.2650,29.0100,30.1500,29.7400,29.7550,30.4300),
+  lat = c(-1.9536,-1.9000,-1.9700,-1.3800,-2.3800,-1.6667,-1.3100,
+          -2.5965,-1.4992,-1.6750,-2.4900,-2.1000,-2.0850,-2.3500,-1.8700)
 )
 
-# --- Conversion en objet sf et projection ---
+# Stocker dans DuckDB pour les jointures avec les flux gravitaires (Parties 17-18)
+duck_write(entreposages_fictifs, "zones_entreposage")
+
+# Conversion en objet sf et reprojection en UTM 35S (même CRS que le réseau)
 entreposages_sf <- entreposages_fictifs %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_transform(crs = 32735)  # Même CRS que le réseau
+  st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+  st_transform(crs = 32735)
 
-cat("✓ Nœuds d'entreposage créés:", nrow(entreposages_sf), "\n")
-cat("  Types:", paste(unique(entreposages_sf$type), collapse = ", "), "\n\n")
+# ── Accrochage (snapping) des entrepôts au réseau ────────────────────────────
+# Les coordonnées des entrepôts ne tombent pas exactement sur le réseau routier.
+# st_nearest_feature() trouve pour chaque entrepôt le nœud du réseau le plus proche.
+# Opération O(n×m) — acceptable ici car on a peu d'entrepôts (~15).
+noeuds_reseau <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
 
-# --- Accrochage (snapping) des entrepôts au réseau ---
-# On trouve le nœud du réseau le plus proche de chaque entrepôt
-
-cat("Accrochage des entrepôts au réseau routier...\n")
-
-# Extraction des nœuds du réseau
-noeuds_reseau <- reseau_rwanda %>%
-  activate("nodes") %>%
-  st_as_sf()
-
-# Pour chaque entrepôt, trouver le nœud le plus proche
 entreposages_avec_snap <- entreposages_sf %>%
   mutate(
-    # Index du nœud le plus proche
     noeud_proche_id = st_nearest_feature(geometry, noeuds_reseau),
-    
-    # Distance au nœud (pour vérification qualité)
-    distance_snap = as.numeric(
+    # Calcul de la distance d'accrochage pour contrôle qualité
+    # (une distance > 2km indiquerait un entrepôt mal positionné)
+    distance_snap   = as.numeric(
       st_distance(geometry, noeuds_reseau[noeud_proche_id,], by_element = TRUE)
     )
   )
 
-# Vérification des distances de snap
-cat("  Distance de snap moyenne:", round(mean(entreposages_avec_snap$distance_snap)), "m\n")
-cat("  Distance de snap maximale:", round(max(entreposages_avec_snap$distance_snap)), "m\n")
-
-# Ajouter un attribut aux nœuds du réseau pour identifier les entreposages
+# Marquage des nœuds d'entreposage dans le réseau (attributs booléens + textuels)
+# match() retourne l'indice de la première occurrence de node_id dans les IDs snappés
 reseau_rwanda <- reseau_rwanda %>%
   activate("nodes") %>%
   mutate(
-    node_id = row_number(),
-    is_warehouse = node_id %in% entreposages_avec_snap$noeud_proche_id,
+    node_id        = row_number(),
+    is_warehouse   = node_id %in% entreposages_avec_snap$noeud_proche_id,
     warehouse_name = if_else(
       is_warehouse,
       entreposages_avec_snap$nom[match(node_id, entreposages_avec_snap$noeud_proche_id)],
@@ -817,299 +641,332 @@ reseau_rwanda <- reseau_rwanda %>%
     )
   )
 
-cat("✓ Entreposages intégrés au réseau\n\n")
+cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
 # ==============================================================================
-# PARTIE 7 : CALCUL DES PENTES
+# PARTIE 7 : CALCUL DES PENTES POUR CHAQUE ARÊTE
 # ==============================================================================
+# La pente d'un segment routier influence à la fois la vitesse des véhicules
+# et leur consommation de carburant. On la calcule en échantillonnant des points
+# le long de chaque arête et en extrayant leur altitude depuis le DEM.
+# terra et raster ne s'interfacent pas avec DuckDB → cette partie reste en R pur.
 
-cat("=== PARTIE 7 : Calcul des pentes pour chaque arête ===\n")
+cat("=== PARTIE 7 : Calcul des pentes ===\n")
 
-# --- Fonction pour calculer la pente d'une arête ---
 calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
-  # Échantillonnage de points le long de la ligne
-  # espacement en mètres
-  longueur <- as.numeric(st_length(ligne_geom))  # Convertir en numérique
   
-  # Si la ligne est très courte, utiliser seulement début et fin
-  if (longueur < espacement * 2) {
-    points <- st_line_sample(ligne_geom, n = 2)
-  } else {
-    # Nombre de points à échantillonner
-    n_points <- max(2, floor(longueur / espacement))
-    points <- st_line_sample(ligne_geom, n = n_points)
-  }
+  # Calcul de la longueur du segment en mètres (CRS métrique requis)
+  longueur <- as.numeric(st_length(ligne_geom))
   
-  # Conversion en points individuels
+  # Nombre de points d'échantillonnage (au moins 2 : début et fin)
+  n_points <- max(2, floor(longueur / espacement))
+  points   <- if (longueur < espacement * 2)
+    st_line_sample(ligne_geom, n = 2)         # Segment très court : 2 points seulement
+  else
+    st_line_sample(ligne_geom, n = n_points)  # Un point tous les 100m
+  
+  # st_cast() éclate le MULTIPOINT en POINTs individuels pour terra::extract()
   points_sf <- st_cast(points, "POINT")
   
-  # Extraction des élévations
-  elevations <- terra::extract(dem, vect(points_sf), method = "bilinear")
-  elev_values <- elevations[, 2]  # 2ème colonne = valeur d'élévation
+  # terra::extract() récupère la valeur du pixel DEM sous chaque point
+  # method = "bilinear" : interpolation entre les 4 pixels voisins (plus précis)
+  # vect() convertit l'objet sf en format terra::SpatVector (requis par terra)
+  elevations  <- terra::extract(dem, vect(points_sf), method = "bilinear")
+  elev_values <- elevations[, 2]  # Colonne 1 = ID du point, colonne 2 = altitude
   
-  # Gestion des NA (points hors du DEM)
-  if (any(is.na(elev_values)) || length(elev_values) < 2) {
-    return(list(
-      slope_mean = 0,
-      elevation_gain = 0,
-      elevation_loss = 0,
-      rugosity = 0
-    ))
-  }
+  # Gestion des NA (points hors de l'emprise du DEM) : retour à zéro plutôt qu'erreur
+  if (any(is.na(elev_values)) || length(elev_values) < 2)
+    return(list(slope_mean=0, elevation_gain=0, elevation_loss=0, rugosity=0))
   
-  # Calcul de la pente moyenne (début → fin)
-  elev_debut <- elev_values[1]
-  elev_fin <- elev_values[length(elev_values)]
-  denivele_net <- elev_fin - elev_debut
+  # Pente nette (début → fin) en pourcentage : dénivelé / longueur × 100
+  # Positive = montée ; négative = descente
+  denivele_net   <- elev_values[length(elev_values)] - elev_values[1]
   slope_mean_pct <- (denivele_net / longueur) * 100
   
-  # Calcul du dénivelé positif (D+) et négatif (D-)
-  differences <- diff(elev_values)
+  # diff() calcule les différences entre valeurs consécutives du vecteur d'élévation
+  # Dénivelé cumulé positif (D+) = somme des montées entre points successifs
+  # Dénivelé cumulé négatif (D-) = somme des descentes (valeur absolue)
+  differences    <- diff(elev_values)
   elevation_gain <- sum(differences[differences > 0], na.rm = TRUE)
   elevation_loss <- abs(sum(differences[differences < 0], na.rm = TRUE))
   
-  # Coefficient de rugosité altimétrique
+  # Rugosité altimétrique : (D+ + D-) / longueur
+  # Mesure l'ondulation du profil — élevée sur une route très accidentée
   rugosity <- (elevation_gain + elevation_loss) / longueur
   
-  return(list(
-    slope_mean = slope_mean_pct,
-    elevation_gain = elevation_gain,
-    elevation_loss = elevation_loss,
-    rugosity = rugosity
-  ))
+  list(slope_mean=slope_mean_pct, elevation_gain=elevation_gain,
+       elevation_loss=elevation_loss, rugosity=rugosity)
 }
 
-# --- Application du calcul à toutes les arêtes ---
-cat("Calcul des pentes en cours...\n")
-cat("(Cela peut prendre 3-10 minutes selon le nombre d'arêtes)\n")
-
-# Extraction des arêtes
-aretes_avec_geom <- reseau_rwanda %>%
-  activate("edges") %>%
-  st_as_sf()
-
-# Calcul des pentes pour chaque arête
-n_aretes <- nrow(aretes_avec_geom)
+# Application sur toutes les arêtes du réseau (boucle nécessaire car terra ne
+# vectorise pas l'extraction sur des géométries sf disparates)
+aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+n_aretes         <- nrow(aretes_avec_geom)
 resultats_pentes <- vector("list", n_aretes)
 
-# Boucle avec indication de progression
 for (i in seq_len(n_aretes)) {
-  if (i %% 500 == 0 || i == n_aretes) {
-    cat("  Progression:", round(i/n_aretes*100, 1), "%\n")
-  }
-  
+  if (i %% 500 == 0 || i == n_aretes) cat("  Pentes :", round(i/n_aretes*100,1), "%\n")
   resultats_pentes[[i]] <- calculer_pente_arete(
     aretes_avec_geom$geometry[i],
     dem_rwanda,
-    espacement = 100  # Point tous les 100m
+    espacement = 100   # Un point d'élévation tous les 100 mètres
   )
 }
 
-cat("  Calcul terminé\n")
-
-# Conversion des résultats en dataframe
+# bind_rows() convertit la liste de listes en data.frame (une ligne = une arête)
 pentes_df <- bind_rows(resultats_pentes)
 
-# Ajout au réseau
+# Intégration des pentes dans le réseau sfnetworks
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(
-    slope_mean = pentes_df$slope_mean,
-    elevation_gain = pentes_df$elevation_gain,
-    elevation_loss = pentes_df$elevation_loss,
-    rugosity = pentes_df$rugosity,
-    
-    # Catégorie de pente (pour faciliter analyse)
-    slope_category = case_when(
-      abs(slope_mean) < 2 ~ "plat",
-      abs(slope_mean) < 5 ~ "legere",
-      abs(slope_mean) < 8 ~ "moderee",
-      TRUE ~ "forte"
+    slope_mean      = pentes_df$slope_mean,
+    elevation_gain  = pentes_df$elevation_gain,
+    elevation_loss  = pentes_df$elevation_loss,
+    rugosity        = pentes_df$rugosity,
+    # Catégorisation de la pente pour les CASE WHEN SQL et la cartographie
+    slope_category  = case_when(
+      abs(slope_mean) < 2 ~ "plat",     # Plaine : quasi-aucun impact
+      abs(slope_mean) < 5 ~ "legere",   # Légère : impact modéré
+      abs(slope_mean) < 8 ~ "moderee",  # Modérée : impact significatif
+      TRUE                ~ "forte"     # Forte : impact majeur (cols, falaises)
     )
   )
 
-cat("✓ Pentes calculées pour toutes les arêtes\n")
+cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 
-# Statistiques sur les pentes
-stats_pentes <- reseau_rwanda %>%
+
+# ==============================================================================
+# PARTIES 8-10 : VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
+# ==============================================================================
+# Ces trois parties sont fusionnées en une seule requête SQL à 4 CTEs (Common
+# Table Expressions). L'approche SQL présente plusieurs avantages :
+#   - Lisibilité : chaque CTE a un rôle clairement nommé et isolé
+#   - Performance : DuckDB optimise l'ensemble de la requête en une seule passe
+#   - Maintenabilité : changer un paramètre économique = modifier une valeur
+#   - Traçabilité : toutes les étapes intermédiaires sont visibles en SQL
+#
+# Formules appliquées :
+#   speed_kmh     = vitesse_base × facteur_pente
+#   conso (L/100) = conso_base × facteur_surface × (1 + slope × FACTEUR / 100)
+#   cost_fuel     = (length_km × conso/100) × prix_carburant
+#   cost_wear     = length_km × usure_usd_km
+#   cost_time     = (length_km / speed_kmh) × valeur_temps
+#   cost_total    = cost_fuel + cost_wear + cost_time  [coût généralisé]
+
+cat("=== PARTIES 8-10 : Vitesses, consommation et coûts via DuckDB ===\n")
+
+# ── Chargement des attributs tabulaires des arêtes dans DuckDB ────────────────
+# st_drop_geometry() supprime la colonne géométrie (non stockable dans DuckDB standard)
+aretes_df <- reseau_rwanda %>%
   activate("edges") %>%
-  as_tibble() %>%
-  summarise(
-    pente_moyenne = mean(abs(slope_mean), na.rm = TRUE),
-    pente_mediane = median(abs(slope_mean), na.rm = TRUE),
-    d_plus_moyen = mean(elevation_gain, na.rm = TRUE),
-    d_moins_moyen = mean(elevation_loss, na.rm = TRUE)
+  st_as_sf() %>%
+  st_drop_geometry() %>%
+  mutate(arete_id = row_number())   # Identifiant pour réaligner les résultats après la requête
+
+duck_write(aretes_df, "aretes_base")
+
+# ── Tables de paramètres dans DuckDB ─────────────────────────────────────────
+# Stocker les paramètres sous forme de tables DuckDB permet de les modifier
+# facilement pour des scénarios alternatifs sans toucher à la requête principale.
+
+# Facteurs de consommation et coûts d'usure par type de surface
+duck_write(
+  tibble(
+    surface         = c("paved","gravel","unpaved"),
+    facteur_surface = c(PARAMS_VEHICULE$facteur_paved,
+                        PARAMS_VEHICULE$facteur_gravel,
+                        PARAMS_VEHICULE$facteur_unpaved),
+    usure_usd_km    = c(PARAMS_ECONOMIQUES$usure_paved,
+                        PARAMS_ECONOMIQUES$usure_gravel,
+                        PARAMS_ECONOMIQUES$usure_unpaved)
+  ),
+  "params_surface"
+)
+
+# Facteurs multiplicatifs de vitesse par catégorie de pente
+duck_write(
+  tibble(
+    slope_category  = c("plat","legere","moderee","forte"),
+    facteur_pente   = c(FACTEURS_PENTE$plat, FACTEURS_PENTE$legere,
+                        FACTEURS_PENTE$moderee, FACTEURS_PENTE$forte)
+  ),
+  "params_pente"
+)
+
+# ── Requête SQL principale : 4 CTEs chaînées ──────────────────────────────────
+# glue::glue() injecte les constantes R dans la chaîne SQL avant exécution
+# (ex : {PARAMS_VEHICULE$conso_base} est remplacé par 20)
+aretes_couts <- duck_query(glue::glue("
+  WITH
+
+  -- CTE 1 : Jointure avec les vitesses de référence
+  -- LEFT JOIN pour conserver les arêtes sans correspondance exacte (vitesse = 30 par défaut)
+  avec_vitesse AS (
+    SELECT
+      a.*,
+      COALESCE(v.vitesse_kmh, 30) AS vitesse_base
+      -- COALESCE : retourne vitesse_kmh si non NULL, sinon 30 km/h (valeur de secours)
+    FROM aretes_base a
+    LEFT JOIN vitesses_reference v
+      ON a.road_type = v.road_type AND a.surface = v.surface
+  ),
+
+  -- CTE 2 : Application du facteur de pente sur la vitesse
+  -- speed_kmh = vitesse_base × facteur_pente
+  -- Ex : 60 km/h × 0.9 (pente légère) = 54 km/h effectif
+  avec_vitesse_pente AS (
+    SELECT
+      av.*,
+      av.vitesse_base * pp.facteur_pente AS speed_kmh,
+      pp.facteur_pente
+    FROM avec_vitesse av
+    LEFT JOIN params_pente pp ON av.slope_category = pp.slope_category
+  ),
+
+  -- CTE 3 : Calcul de la consommation de carburant
+  -- En montée (slope_mean > 0) : surconsommation proportionnelle à la pente
+  -- En descente (slope_mean <= 0) : pas de récupération d'énergie modélisée
+  avec_conso AS (
+    SELECT
+      avp.*,
+      ps.facteur_surface,
+      ps.usure_usd_km,
+      {PARAMS_VEHICULE$conso_base}       -- Base : 20 L/100km sur bitume plat
+        * ps.facteur_surface             -- Ajustement surface (ex : ×1.15 sur gravier)
+        * CASE
+            WHEN slope_mean > 0
+            THEN 1.0 + (slope_mean * {FACTEUR_CONSO_PENTE} / 100.0)
+            -- Ex : pente 5% → facteur 1 + (5×1.5/100) = 1.075 → +7.5% de conso
+            ELSE 1.0  -- En descente : pas de bonus de consommation
+          END AS conso_L_per_100km
+    FROM avec_vitesse_pente avp
+    LEFT JOIN params_surface ps ON avp.surface = ps.surface
+  ),
+
+  -- CTE 4 : Conversion des unités et calcul des grandeurs intermédiaires
+  avec_couts AS (
+    SELECT
+      *,
+      longueur_m / 1000.0                               AS length_km,
+      (longueur_m / 1000.0) / speed_kmh                AS travel_time_h,
+      -- Litres consommés sur ce segment = km × (L/100km ÷ 100)
+      (longueur_m / 1000.0) * (conso_L_per_100km / 100.0) AS fuel_consumption_L
+    FROM avec_conso
   )
 
-cat("  Pente moyenne:", round(stats_pentes$pente_moyenne, 2), "%\n")
-cat("  D+ moyen par arête:", round(stats_pentes$d_plus_moyen, 1), "m\n\n")
+  -- Sélection finale : tous les composantes de coût + colonnes identifiantes
+  SELECT
+    arete_id,
+    road_type,
+    surface,
+    slope_mean,
+    slope_category,
+    elevation_gain,
+    elevation_loss,
+    longueur_m,
+    length_km,
+    speed_kmh,
+    conso_L_per_100km,
+    fuel_consumption_L,
+    -- Coût carburant (USD) = litres consommés × prix du litre de diesel
+    fuel_consumption_L * {PARAMS_ECONOMIQUES$prix_carburant}    AS cost_fuel_usd,
+    -- Coût d'usure (USD) = km parcourus × taux d'usure par km (variable selon surface)
+    length_km * usure_usd_km                                    AS cost_wear_usd,
+    -- Coût du temps (USD) = heures de trajet × valeur économique du temps
+    (length_km / speed_kmh) * {PARAMS_ECONOMIQUES$valeur_temps} AS cost_time_usd,
+    length_km / speed_kmh                                       AS travel_time_h
+  FROM avec_couts
+"))
 
-
-# ==============================================================================
-# PARTIE 8 : ATTRIBUTION DES VITESSES
-# ==============================================================================
-
-cat("=== PARTIE 8 : Attribution des vitesses ===\n")
-
-# --- Jointure avec les vitesses de référence ---
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  left_join(VITESSES_REFERENCE, by = c("road_type", "surface")) %>%
+# Coût généralisé = somme des trois composantes (carburant + usure + temps)
+# Calculé en R car DuckDB ne peut pas référencer des alias de la même clause SELECT
+aretes_couts <- aretes_couts %>%
   mutate(
-    # Si vitesse manquante (cas non prévu), utiliser 30 km/h par défaut
-    vitesse_base = if_else(is.na(vitesse_kmh), 30, vitesse_kmh)
-  )
-
-# --- Ajustement selon la pente ---
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    # Facteur de réduction selon pente
-    facteur_pente = case_when(
-      slope_category == "plat" ~ FACTEURS_PENTE$plat,
-      slope_category == "legere" ~ FACTEURS_PENTE$legere,
-      slope_category == "moderee" ~ FACTEURS_PENTE$moderee,
-      slope_category == "forte" ~ FACTEURS_PENTE$forte,
-      TRUE ~ 1.0
-    ),
-    
-    # Vitesse effective après ajustement pente
-    speed_kmh = vitesse_base * facteur_pente
-  )
-
-cat("✓ Vitesses attribuées\n")
-
-# Statistiques
-stats_vitesses <- reseau_rwanda %>%
-  activate("edges") %>%
-  as_tibble() %>%
-  summarise(
-    vitesse_min = min(speed_kmh, na.rm = TRUE),
-    vitesse_moyenne = mean(speed_kmh, na.rm = TRUE),
-    vitesse_max = max(speed_kmh, na.rm = TRUE)
-  )
-
-cat("  Vitesse moyenne:", round(stats_vitesses$vitesse_moyenne, 1), "km/h\n")
-cat("  Plage:", round(stats_vitesses$vitesse_min, 1), "-", 
-    round(stats_vitesses$vitesse_max, 1), "km/h\n\n")
-
-
-# ==============================================================================
-# PARTIE 9 : CALCUL DE LA CONSOMMATION DE CARBURANT
-# ==============================================================================
-
-cat("=== PARTIE 9 : Calcul de la consommation de carburant ===\n")
-
-# --- Consommation ajustée selon surface et pente ---
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    # Facteur d'ajustement selon surface
-    facteur_surface = case_when(
-      surface == "paved" ~ PARAMS_VEHICULE$facteur_paved,
-      surface == "gravel" ~ PARAMS_VEHICULE$facteur_gravel,
-      surface == "unpaved" ~ PARAMS_VEHICULE$facteur_unpaved,
-      TRUE ~ 1.0
-    ),
-    
-    # Ajustement selon pente (méthode simplifiée)
-    # Pour chaque % de pente en montée : +1.5% de consommation
-    facteur_pente_conso = if_else(
-      slope_mean > 0,
-      1 + (slope_mean * FACTEUR_CONSO_PENTE / 100),
-      1.0  # Pas de bonus en descente (freinage moteur compensé par sécurité)
-    ),
-    
-    # Consommation finale (L/100km)
-    conso_L_per_100km = PARAMS_VEHICULE$conso_base * facteur_surface * facteur_pente_conso,
-    
-    # Consommation totale pour cette arête (litres)
-    fuel_consumption_L = (longueur_m / 1000) * (conso_L_per_100km / 100)
-  )
-
-cat("✓ Consommation calculée\n")
-
-# Statistiques
-stats_conso <- reseau_rwanda %>%
-  activate("edges") %>%
-  as_tibble() %>%
-  summarise(
-    conso_moyenne = mean(conso_L_per_100km, na.rm = TRUE),
-    conso_min = min(conso_L_per_100km, na.rm = TRUE),
-    conso_max = max(conso_L_per_100km, na.rm = TRUE)
-  )
-
-cat("  Consommation moyenne:", round(stats_conso$conso_moyenne, 1), "L/100km\n")
-cat("  Plage:", round(stats_conso$conso_min, 1), "-", 
-    round(stats_conso$conso_max, 1), "L/100km\n\n")
-
-
-# ==============================================================================
-# PARTIE 10 : CALCUL DES COÛTS GÉNÉRALISÉS
-# ==============================================================================
-
-cat("=== PARTIE 10 : Calcul des coûts de transport généralisés ===\n")
-
-# --- Calcul de tous les coûts ---
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    # Recalcul de la longueur en km (pour clarté)
-    length_km = longueur_m / 1000,
-    
-    # Temps de parcours (heures)
-    travel_time_h = length_km / speed_kmh,
-    
-    # Coût carburant (USD)
-    cost_fuel_usd = fuel_consumption_L * PARAMS_ECONOMIQUES$prix_carburant,
-    
-    # Coût usure véhicule (USD)
-    cost_wear_usd = case_when(
-      surface == "paved" ~ length_km * PARAMS_ECONOMIQUES$usure_paved,
-      surface == "gravel" ~ length_km * PARAMS_ECONOMIQUES$usure_gravel,
-      surface == "unpaved" ~ length_km * PARAMS_ECONOMIQUES$usure_unpaved,
-      TRUE ~ length_km * PARAMS_ECONOMIQUES$usure_gravel
-    ),
-    
-    # Coût du temps (USD)
-    cost_time_usd = travel_time_h * PARAMS_ECONOMIQUES$valeur_temps,
-    
-    # COÛT GÉNÉRALISÉ TOTAL (métrique principale)
     cost_generalized_usd = cost_fuel_usd + cost_wear_usd + cost_time_usd,
-    
-    # Coût par kilomètre (pour comparaisons)
-    cost_per_km = cost_generalized_usd / length_km
+    # Coût au km : indicateur de comparaison entre segments de longueurs différentes
+    cost_per_km          = if_else(length_km > 0, cost_generalized_usd / length_km, 0)
   )
 
-cat("✓ Coûts généralisés calculés\n")
+# Persister les coûts dans DuckDB (réutilisés en Parties 18-19)
+duck_write(aretes_couts, "aretes_couts")
 
-# Statistiques finales
-stats_couts <- reseau_rwanda %>%
+# Statistiques de contrôle directement depuis DuckDB
+stats_couts_sql <- duck_query("
+  SELECT
+    ROUND(AVG(cost_per_km), 3)                                  AS cout_par_km_moyen,
+    ROUND(AVG(cost_fuel_usd / cost_generalized_usd) * 100, 1)  AS part_carburant,
+    ROUND(AVG(cost_time_usd / cost_generalized_usd) * 100, 1)  AS part_temps,
+    ROUND(AVG(cost_wear_usd / cost_generalized_usd) * 100, 1)  AS part_usure
+  FROM aretes_couts
+")
+
+cat("✓ Coûts calculés via DuckDB SQL (4 CTEs chaînées)\n")
+cat("  Coût moyen/km :", stats_couts_sql$cout_par_km_moyen, "USD/km\n")
+cat("  Part carburant:", stats_couts_sql$part_carburant, "%\n")
+cat("  Part temps    :", stats_couts_sql$part_temps, "%\n")
+cat("  Part usure    :", stats_couts_sql$part_usure, "%\n\n")
+
+# ── Réintégration des coûts dans sfnetworks ───────────────────────────────────
+# Tri par arete_id pour garantir l'alignement ligne à ligne avec l'ordre des
+# arêtes dans le réseau. Sans ce tri, les coûts seraient affectés aux mauvaises arêtes.
+aretes_couts_ord <- aretes_couts %>% arrange(arete_id)
+
+reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
-  as_tibble() %>%
-  summarise(
-    cout_total_moyen = mean(cost_generalized_usd, na.rm = TRUE),
-    cout_par_km_moyen = mean(cost_per_km, na.rm = TRUE),
-    part_carburant = mean(cost_fuel_usd / cost_generalized_usd, na.rm = TRUE) * 100,
-    part_temps = mean(cost_time_usd / cost_generalized_usd, na.rm = TRUE) * 100,
-    part_usure = mean(cost_wear_usd / cost_generalized_usd, na.rm = TRUE) * 100
+  mutate(
+    length_km            = aretes_couts_ord$length_km,
+    speed_kmh            = aretes_couts_ord$speed_kmh,
+    travel_time_h        = aretes_couts_ord$travel_time_h,
+    conso_L_per_100km    = aretes_couts_ord$conso_L_per_100km,
+    fuel_consumption_L   = aretes_couts_ord$fuel_consumption_L,
+    cost_fuel_usd        = aretes_couts_ord$cost_fuel_usd,
+    cost_wear_usd        = aretes_couts_ord$cost_wear_usd,
+    cost_time_usd        = aretes_couts_ord$cost_time_usd,
+    cost_generalized_usd = aretes_couts_ord$cost_generalized_usd,
+    cost_per_km          = aretes_couts_ord$cost_per_km
   )
 
-cat("  Coût moyen par km:", round(stats_couts$cout_par_km_moyen, 3), "USD/km\n")
-cat("  Répartition des coûts:\n")
-cat("    - Carburant:", round(stats_couts$part_carburant, 1), "%\n")
-cat("    - Temps:", round(stats_couts$part_temps, 1), "%\n")
-cat("    - Usure:", round(stats_couts$part_usure, 1), "%\n\n")
+# Recalcul des attributs manquants après les corrections topologiques de la Partie 5 BIS
+# (certaines arêtes créées lors du snapping/subdivision peuvent manquer de vitesse ou de coût)
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(
+    # Si la vitesse est manquante ou nulle, imputer selon le type de route
+    speed_kmh = case_when(
+      !is.na(speed_kmh) & speed_kmh > 0 ~ speed_kmh,
+      road_type == "trunk"               ~ 60,
+      road_type == "primary"             ~ 60,
+      road_type == "secondary"           ~ 50,
+      road_type == "tertiary"            ~ 45,
+      TRUE                               ~ 30   # Valeur par défaut conservative
+    ),
+    # Si le coût est manquant, utiliser une formule simplifiée de secours
+    cost_generalized_usd = case_when(
+      !is.na(cost_generalized_usd) & cost_generalized_usd > 0 ~ cost_generalized_usd,
+      # Approximation : temps × valeur_temps + km × taux_usure_gravier
+      TRUE ~ travel_time_h * 7.5 + length_km * 0.08
+    )
+  )
 
 
 # ==============================================================================
-# PARTIE 11 : CRÉATION DE LA MATRICE ORIGINE-DESTINATION
+# PARTIE 11 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
 # ==============================================================================
+# La matrice OD donne le coût, la distance et le temps de trajet optimal entre
+# chaque paire d'entrepôts. Elle est calculée par l'algorithme de Dijkstra
+# (igraph) et stockée dans DuckDB en FORMAT LONG plutôt qu'en matrices carrées R.
+#
+# Format long (avantages sur les matrices carrées) :
+#   - Requêtable : SELECT ... WHERE nom_origine = 'Kigali' ORDER BY cout_usd
+#   - Filtrable : ignorer les paires non connectées sans "trous" dans la matrice
+#   - Joinable : directement utilisable dans le modèle gravitaire (Partie 18)
+#   - Compact : ne stocke que les paires connectées (pas de zéros inutiles)
 
-cat("=== PARTIE 11 : Calcul de la matrice origine-destination ===\n")
+cat("=== PARTIE 11 : Matrice OD dans DuckDB ===\n")
 
-# --- Extraction des nœuds d'entreposage ---
+# Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
@@ -1117,763 +974,531 @@ noeuds_entreposage <- reseau_rwanda %>%
   mutate(warehouse_id = row_number())
 
 n_warehouses <- nrow(noeuds_entreposage)
-cat("Nombre de nœuds d'entreposage:", n_warehouses, "\n")
+cat("Entreposages :", n_warehouses, "\n")
 
-# --- Calcul des plus courts chemins (algorithme de Dijkstra) ---
-# On utilise le coût généralisé comme poids
-
-cat("Calcul des plus courts chemins entre tous les entreposages...\n")
-cat("(Cela peut prendre 1-5 minutes)\n")
-
-# Extraction du graphe igraph sous-jacent
-graphe_igraph <- reseau_rwanda %>%
+# ── Préparation du graphe igraph pour Dijkstra ────────────────────────────────
+# as_tbl_graph() convertit sfnetworks en tidygraph/igraph tout en conservant
+# les attributs des nœuds et des arêtes (notamment cost_generalized_usd).
+graphe_igraph      <- reseau_rwanda %>%
   activate("edges") %>%
-  mutate(weight = cost_generalized_usd) %>%
+  mutate(weight = cost_generalized_usd) %>%   # weight = métrique de coût pour Dijkstra
   as_tbl_graph()
 
-# Identifiants des nœuds d'entreposage dans le graphe
+# Indices igraph des nœuds d'entreposage (igraph indexe de 1 à N)
 warehouse_node_ids <- which(igraph::V(graphe_igraph)$is_warehouse)
 
-# Initialisation de la matrice
-matrice_couts <- matrix(0, nrow = n_warehouses, ncol = n_warehouses)
-matrice_distances <- matrix(0, nrow = n_warehouses, ncol = n_warehouses)
-matrice_temps <- matrix(0, nrow = n_warehouses, ncol = n_warehouses)
+# ── Calcul des plus courts chemins par Dijkstra ────────────────────────────────
+# Pour chaque entrepôt i, calcul en batch vers tous les autres entrepôts j.
+# On accumule les résultats dans od_rows (liste → data.frame final).
+od_rows <- list()
+idx     <- 0
 
-# Calcul pour chaque paire
 for (i in seq_along(warehouse_node_ids)) {
-  # Plus courts chemins depuis ce nœud vers tous les autres
-  chemins <- igraph::shortest_paths(
+  # Calcul depuis i vers TOUS les entrepôts en une seule passe (plus efficace
+  # que d'appeler shortest_paths() pour chaque paire i→j individuellement)
+  # output = "both" : retourne les nœuds traversés (vpath) ET les arêtes (epath)
+  chemins   <- igraph::shortest_paths(
     graphe_igraph,
-    from = warehouse_node_ids[i],
-    to = warehouse_node_ids,
+    from    = warehouse_node_ids[i],
+    to      = warehouse_node_ids,
     weights = igraph::E(graphe_igraph)$cost_generalized_usd,
-    output = "both"
+    output  = "both"
   )
+  edge_data <- igraph::edge_attr(graphe_igraph)  # Attributs de toutes les arêtes du graphe
   
-  # Pour chaque destination
   for (j in seq_along(warehouse_node_ids)) {
-    if (i != j) {
-      # Extraire les arêtes du chemin
-      edges_path <- chemins$epath[[j]]
-      
-      if (length(edges_path) > 0) {
-        # Récupérer les attributs des arêtes du chemin
-        edge_data <- igraph::edge_attr(graphe_igraph)
-        
-        matrice_couts[i, j] <- sum(edge_data$cost_generalized_usd[edges_path])
-        matrice_distances[i, j] <- sum(edge_data$length_km[edges_path])
-        matrice_temps[i, j] <- sum(edge_data$travel_time_h[edges_path])
-      }
+    if (i == j) next   # Pas d'auto-trajet
+    
+    edges_path <- chemins$epath[[j]]   # Indices igraph des arêtes sur le chemin i→j
+    
+    if (length(edges_path) > 0) {   # Chemin trouvé (zones connectées)
+      idx <- idx + 1
+      od_rows[[idx]] <- list(
+        id_origine      = i,
+        id_destination  = j,
+        nom_origine     = noeuds_entreposage$warehouse_name[i],
+        nom_destination = noeuds_entreposage$warehouse_name[j],
+        # Somme des attributs sur toutes les arêtes du chemin optimal
+        cout_usd    = sum(edge_data$cost_generalized_usd[edges_path]),
+        distance_km = sum(edge_data$length_km[edges_path]),
+        temps_h     = sum(edge_data$travel_time_h[edges_path])
+      )
     }
+    # Si edges_path est vide (length == 0) : zones non connectées → pas de ligne
   }
-  
-  if (i %% 3 == 0) {
-    cat("  Progression:", round(i/n_warehouses*100, 1), "%\n")
-  }
+  if (i %% 3 == 0) cat("  OD :", round(i/n_warehouses*100,1), "%\n")
 }
 
-cat("  Progression: 100.0%\n")
-cat("✓ Matrice O-D calculée\n\n")
+# Stockage de la matrice OD en format long dans DuckDB
+od_long <- bind_rows(od_rows)
+duck_write(od_long, "matrice_od")
 
-# --- Conversion en dataframes pour export ---
-rownames(matrice_couts) <- noeuds_entreposage$warehouse_name
-colnames(matrice_couts) <- noeuds_entreposage$warehouse_name
+# Statistiques OD agrégées en SQL
+od_stats <- duck_query("
+  SELECT
+    COUNT(*)                    AS n_paires,
+    ROUND(AVG(cout_usd), 2)     AS cout_moyen_usd,
+    ROUND(AVG(distance_km), 1)  AS dist_moyenne_km,
+    ROUND(MAX(distance_km), 1)  AS dist_max_km
+  FROM matrice_od
+")
 
-rownames(matrice_distances) <- noeuds_entreposage$warehouse_name
-colnames(matrice_distances) <- noeuds_entreposage$warehouse_name
+cat("✓ Matrice OD stockée dans DuckDB (format long)\n")
+cat("  Paires connectées :", od_stats$n_paires, "\n")
+cat("  Coût moyen        :", od_stats$cout_moyen_usd, "USD\n")
+cat("  Distance moyenne  :", od_stats$dist_moyenne_km, "km\n\n")
 
-rownames(matrice_temps) <- noeuds_entreposage$warehouse_name
-colnames(matrice_temps) <- noeuds_entreposage$warehouse_name
+# ── Reconstruction des matrices R carrées ─────────────────────────────────────
+# Nécessaires pour la Partie 14 (trajet exemple) et la Partie 19 (affectation igraph).
+# On reconstitue les 3 matrices à partir du format long DuckDB.
+matrice_couts     <- matrix(0, n_warehouses, n_warehouses,
+                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
+matrice_distances <- matrix(0, n_warehouses, n_warehouses,
+                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
+matrice_temps     <- matrix(0, n_warehouses, n_warehouses,
+                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
+
+for (r in seq_len(nrow(od_long))) {
+  i <- od_long$id_origine[r]; j <- od_long$id_destination[r]
+  matrice_couts[i, j]     <- od_long$cout_usd[r]
+  matrice_distances[i, j] <- od_long$distance_km[r]
+  matrice_temps[i, j]     <- od_long$temps_h[r]
+}
 
 
 # ==============================================================================
-# PARTIE 12 : VISUALISATIONS
+# PARTIE 12 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
 # ==============================================================================
+# tmap travaille avec des objets sf et ne s'interface pas avec DuckDB.
+# Cette partie reste entièrement en R/sf. Les couches géographiques
+# (frontières, lacs, provinces) sont extraites depuis le même fichier PBF
+# que les routes, via la couche "multipolygons".
 
-cat("=== PARTIE 12 : Création des visualisations ===\n")
+cat("=== PARTIE 12 : Visualisations ===\n")
 
-cat("Chargement des couches depuis le fichier PBF...\n")
-
-# =========================================================
-# FRONTIÈRES ADMINISTRATIVES DEPUIS LE FICHIER PBF
-# =========================================================
-
-cat("Extraction des frontières administratives...\n")
-
-limites_raw <- st_read(
-  chemin_pbf,
-  layer = "multipolygons",
-  query = "SELECT * FROM multipolygons WHERE admin_level IN ('2', '4')",
-  quiet = TRUE
-) %>%
+# ── Frontières administratives depuis le PBF ──────────────────────────────────
+# admin_level 2 = frontière nationale du Rwanda (1 polygone)
+# admin_level 4 = provinces (5 provinces au Rwanda)
+limites_raw <- st_read(chemin_pbf, layer = "multipolygons",
+                       query = "SELECT * FROM multipolygons WHERE admin_level IN ('2','4')",
+                       quiet = TRUE) %>%
   rename(geometry = `_ogr_geometry_`) %>%
   st_as_sf() %>%
   st_make_valid() %>%
-  filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON"))
+  filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON"))
 
-# Frontière nationale du Rwanda (admin_level = 2)
-rwanda_national <- limites_raw %>%
+# st_union() fusionne tous les polygones de niveau 2 en un seul
+# (au cas où la frontière serait découpée en plusieurs objets dans OSM)
+rwanda_national  <- limites_raw %>%
   filter(admin_level == "2") %>%
   st_union() %>%
   st_as_sf() %>%
-  st_transform(crs = 32735) %>%
+  st_transform(32735) %>%
   st_make_valid()
 
-cat("✓ Frontière nationale extraite\n")
-
-# Provinces du Rwanda (admin_level = 4)
+# Provinces : utiliser la frontière nationale si les provinces sont absentes
 rwanda_provinces <- limites_raw %>%
   filter(admin_level == "4") %>%
-  st_transform(crs = 32735) %>%
+  st_transform(32735) %>%
   st_make_valid()
+if (nrow(rwanda_provinces) == 0) rwanda_provinces <- rwanda_national
 
-if (nrow(rwanda_provinces) > 0) {
-  cat("✓ Provinces extraites:", nrow(rwanda_provinces), "provinces\n")
-} else {
-  cat("⚠ Pas de provinces - utilisation frontière nationale\n")
-  rwanda_provinces <- rwanda_national
-}
-
-# =========================================================
-# LACS DEPUIS LE FICHIER PBF
-# =========================================================
-
-cat("Extraction des étendues d'eau...\n")
-
+# ── Lacs depuis le PBF ────────────────────────────────────────────────────────
+# Filtrage sur > 1 km² pour ne conserver que les lacs significatifs
+# (lac Kivu, lac Rweru, lac Muhazi…). tryCatch gère l'absence de données.
 lacs_ok <- FALSE
-lacs_raw <- NULL
-
 tryCatch({
-  lacs_raw <- st_read(
-    chemin_pbf,
-    layer = "multipolygons",
-    query = "SELECT * FROM multipolygons WHERE 
-             natural = 'water' OR 
-             other_tags LIKE '%\"natural\"=>\"water\"%' OR 
-             other_tags LIKE '%\"water\"=>\"lake\"%' OR
-             other_tags LIKE '%\"water\"=>\"reservoir\"%'",
-    quiet = TRUE
-  ) %>%
+  lacs_raw <- st_read(chemin_pbf, layer = "multipolygons",
+                      query = "SELECT * FROM multipolygons WHERE natural = 'water' OR
+             other_tags LIKE '%\"natural\"=>\"water\"%'", quiet = TRUE) %>%
     rename(geometry = `_ogr_geometry_`) %>%
     st_as_sf() %>%
     st_make_valid() %>%
-    filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
-    st_transform(crs = 32735) %>%
+    filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
+    st_transform(32735) %>%
     mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
-    filter(aire_km2 > 1)
-  
-  if (nrow(lacs_raw) > 0) {
-    lacs_ok <- TRUE
-    cat("✓ Étendues d'eau extraites:", nrow(lacs_raw), "objets (>1km²)\n")
-  } else {
-    cat("⚠ Aucune étendue d'eau significative trouvée\n")
-  }
-  
-}, error = function(e) {
-  cat("⚠ Extraction lacs échouée:", conditionMessage(e), "\n")
-  lacs_ok <<- FALSE
-  lacs_raw <<- NULL
-})
+    filter(aire_km2 > 1)   # Seuil : 1 km² minimum
+  if (nrow(lacs_raw) > 0) lacs_ok <- TRUE
+}, error = function(e) {})
 
-# =========================================================
-# BBOX 250KM x 250KM CENTRÉE SUR LE RWANDA
-# =========================================================
-
-centre_rwanda <- rwanda_national %>%
-  st_centroid() %>%
-  st_coordinates()
-
-centre_x <- centre_rwanda[1, "X"]
-centre_y <- centre_rwanda[1, "Y"]
-
-cat("Centre Rwanda (UTM 35S): X =", round(centre_x), "/ Y =", round(centre_y), "\n")
-
-buffer_km <- 125000
-
-bbox_poly <- st_sfc(
-  st_polygon(list(rbind(
-    c(centre_x - buffer_km, centre_y - buffer_km),
-    c(centre_x + buffer_km, centre_y - buffer_km),
-    c(centre_x + buffer_km, centre_y + buffer_km),
-    c(centre_x - buffer_km, centre_y + buffer_km),
-    c(centre_x - buffer_km, centre_y - buffer_km)
-  ))),
-  crs = 32735
-) %>% st_as_sf()
-
+# ── Zone d'affichage (bbox 250km × 250km centrée sur le Rwanda) ───────────────
+# Buffer de 125km de chaque côté du centroïde pour afficher les frontières voisines
+centre_rwanda <- rwanda_national %>% st_centroid() %>% st_coordinates()
+centre_x <- centre_rwanda[1,"X"]; centre_y <- centre_rwanda[1,"Y"]
+buffer_km <- 125000   # En mètres (UTM 35S)
+bbox_poly <- st_sfc(st_polygon(list(rbind(
+  c(centre_x-buffer_km, centre_y-buffer_km),
+  c(centre_x+buffer_km, centre_y-buffer_km),
+  c(centre_x+buffer_km, centre_y+buffer_km),
+  c(centre_x-buffer_km, centre_y+buffer_km),
+  c(centre_x-buffer_km, centre_y-buffer_km)))), crs = 32735) %>%
+  st_as_sf()
 bbox_carto <- st_bbox(bbox_poly)
-cat("✓ bbox 250km x 250km créée\n\n")
 
-cat("Résumé des couches chargées:\n")
-cat("  Frontière nationale :", "✓\n")
-cat("  Provinces           :", nrow(rwanda_provinces), "\n")
-if (lacs_ok) {
-  cat("  Lacs (>1km²)        :", nrow(lacs_raw), "\n\n")
-} else {
-  cat("  Lacs                : aucun\n\n")
-}
-
-
-# ==============================================================================
-# FONCTION UTILITAIRE : fond de carte commun
-# ==============================================================================
-
+# ── Fonction de fond de carte réutilisable ────────────────────────────────────
+# Crée les couches de base (provinces, frontière, lacs) communes à toutes les cartes.
+# Retourne un objet tmap auquel on ajoute des couches thématiques avec +.
 creer_fond_carte <- function() {
-  
   carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) +
-    tm_polygons(
-      fill = "#F5F5F0",
-      col = "#AAAAAA",
-      lwd = 0.8,
-      fill.legend = tm_legend(show = FALSE)
-    ) +
-    
+    tm_polygons(fill="#F5F5F0", col="#AAAAAA", lwd=0.8, fill.legend=tm_legend(show=FALSE)) +
     tm_shape(rwanda_national) +
-    tm_borders(
-      col = "#222222",
-      lwd = 2.5
-    )
-  
-  if (lacs_ok && !is.null(lacs_raw) && nrow(lacs_raw) > 0) {
-    carte <- carte +
+    tm_borders(col="#222222", lwd=2.5)   # Frontière nationale en trait épais
+  if (lacs_ok) carte <- carte +
       tm_shape(lacs_raw) +
-      tm_polygons(
-        fill = "#A8C8E8",
-        col = "#7AAAC8",
-        lwd = 0.5,
-        fill.legend = tm_legend(show = FALSE)
-      )
-  }
-  
-  return(carte)
+      tm_polygons(fill="#A8C8E8", col="#7AAAC8", lwd=0.5, fill.legend=tm_legend(show=FALSE))
+  carte
 }
 
-
-# --- Carte 1 : Hiérarchie du réseau routier ---
-cat("Génération de la carte de hiérarchie routière...\n")
-
+# ── Carte 1 : Hiérarchie du réseau routier ───────────────────────────────────
+# Couleurs conventionnelles pour les niveaux de routes (rouge = nationales, gris = locales)
 carte_hierarchie <- creer_fond_carte() +
-  
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(
-    col = "road_type",
-    col.scale = tm_scale(
-      values = c(
-        "trunk"        = "#E41A1C",
-        "primary"      = "#FF7F00",
-        "secondary"    = "#E8A000",  # ✅ Ancien : #FFD700
-        "tertiary"     = "#999999",
-        "unclassified" = "#CCCCCC"
-      )
-    ),
-    col.legend = tm_legend(title = "Type de route"),
-    lwd = 1.5
-  ) +
-  
+  tm_lines(col="road_type",
+           col.scale=tm_scale(values=c(trunk="#E41A1C", primary="#FF7F00",
+                                       secondary="#E8A000", tertiary="#999999", unclassified="#CCCCCC")),
+           col.legend=tm_legend(title="Type de route"), lwd=1.5) +
   tm_shape(entreposages_sf) +
-  tm_dots(
-    fill = "type",
-    fill.scale = tm_scale(
-      values = c(
-        "hub"       = "#000000",
-        "sez"       = "#0000FF",
-        "marche"    = "#00CC00",
-        "frontiere" = "#FF0000",
-        "ville"     = "#800080"
-      )
-    ),
-    fill.legend = tm_legend(title = "Entreposages"),
-    size = 0.3
-  ) +
-  
+  tm_dots(fill="type",
+          fill.scale=tm_scale(values=c(hub="#000000", sez="#0000FF",
+                                       marche="#00CC00", frontiere="#FF0000", ville="#800080")),
+          fill.legend=tm_legend(title="Type de zone"), size=0.3) +
   tm_title("Réseau Routier du Rwanda\nHiérarchie des routes") +
-  tm_layout(legend.outside = TRUE, frame = TRUE) +
-  tm_scalebar(position = c("left", "bottom")) +
-  tm_compass(position = c("right", "top"))
-
+  tm_layout(legend.outside=TRUE, frame=TRUE) +
+  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
 tmap_save(carte_hierarchie, "/mnt/user-data/outputs/carte_hierarchie_rwanda.png",
-          width = 3000, height = 2400, dpi = 300)
-cat("✓ Carte de hiérarchie sauvegardée\n")
+          width=3000, height=2400, dpi=300)
 
-
-# --- Carte 2 : Coûts de transport par kilomètre ---
-cat("Génération de la carte des coûts...\n")
-
+# ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
+# Les tronçons les plus chers (rouge foncé) combinent pente forte + surface dégradée.
+# Utile pour identifier les goulets d'étranglement logistiques.
 carte_couts <- creer_fond_carte() +
-  
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(
-    col = "cost_per_km",
-    col.scale = tm_scale_intervals(
-      style = "quantile",
-      n = 5,
-      values = "brewer.yl_or_rd"
-    ),
-    col.legend = tm_legend(title = "Coût (USD/km)"),
-    lwd = 1.5
-  ) +
-  
-  tm_shape(entreposages_sf) +
-  tm_dots(fill = "black", size = 0.2) +
-  
-  tm_title("Coûts de Transport Généralisés\npar kilomètre") +
-  tm_layout(legend.outside = TRUE, frame = TRUE) +
-  tm_scalebar(position = c("left", "bottom")) +
-  tm_compass(position = c("right", "top"))
-
+  tm_lines(col="cost_per_km",
+           col.scale=tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
+           col.legend=tm_legend(title="Coût (USD/km)"), lwd=1.5) +
+  tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
+  tm_title("Coûts de Transport Généralisés par km") +
+  tm_layout(legend.outside=TRUE, frame=TRUE) +
+  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
 tmap_save(carte_couts, "/mnt/user-data/outputs/carte_couts_rwanda.png",
-          width = 3000, height = 2400, dpi = 300)
-cat("✓ Carte des coûts sauvegardée\n")
+          width=3000, height=2400, dpi=300)
 
-
-# --- Carte 3 : Pentes ---
-cat("Génération de la carte des pentes...\n")
-
+# ── Carte 3 : Catégories de pente ─────────────────────────────────────────────
+# Le Rwanda est surnommé "le pays des mille collines" : les pentes fortes y sont très
+# fréquentes, notamment dans les préfectures du nord et de l'ouest.
 carte_pentes <- creer_fond_carte() +
-  
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(
-    col = "slope_category",
-    col.scale = tm_scale(
-      values = c(
-        "plat"    = "#00AA00",  # ✅ Ancien : #00FF00
-        "legere"  = "#AACC00",  # ✅ Ancien : #FFFF00
-        "moderee" = "#FF9900",
-        "forte"   = "#FF0000"
-      )
-    ),
-    col.legend = tm_legend(title = "Catégorie de pente"),
-    lwd = 1.5
-  ) +
-  
+  tm_lines(col="slope_category",
+           col.scale=tm_scale(values=c(plat="#00AA00", legere="#AACC00",
+                                       moderee="#FF9900", forte="#FF0000")),
+           col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
   tm_title("Pentes du Réseau Routier") +
-  tm_layout(legend.outside = TRUE, frame = TRUE) +
-  tm_scalebar(position = c("left", "bottom")) +
-  tm_compass(position = c("right", "top"))
-
+  tm_layout(legend.outside=TRUE, frame=TRUE) +
+  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
 tmap_save(carte_pentes, "/mnt/user-data/outputs/carte_pentes_rwanda.png",
-          width = 3000, height = 2400, dpi = 300)
-cat("✓ Carte des pentes sauvegardée\n\n")
+          width=3000, height=2400, dpi=300)
 
-
+cat("✓ 3 cartes générées\n\n")
 
 
 # ==============================================================================
-# PARTIE 13 : EXPORT DES DONNÉES
+# PARTIE 13 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
 # ==============================================================================
+# COPY TO est la commande DuckDB pour exporter des tables vers des fichiers.
+# Avantages sur write.csv() :
+#   - Parquet : format colonnaire compressé (~10× plus compact que CSV)
+#   - Vitesse : écriture multithread native de DuckDB
+#   - SQL : filtrer/transformer les données à l'export sans créer de df R intermédiaire
 
-cat("=== PARTIE 13 : Export des données ===\n")
+cat("=== PARTIE 13 : Export via DuckDB ===\n")
 
-# --- Export du réseau complet ---
-cat("Export du réseau complet (GeoPackage)...\n")
-
-# Extraction des arêtes avec tous les attributs
+# Chargement de la table des arêtes finales dans DuckDB (sans géométrie)
 aretes_finales <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
-  select(
-    osm_id, name, road_type, surface,
-    length_km, slope_mean, elevation_gain, elevation_loss,
-    speed_kmh, fuel_consumption_L,
-    cost_fuel_usd, cost_wear_usd, cost_time_usd,
-    cost_generalized_usd, cost_per_km
-  )
+  select(osm_id, name, road_type, surface, length_km, slope_mean,
+         elevation_gain, elevation_loss, speed_kmh, fuel_consumption_L,
+         cost_fuel_usd, cost_wear_usd, cost_time_usd, cost_generalized_usd, cost_per_km)
 
-# Export en GeoPackage
-st_write(aretes_finales, 
-         "/mnt/user-data/outputs/reseau_rwanda_aretes.gpkg",
-         delete_dsn = TRUE, quiet = TRUE)
+duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 
-cat("✓ Arêtes exportées: reseau_rwanda_aretes.gpkg\n")
+# Export GeoPackage (format géospatial ouvert, compatible QGIS/ArcGIS/GRASS)
+# Seul st_write() peut exporter des géométries (DuckDB ne les supporte pas encore)
+st_write(aretes_finales, "/mnt/user-data/outputs/reseau_rwanda_aretes.gpkg",
+         delete_dsn=TRUE, quiet=TRUE)
 
-# Extraction des nœuds
 noeuds_finaux <- reseau_rwanda %>%
   activate("nodes") %>%
   st_as_sf() %>%
   select(node_id, is_warehouse, warehouse_name, warehouse_type)
+st_write(noeuds_finaux, "/mnt/user-data/outputs/reseau_rwanda_noeuds.gpkg",
+         delete_dsn=TRUE, quiet=TRUE)
 
-st_write(noeuds_finaux,
-         "/mnt/user-data/outputs/reseau_rwanda_noeuds.gpkg",
-         delete_dsn = TRUE, quiet = TRUE)
+# Exports CSV depuis DuckDB via COPY TO
+# HEADER = TRUE : inclure les noms de colonnes en première ligne du fichier
+dbExecute(con, "
+  COPY (SELECT * FROM matrice_od)
+  TO '/mnt/user-data/outputs/matrice_od_long.csv' (FORMAT CSV, HEADER)
+")
+dbExecute(con, "
+  COPY (SELECT * FROM aretes_finales)
+  TO '/mnt/user-data/outputs/aretes_finales.csv' (FORMAT CSV, HEADER)
+")
 
-cat("✓ Nœuds exportés: reseau_rwanda_noeuds.gpkg\n")
+# Exports Parquet depuis DuckDB
+# Lisible directement avec : Python → pd.read_parquet() ; R → arrow::read_parquet()
+dbExecute(con, "
+  COPY (SELECT * FROM aretes_finales)
+  TO '/mnt/user-data/outputs/aretes_finales.parquet' (FORMAT PARQUET)
+")
+dbExecute(con, "
+  COPY (SELECT * FROM matrice_od)
+  TO '/mnt/user-data/outputs/matrice_od.parquet' (FORMAT PARQUET)
+")
 
-# --- Export des matrices O-D en CSV ---
-cat("Export des matrices origine-destination...\n")
-
-write.csv(matrice_couts, 
-          "/mnt/user-data/outputs/matrice_couts_usd.csv",
-          row.names = TRUE)
-
-write.csv(matrice_distances,
-          "/mnt/user-data/outputs/matrice_distances_km.csv",
-          row.names = TRUE)
-
-write.csv(matrice_temps,
-          "/mnt/user-data/outputs/matrice_temps_heures.csv",
-          row.names = TRUE)
-
-cat("✓ Matrices O-D exportées (CSV)\n")
-
-# --- Export d'un tableau récapitulatif ---
-cat("Export du tableau récapitulatif...\n")
-
-recap_reseau <- tibble(
-  Métrique = c(
-    "Nombre d'arêtes",
-    "Nombre de nœuds",
-    "Nombre d'entreposages",
-    "Longueur totale (km)",
-    "Pente moyenne (%)",
-    "Vitesse moyenne (km/h)",
-    "Consommation moyenne (L/100km)",
-    "Coût moyen (USD/km)",
-    "Part carburant (%)",
-    "Part temps (%)",
-    "Part usure (%)"
-  ),
-  Valeur = c(
-    igraph::ecount(reseau_rwanda),
-    igraph::vcount(reseau_rwanda),
-    n_warehouses,
-    round(sum(aretes_finales$length_km, na.rm = TRUE), 1),
-    round(mean(abs(aretes_finales$slope_mean), na.rm = TRUE), 2),
-    round(mean(aretes_finales$speed_kmh, na.rm = TRUE), 1),
-    round(mean(aretes_finales$fuel_consumption_L / aretes_finales$length_km * 100, na.rm = TRUE), 1),
-    round(mean(aretes_finales$cost_per_km, na.rm = TRUE), 3),
-    round(stats_couts$part_carburant, 1),
-    round(stats_couts$part_temps, 1),
-    round(stats_couts$part_usure, 1)
-  )
-)
-
-write.csv(recap_reseau,
-          "/mnt/user-data/outputs/recapitulatif_reseau.csv",
-          row.names = FALSE)
-
-cat("✓ Tableau récapitulatif exporté\n\n")
+cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 
 
 # ==============================================================================
-# PARTIE 14 : ANALYSE D'EXEMPLE - TRAJET OPTIMAL
+# PARTIE 16 : TABLE INPUT-OUTPUT DU RWANDA
 # ==============================================================================
-
-cat("=== PARTIE 14 : Exemple d'analyse - Trajet optimal ===\n")
-
-# Exemple : Calculer le trajet optimal entre Kigali et la frontière de Rusumo
-
-# Identifiants des nœuds
-kigali_id <- warehouse_node_ids[which(noeuds_entreposage$warehouse_name == "Kigali - Hub Central")]
-rusumo_id <- warehouse_node_ids[which(noeuds_entreposage$warehouse_name == "Frontière Rusumo (Tanzanie)")]
-
-cat("Calcul du trajet Kigali → Rusumo (Tanzanie)...\n")
-
-# Plus court chemin
-chemin_optimal <- igraph::shortest_paths(
-  graphe_igraph,
-  from = kigali_id,
-  to = rusumo_id,
-  weights = igraph::E(graphe_igraph)$cost_generalized_usd,
-  output = "both"
-)
-
-# Extraction des arêtes du chemin
-edges_chemin <- chemin_optimal$epath[[1]]
-edges_data <- igraph::edge_attr(graphe_igraph)
-
-# Statistiques du trajet
-stats_trajet <- tibble(
-  distance_km = sum(edges_data$length_km[edges_chemin]),
-  temps_h = sum(edges_data$travel_time_h[edges_chemin]),
-  denivele_plus_m = sum(edges_data$elevation_gain[edges_chemin]),
-  cout_total_usd = sum(edges_data$cost_generalized_usd[edges_chemin]),
-  cout_carburant_usd = sum(edges_data$cost_fuel_usd[edges_chemin]),
-  cout_temps_usd = sum(edges_data$cost_time_usd[edges_chemin])
-)
-
-cat("\nRÉSULTATS DU TRAJET OPTIMAL:\n")
-cat("  Distance:", round(stats_trajet$distance_km, 1), "km\n")
-cat("  Temps de parcours:", round(stats_trajet$temps_h, 2), "heures\n")
-cat("  Dénivelé positif:", round(stats_trajet$denivele_plus_m, 0), "m\n")
-cat("  Coût total:", round(stats_trajet$cout_total_usd, 2), "USD\n")
-cat("    - dont carburant:", round(stats_trajet$cout_carburant_usd, 2), "USD\n")
-cat("    - dont temps:", round(stats_trajet$cout_temps_usd, 2), "USD\n\n")
-
-
-# ==============================================================================
-# PARTIE 15 : RAPPORT FINAL
-# ==============================================================================
-
-cat("===============================================================\n")
-cat("         PROJET TERMINÉ AVEC SUCCÈS\n")
-cat("===============================================================\n\n")
-
-cat("FICHIERS GÉNÉRÉS:\n")
-cat("  Données:\n")
-cat("    • reseau_rwanda_aretes.gpkg    - Réseau routier complet\n")
-cat("    • reseau_rwanda_noeuds.gpkg    - Nœuds du réseau\n")
-cat("    • matrice_couts_usd.csv        - Matrice O-D des coûts\n")
-cat("    • matrice_distances_km.csv     - Matrice O-D des distances\n")
-cat("    • matrice_temps_heures.csv     - Matrice O-D des temps\n")
-cat("    • recapitulatif_reseau.csv     - Statistiques globales\n")
-cat("\n  Cartes:\n")
-cat("    • carte_hierarchie_rwanda.png  - Hiérarchie routière\n")
-cat("    • carte_couts_rwanda.png       - Coûts par kilomètre\n")
-cat("    • carte_pentes_rwanda.png      - Catégories de pente\n")
-cat("\n")
-
-cat("UTILISATION DES RÉSULTATS:\n")
-cat("  1. Charger les données dans QGIS/ArcGIS pour visualisation\n")
-cat("  2. Importer les matrices CSV dans Excel/Python pour modélisation\n")
-cat("  3. Utiliser le graphe pour optimisation de tournées\n")
-cat("  4. Analyser l'impact d'investissements routiers\n")
-cat("\n")
-
-cat("PROCHAINES ÉTAPES POSSIBLES:\n")
-cat("  • Valider avec des données réelles de transporteurs\n")
-cat("  • Créer des scénarios (saison sèche vs pluies)\n")
-cat("  • Intégrer des données de trafic\n")
-cat("  • Développer une application Shiny interactive\n")
-cat("\n")
-
-cat("===============================================================\n")
-cat("Script terminé le:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
-cat("===============================================================\n")
-
-
-# ==============================================================================
-# PACKAGE SUPPLÉMENTAIRE (ajouter "scales" dans packages_requis en Partie 0)
-# ==============================================================================
-
-if (!requireNamespace("scales", quietly = TRUE)) install.packages("scales")
-library(scales)
-
-
-# ==============================================================================
-# PARTIE 16 : TABLE INPUT-OUTPUT DU RWANDA (DONNÉES FICTIVES RÉALISTES)
-# ==============================================================================
-# NOTE: La table IO officielle du Rwanda (NISR) n'est pas disponible
-# gratuitement via API. Ces données sont fictives mais calibrées sur la
-# structure économique connue du Rwanda (économie agricole en transition).
+# La table Input-Output de Leontief modélise les interdépendances sectorielles :
+#   a_ij = part de la production du secteur j consommée en intrant par le secteur i
+#   Production totale : X = (I - A)^(-1) × D  [équation de Leontief]
+#   où D = demande finale et (I - A)^(-1) = matrice des multiplicateurs de Leontief
 #
-# POUR REMPLACER PAR LES DONNÉES RÉELLES :
-#   1. Télécharger la table IO sur : https://www.statistics.gov.rw
-#   2. Charger le fichier Excel : io_table <- readxl::read_excel("io_rwanda.xlsx")
-#   3. Extraire la matrice A et les vecteurs de production/demande
-# ==============================================================================
+# Interprétation de (I - A)^(-1) :
+#   Un élément [i,j] donne l'augmentation de production du secteur i nécessaire
+#   pour satisfaire une augmentation de 1 USD de demande finale dans le secteur j.
+#
+# NOTE : La table IO officielle du Rwanda (NISR) n'est pas disponible librement.
+# Ces données sont fictives mais calibrées sur la structure économique connue.
+# Pour utiliser les données réelles :
+#   1. Télécharger sur https://www.statistics.gov.rw (NISR)
+#   2. Charger avec readxl::read_excel("io_rwanda.xlsx")
+#   3. Remplacer les matrices A et production_totale ci-dessous
 
-cat("=== PARTIE 16 : Table Input-Output du Rwanda ===\n")
-cat("NOTE: Données fictives réalistes (structure économique Rwanda ~2022)\n\n")
+cat("=== PARTIE 16 : Table Input-Output dans DuckDB ===\n")
 
-# --- Définition des secteurs économiques (8 secteurs) ---
-SECTEURS <- c(
-  "Agriculture",     # Café, thé, pyrèthre, cultures vivrières
-  "Mines",           # Coltan, cassitérite, wolfram
-  "Agro_industrie",  # Transformation alimentaire et boissons
-  "Industrie",       # Textiles, matériaux de construction
-  "Construction",    # BTP, infrastructures
-  "Commerce",        # Commerce de gros et de détail
-  "Transport",       # Transport et logistique
-  "Services"         # Finance, tourisme, services publics
-)
+# 8 secteurs représentatifs de l'économie rwandaise en 2022
+SECTEURS   <- c("Agriculture","Mines","Agro_industrie","Industrie",
+                "Construction","Commerce","Transport","Services")
 N_SECTEURS <- length(SECTEURS)
 
-# --- Matrice des coefficients techniques A ---
-# a_ij = part de la production du secteur j consommée par le secteur i (input)
-# Source de calibration : structures économiques d'Afrique subsaharienne agricole
-# Lignes = secteur qui reçoit (input), Colonnes = secteur qui produit (output)
+# ── Matrice des coefficients techniques A ─────────────────────────────────────
+# a[i,j] = proportion de la production du secteur j (colonne)
+# consommée comme intrant par le secteur i (ligne)
+#
+# Exemple de lecture :
+#   A["Agriculture","Agro_industrie"] = 0.45 → 45% des intrants de l'Agro-industrie
+#   proviennent de l'Agriculture (grains, fruits, légumes pour transformation)
 A <- matrix(c(
-  #  Agri   Mines  AgroI  Indus  Const  Comm   Trans  Serv
-  0.08,  0.00,  0.45,  0.05,  0.01,  0.05,  0.02,  0.03,  # Agriculture
-  0.00,  0.05,  0.01,  0.08,  0.05,  0.00,  0.01,  0.00,  # Mines
-  0.05,  0.00,  0.08,  0.02,  0.00,  0.06,  0.03,  0.04,  # Agro_industrie
-  0.02,  0.03,  0.03,  0.06,  0.15,  0.03,  0.04,  0.02,  # Industrie
-  0.01,  0.02,  0.01,  0.02,  0.08,  0.02,  0.03,  0.05,  # Construction
-  0.04,  0.05,  0.06,  0.08,  0.05,  0.06,  0.05,  0.06,  # Commerce
-  0.03,  0.06,  0.04,  0.05,  0.06,  0.07,  0.06,  0.04,  # Transport
-  0.02,  0.02,  0.02,  0.03,  0.04,  0.06,  0.05,  0.08   # Services
-), nrow = N_SECTEURS, ncol = N_SECTEURS, byrow = TRUE,
+  # ← Secteur fournisseur (lignes) / Secteur consommateur (colonnes) →
+  #  Agri  Mines AgroI Indus Const Comm  Trans Serv
+  0.08, 0.00, 0.45, 0.05, 0.01, 0.05, 0.02, 0.03,  # Agriculture
+  0.00, 0.05, 0.01, 0.08, 0.05, 0.00, 0.01, 0.00,  # Mines
+  0.05, 0.00, 0.08, 0.02, 0.00, 0.06, 0.03, 0.04,  # Agro-industrie
+  0.02, 0.03, 0.03, 0.06, 0.15, 0.03, 0.04, 0.02,  # Industrie
+  0.01, 0.02, 0.01, 0.02, 0.08, 0.02, 0.03, 0.05,  # Construction
+  0.04, 0.05, 0.06, 0.08, 0.05, 0.06, 0.05, 0.06,  # Commerce
+  0.03, 0.06, 0.04, 0.05, 0.06, 0.07, 0.06, 0.04,  # Transport
+  0.02, 0.02, 0.02, 0.03, 0.04, 0.06, 0.05, 0.08   # Services
+), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
 dimnames = list(SECTEURS, SECTEURS))
 
-# --- Production totale par secteur (millions USD) ---
-# Calibrées sur PIB Rwanda ~13 milliards USD (Banque Mondiale 2022)
+# ── Production totale par secteur (millions USD, Rwanda 2022) ─────────────────
+# Calibrées sur Banque Mondiale : PIB Rwanda ~13 Md USD en 2022
 production_totale <- c(
-  Agriculture    = 2100,
-  Mines          = 280,
-  Agro_industrie = 520,
-  Industrie      = 380,
-  Construction   = 750,
-  Commerce       = 1100,
-  Transport      = 480,
-  Services       = 2200
+  Agriculture    = 2100,  # Café, thé, pyrèthre, cultures vivrières (principal secteur)
+  Mines          = 280,   # Coltan, cassitérite, wolfram (3T : exportations majeures)
+  Agro_industrie = 520,   # Transformation alimentaire, boissons, tabac
+  Industrie      = 380,   # Textiles, ciment, matériaux de construction
+  Construction   = 750,   # BTP, infrastructure (très actif : Vision 2050)
+  Commerce       = 1100,  # Commerce de gros et de détail
+  Transport      = 480,   # Transport routier, aérien, services logistiques
+  Services       = 2200   # Finance, tourisme, services publics, éducation, santé
 )
 
-# --- Calcul des grandeurs dérivées ---
-# Consommations intermédiaires totales par secteur
-conso_interm <- as.vector(A %*% production_totale)
-names(conso_interm) <- SECTEURS
-
-# Valeur ajoutée (= production - consommations intermédiaires)
-valeur_ajoutee <- production_totale - conso_interm
-
-# Demande finale (consommation finale ménages + GFCF + exports nets)
-demande_finale <- valeur_ajoutee * 0.85  # Simplification réaliste
-
-# --- Facteurs de conversion valeur → masse (tonnes par million USD) ---
-# Selon les caractéristiques physiques de chaque secteur
+# ── Facteurs de conversion valeur → masse (tonnes par million USD) ────────────
+# Ces facteurs permettent de convertir les flux monétaires (M USD) en tonnes physiques.
+# Un secteur à ratio élevé (Construction) génère beaucoup de tonnes par USD
+# (ciment, gravier = produits lourds et peu chers).
+# À l'inverse, les Services génèrent très peu de fret physique.
 TONNES_PAR_MUSD <- c(
-  Agriculture    = 8000,   # Produits agricoles bruts, faible valeur/tonne
-  Mines          = 3000,   # Minerais semi-bruts
-  Agro_industrie = 4000,   # Produits transformés (céréales, huile...)
-  Industrie      = 2000,   # Produits manufacturés (emballages, ciment...)
-  Construction   = 10000,  # Matériaux très lourds (gravier, sable, béton)
-  Commerce       = 1500,   # Mix de produits distribués
-  Transport      = 300,    # Services peu matériels
-  Services       = 100     # Services très peu matériels
+  Agriculture    = 8000,   # Produits bruts : lourds, faible valeur (bananes, céréales)
+  Mines          = 3000,   # Minerais : denses, valeur croissante avec la transformation
+  Agro_industrie = 4000,   # Produits transformés (huile, farine, sucre, conserves)
+  Industrie      = 2000,   # Produits manufacturés intermédiaires
+  Construction   = 10000,  # Ciment, gravier, acier : très lourds par rapport à la valeur
+  Commerce       = 1500,   # Mix de biens distribués (alimentaire, électronique, textile)
+  Transport      = 300,    # Services : peu de fret physique directement associé
+  Services       = 100     # Quasi-immatériel (finance, éducation, santé, conseil)
 )
 
-# --- Affichage du résumé ---
-recap_io <- tibble(
-  Secteur            = SECTEURS,
-  Production_MUSD    = round(production_totale, 0),
-  Conso_interm_MUSD  = round(conso_interm, 0),
-  Valeur_ajoutee_MUSD= round(valeur_ajoutee, 0),
-  Part_PIB_pct       = round(production_totale / sum(production_totale) * 100, 1),
-  Tonnes_par_MUSD    = TONNES_PAR_MUSD
+# ── Grandeurs dérivées de la table IO ─────────────────────────────────────────
+# A %*% X = produit matriciel : vecteur des intrants totaux par secteur
+conso_interm   <- as.vector(A %*% production_totale)
+# Valeur ajoutée = production - consommations intermédiaires (travail + capital)
+valeur_ajoutee <- production_totale - conso_interm
+# Demande finale ≈ 85% de la valeur ajoutée (ménages + investissement + exports nets)
+demande_finale <- valeur_ajoutee * 0.85
+
+# ── Stockage dans DuckDB ──────────────────────────────────────────────────────
+io_table <- tibble(
+  secteur             = SECTEURS,
+  production_musd     = production_totale,
+  conso_interm_musd   = conso_interm,
+  valeur_ajoutee_musd = valeur_ajoutee,
+  demande_finale_musd = demande_finale,
+  tonnes_par_musd     = TONNES_PAR_MUSD
 )
+duck_write(io_table, "io_table")
 
-cat("Structure économique modélisée:\n")
-print(recap_io)
-cat("\n")
-cat("✓ Table IO définie:", N_SECTEURS, "secteurs\n")
-cat("  PIB total modélisé:", round(sum(production_totale)/1000, 1), "milliards USD\n")
-cat("  Multiplicateur moyen:", round(mean(solve(diag(N_SECTEURS) - A) %*% 
-                                            rep(1, N_SECTEURS)), 2), "\n\n")
+# Matrice A en format long pour des requêtes SQL sur les coefficients individuels
+A_long <- as.data.frame(A) %>%
+  rownames_to_column("secteur_input") %>%
+  pivot_longer(-secteur_input, names_to="secteur_output", values_to="coef_a")
+duck_write(A_long, "matrice_a_long")
 
-# Affichage de la matrice A
-cat("Matrice des coefficients techniques A:\n")
-print(round(A, 3))
-cat("\n")
+# ── Multiplicateurs de Leontief ───────────────────────────────────────────────
+# L = (I - A)^(-1) : la matrice inverse de Leontief
+# L[i,j] = augmentation de production du secteur i nécessaire pour fournir 1 USD
+# de demande finale supplémentaire dans le secteur j (effets directs + indirects)
+# solve() calcule l'inverse matricielle
+leontief <- solve(diag(N_SECTEURS) - A)
+leontief_long <- as.data.frame(leontief) %>%
+  setNames(SECTEURS) %>%
+  mutate(secteur_demande = SECTEURS) %>%
+  pivot_longer(-secteur_demande, names_to="secteur_production", values_to="multiplicateur")
+duck_write(leontief_long, "multiplicateurs_leontief")
+
+cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 
 
 # ==============================================================================
 # PARTIE 17 : GÉNÉRATION DES OFFRES ET DEMANDES PAR ZONE
 # ==============================================================================
+# Chaque zone d'entreposage est caractérisée par :
+#   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
+#   - un profil sectoriel de demande (ce qu'elle consomme/importe des autres zones)
+#   - une taille économique relative (Kigali Hub = référence à 1.0)
+#
+# Profils par type de zone :
+#   hub       → fort en Commerce, Transport, Services (Kigali = centre économique)
+#   sez       → fort en Industrie, Agro-industrie (production concentrée)
+#   frontiere → fort en Commerce transfrontalier, Mines (export international)
+#   ville     → profil équilibré, Commerce local dominant
+#   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
 
-cat("=== PARTIE 17 : Génération des offres et demandes par zone ===\n")
+cat("=== PARTIE 17 : Offres et demandes par zone ===\n")
 
-# --- Profils sectoriels par type de zone ---
-# Chaque profil représente la distribution de l'activité économique
-# selon le type de zone. Somme des poids = 1 pour chaque type.
-
+# Profils d'offre (ce que chaque type de zone produit et offre au marché)
 PROFILS_OFFRE <- list(
-  # Hub (Kigali) : très diversifié, dominant sur services et commerce
-  hub = c(Agriculture=0.02, Mines=0.01, Agro_industrie=0.15,
-          Industrie=0.12, Construction=0.08, Commerce=0.25,
-          Transport=0.20, Services=0.17),
-  # Zone économique spéciale : forte industrie et agro-industrie
-  sez = c(Agriculture=0.05, Mines=0.05, Agro_industrie=0.25,
-          Industrie=0.30, Construction=0.10, Commerce=0.10,
-          Transport=0.10, Services=0.05),
-  # Frontière : transit, commerce transfrontalier, mines (export)
-  frontiere = c(Agriculture=0.15, Mines=0.15, Agro_industrie=0.10,
-                Industrie=0.08, Construction=0.05, Commerce=0.30,
-                Transport=0.12, Services=0.05),
-  # Ville secondaire : commerce local, construction, services
-  ville = c(Agriculture=0.12, Mines=0.02, Agro_industrie=0.08,
-            Industrie=0.05, Construction=0.15, Commerce=0.30,
-            Transport=0.10, Services=0.18),
-  # Marché : très agricole, agro-industrie locale
-  marche = c(Agriculture=0.45, Mines=0.01, Agro_industrie=0.20,
-             Industrie=0.03, Construction=0.02, Commerce=0.20,
-             Transport=0.05, Services=0.04)
+  hub      = c(Agriculture=0.02, Mines=0.01, Agro_industrie=0.15, Industrie=0.12,
+               Construction=0.08, Commerce=0.25, Transport=0.20, Services=0.17),
+  sez      = c(Agriculture=0.05, Mines=0.05, Agro_industrie=0.25, Industrie=0.30,
+               Construction=0.10, Commerce=0.10, Transport=0.10, Services=0.05),
+  frontiere= c(Agriculture=0.15, Mines=0.15, Agro_industrie=0.10, Industrie=0.08,
+               Construction=0.05, Commerce=0.30, Transport=0.12, Services=0.05),
+  ville    = c(Agriculture=0.12, Mines=0.02, Agro_industrie=0.08, Industrie=0.05,
+               Construction=0.15, Commerce=0.30, Transport=0.10, Services=0.18),
+  marche   = c(Agriculture=0.45, Mines=0.01, Agro_industrie=0.20, Industrie=0.03,
+               Construction=0.02, Commerce=0.20, Transport=0.05, Services=0.04)
 )
 
+# Profils de demande (ce que chaque type de zone consomme en provenance des autres)
 PROFILS_DEMANDE <- list(
-  hub = c(Agriculture=0.05, Mines=0.02, Agro_industrie=0.20,
-          Industrie=0.15, Construction=0.10, Commerce=0.20,
-          Transport=0.15, Services=0.13),
-  sez = c(Agriculture=0.10, Mines=0.08, Agro_industrie=0.15,
-          Industrie=0.25, Construction=0.15, Commerce=0.10,
-          Transport=0.12, Services=0.05),
-  frontiere = c(Agriculture=0.12, Mines=0.06, Agro_industrie=0.12,
-                Industrie=0.12, Construction=0.06, Commerce=0.28,
-                Transport=0.18, Services=0.06),
-  ville = c(Agriculture=0.15, Mines=0.02, Agro_industrie=0.18,
-            Industrie=0.10, Construction=0.12, Commerce=0.22,
-            Transport=0.08, Services=0.13),
-  marche = c(Agriculture=0.38, Mines=0.01, Agro_industrie=0.22,
-             Industrie=0.06, Construction=0.04, Commerce=0.20,
-             Transport=0.05, Services=0.04)
+  hub      = c(Agriculture=0.05, Mines=0.02, Agro_industrie=0.20, Industrie=0.15,
+               Construction=0.10, Commerce=0.20, Transport=0.15, Services=0.13),
+  sez      = c(Agriculture=0.10, Mines=0.08, Agro_industrie=0.15, Industrie=0.25,
+               Construction=0.15, Commerce=0.10, Transport=0.12, Services=0.05),
+  frontiere= c(Agriculture=0.12, Mines=0.06, Agro_industrie=0.12, Industrie=0.12,
+               Construction=0.06, Commerce=0.28, Transport=0.18, Services=0.06),
+  ville    = c(Agriculture=0.15, Mines=0.02, Agro_industrie=0.18, Industrie=0.10,
+               Construction=0.12, Commerce=0.22, Transport=0.08, Services=0.13),
+  marche   = c(Agriculture=0.38, Mines=0.01, Agro_industrie=0.22, Industrie=0.06,
+               Construction=0.04, Commerce=0.20, Transport=0.05, Services=0.04)
 )
 
-# --- Taille économique relative de chaque zone (Kigali Hub = 1.0) ---
+# Taille économique relative de chaque zone
+# (détermine le volume absolu des échanges générés)
 TAILLE_ZONE <- c(
-  "Kigali - Hub Central"          = 1.00,
-  "Kigali - SEZ Masoro"           = 0.35,
-  "Kigali - Marché Kimisagara"    = 0.18,
-  "Frontière Gatuna (Ouganda)"    = 0.25,
-  "Frontière Rusumo (Tanzanie)"   = 0.20,
-  "Frontière Rubavu/Goma (RDC)"   = 0.30,
-  "Frontière Kagitumba (Ouganda)" = 0.15,
-  "Huye (Butare) - Centre Sud"    = 0.18,
-  "Musanze - Centre Nord"         = 0.15,
-  "Rubavu - Centre Ouest"         = 0.14,
-  "Rusizi - Centre Sud-Ouest"     = 0.12,
-  "Bugesera SEZ (Agro-industrie)" = 0.22,
-  "Muhanga"                       = 0.08,
-  "Nyanza"                        = 0.07,
-  "Rwamagana"                     = 0.09
+  "Kigali - Hub Central"          = 1.00,  # Référence : hub dominant du pays
+  "Kigali - SEZ Masoro"           = 0.35,  # Zone industrielle intégrée à Kigali
+  "Kigali - Marché Kimisagara"    = 0.18,  # Grand marché de gros populaire
+  "Frontière Gatuna (Ouganda)"    = 0.25,  # Principal corridor Nord (vers Kampala)
+  "Frontière Rusumo (Tanzanie)"   = 0.20,  # Corridor Est (vers Dar es Salaam, mer)
+  "Frontière Rubavu/Goma (RDC)"   = 0.30,  # Corridor Ouest (très actif avec la RDC)
+  "Frontière Kagitumba (Ouganda)" = 0.15,  # Frontière secondaire Nord-Est
+  "Huye (Butare) - Centre Sud"    = 0.18,  # 2e ville : université, industrie
+  "Musanze - Centre Nord"         = 0.15,  # Zone touristique volcanique
+  "Rubavu - Centre Ouest"         = 0.14,  # Ville du lac Kivu
+  "Rusizi - Centre Sud-Ouest"     = 0.12,  # Frontalière RDC/Burundi
+  "Bugesera SEZ (Agro-industrie)" = 0.22,  # SEZ en développement près de l'aéroport
+  "Muhanga"                       = 0.08,  # Carrefour de transit
+  "Nyanza"                        = 0.07,  # Ancienne capitale royale
+  "Rwamagana"                     = 0.09   # Capitale de la Province de l'Est
 )
 
-# --- Facteur d'échelle : part du PIB qui circule entre zones ---
-# (le reste est consommé localement dans chaque zone)
+# Part du PIB qui "voyage" entre zones (le reste est consommé localement)
+# 35% est une hypothèse conservatrice pour un pays enclavé comme le Rwanda
 PART_ECHANGEABLE <- 0.35
+echelle_offre    <- sum(production_totale) * PART_ECHANGEABLE
+echelle_demande  <- sum(demande_finale)    * PART_ECHANGEABLE
 
-echelle_offre   <- sum(production_totale) * PART_ECHANGEABLE
-echelle_demande <- sum(demande_finale)    * PART_ECHANGEABLE
+# Graine différente de la Partie 4 pour des bruits indépendants
+set.seed(456)
 
-# --- Génération des matrices offre/demande ---
-set.seed(456)  # Reproductibilité
-
-offre_zones <- matrix(0, nrow = n_warehouses, ncol = N_SECTEURS,
-                      dimnames = list(noeuds_entreposage$warehouse_name, SECTEURS))
-demande_zones <- matrix(0, nrow = n_warehouses, ncol = N_SECTEURS,
-                        dimnames = list(noeuds_entreposage$warehouse_name, SECTEURS))
+# Génération des matrices offre et demande (lignes = zones, colonnes = secteurs)
+offre_zones   <- matrix(0, n_warehouses, N_SECTEURS,
+                        dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
+demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
+                        dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
 
 for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
   type_zone <- noeuds_entreposage$warehouse_type[i]
   taille    <- TAILLE_ZONE[nom_zone]
-  if (is.na(taille)) taille <- 0.10
+  if (is.na(taille)) taille <- 0.10   # Taille par défaut pour les zones inconnues
   
-  profil_o <- PROFILS_OFFRE[[type_zone]]
-  profil_d <- PROFILS_DEMANDE[[type_zone]]
-  
-  # Bruit multiplicatif réaliste ±20%
+  # Bruit multiplicatif ±20% pour simuler l'hétérogénéité réelle entre zones similaires
+  # runif(N, 0.8, 1.2) génère N valeurs uniformément distribuées entre 0.8 et 1.2
   bruit_o <- runif(N_SECTEURS, 0.80, 1.20)
   bruit_d <- runif(N_SECTEURS, 0.80, 1.20)
   
-  # Offre et demande en millions USD
-  offre_zones[i, ]   <- profil_o * taille * echelle_offre   / sum(TAILLE_ZONE) * bruit_o
-  demande_zones[i, ] <- profil_d * taille * echelle_demande / sum(TAILLE_ZONE) * bruit_d
+  # Volume final = profil sectoriel × taille relative × échelle nationale × bruit
+  # sum(TAILLE_ZONE) normalise pour que la somme des parts soit cohérente avec l'échelle
+  offre_zones[i,]   <- PROFILS_OFFRE[[type_zone]]   * taille * echelle_offre   / sum(TAILLE_ZONE) * bruit_o
+  demande_zones[i,] <- PROFILS_DEMANDE[[type_zone]] * taille * echelle_demande / sum(TAILLE_ZONE) * bruit_d
 }
 
-# --- Tableau récapitulatif ---
-recap_zones <- tibble(
-  Zone               = noeuds_entreposage$warehouse_name,
-  Type               = noeuds_entreposage$warehouse_type,
-  Offre_totale_MUSD  = round(rowSums(offre_zones), 2),
-  Demande_totale_MUSD= round(rowSums(demande_zones), 2),
-  Solde_MUSD         = round(rowSums(offre_zones) - rowSums(demande_zones), 2)
-)
+# ── Stockage dans DuckDB en format long ───────────────────────────────────────
+# Format long (1 ligne = 1 zone × 1 secteur) plus adapté aux jointures SQL
+# que les matrices R carrées (1 ligne = 1 zone, 1 colonne = 1 secteur)
+offre_long_df <- as.data.frame(offre_zones) %>%
+  rownames_to_column("zone") %>%
+  pivot_longer(-zone, names_to="secteur", values_to="offre_musd")
+duck_write(offre_long_df, "offre_zones")
 
-cat("Offres et demandes par zone (millions USD):\n")
-print(recap_zones)
-cat("\n")
-cat("✓ Offres et demandes générées\n")
-cat("  Offre totale :", round(sum(offre_zones), 1), "M USD\n")
-cat("  Demande totale:", round(sum(demande_zones), 1), "M USD\n\n")
+demande_long_df <- as.data.frame(demande_zones) %>%
+  rownames_to_column("zone") %>%
+  pivot_longer(-zone, names_to="secteur", values_to="demande_musd")
+duck_write(demande_long_df, "demande_zones")
+
+# Bilan par zone calculé directement en SQL
+recap_zones <- duck_query("
+  SELECT
+    o.zone,
+    ROUND(SUM(o.offre_musd), 2)                  AS offre_totale_musd,
+    ROUND(SUM(d.demande_musd), 2)                AS demande_totale_musd,
+    ROUND(SUM(o.offre_musd - d.demande_musd), 2) AS solde_musd
+  FROM offre_zones o
+  JOIN demande_zones d ON o.zone = o.zone AND o.secteur = d.secteur
+  GROUP BY o.zone
+  ORDER BY offre_totale_musd DESC
+")
+
+cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 
 
 # ==============================================================================
