@@ -394,6 +394,12 @@ tryCatch({
   cat("✓ DEM fictif créé\n")
 })
 
+# Clip du DEM sur l'emprise exacte des routes (évite les valeurs aberrantes hors Rwanda)
+dem_rwanda <- crop(dem_rwanda, ext(
+  bbox_routes["xmin"], bbox_routes["xmax"],
+  bbox_routes["ymin"], bbox_routes["ymax"]
+))
+
 cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
 cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "m\n\n")
 
