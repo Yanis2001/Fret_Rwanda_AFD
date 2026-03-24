@@ -449,7 +449,10 @@ tmap_save(carte_verif_routes,
           file.path(DIR_OUTPUT, "carte_verif_routes_partie3.png"),
           width = 3000, height = 2400, dpi = 300)
 
+# Ouvre une carte zoomable/déplagable dans l'onglet Viewer de RStudio
+tmap_mode("view")
 print(carte_verif_routes)
+tmap_mode("plot")   # Remettre en mode statique pour la suite du script
 
 cat("✓ Carte de vérification générée\n\n")
 
@@ -460,7 +463,6 @@ cat("✓ Carte de vérification générée\n\n")
 # représente l'altitude en mètres au-dessus du niveau de la mer.
 # Il sera utilisé pour calculer la pente de chaque segment routier
 # (ratio dénivelé/longueur × 100 = pourcentage de pente).
-# elevatr et terra ne s'interfacent pas avec DuckDB → cette partie reste en R pur.
 
 cat("=== PARTIE 4 : Téléchargement des données d'élévation ===\n")
 
@@ -475,8 +477,6 @@ emprise_points <- data.frame(
 # Reconvertir en objet sf en WGS84 (elevatr attend des coordonnées géographiques)
 emprise_sf <- st_as_sf(emprise_points, coords = c("x","y"), crs = 32735) %>%
   st_transform(crs = 4326)
-
-options(timeout = 600)  # Téléchargement DEM peut prendre plusieurs minutes
 
 # tryCatch() permet de continuer le script si le téléchargement échoue
 # (ex : pas d'accès internet, quota AWS dépassé) en créant un DEM fictif
@@ -565,8 +565,9 @@ reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) %>%
 # Les arêtes très longues (>5km) peuvent masquer des variations de pente importantes.
 # On les découpe en segments de 2km maximum pour un calcul de pente plus précis.
 # Cette subdivision augmente le nombre d'arêtes mais améliore la qualité du modèle.
+# crs = système de coordonnées
 subdiviser_ligne <- function(ligne, attributs, crs, max_length = 2000) {
-  longueur_totale <- as.numeric(st_length(st_sfc(ligne, crs = crs)))
+  longueur_totale <- as.numeric(st_length(st_sfc(ligne, crs = crs))) 
   
   # Si le segment est déjà court : le retourner tel quel sans subdivision
   if (longueur_totale <= max_length) {
