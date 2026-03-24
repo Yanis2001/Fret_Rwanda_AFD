@@ -449,6 +449,8 @@ tmap_save(carte_verif_routes,
           file.path(DIR_OUTPUT, "carte_verif_routes_partie3.png"),
           width = 3000, height = 2400, dpi = 300)
 
+print(carte_verif_routes)
+
 cat("✓ Carte de vérification générée\n\n")
 
 # ==============================================================================
