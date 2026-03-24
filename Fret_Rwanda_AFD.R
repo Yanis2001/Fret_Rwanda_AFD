@@ -68,7 +68,7 @@ installer_si_necessaire(packages_requis)
 invisible(lapply(packages_requis, library, character.only = TRUE))
 
 # Augmenter le timeout global pour les téléchargements de gros fichiers (DEM, PBF)
-options(timeout = 300)
+options(timeout = 600)
 
 # Graine aléatoire pour la reproductibilité des données fictives générées en Partie 17
 set.seed(123)
@@ -521,8 +521,8 @@ snapper_reseau <- function(reseau, tolerance_m) {
 }
 
 # Trois passes de snapping avec des tolérances croissantes :
-#   5m  → corrige les micro-gaps (erreurs de numérisation fine)
-#   15m → corrige les gaps de précision GPS
+#   10m  → corrige les micro-gaps (erreurs de numérisation fine)
+#   20m → corrige les gaps de précision GPS
 #   30m → corrige les gaps de saisie manuelle grossière
 reseau_snap <- reseau_subdivise
 for (seuil in c(10, 20, 30)) {
