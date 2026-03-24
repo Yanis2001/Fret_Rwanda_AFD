@@ -194,7 +194,7 @@ cat("=== PARTIE 2 : Chargement des données routières ===\n")
 
 # ── Téléchargement depuis MinIO (SSP Cloud) ───────────────────────────────────
 # Le fichier PBF (Protocolbuffer Binary Format) est le format natif d'OpenStreetMap.
-# Il est stocké sur le bucket S3 personnel de l'auteur sur la plateforme SSP Cloud.
+# Il est stocké sur le bucket S3 personnel sur la plateforme SSP Cloud.
 # save_object() télécharge l'objet S3 vers le répertoire de travail local.
 save_object(
   object    = "data/raw/rwanda-260315.osm.pbf",  # Chemin dans le bucket S3
@@ -1334,7 +1334,7 @@ production_totale <- c(
 # Un secteur à ratio élevé (Construction) génère beaucoup de tonnes par USD
 # (ciment, gravier = produits lourds et peu chers).
 # À l'inverse, les Services génèrent très peu de fret physique.
-TONNES_PAR_MUSD <- c(
+TONNES_PAR_musd <- c(
   Agriculture    = 8000,   # Produits bruts : lourds, faible valeur (bananes, céréales)
   Mines          = 3000,   # Minerais : denses, valeur croissante avec la transformation
   Agro_industrie = 4000,   # Produits transformés (huile, farine, sucre, conserves)
@@ -1360,7 +1360,7 @@ io_table <- tibble(
   conso_interm_musd   = conso_interm,
   valeur_ajoutee_musd = valeur_ajoutee,
   demande_finale_musd = demande_finale,
-  tonnes_par_musd     = TONNES_PAR_MUSD
+  tonnes_par_musd     = TONNES_PAR_musd
 )
 duck_write(io_table, "io_table")
 
@@ -1601,8 +1601,8 @@ cat("✓ Flux gravitaires calculés pour", length(SECTEURS), "secteurs\n")
 flux_par_secteur_df <- tibble(
   Secteur          = SECTEURS,
   Beta             = unname(BETA_SECTEUR),
-  Flux_total_MUSD  = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 1)),
-  Flux_moyen_MUSD  = sapply(SECTEURS, function(s) {
+  Flux_total_musd  = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 1)),
+  Flux_moyen_musd  = sapply(SECTEURS, function(s) {
     f <- flux_gravitaire[[s]]
     round(mean(f[f > 0]), 3)
   })
@@ -1640,7 +1640,7 @@ flux_tonnes_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
 
 # Pour chaque secteur, convertir M USD → tonnes
 for (s in SECTEURS) {
-  flux_tonnes_total <- flux_tonnes_total + flux_gravitaire[[s]] * TONNES_PAR_MUSD[s]
+  flux_tonnes_total <- flux_tonnes_total + flux_gravitaire[[s]] * TONNES_PAR_musd[s]
 }
 
 tonnage_total <- sum(flux_tonnes_total)
@@ -2007,11 +2007,11 @@ if (k > 0) {
 cat("Génération des graphiques statistiques...\n")
 
 g1 <- flux_par_secteur_df %>%
-  ggplot(aes(x = reorder(Secteur, Flux_total_MUSD),
-             y = Flux_total_MUSD,
+  ggplot(aes(x = reorder(Secteur, Flux_total_musd),
+             y = Flux_total_musd,
              fill = Secteur)) +
   geom_col(show.legend = FALSE, width = 0.75) +
-  geom_text(aes(label = paste0(Flux_total_MUSD, " M$")),
+  geom_text(aes(label = paste0(Flux_total_musd, " M$")),
             hjust = -0.1, size = 3.5, color = "#333333") +
   coord_flip(clip = "off") +
   scale_fill_brewer(palette = "Set2") +
@@ -2041,15 +2041,15 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 
 g2 <- recap_zones %>%
   pivot_longer(
-    cols      = c(Offre_totale_MUSD, Demande_totale_MUSD),
+    cols      = c(Offre_totale_musd, Demande_totale_musd),
     names_to  = "Type_flux",
     values_to = "Valeur"
   ) %>%
   mutate(
     Zone_court = str_trunc(Zone, 28),
     Type_flux  = recode(Type_flux,
-                        "Offre_totale_MUSD"   = "Offre",
-                        "Demande_totale_MUSD" = "Demande")
+                        "Offre_totale_musd"   = "Offre",
+                        "Demande_totale_musd" = "Demande")
   ) %>%
   ggplot(aes(x = reorder(Zone_court, Valeur),
              y = Valeur,
@@ -2136,14 +2136,14 @@ cat("✓ Heatmap flux OD sauvegardée\n")
 
 offre_long <- as.data.frame(offre_zones) %>%
   rownames_to_column("Zone") %>%
-  pivot_longer(-Zone, names_to = "Secteur", values_to = "Offre_MUSD") %>%
+  pivot_longer(-Zone, names_to = "Secteur", values_to = "Offre_musd") %>%
   mutate(Zone_court = str_trunc(str_remove(Zone, " - .*"), 22))
 
 g4 <- offre_long %>%
   group_by(Zone_court) %>%
-  mutate(Part_pct = Offre_MUSD / sum(Offre_MUSD) * 100) %>%
+  mutate(Part_pct = Offre_musd / sum(Offre_musd) * 100) %>%
   ungroup() %>%
-  ggplot(aes(x = reorder(Zone_court, -Offre_MUSD),
+  ggplot(aes(x = reorder(Zone_court, -Offre_musd),
              y = Part_pct,
              fill = Secteur)) +
   geom_col(width = 0.8) +
