@@ -525,7 +525,7 @@ snapper_reseau <- function(reseau, tolerance_m) {
 #   15m → corrige les gaps de précision GPS
 #   30m → corrige les gaps de saisie manuelle grossière
 reseau_snap <- reseau_subdivise
-for (seuil in c(5, 15, 30)) {
+for (seuil in c(10, 20, 30)) {
   tryCatch({
     reseau_snap <- snapper_reseau(reseau_snap, seuil) %>%
       convert(to_spatial_subdivision)  # Subdivision après chaque snap (nouveaux nœuds)
