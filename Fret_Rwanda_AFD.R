@@ -1364,6 +1364,9 @@ io_table <- tibble(
 )
 duck_write(io_table, "io_table")
 
+# Récapitulatif IO
+recap_io <- io_table
+
 # Matrice A en format long pour des requêtes SQL sur les coefficients individuels
 A_long <- as.data.frame(A) %>%
   rownames_to_column("secteur_input") %>%
@@ -1503,7 +1506,7 @@ recap_zones <- duck_query("
     ROUND(SUM(d.demande_musd), 2)                AS demande_totale_musd,
     ROUND(SUM(o.offre_musd - d.demande_musd), 2) AS solde_musd
   FROM offre_zones o
-  JOIN demande_zones d ON o.zone = o.zone AND o.secteur = d.secteur
+  JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
   GROUP BY o.zone
   ORDER BY offre_totale_musd DESC
 ")
