@@ -325,6 +325,131 @@ routes_rwanda <- routes_attrs_raw %>%
 
 cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
 
+# ==============================================================================
+# PARTIE 3 BIS : VÉRIFICATION VISUELLE + EXTRACTION DES COUCHES ADMINISTRATIVES
+# ==============================================================================
+# On extrait ici toutes les couches géographiques de référence depuis le PBF
+# (frontière, provinces, lacs) car chemin_pbf est déjà disponible.
+# Ces objets seront réutilisés en Partie 4 (masquage DEM) et Partie 12 (cartes).
+
+cat("=== PARTIE 3 BIS : Couches administratives + vérification visuelle ===\n")
+
+# ── Frontière nationale (admin_level = 2) ─────────────────────────────────────
+rwanda_boundary <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT * FROM multipolygons WHERE admin_level = '2'",
+  quiet = TRUE
+) %>%
+  rename(geometry = `_ogr_geometry_`) %>%
+  st_as_sf() %>%
+  st_make_valid() %>%
+  st_transform(crs = 32735)
+
+rwanda_national <- rwanda_boundary %>%
+  st_union() %>%
+  st_as_sf() %>%
+  st_make_valid()
+
+# ── Provinces (admin_level = 4) ───────────────────────────────────────────────
+rwanda_provinces <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT * FROM multipolygons WHERE admin_level = '4'",
+  quiet = TRUE
+) %>%
+  rename(geometry = `_ogr_geometry_`) %>%
+  st_as_sf() %>%
+  st_make_valid() %>%
+  filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+  st_transform(crs = 32735)
+
+# Fallback : utiliser la frontière nationale si les provinces sont absentes du PBF
+if (nrow(rwanda_provinces) == 0) rwanda_provinces <- rwanda_national
+
+# ── Lacs depuis le PBF ────────────────────────────────────────────────────────
+# Filtrage sur > 1 km² pour ne conserver que les lacs significatifs
+# (lac Kivu, lac Rweru, lac Muhazi…). tryCatch gère l'absence de données.
+
+lacs_ok <- FALSE
+tryCatch({
+  lacs_raw <- st_read(
+    chemin_pbf, layer = "multipolygons",
+    query = "SELECT * FROM multipolygons
+             WHERE natural = 'water'
+             OR other_tags LIKE '%\"natural\"=>\"water\"%'",
+    quiet = TRUE
+  ) %>%
+    rename(geometry = `_ogr_geometry_`) %>%
+    st_as_sf() %>%
+    st_make_valid() %>%
+    filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+    st_transform(crs = 32735) %>%
+    mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
+    filter(aire_km2 > 1)
+  if (nrow(lacs_raw) > 0) lacs_ok <- TRUE
+  cat("  Lacs chargés :", nrow(lacs_raw), "\n")
+}, error = function(e) cat("  ⚠ Lacs non disponibles dans le PBF\n"))
+
+cat("✓ Couches administratives extraites\n")
+
+# ── Zone d'affichage (bbox 250km × 250km centrée sur le Rwanda) ───────────────
+# Buffer de 125km de chaque côté du centroïde pour afficher les frontières voisines
+
+centre_rwanda <- rwanda_national %>% st_centroid() %>% st_coordinates()
+centre_x <- centre_rwanda[1, "X"]; centre_y <- centre_rwanda[1, "Y"]
+buffer_km <- 125000
+bbox_poly <- st_sfc(st_polygon(list(rbind(
+  c(centre_x - buffer_km, centre_y - buffer_km),
+  c(centre_x + buffer_km, centre_y - buffer_km),
+  c(centre_x + buffer_km, centre_y + buffer_km),
+  c(centre_x - buffer_km, centre_y + buffer_km),
+  c(centre_x - buffer_km, centre_y - buffer_km)
+))), crs = 32735) %>% st_as_sf()
+bbox_carto <- st_bbox(bbox_poly)
+
+
+# ── Fonction de fond de carte réutilisable ────────────────────────────────────
+# Crée les couches de base (provinces, frontière, lacs) communes à toutes les cartes.
+# Retourne un objet tmap auquel on ajoute des couches thématiques avec +.
+
+creer_fond_carte <- function() {
+  carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) +
+    tm_polygons(fill = "#F5F5F0", col = "#AAAAAA", lwd = 0.8,
+                fill.legend = tm_legend(show = FALSE)) +
+    tm_shape(rwanda_national) +
+    tm_borders(col = "#222222", lwd = 2.5)
+  if (lacs_ok) carte <- carte +
+      tm_shape(lacs_raw) +
+      tm_polygons(fill = "#A8C8E8", col = "#7AAAC8", lwd = 0.5,
+                  fill.legend = tm_legend(show = FALSE))
+  carte
+}
+
+# ── Carte 1 : vérification post-nettoyage ──────────────────────────────────────
+carte_verif_routes <- creer_fond_carte() +
+  tm_shape(routes_rwanda) +
+  tm_lines(
+    col       = "road_type",
+    col.scale = tm_scale(values = c(
+      motorway     = "#E41A1C",
+      trunk        = "#FF4400",
+      primary      = "#FF7F00",
+      secondary    = "#E8A000",
+      tertiary     = "#999999",
+      unclassified = "#CCCCCC"
+    )),
+    col.legend = tm_legend(title = "Type de route"),
+    lwd = 1.2
+  ) +
+  tm_title("Réseau Routier du Rwanda\nContrôle post-nettoyage (Partie 3)") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position = c("right", "top"))
+
+tmap_save(carte_verif_routes,
+          file.path(DIR_OUTPUT, "carte_verif_routes_partie3.png"),
+          width = 3000, height = 2400, dpi = 300)
+
+cat("✓ Carte de vérification générée\n\n")
 
 # ==============================================================================
 # PARTIE 4 : ACQUISITION DES DONNÉES D'ÉLÉVATION
@@ -394,17 +519,6 @@ tryCatch({
   cat("✓ DEM fictif créé\n")
 })
 
-# Extraction de la frontière nationale depuis le PBF (admin_level=2)
-rwanda_boundary <- st_read(
-  chemin_pbf,
-  layer = "multipolygons",
-  query = "SELECT * FROM multipolygons WHERE admin_level = '2'",
-  quiet = TRUE
-) %>%
-  rename(geometry = `_ogr_geometry_`) %>%
-  st_as_sf() %>%
-  st_make_valid() %>%
-  st_transform(crs = 32735)
 
 # Clip + mask sur les frontières réelles + suppression des valeurs aberrantes SRTM
 dem_rwanda <- crop(dem_rwanda, vect(rwanda_boundary))
@@ -1100,97 +1214,6 @@ for (r in seq_len(nrow(od_long))) {
 
 cat("=== PARTIE 12 : Visualisations ===\n")
 
-# ── Frontières administratives depuis le PBF ──────────────────────────────────
-# admin_level 2 = frontière nationale du Rwanda (1 polygone)
-# admin_level 4 = provinces (5 provinces au Rwanda)
-limites_raw <- st_read(chemin_pbf, layer = "multipolygons",
-                       query = "SELECT * FROM multipolygons WHERE admin_level IN ('2','4')",
-                       quiet = TRUE) %>%
-  rename(geometry = `_ogr_geometry_`) %>%
-  st_as_sf() %>%
-  st_make_valid() %>%
-  filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON"))
-
-# st_union() fusionne tous les polygones de niveau 2 en un seul
-# (au cas où la frontière serait découpée en plusieurs objets dans OSM)
-rwanda_national  <- limites_raw %>%
-  filter(admin_level == "2") %>%
-  st_union() %>%
-  st_as_sf() %>%
-  st_transform(32735) %>%
-  st_make_valid()
-
-# Provinces : utiliser la frontière nationale si les provinces sont absentes
-rwanda_provinces <- limites_raw %>%
-  filter(admin_level == "4") %>%
-  st_transform(32735) %>%
-  st_make_valid()
-if (nrow(rwanda_provinces) == 0) rwanda_provinces <- rwanda_national
-
-# ── Lacs depuis le PBF ────────────────────────────────────────────────────────
-# Filtrage sur > 1 km² pour ne conserver que les lacs significatifs
-# (lac Kivu, lac Rweru, lac Muhazi…). tryCatch gère l'absence de données.
-lacs_ok <- FALSE
-tryCatch({
-  lacs_raw <- st_read(chemin_pbf, layer = "multipolygons",
-                      query = "SELECT * FROM multipolygons WHERE natural = 'water' OR
-             other_tags LIKE '%\"natural\"=>\"water\"%'", quiet = TRUE) %>%
-    rename(geometry = `_ogr_geometry_`) %>%
-    st_as_sf() %>%
-    st_make_valid() %>%
-    filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
-    st_transform(32735) %>%
-    mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
-    filter(aire_km2 > 1)   # Seuil : 1 km² minimum
-  if (nrow(lacs_raw) > 0) lacs_ok <- TRUE
-}, error = function(e) {})
-
-# ── Zone d'affichage (bbox 250km × 250km centrée sur le Rwanda) ───────────────
-# Buffer de 125km de chaque côté du centroïde pour afficher les frontières voisines
-centre_rwanda <- rwanda_national %>% st_centroid() %>% st_coordinates()
-centre_x <- centre_rwanda[1,"X"]; centre_y <- centre_rwanda[1,"Y"]
-buffer_km <- 125000   # En mètres (UTM 35S)
-bbox_poly <- st_sfc(st_polygon(list(rbind(
-  c(centre_x-buffer_km, centre_y-buffer_km),
-  c(centre_x+buffer_km, centre_y-buffer_km),
-  c(centre_x+buffer_km, centre_y+buffer_km),
-  c(centre_x-buffer_km, centre_y+buffer_km),
-  c(centre_x-buffer_km, centre_y-buffer_km)))), crs = 32735) %>%
-  st_as_sf()
-bbox_carto <- st_bbox(bbox_poly)
-
-# ── Fonction de fond de carte réutilisable ────────────────────────────────────
-# Crée les couches de base (provinces, frontière, lacs) communes à toutes les cartes.
-# Retourne un objet tmap auquel on ajoute des couches thématiques avec +.
-creer_fond_carte <- function() {
-  carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) +
-    tm_polygons(fill="#F5F5F0", col="#AAAAAA", lwd=0.8, fill.legend=tm_legend(show=FALSE)) +
-    tm_shape(rwanda_national) +
-    tm_borders(col="#222222", lwd=2.5)   # Frontière nationale en trait épais
-  if (lacs_ok) carte <- carte +
-      tm_shape(lacs_raw) +
-      tm_polygons(fill="#A8C8E8", col="#7AAAC8", lwd=0.5, fill.legend=tm_legend(show=FALSE))
-  carte
-}
-
-# ── Carte 1 : Hiérarchie du réseau routier ───────────────────────────────────
-# Couleurs conventionnelles pour les niveaux de routes (rouge = nationales, gris = locales)
-carte_hierarchie <- creer_fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col="road_type",
-           col.scale=tm_scale(values=c(trunk="#E41A1C", primary="#FF7F00",
-                                       secondary="#E8A000", tertiary="#999999", unclassified="#CCCCCC")),
-           col.legend=tm_legend(title="Type de route"), lwd=1.5) +
-  tm_shape(entreposages_sf) +
-  tm_dots(fill="type",
-          fill.scale=tm_scale(values=c(hub="#000000", sez="#0000FF",
-                                       marche="#00CC00", frontiere="#FF0000", ville="#800080")),
-          fill.legend=tm_legend(title="Type de zone"), size=0.3) +
-  tm_title("Réseau Routier du Rwanda\nHiérarchie des routes") +
-  tm_layout(legend.outside=TRUE, frame=TRUE) +
-  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_hierarchie, file.path(DIR_OUTPUT,"carte_hierarchie_rwanda.png"),
-          width=3000, height=2400, dpi=300)
 
 # ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
 # Les tronçons les plus chers (rouge foncé) combinent pente forte + surface dégradée.
@@ -1222,7 +1245,7 @@ carte_pentes <- creer_fond_carte() +
 tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
           width=3000, height=2400, dpi=300)
 
-cat("✓ 3 cartes générées\n\n")
+cat("✓ 2 cartes générées\n\n")
 
 
 # ==============================================================================
