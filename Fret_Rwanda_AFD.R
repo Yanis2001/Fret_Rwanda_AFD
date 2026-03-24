@@ -394,15 +394,29 @@ tryCatch({
   cat("✓ DEM fictif créé\n")
 })
 
-# Clip du DEM sur l'emprise exacte des routes (évite les valeurs aberrantes hors Rwanda)
-dem_rwanda <- crop(dem_rwanda, ext(
-  bbox_routes["xmin"], bbox_routes["xmax"],
-  bbox_routes["ymin"], bbox_routes["ymax"]
-))
+# Extraction de la frontière nationale depuis le PBF (admin_level=2)
+rwanda_boundary <- st_read(
+  chemin_pbf,
+  layer = "multipolygons",
+  query = "SELECT * FROM multipolygons WHERE admin_level = '2'",
+  quiet = TRUE
+) %>%
+  rename(geometry = `_ogr_geometry_`) %>%
+  st_as_sf() %>%
+  st_make_valid() %>%
+  st_transform(crs = 32735)
+
+# Clip + mask sur les frontières réelles + suppression des valeurs aberrantes SRTM
+dem_rwanda <- crop(dem_rwanda, vect(rwanda_boundary))
+dem_rwanda <- mask(dem_rwanda, vect(rwanda_boundary))
+dem_rwanda <- clamp(dem_rwanda, lower = 800, upper = 4600, values = NA)
 
 cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
 cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "m\n\n")
 
+# Cartographier rapidement pour identifier visuellement les anomalies
+plot(dem_rwanda, main = "DEM Rwanda — vérification")
+plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 
 # ==============================================================================
 # PARTIE 5 : CRÉATION DU GRAPHE ROUTIER AVEC SFNETWORKS
