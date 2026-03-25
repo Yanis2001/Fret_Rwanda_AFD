@@ -370,6 +370,7 @@ if (nrow(rwanda_provinces) == 0) rwanda_provinces <- rwanda_national
 # (lac Kivu, lac Rweru, lac Muhazi…). tryCatch gère l'absence de données.
 
 lacs_ok <- FALSE
+# tryCatch() permet de continuer le script si le téléchargement échoue
 tryCatch({
   lacs_raw <- st_read(
     chemin_pbf, layer = "multipolygons",
@@ -480,7 +481,7 @@ tmap_save(carte_verif_routes,
           file.path(DIR_OUTPUT, "carte_verif_routes_partie3.png"),
           width = 3000, height = 2400, dpi = 300)
 
-# Ouvre une carte zoomable/déplagable dans l'onglet Viewer de RStudio
+# Ouvre une carte zoomable dans l'onglet Viewer de RStudio
 tmap_mode("view")
 print(carte_verif_routes)
 tmap_mode("plot")   # Remettre en mode statique pour la suite du script
@@ -509,8 +510,6 @@ emprise_points <- data.frame(
 emprise_sf <- st_as_sf(emprise_points, coords = c("x","y"), crs = 32735) %>%
   st_transform(crs = 4326)
 
-# tryCatch() permet de continuer le script si le téléchargement échoue
-# (ex : pas d'accès internet, quota AWS dépassé) en créant un DEM fictif
 tryCatch({
   # z = 9 correspond à un zoom de ~300m/pixel, suffisant pour des routes
   # clip = "locations" : on ne récupère les données que dans l'emprise fournie
@@ -553,9 +552,15 @@ tryCatch({
 })
 
 
-# Clip + mask sur les frontières réelles + suppression des valeurs aberrantes SRTM
-dem_rwanda <- crop(dem_rwanda, vect(rwanda_boundary))
+# Découpe le raster dem_rwanda pour ne garder que la zone qui chevauche le 
+# polygone rwanda_boundary pour éviter de traiter des données hors de la zone d'intérêt
+dem_rwanda <- crop(dem_rwanda, vect(rwanda_boundary)) 
+
+# Masque les pixels du raster qui ne sont pas à l'intérieur du polygone rwanda_boundary
+# définis comme NA
 dem_rwanda <- mask(dem_rwanda, vect(rwanda_boundary))
+
+# Limite les valeurs du raster à un intervalle donné et remplace les valeurs hors seuil par NA
 dem_rwanda <- clamp(dem_rwanda, lower = 800, upper = 4600, values = NA)
 
 cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
