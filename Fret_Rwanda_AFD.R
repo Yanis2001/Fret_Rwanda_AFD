@@ -436,15 +436,56 @@ bbox_carto <- st_bbox(bbox_poly)
 # Retourne un objet tmap auquel on ajoute des couches thématiques avec +.
 
 creer_fond_carte <- function() {
+  
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 1. COUCHE 1 : Provinces du Rwanda
+  #    - `tm_shape(rwanda_provinces, bbox = bbox_carto)` :
+  #      Définit la couche des provinces ET limite l'affichage à la bbox définie précédemment.
+  #    - `tm_polygons()` :
+  #      Remplit les polygones des provinces avec un style visuel.
+  #      - fill = "#F5F5F0" : Couleur de remplissage (beige très clair).
+  #      - col = "#AAAAAA" : Couleur des bordures des provinces (gris moyen).
+  #      - lwd = 0.8 : Épaisseur des bordures (0.8 pt).
+  #      - fill.legend = tm_legend(show = FALSE) : Désactive la légende pour cette couche.
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) +
     tm_polygons(fill = "#F5F5F0", col = "#AAAAAA", lwd = 0.8,
                 fill.legend = tm_legend(show = FALSE)) +
+    
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 2. COUCHE 2 : Frontière nationale du Rwanda
+    #    - `tm_shape(rwanda_national)` :
+    #      Ajoute la couche de la frontière nationale (un seul polygone).
+    #    - `tm_borders()` :
+    #      Trace uniquement les bordures (sans remplissage).
+    #      - col = "#222222" : Couleur noire foncée pour la frontière.
+    #      - lwd = 2.5 : Épaisseur de la bordure (2.5 pt, plus épaisse que les provinces).
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     tm_shape(rwanda_national) +
     tm_borders(col = "#222222", lwd = 2.5)
+  
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 3. COUCHE 3 : Lacs (conditionnelle)
+  #    - `if (lacs_ok)` : Vérifie si les données des lacs sont disponibles (voir Partie 3 BIS).
+  #    - Si oui, ajoute une couche pour les lacs avec :
+  #      - `tm_shape(lacs_raw)` : Utilise les données des lacs filtrées (aire > 1 km²).
+  #      - `tm_polygons()` :
+  #        - fill = "#A8C8E8" : Remplissage bleu clair pour l'eau.
+  #        - col = "#7AAAC8" : Bordure bleu moyen.
+  #        - lwd = 0.5 : Bordure fine.
+  #        - fill.legend = tm_legend(show = FALSE) : Pas de légende pour cette couche.
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if (lacs_ok) carte <- carte +
       tm_shape(lacs_raw) +
       tm_polygons(fill = "#A8C8E8", col = "#7AAAC8", lwd = 0.5,
                   fill.legend = tm_legend(show = FALSE))
+  
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 4. Retourne l'objet carte complet
+  #    - `carte` est un objet de classe `tmap`, prêt à être :
+  #      - Affiché avec `print(carte)`.
+  #      - Enrichi avec d'autres couches (ex : routes, points d'intérêt).
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   carte
 }
 
