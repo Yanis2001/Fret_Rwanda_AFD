@@ -720,17 +720,36 @@ cat("Nombre d'arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n"
 noeuds_sf <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
 noeuds_sf$composante <- composantes_finales$membership
 
+cat("Nombre de nœuds dans noeuds_sf :", nrow(noeuds_sf), "\n")
+cat("Valeurs uniques de taille_composante :", unique(noeuds_sf$taille_composante), "\n")
+if (nrow(noeuds_sf) == 0) {
+  cat("⚠ noeuds_sf est vide. Vérifie la construction de reseau_rwanda.\n")
+} else {
+  cat("✓ noeuds_sf est valide.\n")
+}
+
 # Taille de la composante de chaque noeud
 noeuds_sf$taille_composante <- composantes_finales$csize[composantes_finales$membership]
 
-# Carte de la fragmentation
-carte_fragmentation <- creer_fond_carte() +
-  tm_shape(noeuds_sf %>% filter(taille_composante < 50)) +
-  tm_dots(fill = "red", size = 0.05, fill_alpha  = 0.5) +
+
+# Carte de la fragmentation (version robuste)
+carte_fragmentation <- creer_fond_carte()
+
+# Ajouter les composantes < 50 nœuds (si elles existent)
+petites_composantes <- noeuds_sf %>% filter(taille_composante < 50)
+if (nrow(petites_composantes) > 0) {
+  carte_fragmentation <- carte_fragmentation +
+    tm_shape(petites_composantes) +
+    tm_dots(fill = "red", size = 0.5, fill_alpha = 0.5)
+}
+
+# Ajouter les composantes >= 50 nœuds (toujours présentes ici)
+carte_fragmentation <- carte_fragmentation +
   tm_shape(noeuds_sf %>% filter(taille_composante >= 50)) +
-  tm_dots(fill = "blue", size = 0.05, fill_alpha  = 0.3) +
+  tm_dots(fill = "blue", size = 0.05, fill_alpha = 0.3) +
   tm_title("Fragmentation du réseau\nRouge = composantes < 50 noeuds | Bleu = composantes >= 50 noeuds")
 
+# Affichage
 tmap_mode("view")
 print(carte_fragmentation)
 tmap_mode("plot")
@@ -1927,7 +1946,7 @@ cat("=== PARTIE 20 : Visualisations des échanges modélisés ===\n\n")
 
 # --- Préparation des couches spatiales ---
 
-# ✅ Forcer les colonnes numériques explicitement
+# Forcer les colonnes numériques explicitement
 aretes_fret <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
@@ -2206,7 +2225,7 @@ cat("✓ Graphique offre/demande sauvegardé\n")
 
 # ============================================================
 # GRAPHIQUE 3 : Heatmap de la matrice OD
-# ✅ Noms courts uniques via make.unique()
+# Noms courts uniques via make.unique()
 # ============================================================
 
 noms_courts_raw <- noeuds_entreposage$warehouse_name %>%
