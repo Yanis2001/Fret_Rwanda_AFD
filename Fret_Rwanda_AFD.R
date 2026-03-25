@@ -330,8 +330,7 @@ cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmo
 # PARTIE 3 BIS : VÉRIFICATION VISUELLE + EXTRACTION DES COUCHES ADMINISTRATIVES
 # ==============================================================================
 # On extrait ici toutes les couches géographiques de référence depuis le PBF
-# (frontière, provinces, lacs) car chemin_pbf est déjà disponible.
-# Ces objets seront réutilisés en Partie 4 (masquage DEM) et Partie 12 (cartes).
+# (frontière, provinces, lacs) 
 
 cat("=== PARTIE 3 BIS : Couches administratives + vérification visuelle ===\n")
 
@@ -384,7 +383,7 @@ tryCatch({
     st_make_valid() %>%
     filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
     st_transform(crs = 32735) %>%
-    mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
+    mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>% # Crée la colonne aire km2
     filter(aire_km2 > 1)
   if (nrow(lacs_raw) > 0) lacs_ok <- TRUE
   cat("  Lacs chargés :", nrow(lacs_raw), "\n")
@@ -395,17 +394,41 @@ cat("✓ Couches administratives extraites\n")
 # ── Zone d'affichage (bbox 250km × 250km centrée sur le Rwanda) ───────────────
 # Buffer de 125km de chaque côté du centroïde pour afficher les frontières voisines
 
+# 1. Calcul du centroïde du Rwanda (point central)
 centre_rwanda <- rwanda_national %>% st_centroid() %>% st_coordinates()
-centre_x <- centre_rwanda[1, "X"]; centre_y <- centre_rwanda[1, "Y"]
-buffer_km <- 125000
+centre_x <- centre_rwanda[1, "X"]  # Coordonnée X (Est-Ouest) du centroïde
+centre_y <- centre_rwanda[1, "Y"]  # Coordonnée Y (Nord-Sud) du centroïde
+
+# 2. Définition du buffer de 125 km 
+buffer_km <- 125000 
+
+# 3. Construction manuelle d'un polygone carré (bbox) autour du centroïde
+#    Les coordonnées sont calculées en ajoutant/soustrayant buffer_km aux coordonnées du centroïde
+#    Format : liste de points dans l'ordre (coin bas-gauche → coin bas-droit → coin haut-droit → coin haut-gauche → retour au coin bas-gauche)
 bbox_poly <- st_sfc(st_polygon(list(rbind(
+  # Coin Sud-Ouest : c(X,Y) = c(Ouest, Sud)
   c(centre_x - buffer_km, centre_y - buffer_km),
+  
+  # Coin Sud-Est : c(X,Y) = c(Est, Sud)
   c(centre_x + buffer_km, centre_y - buffer_km),
+  
+  # Coin Nord-Est : c(X,Y) = c(Est, Nord)
   c(centre_x + buffer_km, centre_y + buffer_km),
+  
+  # Coin Nord-Ouest : c(X,Y) = c(Ouest, Nord)
   c(centre_x - buffer_km, centre_y + buffer_km),
+  
+  # Retour au coin Sud-Ouest pour fermer le polygone
   c(centre_x - buffer_km, centre_y - buffer_km)
 ))), crs = 32735) %>% st_as_sf()
+
+# 4. Extraction de la bbox (coordonnées min/max) pour utilisation dans tmap
+#    st_bbox() retourne un vecteur [xmin, ymin, xmax, ymax]
 bbox_carto <- st_bbox(bbox_poly)
+#   - xmin = centre_x - buffer_km (Ouest)
+#   - ymin = centre_y - buffer_km (Sud)
+#   - xmax = centre_x + buffer_km (Est)
+#   - ymax = centre_y + buffer_km (Nord)
 
 
 # ── Fonction de fond de carte réutilisable ────────────────────────────────────
