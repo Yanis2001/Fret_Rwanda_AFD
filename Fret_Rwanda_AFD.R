@@ -625,24 +625,47 @@ cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissag
 # connecte les extrémités quasi-jointives sans risque de O(n²) bloquant
 # car on opère sur des arêtes déjà bien structurées.
 cat("  Étape 3/4 : snapping léger (5m)...\n")
-pb_snap <- progress_bar$new(
-  format = "  Snapping   [:bar] :percent | durée : :elapsed",
-  total = 1, clear = FALSE, width = 60
-)
+
 tryCatch({
-  aretes_snap <- reseau_lisse %>%
-    activate("edges") %>%
-    st_as_sf() %>%
-    mutate(geometry = st_snap(geometry, geometry, tolerance = 5)) %>%
+  aretes_sf     <- reseau_lisse %>% activate("edges") %>% st_as_sf()
+  n_aretes_snap <- nrow(aretes_sf)
+  
+  pb_snap <- progress_bar$new(
+    format = "  Snapping   [:bar] :percent | écoulé : :elapsed | ETA : :eta",
+    total  = n_aretes_snap,
+    clear  = FALSE,
+    width  = 70
+  )
+  
+  # Boucle row-by-row : chaque géométrie i est snappée vers toutes les autres
+  geoms_snapped <- vector("list", n_aretes_snap)
+  for (i in seq_len(n_aretes_snap)) {
+    geoms_snapped[[i]] <- st_snap(
+      aretes_sf$geometry[i],   # géométrie source
+      aretes_sf$geometry,      # cible : l'ensemble du réseau
+      tolerance = 5            # 5 mètres
+    )
+    pb_snap$tick()             # ← un tick par arête = progression réelle
+  }
+  
+  aretes_snap <- aretes_sf %>%
+    mutate(geometry = do.call(c, geoms_snapped)) %>%
     st_make_valid() %>%
-    filter(st_geometry_type(geometry) == "LINESTRING", !st_is_empty(geometry))
+    filter(
+      st_geometry_type(geometry) == "LINESTRING",
+      !st_is_empty(geometry)
+    )
+  
   reseau_lisse <- as_sfnetwork(aretes_snap, directed = FALSE) %>%
     activate("edges") %>%
     mutate(longueur_m = as.numeric(st_length(geometry))) %>%
     convert(to_spatial_subdivision)
+  
   cat("  →", igraph::count_components(reseau_lisse), "composantes après snapping\n")
-}, error = function(e) cat("  ⚠ Snapping échoué, on continue sans\n"))
-pb_snap$tick()
+  
+}, error = function(e) {
+  cat("  ⚠ Snapping échoué, on continue sans :", conditionMessage(e), "\n")
+})
 
 # ── Étape 4 : Extraction de la composante géante ──────────────────────────────
 # Même après corrections, le réseau peut rester fragmenté (routes isolées,
