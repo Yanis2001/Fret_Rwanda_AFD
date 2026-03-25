@@ -910,7 +910,7 @@ calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
   longueur <- as.numeric(st_length(ligne_geom))
   
   # Nombre de points d'échantillonnage (au moins 2 : début et fin)
-  n_points <- max(2, floor(longueur / espacement))
+  n_points <- max(2, floor(longueur / espacement))  # floor(longueur / espacement) = Nombre de segment de taille "espacement" dans "longueur"
   points   <- if (longueur < espacement * 2)
     st_line_sample(ligne_geom, n = 2)         # Segment très court : 2 points seulement
   else
@@ -988,10 +988,9 @@ cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 
 
 # ==============================================================================
-# PARTIES 8-10 : VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
+# PARTIES 9: VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
 # ==============================================================================
-# Ces trois parties sont fusionnées en une seule requête SQL à 4 CTEs (Common
-# Table Expressions). L'approche SQL présente plusieurs avantages :
+# L'approche SQL présente plusieurs avantages :
 #   - Lisibilité : chaque CTE a un rôle clairement nommé et isolé
 #   - Performance : DuckDB optimise l'ensemble de la requête en une seule passe
 #   - Maintenabilité : changer un paramètre économique = modifier une valeur
@@ -1005,7 +1004,7 @@ cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
 #   cost_total    = cost_fuel + cost_wear + cost_time  [coût généralisé]
 
-cat("=== PARTIES 8-10 : Vitesses, consommation et coûts via DuckDB ===\n")
+cat("=== PARTIES 9 : Vitesses, consommation et coûts via DuckDB ===\n")
 
 # ── Chargement des attributs tabulaires des arêtes dans DuckDB ────────────────
 # st_drop_geometry() supprime la colonne géométrie (non stockable dans DuckDB standard)
