@@ -588,17 +588,10 @@ cat("=== PARTIE 5 BIS : Corrections topologiques ===\n")
 # pour connecter des routes qui se croisent physiquement.
 
 cat("  Étape 1/4 : subdivision aux intersections...\n")
-pb_subdiv <- progress_bar$new(
-  format = "  Subdivision [:bar] :percent | durée : :elapsed",
-  total  = 1,       # Opération atomique : 1 seul tick à la fin
-  clear  = FALSE,
-  width  = 60
-)
 
 reseau_subdivise <- reseau_rwanda %>%
   convert(to_spatial_subdivision)
 
-pb_subdiv$tick()
 cat("  → ", igraph::count_components(reseau_subdivise), "composantes après subdivision\n")
 
 # ── Étape 2 : Suppression des pseudo-nœuds ────────────────────────────────────
@@ -607,19 +600,14 @@ cat("  → ", igraph::count_components(reseau_subdivise), "composantes après su
 # le graphe. to_spatial_smooth() les supprime et fusionne les arêtes adjacentes.
 
 cat("  Étape 2/4 : suppression des pseudo-nœuds...\n")
-pb_lisse <- progress_bar$new(
-  format = "  Lissage    [:bar] :percent | durée : :elapsed",
-  total  = 1,
-  clear  = FALSE,
-  width  = 60
-)
 
 reseau_lisse <- reseau_subdivise %>%
   convert(to_spatial_smooth)
 
-pb_lisse$tick()
 cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissage\n")
 
+if(FALSE) {
+  # Remplacer FALSE par TRUE si on veut activer cette partie du code
 # ── Étape 3 : snapping ciblé post-topologie ───────────────────────────────────
 # Maintenant que la topologie est propre, un snapping léger (5m seulement)
 # connecte les extrémités quasi-jointives.
@@ -668,10 +656,10 @@ tryCatch({
   
   cat("  →", igraph::count_components(reseau_lisse), "composantes après snapping\n")
   
-}, error = function(e) {
+ }, error = function(e) {
   cat("  ⚠ Snapping échoué, on continue sans :", conditionMessage(e), "\n")
-})
-
+ })
+}
 # ── Étape 4 : Extraction de la composante géante ──────────────────────────────
 # Même après corrections, le réseau peut rester fragmenté (routes isolées,
 # pistes sans connexion au réseau principal). On conserve uniquement la plus
@@ -723,6 +711,9 @@ cat("  1      noeud   :", sum(sizes == 1),                  "composantes\n")
 
 cat("\nTop 5 composantes (nb noeuds) :\n")
 print(head(sizes, 5))
+
+cat("Nombre de nœuds dans reseau_rwanda :", igraph::vcount(reseau_rwanda), "\n")
+cat("Nombre d'arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n")
 
 # Répartition géographique : les fragments sont-ils concentrés dans une zone ?
 # On récupère le centroïde de chaque composante pour cartographier la fragmentation
