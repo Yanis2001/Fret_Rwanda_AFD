@@ -588,7 +588,7 @@ routes_rwanda_clean <- routes_rwanda %>%
   filter(st_geometry_type(.) == "LINESTRING") %>%  # Supprimer les types non conformes
   st_make_valid()
 
-# Création du réseau non orienté (directed = FALSE) :
+# as_sfnetwork() convertit le sf en réseau non orienté (directed = FALSE):
 # un segment peut être parcouru dans les deux sens (routes bidirectionnelles).
 # Les routes à sens unique seraient gérées avec directed = TRUE + attribut oneway.
 reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) %>%
@@ -602,20 +602,15 @@ cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
 
 
 # ==============================================================================
-# PARTIE 5 BIS : CORRECTIONS TOPOLOGIQUES DU RÉSEAU
+# PARTIE 6 : CORRECTIONS TOPOLOGIQUES DU RÉSEAU
 # ==============================================================================
 # Les données OSM contiennent fréquemment des erreurs topologiques :
 #   1. Routes qui se croisent sans nœud d'intersection (pont raté, erreur de saisie)
 #   2. Nœuds intermédiaires inutiles (points de degré 2 sur une ligne droite)
 # Ces erreurs créent des composantes connexes multiples (le réseau est "fragmenté")
 # et empêchent les algorithmes de plus court chemin de trouver des itinéraires.
-#
-# Note : le snapping (st_snap) a été retiré car son coût O(n²) bloque l'exécution
-# sur un réseau national. Les gaps de quelques mètres entre extrémités sont rares
-# dans les fichiers PBF OSM bien maintenus ; les croisements sans nœud (résolus par
-# to_spatial_subdivision) représentent l'essentiel des problèmes de connectivité.
 
-cat("=== PARTIE 5 BIS : Corrections topologiques ===\n")
+cat("=== PARTIE 6 : Corrections topologiques ===\n")
 
 # ── Étape 1 : Subdivision aux intersections ───────────────────────────────────
 # to_spatial_subdivision() détecte les croisements de routes sans nœud commun
@@ -641,12 +636,12 @@ reseau_lisse <- reseau_subdivise %>%
 
 cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissage\n")
 
+
+# Remplacer FALSE par TRUE si on veut activer cette partie du code : ⚠ ~1 jour de calcul
 if(FALSE) {
-  # Remplacer FALSE par TRUE si on veut activer cette partie du code
 # ── Étape 3 : snapping ciblé post-topologie ───────────────────────────────────
 # Maintenant que la topologie est propre, un snapping léger (5m seulement)
 # connecte les extrémités quasi-jointives.
-# ⚠ A désactivé : ~1 jour de calcul
 # Les gaps < 5m sont rarissimes dans les PBF OSM Rwanda bien maintenus.
 # La subdivision (étape 1) règle déjà l'essentiel des problèmes de connectivité.
 # À réactiver uniquement sur un sous-réseau local si des composantes isolées
@@ -655,9 +650,13 @@ if(FALSE) {
 cat("  Étape 3/4 : snapping léger (5m)...\n")
 
 tryCatch({
-  aretes_sf     <- reseau_lisse %>% activate("edges") %>% st_as_sf()
-  n_aretes_snap <- nrow(aretes_sf)
+  aretes_sf     <- reseau_lisse %>% 
+    activate("edges") %>%             # Active la table des arêtes (segments routiers)
+    st_as_sf()                        # Convertit en objet sf
+  n_aretes_snap <- nrow(aretes_sf)    # Nombre total d'arêtes à traiter
   
+  
+  # Initialisation d'une barre de progression pour suivre l'avancement
   pb_snap <- progress_bar$new(
     format = "  Snapping   [:bar] :percent | écoulé : :elapsed | ETA : :eta",
     total  = n_aretes_snap,
@@ -665,29 +664,40 @@ tryCatch({
     width  = 70
   )
   
-  # Boucle row-by-row : chaque géométrie i est snappée vers toutes les autres
+  # Initialisation d'une liste pour stocker les géométries "snappées"
+  # Chaque élément de la liste correspondra à une arête du réseau.  
   geoms_snapped <- vector("list", n_aretes_snap)
+  
+  
   for (i in seq_len(n_aretes_snap)) {
+    # Applique st_snap() à l'arête i :
+    #   - géométrie source : aretes_sf$geometry[i] (l'arête courante)
+    #   - cible : aretes_sf$geometry (toutes les autres arêtes du réseau)
+    #   - tolerance = 5 : distance maximale (en mètres) pour le snapping.
+    #     Si une extrémité de l'arête i est à ≤5m d'une autre géométrie, elle sera "aimantée".
     geoms_snapped[[i]] <- st_snap(
-      aretes_sf$geometry[i],   # géométrie source
-      aretes_sf$geometry,      # cible : l'ensemble du réseau
-      tolerance = 5            # 5 mètres
+      aretes_sf$geometry[i],   
+      aretes_sf$geometry,      
+      tolerance = 5            
     )
-    pb_snap$tick()             # ← un tick par arête = progression réelle
+    pb_snap$tick()             # barre de progression
   }
   
-  aretes_snap <- aretes_sf %>%
-    mutate(geometry = do.call(c, geoms_snapped)) %>%
-    st_make_valid() %>%
-    filter(
+  
+  # Reconstruction du réseau après snapping
+    aretes_snap <- aretes_sf %>%
+    mutate(geometry = do.call(c, geoms_snapped)) %>% # Combine toutes les géométries de la liste en un seul vecteur
+    st_make_valid() %>%                              # Corrige les géométries invalides
+    filter(                                          # Garde uniquement les géométries de type LINESTRING et non vides.
       st_geometry_type(geometry) == "LINESTRING",
       !st_is_empty(geometry)
     )
   
-  reseau_lisse <- as_sfnetwork(aretes_snap, directed = FALSE) %>%
+  # Reconstruction du réseau sous forme de sfnetwork
+    reseau_lisse <- as_sfnetwork(aretes_snap, directed = FALSE) %>%
     activate("edges") %>%
-    mutate(longueur_m = as.numeric(st_length(geometry))) %>%
-    convert(to_spatial_subdivision)
+    mutate(longueur_m = as.numeric(st_length(geometry))) %>% # Recalcule la longueur des arêtes après snapping
+    convert(to_spatial_subdivision)                          #  Reconnecte les intersections (au cas où le snapping a créé des croisements non nodaux)
   
   cat("  →", igraph::count_components(reseau_lisse), "composantes après snapping\n")
   
@@ -703,9 +713,21 @@ tryCatch({
 
 cat("  Étape 4/4 : extraction de la composante géante...\n")
 
-composantes_finales <- igraph::components(reseau_lisse %>% as_tbl_graph())
+# - `as_tbl_graph()` : Convertit le réseau sfnetwork en un graphe tidygraph/igraph.
+#   Cela permet d'utiliser les fonctions d'analyse de graphe d'igraph.
+# - `igraph::components()` : Identifie toutes les composantes connexes du graphe.
+# - Résultat : `composantes_finales` est une liste avec deux éléments :
+#    - $membership : Vecteur indiquant à quelle composante appartient chaque nœud.
+#    - $csize : Vecteur indiquant la taille (nombre de nœuds) de chaque composante.
+composantes_finales <- igraph::components(reseau_lisse %>% as_tbl_graph())   
+
+# Identification de la composante géante
 id_geante           <- which.max(composantes_finales$csize)
+
+# Extraction des nœuds appartenant à la composante géante
 noeuds_geante       <- which(composantes_finales$membership == id_geante)
+
+# Calcul du pourcentage de nœuds dans la composante géante
 pct_noeuds          <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse) * 100, 1)
 
 cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
@@ -717,6 +739,7 @@ pb_geante <- progress_bar$new(
   width  = 60
 )
 
+# Création du réseau avec uniquement la composante géante
 reseau_rwanda <- reseau_lisse %>%
   activate("nodes") %>%
   filter({
@@ -733,7 +756,7 @@ cat("✓ Réseau corrigé —",
 # ── Diagnostic complet de la fragmentation ───────────────────────────────────
 
 composantes_finales <- igraph::components(reseau_rwanda %>% as_tbl_graph())
-sizes <- sort(composantes_finales$csize, decreasing = TRUE)
+sizes <- sort(composantes_finales$csize, decreasing = TRUE) # trie les tailles des composantes connexes du réseau par ordre décroissant
 
 cat("=== Diagnostic de fragmentation ===\n\n")
 
@@ -767,7 +790,7 @@ if (nrow(noeuds_sf) == 0) {
 noeuds_sf$taille_composante <- composantes_finales$csize[composantes_finales$membership]
 
 
-# Carte de la fragmentation (version robuste)
+# Carte de la fragmentation
 carte_fragmentation <- fond_carte()
 
 # Ajouter les composantes < 50 nœuds (si elles existent)
