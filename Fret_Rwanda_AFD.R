@@ -753,9 +753,28 @@ reseau_rwanda <- as_sfnetwork(routes_final, directed = FALSE) %>%
 cat("✓ Réseau final — nœuds :", igraph::vcount(reseau_rwanda),
     "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
 
+# Réextraction de la composante géante après reconstruction sfnetworks
+cat("  Réextraction de la composante géante post-subdivision...\n")
+composantes_ter   <- igraph::components(reseau_rwanda %>% as_tbl_graph())
+id_geante_ter     <- which.max(composantes_ter$csize)
+noeuds_geante_ter <- which(composantes_ter$membership == id_geante_ter)
+pct_ter           <- round(length(noeuds_geante_ter) / igraph::vcount(reseau_rwanda) * 100, 1)
+
+cat("  Composante géante :", length(noeuds_geante_ter),
+    "nœuds (", pct_ter, "% du réseau)\n")
+
+reseau_rwanda <- reseau_rwanda %>%
+  activate("nodes") %>%
+  filter(row_number() %in% noeuds_geante_ter) %>%
+  mutate(node_id = row_number())
+
+cat("✓ Réseau final corrigé — nœuds :", igraph::vcount(reseau_rwanda),
+    "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
+
 
 # ── Diagnostic complet de la fragmentation ───────────────────────────────────
 
+composantes_finales <- igraph::components(reseau_rwanda %>% as_tbl_graph())
 sizes <- sort(composantes_finales$csize, decreasing = TRUE)
 
 cat("=== Diagnostic de fragmentation ===\n\n")
@@ -772,7 +791,7 @@ print(head(sizes, 5))
 
 # Répartition géographique : les fragments sont-ils concentrés dans une zone ?
 # On récupère le centroïde de chaque composante pour cartographier la fragmentation
-noeuds_sf <- reseau_lisse %>% activate("nodes") %>% st_as_sf()
+noeuds_sf <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
 noeuds_sf$composante <- composantes_finales$membership
 
 # Taille de la composante de chaque noeud
@@ -2022,7 +2041,7 @@ cat("  Volume max:", round(max(aretes_fret$volume_tonnes)), "t\n\n")
 
 # ============================================================
 # CARTE 4 : Intensité du trafic fret sur le réseau routier
-# ✅ tm_scale_continuous() au lieu de tm_scale_intervals()
+# tm_scale_continuous() au lieu de tm_scale_intervals()
 # ============================================================
 
 cat("Génération de la carte du trafic fret...\n")
@@ -2037,7 +2056,7 @@ carte_fret <- creer_fond_carte() +
   tm_shape(aretes_fret) +
   tm_lines(
     col = "volume_tonnes",
-    col.scale = tm_scale_continuous(  # ✅ continuous au lieu de intervals
+    col.scale = tm_scale_continuous(  # continuous au lieu de intervals
       values = "brewer.yl_or_rd"
     ),
     col.legend = tm_legend(title = "Volume fret\n(tonnes)"),
@@ -2110,8 +2129,8 @@ for (i in 1:n_warehouses) {
     desire_list[[k]] <- list(
       Origine     = noeuds_entreposage$warehouse_name[i],
       Destination = noeuds_entreposage$warehouse_name[j],
-      flux_musd   = as.numeric(flux_ij),                            # ✅
-      flux_kt     = as.numeric(flux_tonnes_total[i, j] / 1000),    # ✅
+      flux_musd   = as.numeric(flux_ij),                            # 
+      flux_kt     = as.numeric(flux_tonnes_total[i, j] / 1000),    # 
       geom        = st_linestring(rbind(
         c(pt_i[1, "X"], pt_i[1, "Y"]),
         c(pt_j[1, "X"], pt_j[1, "Y"])
@@ -2122,7 +2141,7 @@ for (i in 1:n_warehouses) {
 
 if (k > 0) {
   
-  # ✅ Création de desire_sf AVANT carte_od
+  # Création de desire_sf AVANT carte_od
   desire_sf <- st_sf(
     Origine     = sapply(desire_list, `[[`, "Origine"),
     Destination = sapply(desire_list, `[[`, "Destination"),
@@ -2141,7 +2160,7 @@ if (k > 0) {
     tm_shape(desire_sf) +
     tm_lines(
       col = "flux_musd",
-      col.scale = tm_scale_continuous(  # ✅ continuous au lieu de intervals
+      col.scale = tm_scale_continuous(  # continuous au lieu de intervals
         values = "brewer.blues"
       ),
       col.legend = tm_legend(title = "Flux commercial\n(M USD)"),
