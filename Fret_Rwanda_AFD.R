@@ -801,7 +801,7 @@ if (nrow(petites_composantes) > 0) {
     tm_dots(fill = "red", size = 0.5, fill_alpha = 0.5)
 }
 
-# Ajouter les composantes >= 50 nœuds (toujours présentes ici)
+# Ajouter les composantes >= 50 nœuds 
 carte_fragmentation <- carte_fragmentation +
   tm_shape(noeuds_sf %>% filter(taille_composante >= 50)) +
   tm_dots(fill = "blue", size = 0.05, fill_alpha = 0.3) +
@@ -813,14 +813,14 @@ print(carte_fragmentation)
 tmap_mode("plot")
 
 # ==============================================================================
-# PARTIE 6 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
+# PARTIE 7 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
 # ==============================================================================
 # Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
 # Ils représentent des zones économiques importantes (hub, SEZ, frontières…).
 # ATTENTION : ces données sont fictives mais réalistes ; les coordonnées sont
 # approximatives. Remplacer par les vraies localisations si disponibles.
 
-cat("=== PARTIE 6 : Création des nœuds d'entreposage ===\n")
+cat("=== PARTIE 7 : Création des nœuds d'entreposage ===\n")
 
 entreposages_fictifs <- tibble(
   nom  = c(
@@ -851,7 +851,7 @@ entreposages_fictifs <- tibble(
           -2.5965,-1.4992,-1.6750,-2.4900,-2.1000,-2.0850,-2.3500,-1.8700)
 )
 
-# Stocker dans DuckDB pour les jointures avec les flux gravitaires (Parties 17-18)
+# Stocker dans DuckDB
 duck_write(entreposages_fictifs, "zones_entreposage")
 
 # Conversion en objet sf et reprojection en UTM 35S (même CRS que le réseau)
@@ -862,7 +862,6 @@ entreposages_sf <- entreposages_fictifs %>%
 # ── Accrochage (snapping) des entrepôts au réseau ────────────────────────────
 # Les coordonnées des entrepôts ne tombent pas exactement sur le réseau routier.
 # st_nearest_feature() trouve pour chaque entrepôt le nœud du réseau le plus proche.
-# Opération O(n×m) — acceptable ici car on a peu d'entrepôts (~15).
 noeuds_reseau <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
 
 entreposages_avec_snap <- entreposages_sf %>%
@@ -875,19 +874,18 @@ entreposages_avec_snap <- entreposages_sf %>%
     )
   )
 
-# Marquage des nœuds d'entreposage dans le réseau (attributs booléens + textuels)
-# match() retourne l'indice de la première occurrence de node_id dans les IDs snappés
+# Associe le noeud le plus proche à chaque entrepot ainsi que son type
 reseau_rwanda <- reseau_rwanda %>%
   activate("nodes") %>%
   mutate(
     node_id        = row_number(),
-    is_warehouse   = node_id %in% entreposages_avec_snap$noeud_proche_id,
-    warehouse_name = if_else(
+    is_warehouse   = node_id %in% entreposages_avec_snap$noeud_proche_id,  # TRUE si le nœud est proche d'un entrepôt
+    warehouse_name = if_else(                                              # Nom de l'entrepôt associé (si is_warehouse = TRUE), sinon NA
       is_warehouse,
       entreposages_avec_snap$nom[match(node_id, entreposages_avec_snap$noeud_proche_id)],
       NA_character_
     ),
-    warehouse_type = if_else(
+    warehouse_type = if_else(                                              # Type de l'entrepôt (ex: "port", "aéroport", "centre logistique"), sinon NA
       is_warehouse,
       entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],
       NA_character_
@@ -898,14 +896,13 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
 # ==============================================================================
-# PARTIE 7 : CALCUL DES PENTES POUR CHAQUE ARÊTE
+# PARTIE 8 : CALCUL DES PENTES POUR CHAQUE ARÊTE
 # ==============================================================================
 # La pente d'un segment routier influence à la fois la vitesse des véhicules
 # et leur consommation de carburant. On la calcule en échantillonnant des points
 # le long de chaque arête et en extrayant leur altitude depuis le DEM.
-# terra et raster ne s'interfacent pas avec DuckDB → cette partie reste en R pur.
 
-cat("=== PARTIE 7 : Calcul des pentes ===\n")
+cat("=== PARTIE 8 : Calcul des pentes ===\n")
 
 calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
   
