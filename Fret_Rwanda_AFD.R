@@ -714,7 +714,7 @@ pb_geante <- progress_bar$new(
 reseau_rwanda <- reseau_lisse %>%
   activate("nodes") %>%
   filter({
-    pb_geante$tick(n = sum(row_number() %in% noeuds_geante))
+    pb_geante$tick()
     row_number() %in% noeuds_geante
   }) %>%
   mutate(node_id = row_number())
@@ -722,6 +722,42 @@ reseau_rwanda <- reseau_lisse %>%
 cat("✓ Réseau corrigé —",
     igraph::vcount(reseau_rwanda), "nœuds,",
     igraph::ecount(reseau_rwanda), "arêtes\n\n")
+
+# ── Diagnostic complet de la fragmentation ───────────────────────────────────
+
+sizes <- sort(composantes_finales$csize, decreasing = TRUE)
+
+cat("=== Diagnostic de fragmentation ===\n\n")
+
+cat("Distribution des composantes :\n")
+cat("  >= 1000 noeuds :", sum(sizes >= 1000), "composantes\n")
+cat("  100–999 noeuds :", sum(sizes >= 100 & sizes < 1000), "composantes\n")
+cat("  10–99  noeuds  :", sum(sizes >= 10  & sizes < 100),  "composantes\n")
+cat("  2–9    noeuds  :", sum(sizes >= 2   & sizes < 10),   "composantes\n")
+cat("  1      noeud   :", sum(sizes == 1),                  "composantes\n")
+
+cat("\nTop 5 composantes (nb noeuds) :\n")
+print(head(sizes, 5))
+
+# Répartition géographique : les fragments sont-ils concentrés dans une zone ?
+# On récupère le centroïde de chaque composante pour cartographier la fragmentation
+noeuds_sf <- reseau_lisse %>% activate("nodes") %>% st_as_sf()
+noeuds_sf$composante <- composantes_finales$membership
+
+# Taille de la composante de chaque noeud
+noeuds_sf$taille_composante <- composantes_finales$csize[composantes_finales$membership]
+
+# Carte de la fragmentation
+carte_fragmentation <- creer_fond_carte() +
+  tm_shape(noeuds_sf %>% filter(taille_composante < 50)) +
+  tm_dots(fill = "red", size = 0.05, alpha = 0.5) +
+  tm_shape(noeuds_sf %>% filter(taille_composante >= 50)) +
+  tm_dots(fill = "blue", size = 0.05, alpha = 0.3) +
+  tm_title("Fragmentation du réseau\nRouge = composantes < 50 noeuds | Bleu = composantes >= 50 noeuds")
+
+tmap_mode("view")
+print(carte_fragmentation)
+tmap_mode("plot")
 
 # ==============================================================================
 # PARTIE 6 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
@@ -1114,7 +1150,55 @@ reseau_rwanda <- reseau_rwanda %>%
     )
   )
 
+VITESSE_DEFAUT_KMH <- 30
 
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(
+    # 1. Sécuriser length_km en premier (colonne source de tout le reste)
+    length_km = case_when(
+      is.na(length_km) | is.nan(length_km) | length_km <= 0 ~ longueur_m / 1000,
+      TRUE ~ length_km
+    ),
+    # Dernier recours si longueur_m est aussi invalide
+    length_km = case_when(
+      is.na(length_km) | is.nan(length_km) | length_km <= 0 ~ 0.1,
+      TRUE ~ length_km
+    ),
+    # 2. Sécuriser speed_kmh
+    speed_kmh = case_when(
+      is.na(speed_kmh) | is.nan(speed_kmh) | speed_kmh <= 0 ~ VITESSE_DEFAUT_KMH,
+      TRUE ~ speed_kmh
+    ),
+    # 3. Recalculer travel_time_h avec les valeurs sécurisées
+    travel_time_h = length_km / speed_kmh,
+    # 4. Recalculer cost_generalized_usd entièrement depuis les colonnes sécurisées
+    cost_generalized_usd = case_when(
+      is.na(cost_generalized_usd)  |
+        is.nan(cost_generalized_usd) |
+        is.infinite(cost_generalized_usd) |
+        cost_generalized_usd <= 0 ~
+        travel_time_h * PARAMS_ECONOMIQUES$valeur_temps +
+        length_km     * PARAMS_ECONOMIQUES$usure_gravel,
+      TRUE ~ cost_generalized_usd
+    )
+  )
+
+# Vérification exhaustive de toutes les colonnes critiques pour Dijkstra
+aretes_check <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+
+verif <- tibble(
+  colonne = c("length_km", "speed_kmh", "travel_time_h", "cost_generalized_usd"),
+  n_na    = c(
+    sum(is.na(aretes_check$length_km)            | is.nan(aretes_check$length_km)),
+    sum(is.na(aretes_check$speed_kmh)            | is.nan(aretes_check$speed_kmh)),
+    sum(is.na(aretes_check$travel_time_h)        | is.nan(aretes_check$travel_time_h)),
+    sum(is.na(aretes_check$cost_generalized_usd) | is.nan(aretes_check$cost_generalized_usd) |
+          is.infinite(aretes_check$cost_generalized_usd))
+  )
+)
+print(verif)
+cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
 # ==============================================================================
 # PARTIE 11 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
 # ==============================================================================
@@ -1273,6 +1357,10 @@ tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
 
 cat("✓ 2 cartes générées\n\n")
 
+tmap_mode("view")
+print(carte_couts) 
+print(carte_pentes)
+tmap_mode("plot")
 
 # ==============================================================================
 # PARTIE 13 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
