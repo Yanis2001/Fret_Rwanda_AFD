@@ -562,73 +562,7 @@ reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) %>%
   # as.numeric() supprime l'unité "m" pour faciliter les calculs arithmétiques
   mutate(longueur_m = as.numeric(st_length(geometry)))
 
-# ── Subdivision des arêtes longues ────────────────────────────────────────────
-# Les arêtes très longues (>5km) peuvent masquer des variations de pente importantes.
-# On les découpe en segments de 2km maximum pour un calcul de pente plus précis.
-# Cette subdivision augmente le nombre d'arêtes mais améliore la qualité du modèle.
-# crs = système de coordonnées
-subdiviser_ligne <- function(ligne, attributs, crs, max_length = 2000) {
-  longueur_totale <- as.numeric(st_length(st_sfc(ligne, crs = crs))) 
-  
-  # Si le segment est déjà court : le retourner tel quel sans subdivision
-  if (longueur_totale <= max_length) {
-    return(st_sf(attributs, geometry = st_sfc(ligne, crs = crs)))
-  }
-  
-  # Nombre de sous-segments nécessaires (arrondi supérieur)
-  n_segments  <- ceiling(longueur_totale / max_length)
-  # proportions : vecteur de 0 à 1 en n_segments+1 étapes équidistantes
-  proportions <- seq(0, 1, length.out = n_segments + 1)
-  segments    <- list()
-  
-  for (i in 1:(length(proportions) - 1)) {
-    debut <- proportions[i]; fin <- proportions[i + 1]
-    if (debut == 0 && fin == 1) {
-      segment <- ligne  # Segment unique : pas besoin de découper
-    } else {
-      # st_line_sample() échantillonne des points à des proportions données de la ligne
-      points <- st_line_sample(st_sfc(ligne, crs = crs), sample = c(debut, fin))
-      coords <- st_coordinates(points)
-      # Création d'une nouvelle LINESTRING entre les deux points échantillonnés
-      segment <- if (nrow(coords) >= 2) st_linestring(coords[1:2, 1:2]) else ligne
-    }
-    segments[[i]] <- st_sf(attributs, geometry = st_sfc(segment, crs = crs))
-  }
-  bind_rows(segments)
-}
-
-aretes_avant   <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
-aretes_courtes <- aretes_avant %>% filter(longueur_m <= 5000)  # Conservées telles quelles
-aretes_longues <- aretes_avant %>% filter(longueur_m >  5000)  # À subdiviser
-crs_reseau     <- st_crs(aretes_longues)
-
-# Initialisation de la barre de progression
-pb <- progress_bar$new(
-  format = "Subdivision des arêtes [:bar] :percent en :elapsed | ETA: :eta",
-  total = nrow(aretes_longues),
-  clear = FALSE,
-  width = 60
-)
-
-if (nrow(aretes_longues) > 0) {
-  aretes_subdiv_list <- vector("list", nrow(aretes_longues))
-  for (i in seq_len(nrow(aretes_longues))) {
-    aretes_subdiv_list[[i]] <- subdiviser_ligne(
-      st_geometry(aretes_longues[i,])[[1]],
-      aretes_longues[i,] %>% st_drop_geometry(),
-      crs = crs_reseau, max_length = 2000   # 2km maximum par sous-segment
-    )
-    # Mise à jour de la barre de progression
-    pb$tick()
-  }
-  # Recombinaison : arêtes courtes inchangées + nouvelles arêtes subdivisions
-  routes_final  <- bind_rows(aretes_courtes, bind_rows(aretes_subdiv_list))
-  reseau_rwanda <- as_sfnetwork(routes_final, directed = FALSE) %>%
-    activate("edges") %>%
-    mutate(longueur_m = as.numeric(st_length(geometry)))
-}
-
-cat("✓ Réseau créé — nœuds :", igraph::vcount(reseau_rwanda),
+cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
     "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
 
 
@@ -652,10 +586,8 @@ cat("=== PARTIE 5 BIS : Corrections topologiques ===\n")
 # to_spatial_subdivision() détecte les croisements de routes sans nœud commun
 # et crée des nœuds aux points d'intersection. C'est l'opération fondamentale
 # pour connecter des routes qui se croisent physiquement.
-# Complexité O(n log n) grâce à l'indexation spatiale R-tree — ne bloque pas,
-# mais reste l'étape la plus longue sur un réseau national (~quelques minutes).
 
-cat("  Étape 1/3 : subdivision aux intersections...\n")
+cat("  Étape 1/4 : subdivision aux intersections...\n")
 pb_subdiv <- progress_bar$new(
   format = "  Subdivision [:bar] :percent | durée : :elapsed",
   total  = 1,       # Opération atomique : 1 seul tick à la fin
@@ -673,9 +605,8 @@ cat("  → ", igraph::count_components(reseau_subdivise), "composantes après su
 # Un pseudo-nœud (degré 2) est un nœud connecté à exactement 2 arêtes.
 # Il n'est pas topologiquement nécessaire (pas une vraie intersection) et alourdit
 # le graphe. to_spatial_smooth() les supprime et fusionne les arêtes adjacentes.
-# Peut être long si la subdivision a créé beaucoup de nouveaux nœuds.
 
-cat("  Étape 2/3 : suppression des pseudo-nœuds...\n")
+cat("  Étape 2/4 : suppression des pseudo-nœuds...\n")
 pb_lisse <- progress_bar$new(
   format = "  Lissage    [:bar] :percent | durée : :elapsed",
   total  = 1,
@@ -689,13 +620,37 @@ reseau_lisse <- reseau_subdivise %>%
 pb_lisse$tick()
 cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissage\n")
 
-# ── Étape 3 : Extraction de la composante géante ──────────────────────────────
+# ── Étape 3 : snapping ciblé post-topologie ───────────────────────────────────
+# Maintenant que la topologie est propre, un snapping léger (5m seulement)
+# connecte les extrémités quasi-jointives sans risque de O(n²) bloquant
+# car on opère sur des arêtes déjà bien structurées.
+cat("  Étape 3/4 : snapping léger (5m)...\n")
+pb_snap <- progress_bar$new(
+  format = "  Snapping   [:bar] :percent | durée : :elapsed",
+  total = 1, clear = FALSE, width = 60
+)
+tryCatch({
+  aretes_snap <- reseau_lisse %>%
+    activate("edges") %>%
+    st_as_sf() %>%
+    mutate(geometry = st_snap(geometry, geometry, tolerance = 5)) %>%
+    st_make_valid() %>%
+    filter(st_geometry_type(geometry) == "LINESTRING", !st_is_empty(geometry))
+  reseau_lisse <- as_sfnetwork(aretes_snap, directed = FALSE) %>%
+    activate("edges") %>%
+    mutate(longueur_m = as.numeric(st_length(geometry))) %>%
+    convert(to_spatial_subdivision)
+  cat("  →", igraph::count_components(reseau_lisse), "composantes après snapping\n")
+}, error = function(e) cat("  ⚠ Snapping échoué, on continue sans\n"))
+pb_snap$tick()
+
+# ── Étape 4 : Extraction de la composante géante ──────────────────────────────
 # Même après corrections, le réseau peut rester fragmenté (routes isolées,
 # pistes sans connexion au réseau principal). On conserve uniquement la plus
 # grande composante connexe (composante géante), qui couvre la quasi-totalité
 # du territoire national.
 
-cat("  Étape 3/3 : extraction de la composante géante...\n")
+cat("  Étape 4/4 : extraction de la composante géante...\n")
 
 composantes_finales <- igraph::components(reseau_lisse %>% as_tbl_graph())
 id_geante           <- which.max(composantes_finales$csize)
@@ -722,6 +677,54 @@ reseau_rwanda <- reseau_lisse %>%
 cat("✓ Réseau corrigé —",
     igraph::vcount(reseau_rwanda), "nœuds,",
     igraph::ecount(reseau_rwanda), "arêtes\n\n")
+
+# ==============================================================================
+# PARTIE 5 TER : SUBDIVISION DES ARÊTES LONGUES
+# ==============================================================================
+# Les arêtes très longues (>5km) peuvent masquer des variations de pente importantes.
+# On les découpe en segments de 2km maximum pour un calcul de pente plus précis.
+# Cette subdivision augmente le nombre d'arêtes mais améliore la qualité du modèle.
+# crs = système de coordonnées
+# La subdivision est faite ICI, après la correction topologique.
+# Les nœuds de découpe sont ainsi créés dans un réseau déjà propre,
+# ce qui évite de fragmenter les connexions existantes.
+cat("=== PARTIE 5 TER : Subdivision des arêtes longues ===\n")
+
+aretes_avant   <- reseau_lisse %>% activate("edges") %>% st_as_sf()
+aretes_courtes <- aretes_avant %>% filter(longueur_m <= 5000)
+aretes_longues <- aretes_avant %>% filter(longueur_m >  5000)
+crs_reseau     <- st_crs(aretes_avant)
+
+cat("  Arêtes à subdiviser :", nrow(aretes_longues), "\n")
+
+pb_subdiv2 <- progress_bar$new(
+  format = "  Subdivision [:bar] :percent en :elapsed | ETA: :eta",
+  total = max(nrow(aretes_longues), 1), clear = FALSE, width = 60
+)
+
+if (nrow(aretes_longues) > 0) {
+  aretes_subdiv_list <- vector("list", nrow(aretes_longues))
+  for (i in seq_len(nrow(aretes_longues))) {
+    aretes_subdiv_list[[i]] <- subdiviser_ligne(
+      st_geometry(aretes_longues[i, ])[[1]],
+      aretes_longues[i, ] %>% st_drop_geometry(),
+      crs = crs_reseau, max_length = 2000 # 2km maximum par sous-segment
+    )
+    pb_subdiv2$tick()
+  }
+  # Recombinaison : arêtes courtes inchangées + nouvelles arêtes subdivisions
+  routes_final <- bind_rows(aretes_courtes, bind_rows(aretes_subdiv_list))
+} else {
+  routes_final <- aretes_courtes
+}
+
+reseau_rwanda <- as_sfnetwork(routes_final, directed = FALSE) %>%
+  activate("edges") %>%
+  mutate(longueur_m = as.numeric(st_length(geometry)))
+
+cat("✓ Réseau final — nœuds :", igraph::vcount(reseau_rwanda),
+    "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
+
 
 # ── Diagnostic complet de la fragmentation ───────────────────────────────────
 
