@@ -622,8 +622,13 @@ cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissag
 
 # ── Étape 3 : snapping ciblé post-topologie ───────────────────────────────────
 # Maintenant que la topologie est propre, un snapping léger (5m seulement)
-# connecte les extrémités quasi-jointives sans risque de O(n²) bloquant
-# car on opère sur des arêtes déjà bien structurées.
+# connecte les extrémités quasi-jointives.
+# ⚠ A désactivé : ~1 jour de calcul
+# Les gaps < 5m sont rarissimes dans les PBF OSM Rwanda bien maintenus.
+# La subdivision (étape 1) règle déjà l'essentiel des problèmes de connectivité.
+# À réactiver uniquement sur un sous-réseau local si des composantes isolées
+# persistent après l'étape 4.
+
 cat("  Étape 3/4 : snapping léger (5m)...\n")
 
 tryCatch({
@@ -713,7 +718,7 @@ cat("✓ Réseau corrigé —",
 # ce qui évite de fragmenter les connexions existantes.
 cat("=== PARTIE 5 TER : Subdivision des arêtes longues ===\n")
 
-aretes_avant   <- reseau_lisse %>% activate("edges") %>% st_as_sf()
+aretes_avant <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
 aretes_courtes <- aretes_avant %>% filter(longueur_m <= 5000)
 aretes_longues <- aretes_avant %>% filter(longueur_m >  5000)
 crs_reseau     <- st_crs(aretes_avant)
@@ -776,9 +781,9 @@ noeuds_sf$taille_composante <- composantes_finales$csize[composantes_finales$mem
 # Carte de la fragmentation
 carte_fragmentation <- creer_fond_carte() +
   tm_shape(noeuds_sf %>% filter(taille_composante < 50)) +
-  tm_dots(fill = "red", size = 0.05, alpha = 0.5) +
+  tm_dots(fill = "red", size = 0.05, fill_alpha  = 0.5) +
   tm_shape(noeuds_sf %>% filter(taille_composante >= 50)) +
-  tm_dots(fill = "blue", size = 0.05, alpha = 0.3) +
+  tm_dots(fill = "blue", size = 0.05, fill_alpha  = 0.3) +
   tm_title("Fragmentation du réseau\nRouge = composantes < 50 noeuds | Bleu = composantes >= 50 noeuds")
 
 tmap_mode("view")
