@@ -786,32 +786,6 @@ if (nrow(noeuds_sf) == 0) {
   cat("✓ noeuds_sf est valide.\n")
 }
 
-# Taille de la composante de chaque noeud
-noeuds_sf$taille_composante <- composantes_finales$csize[composantes_finales$membership]
-
-
-# Carte de la fragmentation
-carte_fragmentation <- fond_carte()
-
-# Ajouter les composantes < 50 nœuds (si elles existent)
-petites_composantes <- noeuds_sf %>% filter(taille_composante < 50)
-if (nrow(petites_composantes) > 0) {
-  carte_fragmentation <- carte_fragmentation +
-    tm_shape(petites_composantes) +
-    tm_dots(fill = "red", size = 0.5, fill_alpha = 0.5)
-}
-
-# Ajouter les composantes >= 50 nœuds 
-carte_fragmentation <- carte_fragmentation +
-  tm_shape(noeuds_sf %>% filter(taille_composante >= 50)) +
-  tm_dots(fill = "blue", size = 0.05, fill_alpha = 0.3) +
-  tm_title("Fragmentation du réseau\nRouge = composantes < 50 noeuds | Bleu = composantes >= 50 noeuds")
-
-# Affichage
-tmap_mode("view")
-print(carte_fragmentation)
-tmap_mode("plot")
-
 # ==============================================================================
 # PARTIE 7 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
 # ==============================================================================
@@ -995,15 +969,9 @@ cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 # ==============================================================================
 # PARTIES 9: VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
 # ==============================================================================
-# L'approche SQL présente plusieurs avantages :
-#   - Lisibilité : chaque CTE a un rôle clairement nommé et isolé
-#   - Performance : DuckDB optimise l'ensemble de la requête en une seule passe
-#   - Maintenabilité : changer un paramètre économique = modifier une valeur
-#   - Traçabilité : toutes les étapes intermédiaires sont visibles en SQL
-#
 # Formules appliquées :
 #   speed_kmh     = vitesse_base × facteur_pente
-#   conso (L/100) = conso_base × facteur_surface × (1 + slope × FACTEUR / 100)
+#   conso (L/100km) = conso_base × facteur_surface × (1 + slope × FACTEUR / 100)
 #   cost_fuel     = (length_km × conso/100) × prix_carburant
 #   cost_wear     = length_km × usure_usd_km
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
@@ -1017,9 +985,9 @@ aretes_df <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
   st_drop_geometry() %>%
-  mutate(arete_id = row_number())   # Identifiant pour réaligner les résultats après la requête
+  mutate(arete_id = row_number())   # Attribue un identifiant unique pour réaligner les résultats après la requête
 
-duck_write(aretes_df, "aretes_base")
+duck_write(aretes_df, "aretes_base") # Enregistrement du tableau de données aretes_df dans la base de données DuckDB
 
 # ── Tables de paramètres dans DuckDB ─────────────────────────────────────────
 # Stocker les paramètres sous forme de tables DuckDB permet de les modifier
