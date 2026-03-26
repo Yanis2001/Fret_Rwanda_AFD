@@ -1027,10 +1027,10 @@ aretes_couts <- duck_query(glue::glue("
   -- LEFT JOIN pour conserver les arêtes sans correspondance exacte (vitesse = 30 par défaut)
   avec_vitesse AS (
     SELECT
-      a.*,
+      a.*,  -- Dit qu'il prend en compte la colonne associé à l'abréviation a
       COALESCE(v.vitesse_kmh, 30) AS vitesse_base
       -- COALESCE : retourne vitesse_kmh si non NULL, sinon 30 km/h (valeur de secours)
-    FROM aretes_base a
+    FROM aretes_base a  -- Associe l'abréviation a à aretes_base
     LEFT JOIN vitesses_reference v
       ON a.road_type = v.road_type AND a.surface = v.surface
   ),
