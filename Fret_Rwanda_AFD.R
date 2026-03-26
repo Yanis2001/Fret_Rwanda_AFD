@@ -882,12 +882,14 @@ reseau_rwanda <- reseau_rwanda %>%
     is_warehouse   = node_id %in% entreposages_avec_snap$noeud_proche_id,  # TRUE si le nœud est proche d'un entrepôt
     warehouse_name = if_else(                                              # Nom de l'entrepôt associé (si is_warehouse = TRUE), sinon NA
       is_warehouse,
-      entreposages_avec_snap$nom[match(node_id, entreposages_avec_snap$noeud_proche_id)],
+      entreposages_avec_snap$nom[match(node_id, entreposages_avec_snap$noeud_proche_id)], 
+      # match () cherche la position de chaque élément de node_id dans le vecteur entreposages_avec_snap$noeud_proche_id
+      # Cette ligne permet de trouver le nom d'un entrepôt associé à un identifiant de nœud
       NA_character_
     ),
     warehouse_type = if_else(                                              # Type de l'entrepôt (ex: "port", "aéroport", "centre logistique"), sinon NA
       is_warehouse,
-      entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],
+      entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],  # Cette ligne permet de trouver le type d'un entrepôt associé à un identifiant de nœud
       NA_character_
     )
   )
@@ -910,11 +912,11 @@ calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
   longueur <- as.numeric(st_length(ligne_geom))
   
   # Nombre de points d'échantillonnage (au moins 2 : début et fin)
-  n_points <- max(2, floor(longueur / espacement))  # floor(longueur / espacement) = Nombre de segment de taille "espacement" dans "longueur"
+  n_points <- max(2, floor(longueur / espacement))  # floor() arrondit nmb décimal vers le bas 
   points   <- if (longueur < espacement * 2)
-    st_line_sample(ligne_geom, n = 2)         # Segment très court : 2 points seulement
+    st_line_sample(ligne_geom, n = 2, type = "regular")         # Création de 2 points seulement car segment de moins de 200m
   else
-    st_line_sample(ligne_geom, n = n_points)  # Un point tous les 100m
+    st_line_sample(ligne_geom, n = n_points, type = "regular")  # Un point tous les 100m
   
   # st_cast() éclate le MULTIPOINT en POINTs individuels pour terra::extract()
   points_sf <- st_cast(points, "POINT")
@@ -937,7 +939,7 @@ calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
   # diff() calcule les différences entre valeurs consécutives du vecteur d'élévation
   # Dénivelé cumulé positif (D+) = somme des montées entre points successifs
   # Dénivelé cumulé négatif (D-) = somme des descentes (valeur absolue)
-  differences    <- diff(elev_values)
+  differences    <- diff(elev_values)                                     
   elevation_gain <- sum(differences[differences > 0], na.rm = TRUE)
   elevation_loss <- abs(sum(differences[differences < 0], na.rm = TRUE))
   
@@ -949,14 +951,17 @@ calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
        elevation_loss=elevation_loss, rugosity=rugosity)
 }
 
-# Application sur toutes les arêtes du réseau (boucle nécessaire car terra ne
-# vectorise pas l'extraction sur des géométries sf disparates)
-aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
-n_aretes         <- nrow(aretes_avec_geom)
-resultats_pentes <- vector("list", n_aretes)
 
-for (i in seq_len(n_aretes)) {
+# Passe les arètes du reseau_rwanda au format sf
+aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf() 
+n_aretes         <- nrow(aretes_avec_geom) # Compte le nombre d'arètes
+resultats_pentes <- vector("list", n_aretes) # Crée un vecteur de n_aretes élément dont chacun peut contenir une liste 
+
+# Itération pour l'ensemble des arètes du réseau
+for (i in seq_len(n_aretes)) { 
+  # Affiche la progression en % tous les 500 itérations ainsi qu'à la dernière itération
   if (i %% 500 == 0 || i == n_aretes) cat("  Pentes :", round(i/n_aretes*100,1), "%\n")
+  # Rempli le vecteur liste resultats_pentes avec les paramètres de la fonction calculer_pente_arete qu'on vient de créer
   resultats_pentes[[i]] <- calculer_pente_arete(
     aretes_avec_geom$geometry[i],
     dem_rwanda,
