@@ -1446,25 +1446,29 @@ st_write(noeuds_finaux, file.path(DIR_OUTPUT, "reseau_rwanda_noeuds.gpkg"),
 
 # Exports CSV depuis DuckDB via COPY TO
 # HEADER = TRUE : inclure les noms de colonnes en première ligne du fichier
-dbExecute(con, "
-  COPY (SELECT * FROM matrice_od)
-  TO file.path(DIR_OUTPUT,'matrice_od_long.csv') (FORMAT CSV, HEADER)
-")
-dbExecute(con, "
-  COPY (SELECT * FROM aretes_finales)
-  TO file.path(DIR_OUTPUT,'aretes_finales.csv') (FORMAT CSV, HEADER)
-")
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM matrice_od) TO '",
+  file.path(DIR_OUTPUT, "matrice_od_long.csv"),
+  "' (FORMAT CSV, HEADER)"
+))
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM aretes_finales) TO '",
+  file.path(DIR_OUTPUT,'aretes_finales.csv'),
+  "'(FORMAT CSV, HEADER)"
+))
 
 # Exports Parquet depuis DuckDB
 # Lisible directement avec : Python → pd.read_parquet() ; R → arrow::read_parquet()
-dbExecute(con, "
-  COPY (SELECT * FROM aretes_finales)
-  TO file.path(DIR_OUTPUT, 'aretes_finales.parquet') (FORMAT PARQUET)
-")
-dbExecute(con, "
-  COPY (SELECT * FROM matrice_od)
-  TO file.path(DIR_OUTPUT, 'matrice_od.parquet') (FORMAT PARQUET)
-")
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM aretes_finales) TO '",
+  file.path(DIR_OUTPUT, 'aretes_finales.parquet'), 
+  "'(FORMAT PARQUET)"
+))
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM matrice_od) TO '",
+  file.path(DIR_OUTPUT, 'matrice_od.parquet'), 
+  "'(FORMAT PARQUET)"
+))
 
 cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 
@@ -2241,22 +2245,22 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 
 g2 <- recap_zones %>%
   pivot_longer(
-    cols      = c(Offre_totale_musd, Demande_totale_musd),
+    cols      = c(offre_totale_musd, demande_totale_musd),
     names_to  = "Type_flux",
     values_to = "Valeur"
   ) %>%
   mutate(
-    Zone_court = str_trunc(Zone, 28),
+    Zone_court = str_trunc(zone, 28),
     Type_flux  = recode(Type_flux,
-                        "Offre_totale_musd"   = "Offre",
-                        "Demande_totale_musd" = "Demande")
+                        "offre_totale_musd"   = "offre",
+                        "demande_totale_musd" = "demande")
   ) %>%
   ggplot(aes(x = reorder(Zone_court, Valeur),
              y = Valeur,
              fill = Type_flux)) +
   geom_col(position = "dodge", width = 0.7) +
   coord_flip() +
-  scale_fill_manual(values = c("Offre" = "#1976D2", "Demande" = "#D32F2F")) +
+  scale_fill_manual(values = c("offre" = "#1976D2", "demande" = "#D32F2F")) +
   labs(
     title    = "Offre et Demande par zone économique",
     subtitle = "Modèle gravitaire - Rwanda (données fictives réalistes)",
@@ -2287,7 +2291,7 @@ noms_courts_raw <- noeuds_entreposage$warehouse_name %>%
   str_remove(" \\(.*") %>%
   str_trunc(18)
 
-noms_courts <- make.unique(noms_courts_raw, sep = "_")  # ✅ Kigali, Kigali_1, Kigali_2
+noms_courts <- make.unique(noms_courts_raw, sep = "_")  # Kigali, Kigali_1, Kigali_2
 
 flux_heatmap <- flux_total %>%
   as.data.frame() %>%
