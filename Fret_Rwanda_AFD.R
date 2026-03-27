@@ -1243,7 +1243,7 @@ noeuds_entreposage <- reseau_rwanda %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
   as_tibble() %>%
-  mutate(warehouse_id = row_number())
+  mutate(warehouse_id = row_number()) # Donne un identifiant unique
 
 n_warehouses <- nrow(noeuds_entreposage)
 cat("Entreposages :", n_warehouses, "\n")
@@ -1321,7 +1321,6 @@ cat("  Coût moyen        :", od_stats$cout_moyen_usd, "USD\n")
 cat("  Distance moyenne  :", od_stats$dist_moyenne_km, "km\n\n")
 
 # ── Reconstruction des matrices R carrées ─────────────────────────────────────
-# Nécessaires pour la Partie 14 (trajet exemple) et la Partie 19 (affectation igraph).
 # On reconstitue les 3 matrices à partir du format long DuckDB.
 matrice_couts     <- matrix(0, n_warehouses, n_warehouses,
                             dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
@@ -1341,10 +1340,6 @@ for (r in seq_len(nrow(od_long))) {
 # ==============================================================================
 # PARTIE 11 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
 # ==============================================================================
-# tmap travaille avec des objets sf et ne s'interface pas avec DuckDB.
-# Cette partie reste entièrement en R/sf. Les couches géographiques
-# (frontières, lacs, provinces) sont extraites depuis le même fichier PBF
-# que les routes, via la couche "multipolygons".
 
 cat("=== PARTIE 11 : Visualisations ===\n")
 
