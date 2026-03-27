@@ -120,71 +120,97 @@ duck_query <- function(sql) dbGetQuery(con, sql)
 
 
 # ==============================================================================
-# PARTIE 1 : DÉFINITION DES PARAMÈTRES DU MODÈLE
+# PARTIE 1 : DÉFINITION DE LA FLOTTE — TABLES DUCKDB
 # ==============================================================================
+# Structure en 3 tables normalisées :
+#   params_flotte        : 1 ligne par véhicule (scalaires économiques)
+#   vitesses_flotte      : 1 ligne par véhicule × road_type × surface
+#   facteurs_pente_flotte: 1 ligne par véhicule × slope_category
+#
+# Pour ajouter un véhicule : ajouter des lignes dans les 3 tibbles ci-dessous.
+# Aucune autre modification n'est nécessaire dans le reste du script.
 
-cat("=== PARTIE 1 : Définition des paramètres ===\n")
-
-# ── Paramètres du véhicule de référence ───────────────────────────────────────
-# On modélise un camion moyen (5-10 tonnes) représentatif du fret routier rwandais.
-# Les facteurs d'ajustement selon la surface traduisent la surconsommation
-# due aux vibrations, aux freinages fréquents et à la résistance au roulement.
-PARAMS_VEHICULE <- list(
-  conso_base      = 20,       # Consommation de base (L/100km) sur route plane bitumée
-  type            = "Camion moyen (5-10 tonnes)",
-  facteur_paved   = 1.0,      # Pas de surconsommation sur bitume (référence)
-  facteur_gravel  = 1.15,     # +15% sur gravier (moins bonne adhérence)
-  facteur_unpaved = 1.3       # +30% sur piste en terre (ornières, boue, poussière)
+# ── Table 1 : paramètres scalaires par véhicule ──────────────────────────────
+params_flotte_df <- tribble(
+  ~vehicule_id,    ~nom,                      ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved,
+  "camionnette",   "Camionnette (<3.5t)",      10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,
+  "camion_moyen",  "Camion moyen (5-10t)",     20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,
+  "camion_lourd",  "Camion lourd (>10t)",      35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22
 )
+duck_write(params_flotte_df, "params_flotte")
 
-# ── Paramètres économiques ────────────────────────────────────────────────────
-# Ces valeurs sont calibrées sur des données de terrain rwandaises (2022-2023).
-# La valeur du temps inclut le coût du chauffeur ET l'immobilisation du véhicule.
-PARAMS_ECONOMIQUES <- list(
-  prix_carburant = 1.40,   # Prix du diesel au Rwanda en USD/litre (source : GIZ 2023)
-  valeur_temps   = 7.5,    # Coût total par heure d'immobilisation en USD/h
-  usure_paved    = 0.05,   # Coût d'usure mécanique sur bitume en USD/km
-  usure_gravel   = 0.08,   # Coût d'usure sur gravier (plus de chocs, pièces d'usure)
-  usure_unpaved  = 0.12    # Coût d'usure sur piste (amortisseurs, filtres, pneus)
+# ── Table 2 : vitesses par véhicule × type de route × surface ────────────────
+# Chaque véhicule a ses propres vitesses de référence sur chaque combinaison.
+# L'ajout d'un véhicule = ajouter 11 lignes avec son vehicule_id.
+vitesses_flotte_df <- tribble(
+  ~vehicule_id,   ~road_type,      ~surface,   ~vitesse_kmh,
+  # --- Camionnette ---
+  "camionnette",  "motorway",      "paved",    120,
+  "camionnette",  "trunk",         "paved",     90,
+  "camionnette",  "trunk",         "gravel",    60,
+  "camionnette",  "primary",       "paved",     80,
+  "camionnette",  "primary",       "gravel",    55,
+  "camionnette",  "secondary",     "paved",     70,
+  "camionnette",  "secondary",     "gravel",    50,
+  "camionnette",  "tertiary",      "paved",     60,
+  "camionnette",  "tertiary",      "unpaved",   35,
+  "camionnette",  "unclassified",  "gravel",    45,
+  "camionnette",  "unclassified",  "unpaved",   28,
+  # --- Camion moyen ---
+  "camion_moyen", "motorway",      "paved",    100,
+  "camion_moyen", "trunk",         "paved",     60,
+  "camion_moyen", "trunk",         "gravel",    40,
+  "camion_moyen", "primary",       "paved",     60,
+  "camion_moyen", "primary",       "gravel",    40,
+  "camion_moyen", "secondary",     "paved",     50,
+  "camion_moyen", "secondary",     "gravel",    35,
+  "camion_moyen", "tertiary",      "paved",     45,
+  "camion_moyen", "tertiary",      "unpaved",   25,
+  "camion_moyen", "unclassified",  "gravel",    30,
+  "camion_moyen", "unclassified",  "unpaved",   20,
+  # --- Camion lourd ---
+  "camion_lourd", "motorway",      "paved",     80,
+  "camion_lourd", "trunk",         "paved",     50,
+  "camion_lourd", "trunk",         "gravel",    30,
+  "camion_lourd", "primary",       "paved",     50,
+  "camion_lourd", "primary",       "gravel",    30,
+  "camion_lourd", "secondary",     "paved",     40,
+  "camion_lourd", "secondary",     "gravel",    25,
+  "camion_lourd", "tertiary",      "paved",     35,
+  "camion_lourd", "tertiary",      "unpaved",   18,
+  "camion_lourd", "unclassified",  "gravel",    22,
+  "camion_lourd", "unclassified",  "unpaved",   14
 )
+duck_write(vitesses_flotte_df, "vitesses_flotte")
 
-# ── Table des vitesses de référence ──────────────────────────────────────────
-# Vitesses en km/h pour un camion moyen selon la combinaison type de route × surface.
-# Ces valeurs sont conservatrices (inférieures aux vitesses des véhicules légers)
-# pour refléter les contraintes de sécurité et de chargement des poids lourds.
-# Cette table sera chargée dans DuckDB pour être utilisée dans les jointures SQL.
-VITESSES_REFERENCE <- tibble(
-  road_type   = c("motorway","trunk","trunk","primary","primary",
-                  "secondary","secondary","tertiary","tertiary",
-                  "unclassified","unclassified"),
-  surface     = c("paved","paved","gravel","paved","gravel",
-                  "paved","gravel","paved","unpaved",
-                  "gravel","unpaved"),
-  vitesse_kmh = c(100, 60, 40, 60, 40, 50, 35, 45, 25, 30, 20)
-  # Lecture : un camion sur "trunk" + "paved" roule à 60 km/h,
-  #           mais sur "trunk" + "gravel", il ne fait plus que 40 km/h.
+# ── Table 3 : facteurs de pente par véhicule × catégorie ─────────────────────
+facteurs_pente_df <- tribble(
+  ~vehicule_id,   ~slope_category, ~facteur_pente,
+  "camionnette",  "plat",           1.00,
+  "camionnette",  "legere",         0.95,
+  "camionnette",  "moderee",        0.85,
+  "camionnette",  "forte",          0.72,
+  "camion_moyen", "plat",           1.00,
+  "camion_moyen", "legere",         0.90,
+  "camion_moyen", "moderee",        0.75,
+  "camion_moyen", "forte",          0.60,
+  "camion_lourd", "plat",           1.00,
+  "camion_lourd", "legere",         0.82,
+  "camion_lourd", "moderee",        0.62,
+  "camion_lourd", "forte",          0.45
 )
+duck_write(facteurs_pente_df, "facteurs_pente_flotte")
 
-# Chargement dans DuckDB pour utilisation dans la requête SQL de la Partie 8-10
-duck_write(VITESSES_REFERENCE, "vitesses_reference")
+# Véhicule de référence pour la matrice OD et le modèle gravitaire
+VEHICULE_REFERENCE   <- "camion_moyen"
+CONSO_PAR_METRE_D_PLUS <- 0.03
 
-# ── Facteurs de réduction de vitesse selon la pente ──────────────────────────
-# En montée, les camions chargés perdent de la vitesse (moteur très sollicité).
-# Ces facteurs multiplicatifs s'appliquent sur la vitesse de base.
-FACTEURS_PENTE <- list(
-  plat    = 1.0,   # Pente < 2% : pas d'impact sur la vitesse
-  legere  = 0.9,   # Pente 2-5% : -10% de vitesse
-  moderee = 0.75,  # Pente 5-8% : -25% de vitesse (montées longues difficiles)
-  forte   = 0.6    # Pente > 8% : -40% de vitesse (cols montagneux)
-)
+# Récupérer les ids pour les boucles de cartographie (Partie 10)
+VEHICULES_IDS <- duck_query("SELECT vehicule_id, nom FROM params_flotte")
 
-# ── Paramètre de surconsommation en montée ────────────────────────────────────
-# Pour chaque % de pente en montée, la consommation augmente de FACTEUR_CONSO_PENTE%.
-# En descente, on ne modélise pas de récupération d'énergie (pas de moteur hybride).
-FACTEUR_CONSO_PENTE    <- 1.5    # % d'augmentation de conso par % de pente montante
-CONSO_PAR_METRE_D_PLUS <- 0.03  # Litres supplémentaires par mètre de dénivelé positif
-
-cat("✓ Paramètres définis et table vitesses_reference chargée dans DuckDB\n\n")
+cat("✓ Flotte chargée dans DuckDB :",
+    nrow(VEHICULES_IDS), "véhicules —",
+    paste(VEHICULES_IDS$vehicule_id, collapse = ", "), "\n\n")
 
 
 # ==============================================================================
@@ -1023,9 +1049,8 @@ reseau_rwanda <- reseau_rwanda %>%
 
 cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 
-
 # ==============================================================================
-# PARTIES 9: VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
+# PARTIE 9 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
 # ==============================================================================
 # Formules appliquées :
 #   speed_kmh     = vitesse_base × facteur_pente
@@ -1034,6 +1059,178 @@ cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 #   cost_wear     = length_km × usure_usd_km
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
 #   cost_total    = cost_fuel + cost_wear + cost_time  [coût généralisé]
+
+cat("=== PARTIE 9 : Coûts généralisés ===\n")
+
+aretes_df <- reseau_rwanda %>%
+  activate("edges") %>% st_as_sf() %>% st_drop_geometry() %>%
+  mutate(arete_id = row_number())
+duck_write(aretes_df, "aretes_base")
+
+duck_query("
+  CREATE OR REPLACE TABLE aretes_couts_tous AS
+
+  WITH
+
+  -- Étape 1 : combinaison de chaque arête avec chaque véhicule de la flotte
+  -- CROSS JOIN : N_arêtes × N_véhicules lignes (ex : 15 000 × 3 = 45 000 lignes)
+  aretes_x_vehicules AS (
+    SELECT
+      a.*,
+      f.vehicule_id,
+      f.nom                AS vehicule_nom,
+      f.conso_base,
+      f.facteur_conso_pente,
+      f.prix_carburant,
+      f.valeur_temps,
+      -- Facteur surface et coût d'usure : résolu ici par CASE pour éviter
+      -- une jointure supplémentaire (params_surface n'est plus une table séparée)
+      CASE a.surface
+        WHEN 'paved'   THEN f.facteur_paved
+        WHEN 'gravel'  THEN f.facteur_gravel
+        WHEN 'unpaved' THEN f.facteur_unpaved
+        ELSE f.facteur_unpaved
+      END AS facteur_surface,
+      CASE a.surface
+        WHEN 'paved'   THEN f.usure_paved
+        WHEN 'gravel'  THEN f.usure_gravel
+        WHEN 'unpaved' THEN f.usure_unpaved
+        ELSE f.usure_unpaved
+      END AS usure_usd_km
+    FROM aretes_base a
+    CROSS JOIN params_flotte f
+  ),
+
+  -- Étape 2 : jointure avec la table de vitesses (vehicule_id + road_type + surface)
+  avec_vitesse AS (
+    SELECT
+      ax.*,
+      COALESCE(v.vitesse_kmh, 30) AS vitesse_base
+    FROM aretes_x_vehicules ax
+    LEFT JOIN vitesses_flotte v
+      ON  ax.vehicule_id = v.vehicule_id
+      AND ax.road_type   = v.road_type
+      AND ax.surface     = v.surface
+  ),
+
+  -- Étape 3 : application du facteur de pente sur la vitesse
+  avec_vitesse_pente AS (
+    SELECT
+      av.*,
+      av.vitesse_base * pp.facteur_pente AS speed_kmh
+    FROM avec_vitesse av
+    LEFT JOIN facteurs_pente_flotte pp
+      ON  av.vehicule_id    = pp.vehicule_id
+      AND av.slope_category = pp.slope_category
+  ),
+
+  -- Étape 4 : consommation de carburant (surconso en montée uniquement)
+  avec_conso AS (
+    SELECT
+      *,
+      conso_base
+        * facteur_surface
+        * CASE
+            WHEN slope_mean > 0
+            THEN 1.0 + (slope_mean * facteur_conso_pente / 100.0)
+            ELSE 1.0
+          END AS conso_L_per_100km
+    FROM avec_vitesse_pente
+  ),
+
+  -- Étape 5 : conversion unités + calcul des composantes de coût
+  avec_couts AS (
+    SELECT
+      *,
+      longueur_m / 1000.0                                  AS length_km,
+      (longueur_m / 1000.0) / speed_kmh                   AS travel_time_h,
+      (longueur_m / 1000.0) * (conso_L_per_100km / 100.0) AS fuel_consumption_L
+    FROM avec_conso
+  )
+
+  -- Sélection finale : toutes les colonnes utiles + coût généralisé
+  SELECT
+    vehicule_id,
+    vehicule_nom,
+    arete_id,
+    road_type,
+    surface,
+    slope_mean,
+    slope_category,
+    elevation_gain,
+    elevation_loss,
+    longueur_m,
+    length_km,
+    speed_kmh,
+    conso_L_per_100km,
+    fuel_consumption_L,
+    fuel_consumption_L * prix_carburant             AS cost_fuel_usd,
+    length_km * usure_usd_km                        AS cost_wear_usd,
+    (length_km / speed_kmh) * valeur_temps          AS cost_time_usd,
+    travel_time_h,
+    -- Coût généralisé calculé directement ici (somme des 3 composantes)
+    fuel_consumption_L * prix_carburant
+      + length_km * usure_usd_km
+      + (length_km / speed_kmh) * valeur_temps      AS cost_generalized_usd,
+    -- Coût au km (NULLIF évite la division par zéro)
+    (fuel_consumption_L * prix_carburant
+      + length_km * usure_usd_km
+      + (length_km / speed_kmh) * valeur_temps)
+      / NULLIF(length_km, 0)                        AS cost_per_km
+  FROM avec_couts
+")
+
+# Stats récapitulatives par véhicule depuis DuckDB
+stats_flotte <- duck_query("
+  SELECT
+    vehicule_id,
+    vehicule_nom,
+    ROUND(AVG(cost_per_km), 3)                                 AS cout_par_km_moyen,
+    ROUND(AVG(cost_fuel_usd / cost_generalized_usd) * 100, 1) AS part_carburant_pct,
+    ROUND(AVG(cost_time_usd / cost_generalized_usd) * 100, 1) AS part_temps_pct,
+    ROUND(AVG(cost_wear_usd / cost_generalized_usd) * 100, 1) AS part_usure_pct
+  FROM aretes_couts_tous
+  GROUP BY vehicule_id, vehicule_nom
+  ORDER BY cout_par_km_moyen
+")
+print(stats_flotte)
+
+# Export Parquet de la table consolidée
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM aretes_couts_tous) TO '",
+  file.path(DIR_OUTPUT, "aretes_couts_tous_vehicules.parquet"),
+  "' (FORMAT PARQUET)"
+))
+
+# ── Réintégration dans sfnetworks pour le véhicule de référence ───────────────
+aretes_ref <- duck_query(glue::glue("
+  SELECT * FROM aretes_couts_tous
+  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
+  ORDER BY arete_id
+"))
+
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(
+    length_km            = aretes_ref$length_km,
+    speed_kmh            = aretes_ref$speed_kmh,
+    travel_time_h        = aretes_ref$travel_time_h,
+    conso_L_per_100km    = aretes_ref$conso_L_per_100km,
+    fuel_consumption_L   = aretes_ref$fuel_consumption_L,
+    cost_fuel_usd        = aretes_ref$cost_fuel_usd,
+    cost_wear_usd        = aretes_ref$cost_wear_usd,
+    cost_time_usd        = aretes_ref$cost_time_usd,
+    cost_generalized_usd = aretes_ref$cost_generalized_usd,
+    cost_per_km          = aretes_ref$cost_per_km
+  )
+
+cat("✓ Table aretes_couts_tous créée dans DuckDB\n")
+cat("  Lignes :", duck_query("SELECT COUNT(*) AS n FROM aretes_couts_tous")$n,
+    "(arêtes × véhicules)\n\n")
+
+# ==============================================================================
+# PARTIES 9: VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
+# ==============================================================================
 
 cat("=== PARTIES 9 : Vitesses, consommation et coûts via DuckDB ===\n")
 
@@ -1280,6 +1477,91 @@ verif <- tibble(
 )
 print(verif)
 cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
+
+# ==============================================================================
+# PARTIE 10 : CARTES PAR VÉHICULE — PILOTÉES PAR LA TABLE params_flotte
+# ==============================================================================
+
+cat("=== PARTIE 10 : Cartes de coûts par véhicule ===\n")
+
+for (i in seq_len(nrow(VEHICULES_IDS))) {
+  
+  id_veh  <- VEHICULES_IDS$vehicule_id[i]
+  nom_veh <- VEHICULES_IDS$nom[i]
+  
+  # Récupérer les coûts depuis DuckDB (une requête SQL, pas de R intermédiaire)
+  couts_veh <- duck_query(glue::glue("
+    SELECT arete_id, cost_per_km, cost_generalized_usd, speed_kmh
+    FROM aretes_couts_tous
+    WHERE vehicule_id = '{id_veh}'
+    ORDER BY arete_id
+  "))
+  
+  reseau_tmp <- reseau_rwanda %>%
+    activate("edges") %>%
+    mutate(
+      cost_per_km          = couts_veh$cost_per_km,
+      cost_generalized_usd = couts_veh$cost_generalized_usd,
+      speed_kmh            = couts_veh$speed_kmh
+    )
+  
+  carte <- fond_carte() +
+    tm_shape(reseau_tmp %>% activate("edges") %>% st_as_sf()) +
+    tm_lines(
+      col       = "cost_per_km",
+      col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
+      col.legend = tm_legend(title = "Coût (USD/km)"),
+      lwd = 1.5
+    ) +
+    tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
+    tm_title(paste("Coûts de Transport —", nom_veh)) +
+    tm_layout(legend.outside=TRUE, frame=TRUE) +
+    tm_scalebar(position=c("left","bottom")) +
+    tm_compass(position=c("right","top"))
+  
+  nom_fichier <- paste0("carte_couts_", id_veh, ".png")
+  tmap_save(carte, file.path(DIR_OUTPUT, nom_fichier), width=3000, height=2400, dpi=300)
+  cat("  ✓", nom_fichier, "\n")
+}
+
+# ── Carte comparative : ratio coût par km camion lourd vs camionnette ─────────
+# Requête SQL directe : le calcul du ratio se fait entièrement dans DuckDB
+ratio_df <- duck_query("
+  SELECT
+    a.arete_id,
+    a.cost_per_km / NULLIF(b.cost_per_km, 0) AS ratio_lourd_vs_legere
+  FROM
+    (SELECT arete_id, cost_per_km FROM aretes_couts_tous WHERE vehicule_id = 'camion_lourd')  a
+  JOIN
+    (SELECT arete_id, cost_per_km FROM aretes_couts_tous WHERE vehicule_id = 'camionnette') b
+  USING (arete_id)
+  ORDER BY arete_id
+")
+
+if (nrow(ratio_df) > 0) {
+  reseau_ratio <- reseau_rwanda %>%
+    activate("edges") %>%
+    mutate(ratio_lourd_vs_legere = ratio_df$ratio_lourd_vs_legere)
+  
+  carte_ratio <- fond_carte() +
+    tm_shape(reseau_ratio %>% activate("edges") %>% st_as_sf()) +
+    tm_lines(
+      col       = "ratio_lourd_vs_legere",
+      col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.rd_yl_gn"),
+      col.legend = tm_legend(title="Ratio coût\nlourd / camionnette"),
+      lwd = 1.5
+    ) +
+    tm_title("Surcoût relatif — Camion lourd vs Camionnette") +
+    tm_layout(legend.outside=TRUE, frame=TRUE) +
+    tm_scalebar(position=c("left","bottom")) +
+    tm_compass(position=c("right","top"))
+  
+  tmap_save(carte_ratio, file.path(DIR_OUTPUT,"carte_ratio_vehicules.png"),
+            width=3000, height=2400, dpi=300)
+  cat("  ✓ carte_ratio_vehicules.png\n")
+}
+
+cat("✓", nrow(VEHICULES_IDS), "cartes + 1 carte comparative générées\n\n")
 
 # ==============================================================================
 # PARTIE 10 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
