@@ -816,6 +816,180 @@ pct_noeuds          <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse
 
 cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
 
+# ==============================================================================
+# PARTIE 6 BIS : DIAGNOSTIC DES 8% D'ARÊTES PERDUES
+# ==============================================================================
+
+cat("=== PARTIE 6 BIS : Diagnostic des arêtes hors composante géante ===\n")
+
+# ── Récupérer les arêtes du réseau AVANT filtrage (reseau_lisse) ─────────────
+aretes_lisse <- reseau_lisse %>% activate("edges") %>% st_as_sf()
+noeuds_lisse <- reseau_lisse %>% activate("nodes") %>% st_as_sf()
+
+# Appartenance de chaque nœud à une composante (calculée sur reseau_lisse)
+comp_lisse <- igraph::components(reseau_lisse %>% as_tbl_graph())
+noeuds_lisse$composante  <- comp_lisse$membership
+noeuds_lisse$taille_comp <- comp_lisse$csize[comp_lisse$membership]
+
+# Identifier les nœuds hors composante géante
+id_geante_lisse    <- which.max(comp_lisse$csize)
+noeuds_hors_geante <- noeuds_lisse %>%
+  filter(composante != id_geante_lisse)
+
+# ── Joindre l'info composante aux arêtes via leurs nœuds extrémité ───────────
+# Une arête est "hors géante" si au moins un de ses nœuds l'est
+aretes_lisse <- aretes_lisse %>%
+  mutate(
+    comp_from      = comp_lisse$membership[from],
+    comp_to        = comp_lisse$membership[to],
+    taille_comp    = pmin(
+      comp_lisse$csize[comp_from],
+      comp_lisse$csize[comp_to]
+    ),
+    hors_geante    = (comp_from != id_geante_lisse) | (comp_to != id_geante_lisse)
+  )
+
+aretes_perdues <- aretes_lisse %>% filter(hors_geante)
+
+cat("Arêtes totales (avant filtrage) :", nrow(aretes_lisse), "\n")
+cat("Arêtes perdues (hors composante géante) :", nrow(aretes_perdues),
+    "(", round(nrow(aretes_perdues)/nrow(aretes_lisse)*100,1), "%)\n\n")
+
+# ── 1. Distribution par type de route ─────────────────────────────────────────
+if ("road_type" %in% names(aretes_perdues)) {
+  distrib_road_type <- aretes_perdues %>%
+    st_drop_geometry() %>%
+    group_by(road_type) %>%
+    summarise(
+      n_aretes      = n(),
+      longueur_km   = round(sum(longueur_m, na.rm = TRUE) / 1000, 1),
+      pct_sur_total = round(n() / nrow(aretes_perdues) * 100, 1)
+    ) %>%
+    arrange(desc(n_aretes))
+  
+  cat("── Distribution par type de route ──────────────────────────────────\n")
+  print(distrib_road_type)
+  cat("\n")
+}
+
+# ── 2. Distribution par surface ───────────────────────────────────────────────
+if ("surface" %in% names(aretes_perdues)) {
+  distrib_surface <- aretes_perdues %>%
+    st_drop_geometry() %>%
+    group_by(surface) %>%
+    summarise(
+      n_aretes    = n(),
+      longueur_km = round(sum(longueur_m, na.rm = TRUE) / 1000, 1),
+      pct         = round(n() / nrow(aretes_perdues) * 100, 1)
+    ) %>%
+    arrange(desc(n_aretes))
+  
+  cat("── Distribution par surface ─────────────────────────────────────────\n")
+  print(distrib_surface)
+  cat("\n")
+}
+
+# ── 3. Distribution par taille de composante (isolats vs petits fragments) ────
+distrib_taille <- aretes_perdues %>%
+  st_drop_geometry() %>%
+  mutate(
+    categorie_comp = case_when(
+      taille_comp == 1  ~ "Isolat (1 nœud)",
+      taille_comp <= 5  ~ "Micro (2–5 nœuds)",
+      taille_comp <= 20 ~ "Petit (6–20 nœuds)",
+      TRUE              ~ "Moyen (>20 nœuds)"
+    )
+  ) %>%
+  group_by(categorie_comp) %>%
+  summarise(
+    n_aretes    = n(),
+    longueur_km = round(sum(longueur_m, na.rm = TRUE) / 1000, 1),
+    pct         = round(n() / nrow(aretes_perdues) * 100, 1)
+  ) %>%
+  arrange(desc(n_aretes))
+
+cat("── Distribution par taille de composante ────────────────────────────\n")
+print(distrib_taille)
+cat("\n")
+
+# ── 4. Localisation géographique (province la plus touchée) ───────────────────
+# On spatialise les arêtes perdues et on les intersecte avec les provinces
+if (nrow(aretes_perdues) > 0 && nrow(rwanda_provinces) > 0) {
+  
+  # Centroïde de chaque arête perdue pour l'intersection (plus rapide qu'une
+  # intersection complète ligne × polygone)
+  centroides_perdues <- aretes_perdues %>%
+    st_centroid(of_largest_polygon = FALSE) %>%
+    st_join(rwanda_provinces %>% select(name), join = st_within)
+  
+  distrib_province <- centroides_perdues %>%
+    st_drop_geometry() %>%
+    group_by(Province = name) %>%
+    summarise(
+      n_aretes    = n(),
+      longueur_km = round(sum(longueur_m, na.rm = TRUE) / 1000, 1),
+      pct         = round(n() / nrow(aretes_perdues) * 100, 1)
+    ) %>%
+    arrange(desc(n_aretes))
+  
+  cat("── Localisation par province ────────────────────────────────────────\n")
+  print(distrib_province)
+  cat("\n")
+}
+
+# ── 5. Carte des arêtes perdues ───────────────────────────────────────────────
+cat("Génération de la carte des arêtes perdues...\n")
+
+# Palette par type de route (cohérente avec la carte de vérification Partie 3)
+palette_road_type <- c(
+  motorway     = "#E41A1C",
+  trunk        = "#FF4400",
+  primary      = "#FF7F00",
+  secondary    = "#E8A000",
+  tertiary     = "#999999",
+  unclassified = "#CCCCCC"
+)
+
+carte_aretes_perdues <- fond_carte() +
+  
+  # Réseau principal (composante géante) en gris clair pour le contexte
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col = "#CCCCCC", lwd = 0.4, col_alpha = 0.6) +
+  
+  # Arêtes perdues colorées par type de route
+  tm_shape(aretes_perdues) +
+  tm_lines(
+    col       = "road_type",
+    col.scale = tm_scale(values = palette_road_type),
+    col.legend = tm_legend(title = "Type de route\n(arêtes perdues)"),
+    lwd = 1.8
+  ) +
+  
+  # Nœuds hors géante (points rouges) pour visualiser les isolats
+  tm_shape(noeuds_hors_geante) +
+  tm_dots(fill = "#CC0000", size = 0.08, fill_alpha = 0.5) +
+  
+  tm_title("Arêtes exclues de la composante géante\n(~8% du réseau — Partie 6)") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_aretes_perdues,
+  file.path(DIR_OUTPUT, "carte_aretes_perdues_partie6.png"),
+  width = 3000, height = 2400, dpi = 300
+)
+
+tmap_mode("view")
+print(carte_aretes_perdues)
+tmap_mode("plot")
+
+cat("✓ Carte des arêtes perdues sauvegardée\n\n")
+
+# ==============================================================================
+# PARTIE 6 TER : EXTRACTION DE LA COMPOSANTE GÉANTE
+# ==============================================================================
+
 pb_geante <- progress_bar$new(
   format = "  Filtrage   [:bar] :percent | durée : :elapsed",
   total  = length(noeuds_geante),
