@@ -1209,6 +1209,7 @@ reseau_rwanda <- reseau_rwanda %>%
 # Vérification exhaustive de toutes les colonnes critiques pour Dijkstra
 aretes_check <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
 
+# Vérifie s'il n'y a pas de valeur NA, de valeur non numérique (nan = Not A Number) ou de valeur infinie
 verif <- tibble(
   colonne = c("length_km", "speed_kmh", "travel_time_h", "cost_generalized_usd"),
   n_na    = c(
@@ -1221,8 +1222,9 @@ verif <- tibble(
 )
 print(verif)
 cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
+
 # ==============================================================================
-# PARTIE 11 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
+# PARTIE 10 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
 # ==============================================================================
 # La matrice OD donne le coût, la distance et le temps de trajet optimal entre
 # chaque paire d'entrepôts. Elle est calculée par l'algorithme de Dijkstra
@@ -1234,7 +1236,7 @@ cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
 #   - Joinable : directement utilisable dans le modèle gravitaire (Partie 18)
 #   - Compact : ne stocke que les paires connectées (pas de zéros inutiles)
 
-cat("=== PARTIE 11 : Matrice OD dans DuckDB ===\n")
+cat("=== PARTIE 10 : Matrice OD dans DuckDB ===\n")
 
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
@@ -1337,14 +1339,14 @@ for (r in seq_len(nrow(od_long))) {
 
 
 # ==============================================================================
-# PARTIE 12 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
+# PARTIE 11 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
 # ==============================================================================
 # tmap travaille avec des objets sf et ne s'interface pas avec DuckDB.
 # Cette partie reste entièrement en R/sf. Les couches géographiques
 # (frontières, lacs, provinces) sont extraites depuis le même fichier PBF
 # que les routes, via la couche "multipolygons".
 
-cat("=== PARTIE 12 : Visualisations ===\n")
+cat("=== PARTIE 11 : Visualisations ===\n")
 
 
 # ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
@@ -1385,7 +1387,7 @@ print(carte_pentes)
 tmap_mode("plot")
 
 # ==============================================================================
-# PARTIE 13 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
+# PARTIE 12 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
 # ==============================================================================
 # COPY TO est la commande DuckDB pour exporter des tables vers des fichiers.
 # Avantages sur write.csv() :
@@ -1393,7 +1395,7 @@ tmap_mode("plot")
 #   - Vitesse : écriture multithread native de DuckDB
 #   - SQL : filtrer/transformer les données à l'export sans créer de df R intermédiaire
 
-cat("=== PARTIE 13 : Export via DuckDB ===\n")
+cat("=== PARTIE 12 : Export via DuckDB ===\n")
 
 # Chargement de la table des arêtes finales dans DuckDB (sans géométrie)
 aretes_finales <- reseau_rwanda %>%
@@ -1447,7 +1449,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 
 
 # ==============================================================================
-# PARTIE 16 : TABLE INPUT-OUTPUT DU RWANDA
+# PARTIE 13 : TABLE INPUT-OUTPUT DU RWANDA
 # ==============================================================================
 # La table Input-Output de Leontief modélise les interdépendances sectorielles :
 #   a_ij = part de la production du secteur j consommée en intrant par le secteur i
@@ -1465,7 +1467,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 #   2. Charger avec readxl::read_excel("io_rwanda.xlsx")
 #   3. Remplacer les matrices A et production_totale ci-dessous
 
-cat("=== PARTIE 16 : Table Input-Output dans DuckDB ===\n")
+cat("=== PARTIE 13 : Table Input-Output dans DuckDB ===\n")
 
 # 8 secteurs représentatifs de l'économie rwandaise en 2022
 SECTEURS   <- c("Agriculture","Mines","Agro_industrie","Industrie",
@@ -1566,7 +1568,7 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 
 
 # ==============================================================================
-# PARTIE 17 : GÉNÉRATION DES OFFRES ET DEMANDES PAR ZONE
+# PARTIE 14 : GÉNÉRATION DES OFFRES ET DEMANDES PAR ZONE
 # ==============================================================================
 # Chaque zone d'entreposage est caractérisée par :
 #   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
@@ -1580,7 +1582,7 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 #   ville     → profil équilibré, Commerce local dominant
 #   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
 
-cat("=== PARTIE 17 : Offres et demandes par zone ===\n")
+cat("=== PARTIE 14 : Offres et demandes par zone ===\n")
 
 # Profils d'offre (ce que chaque type de zone produit et offre au marché)
 PROFILS_OFFRE <- list(
@@ -1692,10 +1694,10 @@ cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 
 
 # ==============================================================================
-# PARTIE 18 : MODÈLE GRAVITAIRE DES ÉCHANGES
+# PARTIE 15 : MODÈLE GRAVITAIRE DES ÉCHANGES
 # ==============================================================================
 
-cat("=== PARTIE 18 : Modèle gravitaire des échanges ===\n\n")
+cat("=== PARTIE 15 : Modèle gravitaire des échanges ===\n\n")
 
 # Le modèle gravitaire estime les flux commerciaux bilatéraux :
 #
@@ -1803,10 +1805,10 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 
 # ==============================================================================
-# PARTIE 19 : MODÉLISATION DU FRET ET AFFECTATION AU RÉSEAU
+# PARTIE 16 : MODÉLISATION DU FRET ET AFFECTATION AU RÉSEAU
 # ==============================================================================
 
-cat("=== PARTIE 19 : Modélisation du fret et affectation au réseau ===\n")
+cat("=== PARTIE 16 : Modélisation du fret et affectation au réseau ===\n")
 
 # --- Étape 1 : Conversion des flux monétaires en tonnes ---
 cat("Conversion des flux en tonnes...\n")
@@ -1934,7 +1936,7 @@ volumes_par_zone <- tibble(
 print(volumes_par_zone)
 cat("\n")
 
-# === DIAGNOSTIC PARTIE 19 ===
+# === DIAGNOSTIC PARTIE 16 ===
 
 cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
 
@@ -1970,10 +1972,10 @@ for (i in 1:min(5, length(warehouse_node_ids))) {
 }
 
 # ==============================================================================
-# PARTIE 20 : VISUALISATIONS DES ÉCHANGES MODÉLISÉS
+# PARTIE 17 : VISUALISATIONS DES ÉCHANGES MODÉLISÉS
 # ==============================================================================
 
-cat("=== PARTIE 20 : Visualisations des échanges modélisés ===\n\n")
+cat("=== PARTIE 17 : Visualisations des échanges modélisés ===\n\n")
 
 # --- Préparation des couches spatiales ---
 
