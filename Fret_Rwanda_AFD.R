@@ -365,6 +365,8 @@ rwanda_provinces <- st_read(
 # Fallback : utiliser la frontière nationale si les provinces sont absentes du PBF
 if (nrow(rwanda_provinces) == 0) rwanda_provinces <- rwanda_national
 
+cat("✓ Couches administratives extraites\n")
+
 # ── Lacs depuis le PBF ────────────────────────────────────────────────────────
 # Filtrage sur > 1 km² pour ne conserver que les lacs significatifs
 # (lac Kivu, lac Rweru, lac Muhazi…). tryCatch gère l'absence de données.
@@ -390,7 +392,47 @@ tryCatch({
   cat("  Lacs chargés :", nrow(lacs_raw), "\n")
 }, error = function(e) cat("  ⚠ Lacs non disponibles dans le PBF\n"))
 
-cat("✓ Couches administratives extraites\n")
+
+# ── Parcs naturels depuis le PBF ──────────────────────────────────────────────
+# Les parcs sont tagués de trois façons dans OSM :
+#   boundary = national_park      → parcs nationaux officiels
+#   boundary = protected_area     → zones protégées (réserves, sanctuaires)
+#   leisure  = nature_reserve     → réserves naturelles
+
+parcs_ok <- FALSE
+
+tryCatch({
+  parcs_raw <- st_read(
+    chemin_pbf, layer = "multipolygons",
+    query = "SELECT * FROM multipolygons
+             WHERE boundary IN ('national_park', 'protected_area')
+             OR    leisure   =  'nature_reserve'",
+    quiet = TRUE
+  ) %>%
+    rename(geometry = `_ogr_geometry_`) %>%
+    st_as_sf() %>%
+    st_make_valid() %>%
+    filter(st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")) %>%
+    st_transform(crs = 32735) %>%
+    mutate(
+      aire_km2 = as.numeric(st_area(geometry)) / 1e6,
+      # Récupérer le nom anglais depuis other_tags si disponible
+      nom_en   = sapply(other_tags, extraire_tag, cle = "name:en"),
+      nom_parc = if_else(!is.na(nom_en) & nom_en != "", nom_en, name)
+    ) %>%
+    filter(aire_km2 > 5)   # Exclure les micro-zones (< 5 km²)
+  
+  if (nrow(parcs_raw) > 0) {
+    parcs_ok <- TRUE
+    cat("  Parcs naturels chargés :", nrow(parcs_raw), "\n")
+    cat("  Noms :", paste(parcs_raw$nom_parc, collapse = ", "), "\n")
+  } else {
+    cat("  ⚠ Aucun parc trouvé dans le PBF\n")
+  }
+  
+}, error = function(e) {
+  cat("  ⚠ Parcs non disponibles dans le PBF :", conditionMessage(e), "\n")
+})
 
 # ── Zone d'affichage (bbox 250km × 250km centrée sur le Rwanda) ───────────────
 # Buffer de 125km de chaque côté du centroïde pour afficher les frontières voisines
@@ -438,21 +480,37 @@ bbox_carto <- st_bbox(bbox_poly)
 
 fond_carte <- function() {
   
-   carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) + # Définit la couche des provinces ET limite l'affichage à la bbox
-    tm_polygons(                                            # Remplit les polygones des provinces avec un style visuel
-      fill = "#F5F5F0",                                     # Couleur de remplissage
-      col = "#AAAAAA",                                      # Couleur des bordures
-      lwd = 0.8,                                            # Épaisseur des bordures 
-                fill.legend = tm_legend(show = FALSE)) +    # Désactive la légende pour cette couche
-    tm_shape(rwanda_national) +                             # Ajoute la couche de la frontière nationale
-     tm_borders(col = "#222222", lwd = 2.5)
+  carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) +
+    tm_polygons(
+      fill = "#F5F5F0",
+      col  = "#AAAAAA",
+      lwd  = 0.8,
+      fill.legend = tm_legend(show = FALSE)
+    ) +
+    tm_shape(rwanda_national) +
+    tm_borders(col = "#222222", lwd = 2.5)
   
-   if (lacs_ok) carte <- carte +                              # Vérifie si les données des lacs sont disponibles
-      tm_shape(lacs_raw) +                                   # Ajoute la couche des lacs
-      tm_polygons(fill = "#A8C8E8", 
-                  col = "#7AAAC8", 
-                  lwd = 0.5,
-                  fill.legend = tm_legend(show = FALSE))
+  # ── Parcs naturels (sous les lacs pour ne pas les masquer) ────────────────
+  if (parcs_ok) carte <- carte +
+      tm_shape(parcs_raw) +
+      tm_polygons(
+        fill        = "#A8D5A2",     # Vert pâle caractéristique des zones protégées
+        col         = "#5A9E52",     # Bordure vert plus soutenu
+        lwd         = 1.2,
+        fill_alpha  = 0.45,          # Semi-transparent pour voir les routes dessous
+        fill.legend = tm_legend(show = FALSE)
+      )
+  
+  # ── Lacs ──────────────────────────────────────────────────────────────────
+  if (lacs_ok) carte <- carte +
+      tm_shape(lacs_raw) +
+      tm_polygons(
+        fill        = "#A8C8E8",
+        col         = "#7AAAC8",
+        lwd         = 0.5,
+        fill.legend = tm_legend(show = FALSE)
+      )
+  
   carte
 }
 
@@ -1224,7 +1282,52 @@ print(verif)
 cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
 
 # ==============================================================================
-# PARTIE 10 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
+# PARTIE 10 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
+# ==============================================================================
+
+cat("=== PARTIE 10 : Visualisations ===\n")
+
+
+# ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
+# Les tronçons les plus chers (rouge foncé) combinent pente forte + surface dégradée.
+# Utile pour identifier les goulets d'étranglement logistiques.
+carte_couts <- fond_carte() +
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col="cost_per_km",
+           col.scale=tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
+           col.legend=tm_legend(title="Coût (USD/km)"), lwd=1.5) +
+  tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
+  tm_title("Coûts de Transport Généralisés par km") +
+  tm_layout(legend.outside=TRUE, frame=TRUE) +
+  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
+tmap_save(carte_couts, file.path(DIR_OUTPUT,"carte_couts_rwanda.png"),
+          width=3000, height=2400, dpi=300)
+
+# ── Carte 3 : Catégories de pente ─────────────────────────────────────────────
+# Le Rwanda est surnommé "le pays des mille collines" : les pentes fortes y sont très
+# fréquentes, notamment dans les préfectures du nord et de l'ouest.
+carte_pentes <- fond_carte() +
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col="slope_category",
+           col.scale=tm_scale(values=c(plat="#00AA00", legere="#AACC00",
+                                       moderee="#FF9900", forte="#FF0000")),
+           col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
+  tm_title("Pentes du Réseau Routier") +
+  tm_layout(legend.outside=TRUE, frame=TRUE) +
+  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
+tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
+          width=3000, height=2400, dpi=300)
+
+cat("✓ 2 cartes générées\n\n")
+
+tmap_mode("view")
+print(carte_couts) 
+print(carte_pentes)
+tmap_mode("plot")
+
+
+# ==============================================================================
+# PARTIE 11 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
 # ==============================================================================
 # La matrice OD donne le coût, la distance et le temps de trajet optimal entre
 # chaque paire d'entrepôts. Elle est calculée par l'algorithme de Dijkstra
@@ -1236,7 +1339,7 @@ cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
 #   - Joinable : directement utilisable dans le modèle gravitaire (Partie 18)
 #   - Compact : ne stocke que les paires connectées (pas de zéros inutiles)
 
-cat("=== PARTIE 10 : Matrice OD dans DuckDB ===\n")
+cat("=== PARTIE 11 : Matrice OD dans DuckDB ===\n")
 
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
@@ -1320,66 +1423,6 @@ cat("  Paires connectées :", od_stats$n_paires, "\n")
 cat("  Coût moyen        :", od_stats$cout_moyen_usd, "USD\n")
 cat("  Distance moyenne  :", od_stats$dist_moyenne_km, "km\n\n")
 
-# ── Reconstruction des matrices R carrées ─────────────────────────────────────
-# On reconstitue les 3 matrices à partir du format long DuckDB.
-matrice_couts     <- matrix(0, n_warehouses, n_warehouses,
-                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
-matrice_distances <- matrix(0, n_warehouses, n_warehouses,
-                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
-matrice_temps     <- matrix(0, n_warehouses, n_warehouses,
-                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
-
-for (r in seq_len(nrow(od_long))) {
-  i <- od_long$id_origine[r]; j <- od_long$id_destination[r]
-  matrice_couts[i, j]     <- od_long$cout_usd[r]
-  matrice_distances[i, j] <- od_long$distance_km[r]
-  matrice_temps[i, j]     <- od_long$temps_h[r]
-}
-
-
-# ==============================================================================
-# PARTIE 11 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
-# ==============================================================================
-
-cat("=== PARTIE 11 : Visualisations ===\n")
-
-
-# ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
-# Les tronçons les plus chers (rouge foncé) combinent pente forte + surface dégradée.
-# Utile pour identifier les goulets d'étranglement logistiques.
-carte_couts <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col="cost_per_km",
-           col.scale=tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
-           col.legend=tm_legend(title="Coût (USD/km)"), lwd=1.5) +
-  tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
-  tm_title("Coûts de Transport Généralisés par km") +
-  tm_layout(legend.outside=TRUE, frame=TRUE) +
-  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_couts, file.path(DIR_OUTPUT,"carte_couts_rwanda.png"),
-          width=3000, height=2400, dpi=300)
-
-# ── Carte 3 : Catégories de pente ─────────────────────────────────────────────
-# Le Rwanda est surnommé "le pays des mille collines" : les pentes fortes y sont très
-# fréquentes, notamment dans les préfectures du nord et de l'ouest.
-carte_pentes <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col="slope_category",
-           col.scale=tm_scale(values=c(plat="#00AA00", legere="#AACC00",
-                                       moderee="#FF9900", forte="#FF0000")),
-           col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
-  tm_title("Pentes du Réseau Routier") +
-  tm_layout(legend.outside=TRUE, frame=TRUE) +
-  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
-          width=3000, height=2400, dpi=300)
-
-cat("✓ 2 cartes générées\n\n")
-
-tmap_mode("view")
-print(carte_couts) 
-print(carte_pentes)
-tmap_mode("plot")
 
 # ==============================================================================
 # PARTIE 12 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
@@ -1727,6 +1770,15 @@ for (s in SECTEURS) {
   cat("  β(", s, ") =", BETA_SECTEUR[s], "\n")
 }
 cat("\n")
+
+# ── Reconstruction de la matrice coputs en R carrées ──────────────────────────
+matrice_couts     <- matrix(0, n_warehouses, n_warehouses,
+                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
+
+for (r in seq_len(nrow(od_long))) {
+  i <- od_long$id_origine[r]; j <- od_long$id_destination[r]
+  matrice_couts[i, j]     <- od_long$cout_usd[r]
+}
 
 # --- Préparation de la matrice de coûts ---
 C_ij <- matrice_couts
