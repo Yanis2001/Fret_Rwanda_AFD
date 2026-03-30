@@ -675,11 +675,7 @@ routes_rwanda_clean <- routes_rwanda %>%
 # as_sfnetwork() convertit le sf en réseau non orienté (directed = FALSE):
 # un segment peut être parcouru dans les deux sens (routes bidirectionnelles).
 # Les routes à sens unique seraient gérées avec directed = TRUE + attribut oneway.
-reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) %>%
-  activate("edges") %>%
-  # st_length() calcule la longueur en mètres (grâce à la projection UTM 35S)
-  # as.numeric() supprime l'unité "m" pour faciliter les calculs arithmétiques
-  mutate(longueur_m = as.numeric(st_length(geometry)))
+reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) 
 
 cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
     "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
@@ -827,7 +823,8 @@ cat("Colonnes de rwanda_provinces :\n")
 print(names(rwanda_provinces))
 
 # ── Récupérer les arêtes du réseau AVANT filtrage (reseau_lisse) ─────────────
-aretes_lisse <- reseau_lisse %>% activate("edges") %>% st_as_sf()
+aretes_lisse <- reseau_lisse %>% activate("edges") %>% st_as_sf() %>%
+  mutate(longueur_m = as.numeric(st_length(geometry)))  
 noeuds_lisse <- reseau_lisse %>% activate("nodes") %>% st_as_sf()
 
 # Appartenance de chaque nœud à une composante (calculée sur reseau_lisse)
@@ -1010,9 +1007,103 @@ reseau_rwanda <- reseau_lisse %>%
   }) %>%
   mutate(node_id = row_number())
 
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(longueur_m = as.numeric(st_length(geometry)))
+
+# Vérification immédiate
+n_na_longueur <- reseau_rwanda %>%
+  activate("edges") %>% st_as_sf() %>%
+  pull(longueur_m) %>%
+  { sum(is.na(.) | . == 0) }
+
+cat("✓ longueur_m recalculée sur toutes les arêtes\n")
+cat("  Arêtes avec longueur_m = 0 ou NA :", n_na_longueur, "(doit être 0)\n\n")
+
+# to_spatial_subdivision() crée des fragments de longueur nulle aux intersections
+# quand deux nœuds sont géométriquement confondus. On les élimine ici,
+# avant le calcul des pentes (Partie 8) et des coûts (Partie 9),
+# pour éviter toute propagation de NA en aval.
+n_avant_filtre <- igraph::ecount(reseau_rwanda)
+
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(longueur_m_brute = as.numeric(st_length(geometry))) %>%
+  filter(longueur_m_brute > 0.5) %>%        # Seuil 0.5m
+  select(-longueur_m_brute)                  # Colonne temporaire, on la retire
+
+n_apres_filtre <- igraph::ecount(reseau_rwanda)
+cat("Arêtes dégénérées supprimées :", n_avant_filtre - n_apres_filtre,
+    "(", round((n_avant_filtre - n_apres_filtre)/n_avant_filtre*100, 1), "% du réseau)\n")
+cat("Arêtes conservées            :", n_apres_filtre, "\n\n")
+
 cat("✓ Réseau corrigé —",
     igraph::vcount(reseau_rwanda), "nœuds,",
     igraph::ecount(reseau_rwanda), "arêtes\n\n")
+
+# ── Diagnostic approfondi ─────────────────────────────────────────────────────
+
+aretes_diag <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+
+cat("=== Diagnostic désalignement indices ===\n\n")
+
+# 1. Nombre d'arêtes dans le réseau vs dans DuckDB
+n_reseau <- nrow(aretes_diag)
+n_duckdb <- duck_query(glue::glue(
+  "SELECT COUNT(*) AS n FROM aretes_couts_tous WHERE vehicule_id = '{VEHICULE_REFERENCE}'"
+))$n
+
+cat("Arêtes dans reseau_rwanda :", n_reseau, "\n")
+cat("Arêtes dans DuckDB        :", n_duckdb, "\n")
+cat("Écart                     :", n_duckdb - n_reseau, "\n\n")
+
+# 2. Longueur brute depuis la géométrie vs longueur_m stockée
+aretes_diag <- aretes_diag %>%
+  mutate(
+    longueur_geom   = as.numeric(st_length(geometry)),
+    longueur_stored = longueur_m,
+    ecart           = abs(longueur_geom - longueur_stored)
+  )
+
+cat("longueur_m = 0 ou NA (stockée)  :", 
+    sum(is.na(aretes_diag$longueur_stored) | aretes_diag$longueur_stored == 0), "\n")
+cat("longueur_geom = 0 ou NA (géométrie):", 
+    sum(is.na(aretes_diag$longueur_geom)  | aretes_diag$longueur_geom  == 0), "\n\n")
+
+# 3. Vérifier si length_km dans reseau_rwanda correspond à longueur_m / 1000
+cat("length_km NA dans reseau_rwanda  :", 
+    sum(is.na(aretes_diag$length_km)), "\n")
+cat("cost_generalized_usd NA          :", 
+    sum(is.na(aretes_diag$cost_generalized_usd)), "\n\n")
+
+# 4. Chercher si aretes_base dans DuckDB a des longueur_m = 0
+zero_duckdb <- duck_query("
+  SELECT COUNT(*) AS n_zero, MIN(longueur_m) AS min_l, MAX(longueur_m) AS max_l
+  FROM aretes_base
+  WHERE longueur_m = 0 OR longueur_m IS NULL
+")
+cat("Arêtes longueur_m = 0 ou NULL dans aretes_base (DuckDB) :", zero_duckdb$n_zero, "\n")
+
+# 5. Vérifier si length_km = NA dans DuckDB correspond à longueur_m = 0
+na_duckdb <- duck_query(glue::glue("
+  SELECT COUNT(*) AS n_na, MIN(longueur_m) AS min_l, AVG(longueur_m) AS avg_l
+  FROM aretes_couts_tous
+  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
+    AND length_km IS NULL
+"))
+cat("Arêtes length_km NULL dans DuckDB :", na_duckdb$n_na, "\n")
+cat("  longueur_m min sur ces arêtes   :", na_duckdb$min_l, "\n")
+cat("  longueur_m moy sur ces arêtes   :", round(na_duckdb$avg_l, 4), "\n\n")
+
+# 6. Vérifier l'alignement arete_id
+arete_ids_duckdb <- duck_query(glue::glue("
+  SELECT arete_id FROM aretes_couts_tous
+  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
+  ORDER BY arete_id
+"))
+cat("arete_id max dans DuckDB :", max(arete_ids_duckdb$arete_id), "\n")
+cat("Nb arêtes réseau         :", n_reseau, "\n")
+cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\n")
 
 
 # ── Diagnostic complet de la fragmentation ───────────────────────────────────
@@ -1295,14 +1386,16 @@ duck_query("
 
   -- Étape 3 : application du facteur de pente sur la vitesse
   avec_vitesse_pente AS (
-    SELECT
+     SELECT
       av.*,
-      av.vitesse_base * pp.facteur_pente AS speed_kmh
-    FROM avec_vitesse av
-    LEFT JOIN facteurs_pente_flotte pp
-      ON  av.vehicule_id    = pp.vehicule_id
-      AND av.slope_category = pp.slope_category
-  ),
+      av.vitesse_base * COALESCE(pp.facteur_pente, 1.0) AS speed_kmh
+      -- COALESCE : si slope_category est NULL (arête topologique),
+      -- facteur_pente = 1.0 (pas de modification de vitesse)
+     FROM avec_vitesse av
+     LEFT JOIN facteurs_pente_flotte pp
+       ON  av.vehicule_id    = pp.vehicule_id
+       AND av.slope_category = pp.slope_category
+    ),
 
   -- Étape 4 : consommation de carburant (surconso en montée uniquement)
   avec_conso AS (
@@ -1318,13 +1411,13 @@ duck_query("
     FROM avec_vitesse_pente
   ),
 
-  -- Étape 5 : conversion unités + calcul des composantes de coût
+-- Étape 5 : conversion unités + calcul des composantes de coût
   avec_couts AS (
     SELECT
       *,
-      longueur_m / 1000.0                                 AS length_km,
-      (longueur_m / 1000.0) / speed_kmh                   AS travel_time_h,
-      (longueur_m / 1000.0) * (conso_L_per_100km / 100.0) AS fuel_consumption_L
+      NULLIF(longueur_m, 0) / 1000.0                                    AS length_km,
+      (NULLIF(longueur_m, 0) / 1000.0) / NULLIF(speed_kmh, 0)          AS travel_time_h,
+      (NULLIF(longueur_m, 0) / 1000.0) * (conso_L_per_100km / 100.0)   AS fuel_consumption_L
     FROM avec_conso
   )
 
@@ -1381,6 +1474,7 @@ dbExecute(con, paste0(
   file.path(DIR_OUTPUT, "aretes_couts_tous_vehicules.parquet"),
   "' (FORMAT PARQUET)"
 ))
+# Le chiffre qu'il y a à la suite de la commande précédente correspond au nombre de lignes bien exportées
 
 # ── Réintégration dans sfnetworks pour le véhicule de référence ───────────────
 aretes_ref <- duck_query(glue::glue("
@@ -1408,243 +1502,9 @@ cat("✓ Table aretes_couts_tous créée dans DuckDB\n")
 cat("  Lignes :", duck_query("SELECT COUNT(*) AS n FROM aretes_couts_tous")$n,
     "(arêtes × véhicules)\n\n")
 
-# ==============================================================================
-# PARTIES 9: VITESSES, CONSOMMATION ET COÛTS GÉNÉRALISÉS VIA DUCKDB SQL
-# ==============================================================================
-
-cat("=== PARTIES 9 : Vitesses, consommation et coûts via DuckDB ===\n")
-
-# ── Chargement des attributs tabulaires des arêtes dans DuckDB ────────────────
-# st_drop_geometry() supprime la colonne géométrie (non stockable dans DuckDB standard)
-aretes_df <- reseau_rwanda %>%
-  activate("edges") %>%
-  st_as_sf() %>%
-  st_drop_geometry() %>%
-  mutate(arete_id = row_number())   # Attribue un identifiant unique pour réaligner les résultats après la requête
-
-duck_write(aretes_df, "aretes_base") # Enregistrement du tableau de données aretes_df dans la base de données DuckDB
-
-# ── Tables de paramètres dans DuckDB ─────────────────────────────────────────
-# Stocker les paramètres sous forme de tables DuckDB permet de les modifier
-# facilement pour des scénarios alternatifs sans toucher à la requête principale.
-
-# Facteurs de consommation et coûts d'usure par type de surface
-duck_write(
-  tibble(
-    surface         = c("paved","gravel","unpaved"),
-    facteur_surface = c(PARAMS_VEHICULE$facteur_paved,
-                        PARAMS_VEHICULE$facteur_gravel,
-                        PARAMS_VEHICULE$facteur_unpaved),
-    usure_usd_km    = c(PARAMS_ECONOMIQUES$usure_paved,
-                        PARAMS_ECONOMIQUES$usure_gravel,
-                        PARAMS_ECONOMIQUES$usure_unpaved)
-  ),
-  "params_surface"
-)
-
-# Facteurs multiplicatifs de vitesse par catégorie de pente
-duck_write(
-  tibble(
-    slope_category  = c("plat","legere","moderee","forte"),
-    facteur_pente   = c(FACTEURS_PENTE$plat, FACTEURS_PENTE$legere,
-                        FACTEURS_PENTE$moderee, FACTEURS_PENTE$forte)
-  ),
-  "params_pente"
-)
-
-# ── Requête SQL principale : 4 CTEs chaînées ──────────────────────────────────
-# glue::glue() injecte les constantes R dans la chaîne SQL avant exécution
-# (ex : {PARAMS_VEHICULE$conso_base} est remplacé par 20)
-aretes_couts <- duck_query(glue::glue("
-  WITH
-
-  -- CTE 1 : Jointure avec les vitesses de référence
-  -- LEFT JOIN pour conserver les arêtes sans correspondance exacte (vitesse = 30 par défaut)
-  avec_vitesse AS (
-    SELECT
-      a.*,  -- Dit qu'il prend en compte la colonne associé à l'abréviation a
-      COALESCE(v.vitesse_kmh, 30) AS vitesse_base
-      -- COALESCE : retourne vitesse_kmh si non NULL, sinon 30 km/h (valeur de secours)
-    FROM aretes_base a  -- Associe l'abréviation a à aretes_base
-    LEFT JOIN vitesses_reference v
-      ON a.road_type = v.road_type AND a.surface = v.surface
-  ),
-
-  -- CTE 2 : Application du facteur de pente sur la vitesse
-  -- speed_kmh = vitesse_base × facteur_pente
-  -- Ex : 60 km/h × 0.9 (pente légère) = 54 km/h effectif
-  avec_vitesse_pente AS (
-    SELECT
-      av.*,
-      av.vitesse_base * pp.facteur_pente AS speed_kmh,
-      pp.facteur_pente
-    FROM avec_vitesse av
-    LEFT JOIN params_pente pp ON av.slope_category = pp.slope_category
-  ),
-
-  -- CTE 3 : Calcul de la consommation de carburant
-  -- En montée (slope_mean > 0) : surconsommation proportionnelle à la pente
-  -- En descente (slope_mean <= 0) : pas de récupération d'énergie modélisée
-  avec_conso AS (
-    SELECT
-      avp.*,
-      ps.facteur_surface,
-      ps.usure_usd_km,
-      {PARAMS_VEHICULE$conso_base}       -- Base : 20 L/100km sur bitume plat
-        * ps.facteur_surface             -- Ajustement surface (ex : ×1.15 sur gravier)
-        * CASE
-            WHEN slope_mean > 0
-            THEN 1.0 + (slope_mean * {FACTEUR_CONSO_PENTE} / 100.0)
-            -- Ex : pente 5% → facteur 1 + (5×1.5/100) = 1.075 → +7.5% de conso
-            ELSE 1.0  -- En descente : pas de bonus de consommation
-          END AS conso_L_per_100km
-    FROM avec_vitesse_pente avp
-    LEFT JOIN params_surface ps ON avp.surface = ps.surface
-  ),
-
-  -- CTE 4 : Conversion des unités et calcul des grandeurs intermédiaires
-  avec_couts AS (
-    SELECT
-      *,
-      longueur_m / 1000.0                               AS length_km,
-      (longueur_m / 1000.0) / speed_kmh                AS travel_time_h,
-      -- Litres consommés sur ce segment = km × (L/100km ÷ 100)
-      (longueur_m / 1000.0) * (conso_L_per_100km / 100.0) AS fuel_consumption_L
-    FROM avec_conso
-  )
-
-  -- Sélection finale : tous les composantes de coût + colonnes identifiantes
-  SELECT
-    arete_id,
-    road_type,
-    surface,
-    slope_mean,
-    slope_category,
-    elevation_gain,
-    elevation_loss,
-    longueur_m,
-    length_km,
-    speed_kmh,
-    conso_L_per_100km,
-    fuel_consumption_L,
-    -- Coût carburant (USD) = litres consommés × prix du litre de diesel
-    fuel_consumption_L * {PARAMS_ECONOMIQUES$prix_carburant}    AS cost_fuel_usd,
-    -- Coût d'usure (USD) = km parcourus × taux d'usure par km (variable selon surface)
-    length_km * usure_usd_km                                    AS cost_wear_usd,
-    -- Coût du temps (USD) = heures de trajet × valeur économique du temps
-    (length_km / speed_kmh) * {PARAMS_ECONOMIQUES$valeur_temps} AS cost_time_usd,
-    length_km / speed_kmh                                       AS travel_time_h
-  FROM avec_couts
-"))
-
-# Coût généralisé = somme des trois composantes (carburant + usure + temps)
-# Calculé en R car DuckDB ne peut pas référencer des alias de la même clause SELECT
-aretes_couts <- aretes_couts %>%
-  mutate(
-    cost_generalized_usd = cost_fuel_usd + cost_wear_usd + cost_time_usd,
-    # Coût au km : indicateur de comparaison entre segments de longueurs différentes
-    cost_per_km          = if_else(length_km > 0, cost_generalized_usd / length_km, 0)
-  )
-
-# Persister les coûts dans DuckDB (réutilisés en Parties 18-19)
-duck_write(aretes_couts, "aretes_couts")
-
-# Statistiques de contrôle directement depuis DuckDB
-stats_couts_sql <- duck_query("
-  SELECT
-    ROUND(AVG(cost_per_km), 3)                                  AS cout_par_km_moyen,
-    ROUND(AVG(cost_fuel_usd / cost_generalized_usd) * 100, 1)  AS part_carburant,
-    ROUND(AVG(cost_time_usd / cost_generalized_usd) * 100, 1)  AS part_temps,
-    ROUND(AVG(cost_wear_usd / cost_generalized_usd) * 100, 1)  AS part_usure
-  FROM aretes_couts
-")
-
-cat("✓ Coûts calculés via DuckDB SQL (4 CTEs chaînées)\n")
-cat("  Coût moyen/km :", stats_couts_sql$cout_par_km_moyen, "USD/km\n")
-cat("  Part carburant:", stats_couts_sql$part_carburant, "%\n")
-cat("  Part temps    :", stats_couts_sql$part_temps, "%\n")
-cat("  Part usure    :", stats_couts_sql$part_usure, "%\n\n")
-
-# ── Réintégration des coûts dans sfnetworks ───────────────────────────────────
-# Tri par arete_id pour garantir l'alignement ligne à ligne avec l'ordre des
-# arêtes dans le réseau. Sans ce tri, les coûts seraient affectés aux mauvaises arêtes.
-aretes_couts_ord <- aretes_couts %>% arrange(arete_id)
-
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    length_km            = aretes_couts_ord$length_km,
-    speed_kmh            = aretes_couts_ord$speed_kmh,
-    travel_time_h        = aretes_couts_ord$travel_time_h,
-    conso_L_per_100km    = aretes_couts_ord$conso_L_per_100km,
-    fuel_consumption_L   = aretes_couts_ord$fuel_consumption_L,
-    cost_fuel_usd        = aretes_couts_ord$cost_fuel_usd,
-    cost_wear_usd        = aretes_couts_ord$cost_wear_usd,
-    cost_time_usd        = aretes_couts_ord$cost_time_usd,
-    cost_generalized_usd = aretes_couts_ord$cost_generalized_usd,
-    cost_per_km          = aretes_couts_ord$cost_per_km
-  )
-
-# Recalcul des attributs manquants après les corrections topologiques de la Partie 5 BIS
-# (certaines arêtes créées lors du snapping/subdivision peuvent manquer de vitesse ou de coût)
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    # Si la vitesse est manquante ou nulle, imputer selon le type de route
-    speed_kmh = case_when(
-      !is.na(speed_kmh) & speed_kmh > 0 ~ speed_kmh,
-      road_type == "trunk"               ~ 60,
-      road_type == "primary"             ~ 60,
-      road_type == "secondary"           ~ 50,
-      road_type == "tertiary"            ~ 45,
-      TRUE                               ~ 30   # Valeur par défaut conservative
-    ),
-    # Si le coût est manquant, utiliser une formule simplifiée de secours
-    cost_generalized_usd = case_when(
-      !is.na(cost_generalized_usd) & cost_generalized_usd > 0 ~ cost_generalized_usd,
-      # Approximation : temps × valeur_temps + km × taux_usure_gravier
-      TRUE ~ travel_time_h * 7.5 + length_km * 0.08
-    )
-  )
-
-VITESSE_DEFAUT_KMH <- 30
-
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    # 1. Sécuriser length_km en premier (colonne source de tout le reste)
-    length_km = case_when(
-      is.na(length_km) | is.nan(length_km) | length_km <= 0 ~ longueur_m / 1000,
-      TRUE ~ length_km
-    ),
-    # Dernier recours si longueur_m est aussi invalide
-    length_km = case_when(
-      is.na(length_km) | is.nan(length_km) | length_km <= 0 ~ 0.1,
-      TRUE ~ length_km
-    ),
-    # 2. Sécuriser speed_kmh
-    speed_kmh = case_when(
-      is.na(speed_kmh) | is.nan(speed_kmh) | speed_kmh <= 0 ~ VITESSE_DEFAUT_KMH,
-      TRUE ~ speed_kmh
-    ),
-    # 3. Recalculer travel_time_h avec les valeurs sécurisées
-    travel_time_h = length_km / speed_kmh,
-    # 4. Recalculer cost_generalized_usd entièrement depuis les colonnes sécurisées
-    cost_generalized_usd = case_when(
-      is.na(cost_generalized_usd)  |
-        is.nan(cost_generalized_usd) |
-        is.infinite(cost_generalized_usd) |
-        cost_generalized_usd <= 0 ~
-        travel_time_h * PARAMS_ECONOMIQUES$valeur_temps +
-        length_km     * PARAMS_ECONOMIQUES$usure_gravel,
-      TRUE ~ cost_generalized_usd
-    )
-  )
-
-# Vérification exhaustive de toutes les colonnes critiques pour Dijkstra
+# ── Vérification finale des colonnes critiques pour Dijkstra ──────────────────
 aretes_check <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
 
-# Vérifie s'il n'y a pas de valeur NA, de valeur non numérique (nan = Not A Number) ou de valeur infinie
 verif <- tibble(
   colonne = c("length_km", "speed_kmh", "travel_time_h", "cost_generalized_usd"),
   n_na    = c(
