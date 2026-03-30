@@ -822,6 +822,10 @@ cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% 
 
 cat("=== PARTIE 6 BIS : Diagnostic des arêtes hors composante géante ===\n")
 
+# Vérifier les colonnes disponibles dans rwanda_provinces
+cat("Colonnes de rwanda_provinces :\n")
+print(names(rwanda_provinces))
+
 # ── Récupérer les arêtes du réseau AVANT filtrage (reseau_lisse) ─────────────
 aretes_lisse <- reseau_lisse %>% activate("edges") %>% st_as_sf()
 noeuds_lisse <- reseau_lisse %>% activate("nodes") %>% st_as_sf()
@@ -916,15 +920,18 @@ cat("\n")
 # On spatialise les arêtes perdues et on les intersecte avec les provinces
 if (nrow(aretes_perdues) > 0 && nrow(rwanda_provinces) > 0) {
   
-  # Centroïde de chaque arête perdue pour l'intersection (plus rapide qu'une
-  # intersection complète ligne × polygone)
+  # Renommage AVANT la jointure pour éviter le conflit avec la colonne
+  # "name" des arêtes (nom de route OSM)
+  provinces_join <- rwanda_provinces %>%
+    select(nom_province = name)
+  
   centroides_perdues <- aretes_perdues %>%
     st_centroid(of_largest_polygon = FALSE) %>%
-    st_join(rwanda_provinces %>% select(name), join = st_within)
+    st_join(provinces_join, join = st_within)
   
   distrib_province <- centroides_perdues %>%
     st_drop_geometry() %>%
-    group_by(Province = name) %>%
+    group_by(Province = nom_province) %>%
     summarise(
       n_aretes    = n(),
       longueur_km = round(sum(longueur_m, na.rm = TRUE) / 1000, 1),
@@ -952,9 +959,6 @@ palette_road_type <- c(
 
 carte_aretes_perdues <- fond_carte() +
   
-  # Réseau principal (composante géante) en gris clair pour le contexte
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col = "#CCCCCC", lwd = 0.4, col_alpha = 0.6) +
   
   # Arêtes perdues colorées par type de route
   tm_shape(aretes_perdues) +
@@ -962,12 +966,12 @@ carte_aretes_perdues <- fond_carte() +
     col       = "road_type",
     col.scale = tm_scale(values = palette_road_type),
     col.legend = tm_legend(title = "Type de route\n(arêtes perdues)"),
-    lwd = 1.8
+    lwd = 3
   ) +
   
   # Nœuds hors géante (points rouges) pour visualiser les isolats
   tm_shape(noeuds_hors_geante) +
-  tm_dots(fill = "#CC0000", size = 0.08, fill_alpha = 0.5) +
+  tm_dots(fill = "#CC0000", size = 0.2, fill_alpha = 0.5) +
   
   tm_title("Arêtes exclues de la composante géante\n(~8% du réseau — Partie 6)") +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
@@ -1257,7 +1261,7 @@ duck_query("
       f.facteur_conso_pente,
       f.prix_carburant,
       f.valeur_temps,
-      -- Facteur surface et coût d'usure : résolu ici par CASE pour éviter
+      -- Facteur surface et coût d'usure : résolu ici par CASE (fonction si-alors-sinon) pour éviter
       -- une jointure supplémentaire (params_surface n'est plus une table séparée)
       CASE a.surface
         WHEN 'paved'   THEN f.facteur_paved
@@ -1279,8 +1283,10 @@ duck_query("
   avec_vitesse AS (
     SELECT
       ax.*,
-      COALESCE(v.vitesse_kmh, 30) AS vitesse_base
+      COALESCE(v.vitesse_kmh, 30) AS vitesse_base -- COALESCE : remplace les valeurs NULL par 30
     FROM aretes_x_vehicules ax
+    -- Rajoût de la colonne vitesse en appariant en fonction de l'identifiant 
+    -- du véhicule, du type de route et de la surface
     LEFT JOIN vitesses_flotte v
       ON  ax.vehicule_id = v.vehicule_id
       AND ax.road_type   = v.road_type
@@ -1316,7 +1322,7 @@ duck_query("
   avec_couts AS (
     SELECT
       *,
-      longueur_m / 1000.0                                  AS length_km,
+      longueur_m / 1000.0                                 AS length_km,
       (longueur_m / 1000.0) / speed_kmh                   AS travel_time_h,
       (longueur_m / 1000.0) * (conso_L_per_100km / 100.0) AS fuel_consumption_L
     FROM avec_conso
@@ -1359,7 +1365,7 @@ stats_flotte <- duck_query("
   SELECT
     vehicule_id,
     vehicule_nom,
-    ROUND(AVG(cost_per_km), 3)                                 AS cout_par_km_moyen,
+    ROUND(AVG(cost_per_km), 3)                                AS cout_par_km_moyen,
     ROUND(AVG(cost_fuel_usd / cost_generalized_usd) * 100, 1) AS part_carburant_pct,
     ROUND(AVG(cost_time_usd / cost_generalized_usd) * 100, 1) AS part_temps_pct,
     ROUND(AVG(cost_wear_usd / cost_generalized_usd) * 100, 1) AS part_usure_pct
