@@ -201,6 +201,21 @@ facteurs_pente_df <- tribble(
 )
 duck_write(facteurs_pente_df, "facteurs_pente_flotte")
 
+# ── Table 4 : coûts de transbordement entre véhicules ────────────────────────
+# Coût fixe en USD pour transférer la cargaison d'un type de véhicule à un autre
+# dans un entrepôt (manutention, attente, administration).
+# Pour ajouter une combinaison : ajouter une ligne dans ce tribble.
+couts_transbordement_df <- tribble(
+  ~vehicule_origine,  ~vehicule_destination, ~cout_usd_fixe,
+  "camion_lourd",     "camion_moyen",         25.0,
+  "camion_lourd",     "camionnette",           40.0,
+  "camion_moyen",     "camion_lourd",          25.0,
+  "camion_moyen",     "camionnette",           15.0,
+  "camionnette",      "camion_moyen",          15.0,
+  "camionnette",      "camion_lourd",           40.0
+)
+duck_write(couts_transbordement_df, "couts_transbordement")
+
 # Véhicule de référence pour la matrice OD et le modèle gravitaire
 VEHICULE_REFERENCE   <- "camion_moyen"
 CONSO_PAR_METRE_D_PLUS <- 0.03
@@ -1161,6 +1176,128 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
 # ==============================================================================
+# PARTIE 7 BIS : GRAPHE MULTI-MODAL AVEC TRANSBORDEMENTS AUX ENTREPÔTS
+# ==============================================================================
+# Structure du graphe en couches :
+#
+#   Couche camionnette  : nœuds  1        →  N_noeuds
+#   Couche camion_moyen : nœuds  N+1      →  2×N_noeuds
+#   Couche camion_lourd : nœuds  2×N+1    →  3×N_noeuds
+#
+#   Arêtes intra-couche : routes normales avec coûts propres à chaque véhicule
+#   Arêtes inter-couches: transbordements aux entrepôts uniquement (coût fixe)
+#
+# Le Dijkstra sur ce graphe étendu trouve automatiquement la combinaison
+# optimale de véhicules pour chaque paire OD.
+
+cat("=== PARTIE 7 BIS : Construction du graphe multi-modal ===\n")
+
+# ── Paramètres de base ────────────────────────────────────────────────────────
+n_vehicules <- nrow(VEHICULES_IDS)
+graphe_base <- reseau_rwanda %>% as_tbl_graph()
+n_noeuds    <- igraph::vcount(graphe_base)
+
+# Fonction de remappage : nœud n dans la couche du véhicule v_idx
+# Ex : v_idx=2 (camion_moyen), n=150 → nœud 150 + N_noeuds dans le graphe étendu
+node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
+
+cat("  Nœuds de base :", n_noeuds, "\n")
+cat("  Véhicules     :", n_vehicules, "\n")
+cat("  Nœuds total   :", n_noeuds * n_vehicules, "\n\n")
+
+# ── Récupération des arêtes de base (from/to = indices igraph) ────────────────
+aretes_base_tbl <- reseau_rwanda %>%
+  activate("edges") %>%
+  as_tibble() %>%
+  mutate(arete_id = row_number())
+
+# ── 1. Arêtes intra-couche (routes, une couche par véhicule) ──────────────────
+edges_intra <- list()
+
+for (v_idx in seq_len(n_vehicules)) {
+  id_veh <- VEHICULES_IDS$vehicule_id[v_idx]
+  
+  # Coûts et attributs depuis DuckDB pour ce véhicule
+  couts_veh <- duck_query(glue::glue("
+    SELECT arete_id, cost_generalized_usd, length_km, travel_time_h
+    FROM aretes_couts_tous
+    WHERE vehicule_id = '{id_veh}'
+    ORDER BY arete_id
+  "))
+  
+  edges_intra[[v_idx]] <- tibble(
+    from          = node_multi(v_idx, aretes_base_tbl$from),
+    to            = node_multi(v_idx, aretes_base_tbl$to),
+    weight        = couts_veh$cost_generalized_usd,
+    length_km     = couts_veh$length_km,
+    travel_time_h = couts_veh$travel_time_h,
+    vehicule_id   = id_veh,
+    type          = "route"
+  ) %>%
+    filter(!is.na(weight), weight > 0)
+  
+  cat("  Couche", id_veh, ":", nrow(edges_intra[[v_idx]]), "arêtes\n")
+}
+
+# ── 2. Arêtes de transbordement aux entrepôts (inter-couches) ─────────────────
+# Uniquement aux nœuds d'entrepôt — pas de transbordement en bord de route
+couts_transb       <- duck_query("SELECT * FROM couts_transbordement")
+warehouse_nodes_base <- which(igraph::V(graphe_base)$is_warehouse)
+
+cat("\n  Entrepôts disponibles pour transbordement :",
+    length(warehouse_nodes_base), "\n")
+
+edges_transb <- list()
+k <- 0
+
+for (wh_node in warehouse_nodes_base) {
+  for (r in seq_len(nrow(couts_transb))) {
+    
+    v_orig <- match(couts_transb$vehicule_origine[r],     VEHICULES_IDS$vehicule_id)
+    v_dest <- match(couts_transb$vehicule_destination[r], VEHICULES_IDS$vehicule_id)
+    if (is.na(v_orig) || is.na(v_dest)) next
+    
+    k <- k + 1
+    edges_transb[[k]] <- tibble(
+      from          = node_multi(v_orig, wh_node),
+      to            = node_multi(v_dest, wh_node),
+      weight        = couts_transb$cout_usd_fixe[r],
+      length_km     = 0,    # Pas de distance physique au transbordement
+      travel_time_h = 0,    # Temps de manutention non modélisé ici
+      vehicule_id   = paste0(couts_transb$vehicule_origine[r],
+                             "->",
+                             couts_transb$vehicule_destination[r]),
+      type          = "transbordement"
+    )
+  }
+}
+
+cat("  Arêtes de transbordement créées :", k, "\n\n")
+
+# ── Assemblage du graphe multi-modal ──────────────────────────────────────────
+all_edges_mm <- bind_rows(c(edges_intra, edges_transb))
+
+# Table des nœuds : chaque nœud de base existe en N_vehicules exemplaires
+vertices_mm <- tibble(
+  name      = seq_len(n_noeuds * n_vehicules),
+  node_base = rep(seq_len(n_noeuds), n_vehicules),
+  vehicule  = rep(VEHICULES_IDS$vehicule_id, each = n_noeuds)
+)
+
+graphe_multimodal <- igraph::graph_from_data_frame(
+  all_edges_mm,
+  directed = FALSE,
+  vertices = vertices_mm
+)
+
+cat("✓ Graphe multi-modal construit\n")
+cat("  Nœuds  :", igraph::vcount(graphe_multimodal),
+    "(", n_noeuds, "×", n_vehicules, "couches)\n")
+cat("  Arêtes :", igraph::ecount(graphe_multimodal),
+    "dont", k, "transbordements\n\n")
+
+
+# ==============================================================================
 # PARTIE 8 : CALCUL DES PENTES POUR CHAQUE ARÊTE
 # ==============================================================================
 # La pente d'un segment routier influence à la fois la vitesse des véhicules
@@ -1712,66 +1849,95 @@ graphe_igraph      <- reseau_rwanda %>%
 # Indices igraph des nœuds d'entreposage (igraph indexe de 1 à N)
 warehouse_node_ids <- which(igraph::V(graphe_igraph)$is_warehouse)
 
-# ── Calcul des plus courts chemins par Dijkstra ────────────────────────────────
-# Pour chaque entrepôt i, calcul en batch vers tous les autres entrepôts j.
-# On accumule les résultats dans od_rows (liste → data.frame final).
+# ── Calcul des plus courts chemins multi-modaux par Dijkstra ──────────────────
+# Pour chaque paire d'entrepôts (i,j) :
+#   1. Tester tous les véhicules de départ possibles en i
+#   2. Tester tous les véhicules d'arrivée possibles en j
+#   3. Le chemin optimal dans le graphe multi-modal donne automatiquement
+#      la meilleure combinaison, y compris avec transbordements intermédiaires
+
 od_rows <- list()
 idx     <- 0
 
-for (i in seq_along(warehouse_node_ids)) {
-  # Calcul depuis i vers TOUS les entrepôts en une seule passe (plus efficace
-  # que d'appeler shortest_paths() pour chaque paire i→j individuellement)
-  # output = "both" : retourne les nœuds traversés (vpath) ET les arêtes (epath)
-  chemins   <- igraph::shortest_paths(
-    graphe_igraph,
-    from    = warehouse_node_ids[i],
-    to      = warehouse_node_ids,
-    weights = igraph::E(graphe_igraph)$cost_generalized_usd,
-    output  = "both"
-  )
-  edge_data <- igraph::edge_attr(graphe_igraph)  # Attributs de toutes les arêtes du graphe
+for (i in seq_along(warehouse_nodes_base)) {
   
-  for (j in seq_along(warehouse_node_ids)) {
-    if (i == j) next   # Pas d'auto-trajet
+  # Nœuds sources : entrepôt i dans CHAQUE couche véhicule
+  sources_i <- sapply(seq_len(n_vehicules),
+                      function(v) node_multi(v, warehouse_nodes_base[i]))
+  
+  for (j in seq_along(warehouse_nodes_base)) {
+    if (i == j) next
     
-    edges_path <- chemins$epath[[j]]   # Indices igraph des arêtes sur le chemin i→j
+    # Nœuds destinations : entrepôt j dans CHAQUE couche véhicule
+    targets_j <- sapply(seq_len(n_vehicules),
+                        function(v) node_multi(v, warehouse_nodes_base[j]))
     
-    if (length(edges_path) > 0) {   # Chemin trouvé (zones connectées)
-      idx <- idx + 1
-      od_rows[[idx]] <- list(
-        id_origine      = i,
-        id_destination  = j,
-        nom_origine     = noeuds_entreposage$warehouse_name[i],
-        nom_destination = noeuds_entreposage$warehouse_name[j],
-        # Somme des attributs sur toutes les arêtes du chemin optimal
-        cout_usd    = sum(edge_data$cost_generalized_usd[edges_path]),
-        distance_km = sum(edge_data$length_km[edges_path]),
-        temps_h     = sum(edge_data$travel_time_h[edges_path])
-      )
-    }
-    # Si edges_path est vide (length == 0) : zones non connectées → pas de ligne
+    # Matrice des coûts : N_vehicules × N_vehicules
+    # distances() calcule toutes les combinaisons en une seule passe
+    dists_matrix <- igraph::distances(
+      graphe_multimodal,
+      v       = sources_i,
+      to      = targets_j,
+      weights = igraph::E(graphe_multimodal)$weight
+    )
+    
+    min_cout <- min(dists_matrix, na.rm = TRUE)
+    if (is.infinite(min_cout)) next   # Zones non connectées
+    
+    # Identifier la meilleure combinaison de véhicules
+    best_idx  <- which(dists_matrix == min_cout, arr.ind = TRUE)[1, ]
+    best_from <- sources_i[best_idx[1]]
+    best_to   <- targets_j[best_idx[2]]
+    
+    # Récupérer le chemin réel pour distance et temps
+    path_obj   <- igraph::shortest_paths(
+      graphe_multimodal,
+      from    = best_from,
+      to      = best_to,
+      weights = igraph::E(graphe_multimodal)$weight,
+      output  = "epath"
+    )
+    edges_path <- path_obj$epath[[1]]
+    edge_data  <- igraph::edge_attr(graphe_multimodal)
+    
+    idx <- idx + 1
+    od_rows[[idx]] <- list(
+      id_origine        = i,
+      id_destination    = j,
+      nom_origine       = noeuds_entreposage$warehouse_name[i],
+      nom_destination   = noeuds_entreposage$warehouse_name[j],
+      cout_usd          = min_cout,
+      distance_km       = sum(edge_data$length_km[edges_path],     na.rm = TRUE),
+      temps_h           = sum(edge_data$travel_time_h[edges_path], na.rm = TRUE),
+      # Traçabilité : quel véhicule au départ et à l'arrivée ?
+      vehicule_depart   = VEHICULES_IDS$vehicule_id[best_idx[1]],
+      vehicule_arrivee  = VEHICULES_IDS$vehicule_id[best_idx[2]],
+      # Combien de transbordements sur le chemin optimal ?
+      n_transbordements = sum(edge_data$type[edges_path] == "transbordement")
+    )
   }
-  if (i %% 3 == 0) cat("  OD :", round(i/n_warehouses*100,1), "%\n")
+  if (i %% 3 == 0) cat("  OD multi-modal :", round(i/n_warehouses*100,1), "%\n")
 }
 
-# Stockage de la matrice OD en format long dans DuckDB
 od_long <- bind_rows(od_rows)
 duck_write(od_long, "matrice_od")
 
-# Statistiques OD agrégées en SQL
+# Statistiques enrichies incluant les transbordements
 od_stats <- duck_query("
   SELECT
-    COUNT(*)                    AS n_paires,
-    ROUND(AVG(cout_usd), 2)     AS cout_moyen_usd,
-    ROUND(AVG(distance_km), 1)  AS dist_moyenne_km,
-    ROUND(MAX(distance_km), 1)  AS dist_max_km
+    COUNT(*)                          AS n_paires,
+    ROUND(AVG(cout_usd), 2)           AS cout_moyen_usd,
+    ROUND(AVG(distance_km), 1)        AS dist_moyenne_km,
+    SUM(n_transbordements > 0)        AS paires_avec_transbordement,
+    ROUND(AVG(n_transbordements), 2)  AS transbordements_moyens
   FROM matrice_od
 ")
 
-cat("✓ Matrice OD stockée dans DuckDB (format long)\n")
-cat("  Paires connectées :", od_stats$n_paires, "\n")
-cat("  Coût moyen        :", od_stats$cout_moyen_usd, "USD\n")
-cat("  Distance moyenne  :", od_stats$dist_moyenne_km, "km\n\n")
+cat("✓ Matrice OD multi-modale stockée dans DuckDB\n")
+cat("  Paires connectées            :", od_stats$n_paires, "\n")
+cat("  Coût moyen                   :", od_stats$cout_moyen_usd, "USD\n")
+cat("  Paires avec transbordement   :", od_stats$paires_avec_transbordement, "\n")
+cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
 
 # ==============================================================================
