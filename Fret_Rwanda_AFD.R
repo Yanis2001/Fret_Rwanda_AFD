@@ -1565,6 +1565,51 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   cat("  ✓", nom_fichier, "\n")
 }
 
+tmap_mode("view")
+cartes_vehicules <- list()
+
+for (i in seq_len(nrow(VEHICULES_IDS))) {
+  id_veh  <- VEHICULES_IDS$vehicule_id[i]
+  nom_veh <- VEHICULES_IDS$nom[i]
+  cat(id_veh, "\n")
+  cat(nom_veh, "\n")
+  
+  couts_veh <- duck_query(glue::glue("
+    SELECT arete_id, cost_per_km, cost_generalized_usd, speed_kmh
+    FROM aretes_couts_tous
+    WHERE vehicule_id = '{id_veh}'
+    ORDER BY arete_id
+  "))
+  cat("Lignes récupérées :", nrow(couts_veh), "\n")
+  
+  reseau_tmp <- reseau_rwanda %>%
+    activate("edges") %>%
+    mutate(
+      cost_per_km          = couts_veh$cost_per_km,
+      cost_generalized_usd = couts_veh$cost_generalized_usd,
+      speed_kmh            = couts_veh$speed_kmh
+    )
+  cat("reseau_tmp créé\n")
+  
+  cartes_vehicules[[id_veh]] <- fond_carte() +
+    tm_shape(reseau_tmp %>% activate("edges") %>% st_as_sf()) +
+    tm_lines(
+      col        = "cost_per_km",
+      col.scale  = tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
+      col.legend = tm_legend(title = "Coût (USD/km)"),
+      lwd = 1.5
+    ) +
+    tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
+    tm_title(paste("Coûts de Transport —", nom_veh))
+}
+
+cat("✓ Cartes créées :", paste(names(cartes_vehicules), collapse=", "), "\n")
+cat("  Pour afficher, entrer dans la console : print(cartes_vehicules[['camionnette']])\n")
+cat("                                          print(cartes_vehicules[['camion_moyen']])\n")
+cat("                                          print(cartes_vehicules[['camion_lourd']])\n")
+tmap_mode("plot")
+
+
 # ── Carte comparative : ratio coût par km camion lourd vs camionnette ─────────
 # Requête SQL directe : le calcul du ratio se fait entièrement dans DuckDB
 ratio_df <- duck_query("
@@ -1604,6 +1649,10 @@ if (nrow(ratio_df) > 0) {
 
 cat("✓", nrow(VEHICULES_IDS), "cartes + 1 carte comparative générées\n\n")
 
+tmap_mode("view")
+print(carte_ratio)
+tmap_mode("plot")
+
 # ── Carte des pentes (indépendante du véhicule) ───────────────────────────────
 carte_pentes <- fond_carte() +
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
@@ -1622,7 +1671,6 @@ cat("  ✓ carte_pentes_rwanda.png\n")
 
 tmap_mode("view")
 print(carte_pentes)
-print(carte_ratio)
 tmap_mode("plot")
 
 
