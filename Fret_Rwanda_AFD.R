@@ -1524,7 +1524,7 @@ duck_query("
       + length_km * usure_usd_km
       + (length_km / speed_kmh) * valeur_temps)
       / NULLIF(length_km, 0)
-      / f.capacite_tonnes                         AS cost_per_tkm
+      / NULLIF(capacite_tonnes, 0)               AS cost_per_tkm
   FROM avec_couts
 ")
 
@@ -1533,13 +1533,13 @@ stats_flotte <- duck_query("
   SELECT
     vehicule_id,
     vehicule_nom,
-    ROUND(AVG(cost_per_km), 3)                                AS cout_par_km_moyen,
+    ROUND(AVG(cost_per_tkm), 3)                                AS cout_par_tkm_moyen,
     ROUND(AVG(cost_fuel_usd / cost_generalized_usd) * 100, 1) AS part_carburant_pct,
     ROUND(AVG(cost_time_usd / cost_generalized_usd) * 100, 1) AS part_temps_pct,
     ROUND(AVG(cost_wear_usd / cost_generalized_usd) * 100, 1) AS part_usure_pct
   FROM aretes_couts_tous
   GROUP BY vehicule_id, vehicule_nom
-  ORDER BY cout_par_km_moyen
+  ORDER BY cout_par_tkm_moyen
 ")
 print(stats_flotte)
 
@@ -1671,7 +1671,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   
   # Récupérer les coûts depuis DuckDB (une requête SQL, pas de R intermédiaire)
   couts_veh <- duck_query(glue::glue("
-    SELECT arete_id, cost_per_km, cost_generalized_usd, speed_kmh
+    SELECT arete_id, cost_per_tkm, cost_generalized_usd, speed_kmh
     FROM aretes_couts_tous
     WHERE vehicule_id = '{id_veh}'
     ORDER BY arete_id
@@ -1680,7 +1680,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   reseau_tmp <- reseau_rwanda %>%
     activate("edges") %>%
     mutate(
-      cost_per_km          = couts_veh$cost_per_km,
+      cost_per_tkm          = couts_veh$cost_per_tkm,
       cost_generalized_usd = couts_veh$cost_generalized_usd,
       speed_kmh            = couts_veh$speed_kmh
     )
@@ -1714,7 +1714,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   cat(nom_veh, "\n")
   
   couts_veh <- duck_query(glue::glue("
-    SELECT arete_id, cost_per_km, cost_generalized_usd, speed_kmh
+    SELECT arete_id, cost_per_tkm, cost_generalized_usd, speed_kmh
     FROM aretes_couts_tous
     WHERE vehicule_id = '{id_veh}'
     ORDER BY arete_id
@@ -1724,7 +1724,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   reseau_tmp <- reseau_rwanda %>%
     activate("edges") %>%
     mutate(
-      cost_per_km          = couts_veh$cost_per_km,
+      cost_per_tkm          = couts_veh$cost_per_tkm,
       cost_generalized_usd = couts_veh$cost_generalized_usd,
       speed_kmh            = couts_veh$speed_kmh
     )
@@ -1733,7 +1733,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   cartes_vehicules[[id_veh]] <- fond_carte() +
     tm_shape(reseau_tmp %>% activate("edges") %>% st_as_sf()) +
     tm_lines(
-      col        = "cost_per_km",
+      col        = "cost_per_tkm",
       col.scale  = tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
       col.legend = tm_legend(title = "Coût (USD/km)"),
       lwd = 1.5
@@ -1754,11 +1754,11 @@ tmap_mode("plot")
 ratio_df <- duck_query("
   SELECT
     a.arete_id,
-    a.cost_per_km / NULLIF(b.cost_per_km, 0) AS ratio_lourd_vs_legere
+    a.cost_per_tkm / NULLIF(b.cost_per_tkm, 0) AS ratio_lourd_vs_legere
   FROM
-    (SELECT arete_id, cost_per_km FROM aretes_couts_tous WHERE vehicule_id = 'camion_lourd')  a
+    (SELECT arete_id, cost_per_tkm FROM aretes_couts_tous WHERE vehicule_id = 'camion_lourd')  a
   JOIN
-    (SELECT arete_id, cost_per_km FROM aretes_couts_tous WHERE vehicule_id = 'camionnette') b
+    (SELECT arete_id, cost_per_tkm FROM aretes_couts_tous WHERE vehicule_id = 'camionnette') b
   USING (arete_id)
   ORDER BY arete_id
 ")
@@ -2326,9 +2326,9 @@ for (s in SECTEURS) {
   
   # Calibration : normalisation pour respecter les totaux
   if (sum(flux_brut) > 0) {
-    # Calibration proportionnelle (méthode IPF simplifiée, 1 itération)
-    facteur_k <- (sum(O_s) * sum(D_s)) / (sum(flux_brut)^2 / sum(flux_brut))
-    flux_calibre <- flux_brut * sqrt(facteur_k)
+    cible     <- sqrt(sum(O_s) * sum(D_s))
+    facteur_k <- cible / sum(flux_brut)
+    flux_calibre <- flux_brut * facteur_k
   } else {
     flux_calibre <- flux_brut
   }
