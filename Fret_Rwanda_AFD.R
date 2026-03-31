@@ -132,10 +132,10 @@ duck_query <- function(sql) dbGetQuery(con, sql)
 
 # ── Table 1 : paramètres scalaires par véhicule ──────────────────────────────
 params_flotte_df <- tribble(
-  ~vehicule_id,    ~nom,                      ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved,
-  "camionnette",   "Camionnette (<3.5t)",      10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,
-  "camion_moyen",  "Camion moyen (5-10t)",     20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,
-  "camion_lourd",  "Camion lourd (>10t)",      35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes,
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0
 )
 duck_write(params_flotte_df, "params_flotte")
 
@@ -1288,6 +1288,7 @@ duck_query("
       f.facteur_conso_pente,
       f.prix_carburant,
       f.valeur_temps,
+      f.capacite_tonnes,
       -- Facteur surface et coût d'usure : résolu ici par CASE (fonction si-alors-sinon) pour éviter
       -- une jointure supplémentaire (params_surface n'est plus une table séparée)
       CASE a.surface
@@ -1385,7 +1386,8 @@ duck_query("
     (fuel_consumption_L * prix_carburant
       + length_km * usure_usd_km
       + (length_km / speed_kmh) * valeur_temps)
-      / NULLIF(length_km, 0)                        AS cost_per_km
+      / NULLIF(length_km, 0)
+      / f.capacite_tonnes                         AS cost_per_tkm
   FROM avec_couts
 ")
 
@@ -1431,7 +1433,7 @@ reseau_rwanda <- reseau_rwanda %>%
     cost_wear_usd        = aretes_ref$cost_wear_usd,
     cost_time_usd        = aretes_ref$cost_time_usd,
     cost_generalized_usd = aretes_ref$cost_generalized_usd,
-    cost_per_km          = aretes_ref$cost_per_km
+    cost_per_tkm         = aretes_ref$cost_per_tkm
   )
 
 cat("✓ Table aretes_couts_tous créée dans DuckDB\n")
@@ -1549,9 +1551,9 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   carte <- fond_carte() +
     tm_shape(reseau_tmp %>% activate("edges") %>% st_as_sf()) +
     tm_lines(
-      col       = "cost_per_km",
+      col       = "cost_per_tkm",
       col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
-      col.legend = tm_legend(title = "Coût (USD/km)"),
+      col.legend = tm_legend(title = "Coût (USD/tkm)"),
       lwd = 1.5
     ) +
     tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
@@ -1789,7 +1791,7 @@ aretes_finales <- reseau_rwanda %>%
   st_as_sf() %>%
   select(osm_id, name, road_type, surface, length_km, slope_mean,
          elevation_gain, elevation_loss, speed_kmh, fuel_consumption_L,
-         cost_fuel_usd, cost_wear_usd, cost_time_usd, cost_generalized_usd, cost_per_km)
+         cost_fuel_usd, cost_wear_usd, cost_time_usd, cost_generalized_usd, cost_per_tkm)
 
 duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 
