@@ -1041,70 +1041,6 @@ cat("✓ Réseau corrigé —",
     igraph::vcount(reseau_rwanda), "nœuds,",
     igraph::ecount(reseau_rwanda), "arêtes\n\n")
 
-# ── Diagnostic approfondi ─────────────────────────────────────────────────────
-
-aretes_diag <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
-
-cat("=== Diagnostic désalignement indices ===\n\n")
-
-# 1. Nombre d'arêtes dans le réseau vs dans DuckDB
-n_reseau <- nrow(aretes_diag)
-n_duckdb <- duck_query(glue::glue(
-  "SELECT COUNT(*) AS n FROM aretes_couts_tous WHERE vehicule_id = '{VEHICULE_REFERENCE}'"
-))$n
-
-cat("Arêtes dans reseau_rwanda :", n_reseau, "\n")
-cat("Arêtes dans DuckDB        :", n_duckdb, "\n")
-cat("Écart                     :", n_duckdb - n_reseau, "\n\n")
-
-# 2. Longueur brute depuis la géométrie vs longueur_m stockée
-aretes_diag <- aretes_diag %>%
-  mutate(
-    longueur_geom   = as.numeric(st_length(geometry)),
-    longueur_stored = longueur_m,
-    ecart           = abs(longueur_geom - longueur_stored)
-  )
-
-cat("longueur_m = 0 ou NA (stockée)  :", 
-    sum(is.na(aretes_diag$longueur_stored) | aretes_diag$longueur_stored == 0), "\n")
-cat("longueur_geom = 0 ou NA (géométrie):", 
-    sum(is.na(aretes_diag$longueur_geom)  | aretes_diag$longueur_geom  == 0), "\n\n")
-
-# 3. Vérifier si length_km dans reseau_rwanda correspond à longueur_m / 1000
-cat("length_km NA dans reseau_rwanda  :", 
-    sum(is.na(aretes_diag$length_km)), "\n")
-cat("cost_generalized_usd NA          :", 
-    sum(is.na(aretes_diag$cost_generalized_usd)), "\n\n")
-
-# 4. Chercher si aretes_base dans DuckDB a des longueur_m = 0
-zero_duckdb <- duck_query("
-  SELECT COUNT(*) AS n_zero, MIN(longueur_m) AS min_l, MAX(longueur_m) AS max_l
-  FROM aretes_base
-  WHERE longueur_m = 0 OR longueur_m IS NULL
-")
-cat("Arêtes longueur_m = 0 ou NULL dans aretes_base (DuckDB) :", zero_duckdb$n_zero, "\n")
-
-# 5. Vérifier si length_km = NA dans DuckDB correspond à longueur_m = 0
-na_duckdb <- duck_query(glue::glue("
-  SELECT COUNT(*) AS n_na, MIN(longueur_m) AS min_l, AVG(longueur_m) AS avg_l
-  FROM aretes_couts_tous
-  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
-    AND length_km IS NULL
-"))
-cat("Arêtes length_km NULL dans DuckDB :", na_duckdb$n_na, "\n")
-cat("  longueur_m min sur ces arêtes   :", na_duckdb$min_l, "\n")
-cat("  longueur_m moy sur ces arêtes   :", round(na_duckdb$avg_l, 4), "\n\n")
-
-# 6. Vérifier l'alignement arete_id
-arete_ids_duckdb <- duck_query(glue::glue("
-  SELECT arete_id FROM aretes_couts_tous
-  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
-  ORDER BY arete_id
-"))
-cat("arete_id max dans DuckDB :", max(arete_ids_duckdb$arete_id), "\n")
-cat("Nb arêtes réseau         :", n_reseau, "\n")
-cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\n")
-
 
 # ── Diagnostic complet de la fragmentation ───────────────────────────────────
 
@@ -1518,6 +1454,71 @@ verif <- tibble(
 print(verif)
 cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
 
+# ── Diagnostic approfondi ─────────────────────────────────────────────────────
+
+aretes_diag <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+
+cat("=== Diagnostic désalignement indices ===\n\n")
+
+# 1. Nombre d'arêtes dans le réseau vs dans DuckDB
+n_reseau <- nrow(aretes_diag)
+n_duckdb <- duck_query(glue::glue(
+  "SELECT COUNT(*) AS n FROM aretes_couts_tous WHERE vehicule_id = '{VEHICULE_REFERENCE}'"
+))$n
+
+cat("Arêtes dans reseau_rwanda :", n_reseau, "\n")
+cat("Arêtes dans DuckDB        :", n_duckdb, "\n")
+cat("Écart                     :", n_duckdb - n_reseau, "\n\n")
+
+# 2. Longueur brute depuis la géométrie vs longueur_m stockée
+aretes_diag <- aretes_diag %>%
+  mutate(
+    longueur_geom   = as.numeric(st_length(geometry)),
+    longueur_stored = longueur_m,
+    ecart           = abs(longueur_geom - longueur_stored)
+  )
+
+cat("longueur_m = 0 ou NA (stockée)  :", 
+    sum(is.na(aretes_diag$longueur_stored) | aretes_diag$longueur_stored == 0), "\n")
+cat("longueur_geom = 0 ou NA (géométrie):", 
+    sum(is.na(aretes_diag$longueur_geom)  | aretes_diag$longueur_geom  == 0), "\n\n")
+
+# 3. Vérifier si length_km dans reseau_rwanda correspond à longueur_m / 1000
+cat("length_km NA dans reseau_rwanda  :", 
+    sum(is.na(aretes_diag$length_km)), "\n")
+cat("cost_generalized_usd NA          :", 
+    sum(is.na(aretes_diag$cost_generalized_usd)), "\n\n")
+
+# 4. Chercher si aretes_base dans DuckDB a des longueur_m = 0
+zero_duckdb <- duck_query("
+  SELECT COUNT(*) AS n_zero, MIN(longueur_m) AS min_l, MAX(longueur_m) AS max_l
+  FROM aretes_base
+  WHERE longueur_m = 0 OR longueur_m IS NULL
+")
+cat("Arêtes longueur_m = 0 ou NULL dans aretes_base (DuckDB) :", zero_duckdb$n_zero, "\n")
+
+# 5. Vérifier si length_km = NA dans DuckDB correspond à longueur_m = 0
+na_duckdb <- duck_query(glue::glue("
+  SELECT COUNT(*) AS n_na, MIN(longueur_m) AS min_l, AVG(longueur_m) AS avg_l
+  FROM aretes_couts_tous
+  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
+    AND length_km IS NULL
+"))
+cat("Arêtes length_km NULL dans DuckDB :", na_duckdb$n_na, "\n")
+cat("  longueur_m min sur ces arêtes   :", na_duckdb$min_l, "\n")
+cat("  longueur_m moy sur ces arêtes   :", round(na_duckdb$avg_l, 4), "\n\n")
+
+# 6. Vérifier l'alignement arete_id
+arete_ids_duckdb <- duck_query(glue::glue("
+  SELECT arete_id FROM aretes_couts_tous
+  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
+  ORDER BY arete_id
+"))
+cat("arete_id max dans DuckDB :", max(arete_ids_duckdb$arete_id), "\n")
+cat("Nb arêtes réseau         :", n_reseau, "\n")
+cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\n")
+
+
 # ==============================================================================
 # PARTIE 10 : CARTES PAR VÉHICULE — PILOTÉES PAR LA TABLE params_flotte
 # ==============================================================================
@@ -1603,31 +1604,7 @@ if (nrow(ratio_df) > 0) {
 
 cat("✓", nrow(VEHICULES_IDS), "cartes + 1 carte comparative générées\n\n")
 
-# ==============================================================================
-# PARTIE 10 : VISUALISATIONS CARTOGRAPHIQUES (tmap)
-# ==============================================================================
-
-cat("=== PARTIE 10 : Visualisations ===\n")
-
-
-# ── Carte 2 : Coûts généralisés par km ───────────────────────────────────────
-# Les tronçons les plus chers (rouge foncé) combinent pente forte + surface dégradée.
-# Utile pour identifier les goulets d'étranglement logistiques.
-carte_couts <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col="cost_per_km",
-           col.scale=tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
-           col.legend=tm_legend(title="Coût (USD/km)"), lwd=1.5) +
-  tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
-  tm_title("Coûts de Transport Généralisés par km") +
-  tm_layout(legend.outside=TRUE, frame=TRUE) +
-  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
-tmap_save(carte_couts, file.path(DIR_OUTPUT,"carte_couts_rwanda.png"),
-          width=3000, height=2400, dpi=300)
-
-# ── Carte 3 : Catégories de pente ─────────────────────────────────────────────
-# Le Rwanda est surnommé "le pays des mille collines" : les pentes fortes y sont très
-# fréquentes, notamment dans les préfectures du nord et de l'ouest.
+# ── Carte des pentes (indépendante du véhicule) ───────────────────────────────
 carte_pentes <- fond_carte() +
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col="slope_category",
@@ -1636,15 +1613,16 @@ carte_pentes <- fond_carte() +
            col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
   tm_title("Pentes du Réseau Routier") +
   tm_layout(legend.outside=TRUE, frame=TRUE) +
-  tm_scalebar(position=c("left","bottom")) + tm_compass(position=c("right","top"))
+  tm_scalebar(position=c("left","bottom")) +
+  tm_compass(position=c("right","top"))
+
 tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
           width=3000, height=2400, dpi=300)
-
-cat("✓ 2 cartes générées\n\n")
+cat("  ✓ carte_pentes_rwanda.png\n")
 
 tmap_mode("view")
-print(carte_couts) 
 print(carte_pentes)
+print(carte_ratio)
 tmap_mode("plot")
 
 
