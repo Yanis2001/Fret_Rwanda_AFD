@@ -71,7 +71,7 @@ invisible(lapply(packages_requis, library, character.only = TRUE))
 # Augmenter le timeout global pour les téléchargements de gros fichiers (DEM, PBF)
 options(timeout = 600)
 
-# Graine aléatoire pour la reproductibilité des données fictives générées en Partie 17
+# Graine aléatoire pour la reproductibilité des données fictives générées 
 set.seed(123)
 
 cat("✓ Tous les packages sont chargés\n\n")
@@ -1198,9 +1198,10 @@ if (nrow(noeuds_sf) == 0) {
 cat("=== PARTIE 9 BIS : Zones d'usage du sol ===\n")
 
 # ── Chargement des zones résidentielles et commerciales (pénalité poids lourds) ──
+# ── Chargement des zones résidentielles et commerciales ──
 zones_urbaines <- st_read(
   chemin_pbf, layer = "multipolygons",
-  query = "SELECT landuse FROM multipolygons
+  query = "SELECT landuse, _ogr_geometry_ FROM multipolygons
            WHERE landuse IN ('residential','commercial','retail')",
   quiet = TRUE
 ) %>%
@@ -1210,13 +1211,10 @@ zones_urbaines <- st_read(
   filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
   st_transform(crs = 32735)
 
-cat("  Zones urbaines (résidentiel + commercial + retail) :",
-    nrow(zones_urbaines), "\n")
-
-# ── Chargement des zones industrielles (origines de fret) ─────────────────────
+# ── Chargement des zones industrielles ──
 zones_industrielles <- st_read(
   chemin_pbf, layer = "multipolygons",
-  query = "SELECT landuse FROM multipolygons
+  query = "SELECT landuse, _ogr_geometry_ FROM multipolygons
            WHERE landuse = 'industrial'",
   quiet = TRUE
 ) %>%
@@ -1226,14 +1224,12 @@ zones_industrielles <- st_read(
   filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
   st_transform(crs = 32735) %>%
   mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
-  filter(aire_km2 > 0.01)   # Supprimer les micro-zones
+  filter(aire_km2 > 0.01)
 
-cat("  Zones industrielles :", nrow(zones_industrielles), "\n")
-
-# ── Chargement des zones retail (destinations commerciales) ───────────────────
+# ── Chargement des zones retail ──
 zones_retail <- st_read(
   chemin_pbf, layer = "multipolygons",
-  query = "SELECT landuse FROM multipolygons
+  query = "SELECT landuse, _ogr_geometry_ FROM multipolygons
            WHERE landuse = 'retail'",
   quiet = TRUE
 ) %>%
