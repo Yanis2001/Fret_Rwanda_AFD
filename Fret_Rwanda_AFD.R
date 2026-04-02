@@ -118,6 +118,68 @@ duck_write <- function(df, table_name) {
 # Exécute une requête SQL et retourne le résultat sous forme de data.frame R.
 duck_query <- function(sql) dbGetQuery(con, sql)
 
+# ==============================================================================
+# PALETTES DE COULEURS — DÉFINITION CENTRALISÉE
+# ==============================================================================
+# Toutes les couleurs utilisées dans les cartes sont définies ici.
+# Pour modifier une couleur : changer uniquement ce bloc.
+# Format : vecteur nommé (nom de catégorie = code couleur hexadécimal)
+
+# ── Types de routes ───────────────────────────────────────────────────────────
+PALETTE_ROAD_TYPE <- c(
+  motorway     = "#E41A1C",   # Rouge vif    — autoroute
+  trunk        = "#FF4400",   # Rouge-orange — route nationale principale
+  primary      = "#FF7F00",   # Orange       — route primaire
+  secondary    = "#E8A000",   # Jaune-ocre   — route secondaire
+  tertiary     = "#999999",   # Gris moyen   — route tertiaire
+  unclassified = "#CCCCCC"    # Gris clair   — route non classée
+)
+
+# ── Catégories de pente ───────────────────────────────────────────────────────
+PALETTE_PENTE <- c(
+  plat    = "#00AA00",   # Vert foncé  — pente < 2%
+  legere  = "#AACC00",   # Vert-jaune  — pente 2-5%
+  moderee = "#FF9900",   # Orange      — pente 5-8%
+  forte   = "#FF0000"    # Rouge       — pente > 8%
+)
+
+# ── Types de zones (entrepôts) ────────────────────────────────────────────────
+PALETTE_ZONE_TYPE <- c(
+  hub       = "#000000",   # Noir        — hub central
+  sez       = "#0055FF",   # Bleu vif    — zone économique spéciale
+  marche    = "#00AA00",   # Vert        — marché
+  frontiere = "#FF0000",   # Rouge       — poste frontière
+  ville     = "#880088",   # Violet      — ville
+  industrie = "#FF6600"    # Orange foncé— zone industrielle
+)
+
+# ── Coûts généralisés (gradient jaune pâle → bordeaux) ───────────────────────
+PALETTE_COUTS <- c("#FFF7BC", "#FEC44F", "#D94701", "#7F0000")
+# Lecture : faible coût = jaune pâle, coût élevé = bordeaux
+
+# ── Ratio de coût entre véhicules (gradient rouge → jaune → vert) ────────────
+# Rouge = le poids lourd coûte beaucoup plus ; vert = coûts similaires
+PALETTE_RATIO <- c("#D73027", "#FC8D59", "#FEE090", "#91CF60", "#1A9850")
+
+# ── Volume de trafic fret (gradient bleu clair → violet) ─────────────────────
+PALETTE_FRET <- c("#CCE5FF", "#6BAED6", "#2171B5", "#6A0DAD")
+# Lecture : faible trafic = bleu clair, trafic intense = violet
+
+# ── Flux commerciaux OD (gradient bleu) ──────────────────────────────────────
+PALETTE_FLUX_OD <- c("#EFF3FF", "#BDD7E7", "#6BAED6", "#2171B5", "#084594")
+
+# ── Catégories de trafic (pour légendes textuelles) ──────────────────────────
+PALETTE_CLASSE_TRAFIC <- c(
+  "Aucun"       = "#F0F0F0",   # Gris très clair
+  "Très faible" = "#CCE5FF",   # Bleu très clair
+  "Faible"      = "#6BAED6",   # Bleu moyen
+  "Moyen"       = "#2171B5",   # Bleu foncé
+  "Élevé"       = "#54278F",   # Violet foncé
+  "Très élevé"  = "#6A0DAD"    # Violet intense
+)
+
+cat("✓ Palettes de couleurs définies\n\n")
+
 
 # ==============================================================================
 # PARTIE 1 : DÉFINITION DE LA FLOTTE — TABLES DUCKDB
@@ -606,14 +668,7 @@ carte_verif_routes <- fond_carte() +
   tm_shape(routes_rwanda) +
   tm_lines(
     col       = "road_type",
-    col.scale = tm_scale(values = c(
-      motorway     = "#E41A1C",
-      trunk        = "#FF4400",
-      primary      = "#FF7F00",
-      secondary    = "#E8A000",
-      tertiary     = "#999999",
-      unclassified = "#CCCCCC"
-    )),
+    col.scale = tm_scale(values = PALETTE_ROAD_TYPE),
     col.legend = tm_legend(title = "Type de route"),
     lwd = 1.2
   ) +
@@ -1008,14 +1063,6 @@ if (nrow(aretes_perdues) > 0 && nrow(rwanda_provinces) > 0) {
 cat("Génération de la carte des arêtes perdues...\n")
 
 # Palette par type de route (cohérente avec la carte de vérification Partie 3)
-palette_road_type <- c(
-  motorway     = "#E41A1C",
-  trunk        = "#FF4400",
-  primary      = "#FF7F00",
-  secondary    = "#E8A000",
-  tertiary     = "#999999",
-  unclassified = "#CCCCCC"
-)
 
 carte_aretes_perdues <- fond_carte() +
   
@@ -1024,7 +1071,7 @@ carte_aretes_perdues <- fond_carte() +
   tm_shape(aretes_perdues) +
   tm_lines(
     col       = "road_type",
-    col.scale = tm_scale(values = palette_road_type),
+    col.scale = tm_scale(values = PALETTE_ROAD_TYPE),
     col.legend = tm_legend(title = "Type de route\n(arêtes perdues)"),
     lwd = 3
   ) +
@@ -1961,7 +2008,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     tm_shape(reseau_tmp %>% activate("edges") %>% st_as_sf()) +
     tm_lines(
       col       = "cost_per_tkm",
-      col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
+      col.scale = tm_scale_intervals(style="quantile", n=4, values=PALETTE_COUTS),
       col.legend = tm_legend(title = "Coût (USD/tkm)"),
       lwd = 1.5
     ) +
@@ -2045,7 +2092,7 @@ if (nrow(ratio_df) > 0) {
     tm_shape(reseau_ratio %>% activate("edges") %>% st_as_sf()) +
     tm_lines(
       col       = "ratio_lourd_vs_legere",
-      col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.rd_yl_gn"),
+      col.scale = tm_scale_intervals(style="quantile", n=5, values=PALETTE_RATIO),
       col.legend = tm_legend(title="Ratio coût\nlourd / camionnette"),
       lwd = 1.5
     ) +
@@ -2114,8 +2161,7 @@ tmap_mode("plot")
 carte_pentes <- fond_carte() +
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col="slope_category",
-           col.scale=tm_scale(values=c(plat="#00AA00", legere="#AACC00",
-                                       moderee="#FF9900", forte="#FF0000")),
+           col.scale = tm_scale(values = PALETTE_PENTE),
            col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
   tm_title("Pentes du Réseau Routier") +
   tm_layout(legend.outside=TRUE, frame=TRUE) +
@@ -3004,9 +3050,7 @@ carte_fret <- fond_carte() +
   tm_shape(aretes_fret) +
   tm_lines(
     col = "volume_tonnes",
-    col.scale = tm_scale_continuous(  # continuous au lieu de intervals
-      values = "brewer.yl_or_rd"
-    ),
+    col.scale = tm_scale_intervals(style="quantile", n=4, values=PALETTE_FRET),
     col.legend = tm_legend(title = "Volume fret\n(tonnes)"),
     lwd = "lwd_val",
     lwd.scale = tm_scale(values.range = c(0.4, 5)),
@@ -3017,15 +3061,7 @@ carte_fret <- fond_carte() +
   tm_shape(coords_zones_sf) +
   tm_dots(
     fill = "warehouse_type",
-    fill.scale = tm_scale(
-      values = c(
-        "hub"       = "#000000",
-        "sez"       = "#0055FF",
-        "marche"    = "#00AA00",
-        "frontiere" = "#FF0000",
-        "ville"     = "#880088"
-      )
-    ),
+    fill.scale = tm_scale(values = PALETTE_ZONE_TYPE),
     fill.legend = tm_legend(title = "Type de zone"),
     size = "taille_point",
     size.scale = tm_scale(values.range = c(0.3, 1.8)),
@@ -3108,9 +3144,7 @@ if (k > 0) {
     tm_shape(desire_sf) +
     tm_lines(
       col = "flux_musd",
-      col.scale = tm_scale_continuous(  # continuous au lieu de intervals
-        values = "brewer.blues"
-      ),
+      col.scale = tm_scale_intervals(style="quantile", n=5, values=PALETTE_FLUX_OD),
       col.legend = tm_legend(title = "Flux commercial\n(M USD)"),
       lwd = "flux_log",
       lwd.scale = tm_scale(values.range = c(0.5, 5)),
@@ -3121,15 +3155,7 @@ if (k > 0) {
     tm_shape(coords_zones_sf) +
     tm_dots(
       fill = "warehouse_type",
-      fill.scale = tm_scale(
-        values = c(
-          "hub"       = "#000000",
-          "sez"       = "#0055FF",
-          "marche"    = "#00AA00",
-          "frontiere" = "#FF0000",
-          "ville"     = "#880088"
-        )
-      ),
+      fill.scale = tm_scale(values = PALETTE_ZONE_TYPE),
       fill.legend = tm_legend(title = "Type de zone"),
       size = 0.45
     ) +
