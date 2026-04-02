@@ -368,12 +368,12 @@ routes_rwanda <- routes_attrs_raw %>%
 cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
 
 # ==============================================================================
-# PARTIE 3 BIS : VÉRIFICATION VISUELLE + EXTRACTION DES COUCHES ADMINISTRATIVES
+# PARTIE 4 : VÉRIFICATION VISUELLE + EXTRACTION DES COUCHES ADMINISTRATIVES
 # ==============================================================================
 # On extrait ici toutes les couches géographiques de référence depuis le PBF
 # (frontière, provinces, lacs) 
 
-cat("=== PARTIE 3 BIS : Couches administratives + vérification visuelle ===\n")
+cat("=== PARTIE 4 : Couches administratives + vérification visuelle ===\n")
 
 # ── Frontière nationale (admin_level = 2) ─────────────────────────────────────
 rwanda_boundary <- st_read(
@@ -588,14 +588,14 @@ tmap_mode("plot")   # Remettre en mode statique pour la suite du script
 cat("✓ Carte de vérification générée\n\n")
 
 # ==============================================================================
-# PARTIE 4 : ACQUISITION DES DONNÉES D'ÉLÉVATION
+# PARTIE 5 : ACQUISITION DES DONNÉES D'ÉLÉVATION
 # ==============================================================================
 # Le DEM (Digital Elevation Model) est une grille de pixels où chaque valeur
 # représente l'altitude en mètres au-dessus du niveau de la mer.
 # Il sera utilisé pour calculer la pente de chaque segment routier
 # (ratio dénivelé/longueur × 100 = pourcentage de pente).
 
-cat("=== PARTIE 4 : Téléchargement des données d'élévation ===\n")
+cat("=== PARTIE 5 : Téléchargement des données d'élévation ===\n")
 
 # Créer l'emprise géographique à partir de la bbox des routes
 # pour ne télécharger que la zone d'intérêt (Rwanda uniquement)
@@ -670,14 +670,14 @@ plot(dem_rwanda, main = "DEM Rwanda — vérification")
 plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 
 # ==============================================================================
-# PARTIE 5 : CRÉATION DU GRAPHE ROUTIER AVEC SFNETWORKS
+# PARTIE 6 : CRÉATION DU GRAPHE ROUTIER AVEC SFNETWORKS
 # ==============================================================================
 # sfnetworks représente le réseau routier comme un graphe topologique où :
 #   - les NŒUDS sont les intersections et extrémités de routes
 #   - les ARÊTES sont les segments de route entre deux nœuds
 # Ce graphe servira ensuite à igraph pour le calcul de plus courts chemins.
 
-cat("=== PARTIE 5 : Création du graphe routier ===\n")
+cat("=== PARTIE 6 : Création du graphe routier ===\n")
 
 # ── Homogénéisation des types de géométrie ───────────────────────────────────
 # Le fichier PBF peut contenir des MULTILINESTRING (plusieurs lignes groupées)
@@ -697,7 +697,7 @@ cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
 
 
 # ==============================================================================
-# PARTIE 6 : CORRECTIONS TOPOLOGIQUES DU RÉSEAU
+# PARTIE 7 : CORRECTIONS TOPOLOGIQUES DU RÉSEAU
 # ==============================================================================
 # Les données OSM contiennent fréquemment des erreurs topologiques :
 #   1. Routes qui se croisent sans nœud d'intersection (pont raté, erreur de saisie)
@@ -705,7 +705,7 @@ cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
 # Ces erreurs créent des composantes connexes multiples (le réseau est "fragmenté")
 # et empêchent les algorithmes de plus court chemin de trouver des itinéraires.
 
-cat("=== PARTIE 6 : Corrections topologiques ===\n")
+cat("=== PARTIE 7 : Corrections topologiques ===\n")
 
 # ── Étape 1 : Subdivision aux intersections ───────────────────────────────────
 # to_spatial_subdivision() détecte les croisements de routes sans nœud commun
@@ -828,10 +828,10 @@ pct_noeuds          <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse
 cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
 
 # ==============================================================================
-# PARTIE 6 BIS : DIAGNOSTIC DES 8% D'ARÊTES PERDUES
+# PARTIE 8 : DIAGNOSTIC DES ARÊTES PERDUES
 # ==============================================================================
 
-cat("=== PARTIE 6 BIS : Diagnostic des arêtes hors composante géante ===\n")
+cat("=== PARTIE 8 : Diagnostic des arêtes hors composante géante ===\n")
 
 # Vérifier les colonnes disponibles dans rwanda_provinces
 cat("Colonnes de rwanda_provinces :\n")
@@ -985,14 +985,14 @@ carte_aretes_perdues <- fond_carte() +
   tm_shape(noeuds_hors_geante) +
   tm_dots(fill = "#CC0000", size = 0.2, fill_alpha = 0.5) +
   
-  tm_title("Arêtes exclues de la composante géante\n(~8% du réseau — Partie 6)") +
+  tm_title("Arêtes exclues de la composante géante\n(~8% du réseau — Partie 7)") +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
 
 tmap_save(
   carte_aretes_perdues,
-  file.path(DIR_OUTPUT, "carte_aretes_perdues_partie6.png"),
+  file.path(DIR_OUTPUT, "carte_aretes_perdues_partie7.png"),
   width = 3000, height = 2400, dpi = 300
 )
 
@@ -1003,7 +1003,7 @@ tmap_mode("plot")
 cat("✓ Carte des arêtes perdues sauvegardée\n\n")
 
 # ==============================================================================
-# PARTIE 6 TER : EXTRACTION DE LA COMPOSANTE GÉANTE
+# PARTIE 9 : EXTRACTION DE LA COMPOSANTE GÉANTE
 # ==============================================================================
 
 pb_geante <- progress_bar$new(
@@ -1037,7 +1037,7 @@ cat("  Arêtes avec longueur_m = 0 ou NA :", n_na_longueur, "(doit être 0)\n\n"
 
 # to_spatial_subdivision() crée des fragments de longueur nulle aux intersections
 # quand deux nœuds sont géométriquement confondus. On les élimine ici,
-# avant le calcul des pentes (Partie 8) et des coûts (Partie 9),
+# avant le calcul des pentes (Partie 11) et des coûts (Partie 12),
 # pour éviter toute propagation de NA en aval.
 n_avant_filtre <- igraph::ecount(reseau_rwanda)
 
@@ -1091,14 +1091,14 @@ if (nrow(noeuds_sf) == 0) {
 }
 
 # ==============================================================================
-# PARTIE 7 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
+# PARTIE 10 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
 # ==============================================================================
 # Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
 # Ils représentent des zones économiques importantes (hub, SEZ, frontières…).
 # ATTENTION : ces données sont fictives mais réalistes ; les coordonnées sont
 # approximatives. Remplacer par les vraies localisations si disponibles.
 
-cat("=== PARTIE 7 : Création des nœuds d'entreposage ===\n")
+cat("=== PARTIE 10 : Création des nœuds d'entreposage ===\n")
 
 entreposages_fictifs <- tibble(
   nom  = c(
@@ -1176,135 +1176,13 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
 # ==============================================================================
-# PARTIE 7 BIS : GRAPHE MULTI-MODAL AVEC TRANSBORDEMENTS AUX ENTREPÔTS
-# ==============================================================================
-# Structure du graphe en couches :
-#
-#   Couche camionnette  : nœuds  1        →  N_noeuds
-#   Couche camion_moyen : nœuds  N+1      →  2×N_noeuds
-#   Couche camion_lourd : nœuds  2×N+1    →  3×N_noeuds
-#
-#   Arêtes intra-couche : routes normales avec coûts propres à chaque véhicule
-#   Arêtes inter-couches: transbordements aux entrepôts uniquement (coût fixe)
-#
-# Le Dijkstra sur ce graphe étendu trouve automatiquement la combinaison
-# optimale de véhicules pour chaque paire OD.
-
-cat("=== PARTIE 7 BIS : Construction du graphe multi-modal ===\n")
-
-# ── Paramètres de base ────────────────────────────────────────────────────────
-n_vehicules <- nrow(VEHICULES_IDS)
-graphe_base <- reseau_rwanda %>% as_tbl_graph()
-n_noeuds    <- igraph::vcount(graphe_base)
-
-# Fonction de remappage : nœud n dans la couche du véhicule v_idx
-# Ex : v_idx=2 (camion_moyen), n=150 → nœud 150 + N_noeuds dans le graphe étendu
-node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
-
-cat("  Nœuds de base :", n_noeuds, "\n")
-cat("  Véhicules     :", n_vehicules, "\n")
-cat("  Nœuds total   :", n_noeuds * n_vehicules, "\n\n")
-
-# ── Récupération des arêtes de base (from/to = indices igraph) ────────────────
-aretes_base_tbl <- reseau_rwanda %>%
-  activate("edges") %>%
-  as_tibble() %>%
-  mutate(arete_id = row_number())
-
-# ── 1. Arêtes intra-couche (routes, une couche par véhicule) ──────────────────
-edges_intra <- list()
-
-for (v_idx in seq_len(n_vehicules)) {
-  id_veh <- VEHICULES_IDS$vehicule_id[v_idx]
-  
-  # Coûts et attributs depuis DuckDB pour ce véhicule
-  couts_veh <- duck_query(glue::glue("
-    SELECT arete_id, cost_generalized_usd, length_km, travel_time_h
-    FROM aretes_couts_tous
-    WHERE vehicule_id = '{id_veh}'
-    ORDER BY arete_id
-  "))
-  
-  edges_intra[[v_idx]] <- tibble(
-    from          = node_multi(v_idx, aretes_base_tbl$from),
-    to            = node_multi(v_idx, aretes_base_tbl$to),
-    weight        = couts_veh$cost_generalized_usd,
-    length_km     = couts_veh$length_km,
-    travel_time_h = couts_veh$travel_time_h,
-    vehicule_id   = id_veh,
-    type          = "route"
-  ) %>%
-    filter(!is.na(weight), weight > 0)
-  
-  cat("  Couche", id_veh, ":", nrow(edges_intra[[v_idx]]), "arêtes\n")
-}
-
-# ── 2. Arêtes de transbordement aux entrepôts (inter-couches) ─────────────────
-# Uniquement aux nœuds d'entrepôt — pas de transbordement en bord de route
-couts_transb       <- duck_query("SELECT * FROM couts_transbordement")
-warehouse_nodes_base <- which(igraph::V(graphe_base)$is_warehouse)
-
-cat("\n  Entrepôts disponibles pour transbordement :",
-    length(warehouse_nodes_base), "\n")
-
-edges_transb <- list()
-k <- 0
-
-for (wh_node in warehouse_nodes_base) {
-  for (r in seq_len(nrow(couts_transb))) {
-    
-    v_orig <- match(couts_transb$vehicule_origine[r],     VEHICULES_IDS$vehicule_id)
-    v_dest <- match(couts_transb$vehicule_destination[r], VEHICULES_IDS$vehicule_id)
-    if (is.na(v_orig) || is.na(v_dest)) next
-    
-    k <- k + 1
-    edges_transb[[k]] <- tibble(
-      from          = node_multi(v_orig, wh_node),
-      to            = node_multi(v_dest, wh_node),
-      weight        = couts_transb$cout_usd_fixe[r],
-      length_km     = 0,    # Pas de distance physique au transbordement
-      travel_time_h = 0,    # Temps de manutention non modélisé ici
-      vehicule_id   = paste0(couts_transb$vehicule_origine[r],
-                             "->",
-                             couts_transb$vehicule_destination[r]),
-      type          = "transbordement"
-    )
-  }
-}
-
-cat("  Arêtes de transbordement créées :", k, "\n\n")
-
-# ── Assemblage du graphe multi-modal ──────────────────────────────────────────
-all_edges_mm <- bind_rows(c(edges_intra, edges_transb))
-
-# Table des nœuds : chaque nœud de base existe en N_vehicules exemplaires
-vertices_mm <- tibble(
-  name      = seq_len(n_noeuds * n_vehicules),
-  node_base = rep(seq_len(n_noeuds), n_vehicules),
-  vehicule  = rep(VEHICULES_IDS$vehicule_id, each = n_noeuds)
-)
-
-graphe_multimodal <- igraph::graph_from_data_frame(
-  all_edges_mm,
-  directed = FALSE,
-  vertices = vertices_mm
-)
-
-cat("✓ Graphe multi-modal construit\n")
-cat("  Nœuds  :", igraph::vcount(graphe_multimodal),
-    "(", n_noeuds, "×", n_vehicules, "couches)\n")
-cat("  Arêtes :", igraph::ecount(graphe_multimodal),
-    "dont", k, "transbordements\n\n")
-
-
-# ==============================================================================
-# PARTIE 8 : CALCUL DES PENTES POUR CHAQUE ARÊTE
+# PARTIE 12 : CALCUL DES PENTES POUR CHAQUE ARÊTE
 # ==============================================================================
 # La pente d'un segment routier influence à la fois la vitesse des véhicules
 # et leur consommation de carburant. On la calcule en échantillonnant des points
 # le long de chaque arête et en extrayant leur altitude depuis le DEM.
 
-cat("=== PARTIE 8 : Calcul des pentes ===\n")
+cat("=== PARTIE 12 : Calcul des pentes ===\n")
 
 calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
   
@@ -1392,7 +1270,7 @@ reseau_rwanda <- reseau_rwanda %>%
 cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 
 # ==============================================================================
-# PARTIE 9 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
+# PARTIE 13 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
 # ==============================================================================
 # Formules appliquées :
 #   speed_kmh     = vitesse_base × facteur_pente
@@ -1402,7 +1280,7 @@ cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
 #   cost_total    = cost_fuel + cost_wear + cost_time  [coût généralisé]
 
-cat("=== PARTIE 9 : Coûts généralisés ===\n")
+cat("=== PARTIE 13 : Coûts généralisés ===\n")
 
 aretes_df <- reseau_rwanda %>%
   activate("edges") %>% st_as_sf() %>% st_drop_geometry() %>%
@@ -1657,12 +1535,133 @@ cat("arete_id max dans DuckDB :", max(arete_ids_duckdb$arete_id), "\n")
 cat("Nb arêtes réseau         :", n_reseau, "\n")
 cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\n")
 
+# ==============================================================================
+# PARTIE 11 : GRAPHE MULTI-MODAL AVEC TRANSBORDEMENTS AUX ENTREPÔTS
+# ==============================================================================
+# Structure du graphe en couches :
+#
+#   Couche camionnette  : nœuds  1        →  N_noeuds
+#   Couche camion_moyen : nœuds  N+1      →  2×N_noeuds
+#   Couche camion_lourd : nœuds  2×N+1    →  3×N_noeuds
+#
+#   Arêtes intra-couche : routes normales avec coûts propres à chaque véhicule
+#   Arêtes inter-couches: transbordements aux entrepôts uniquement (coût fixe)
+#
+# Le Dijkstra sur ce graphe étendu trouve automatiquement la combinaison
+# optimale de véhicules pour chaque paire OD.
+
+cat("=== PARTIE 11 : Construction du graphe multi-modal ===\n")
+
+# ── Paramètres de base ────────────────────────────────────────────────────────
+n_vehicules <- nrow(VEHICULES_IDS)
+graphe_base <- reseau_rwanda %>% as_tbl_graph()
+n_noeuds    <- igraph::vcount(graphe_base)
+
+# Fonction de remappage : nœud n dans la couche du véhicule v_idx
+# Ex : v_idx=2 (camion_moyen), n=150 → nœud 150 + N_noeuds dans le graphe étendu
+node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
+
+cat("  Nœuds de base :", n_noeuds, "\n")
+cat("  Véhicules     :", n_vehicules, "\n")
+cat("  Nœuds total   :", n_noeuds * n_vehicules, "\n\n")
+
+# ── Récupération des arêtes de base (from/to = indices igraph) ────────────────
+aretes_base_tbl <- reseau_rwanda %>%
+  activate("edges") %>%
+  as_tibble() %>%
+  mutate(arete_id = row_number())
+
+# ── 1. Arêtes intra-couche (routes, une couche par véhicule) ──────────────────
+edges_intra <- list()
+
+for (v_idx in seq_len(n_vehicules)) {
+  id_veh <- VEHICULES_IDS$vehicule_id[v_idx]
+  
+  # Coûts et attributs depuis DuckDB pour ce véhicule
+  couts_veh <- duck_query(glue::glue("
+    SELECT arete_id, cost_generalized_usd, length_km, travel_time_h
+    FROM aretes_couts_tous
+    WHERE vehicule_id = '{id_veh}'
+    ORDER BY arete_id
+  "))
+  
+  edges_intra[[v_idx]] <- tibble(
+    from          = node_multi(v_idx, aretes_base_tbl$from),
+    to            = node_multi(v_idx, aretes_base_tbl$to),
+    weight        = couts_veh$cost_generalized_usd,
+    length_km     = couts_veh$length_km,
+    travel_time_h = couts_veh$travel_time_h,
+    vehicule_id   = id_veh,
+    type          = "route"
+  ) %>%
+    filter(!is.na(weight), weight > 0)
+  
+  cat("  Couche", id_veh, ":", nrow(edges_intra[[v_idx]]), "arêtes\n")
+}
+
+# ── 2. Arêtes de transbordement aux entrepôts (inter-couches) ─────────────────
+# Uniquement aux nœuds d'entrepôt — pas de transbordement en bord de route
+couts_transb       <- duck_query("SELECT * FROM couts_transbordement")
+warehouse_nodes_base <- which(igraph::V(graphe_base)$is_warehouse)
+
+cat("\n  Entrepôts disponibles pour transbordement :",
+    length(warehouse_nodes_base), "\n")
+
+edges_transb <- list()
+k <- 0
+
+for (wh_node in warehouse_nodes_base) {
+  for (r in seq_len(nrow(couts_transb))) {
+    
+    v_orig <- match(couts_transb$vehicule_origine[r],     VEHICULES_IDS$vehicule_id)
+    v_dest <- match(couts_transb$vehicule_destination[r], VEHICULES_IDS$vehicule_id)
+    if (is.na(v_orig) || is.na(v_dest)) next
+    
+    k <- k + 1
+    edges_transb[[k]] <- tibble(
+      from          = node_multi(v_orig, wh_node),
+      to            = node_multi(v_dest, wh_node),
+      weight        = couts_transb$cout_usd_fixe[r],
+      length_km     = 0,    # Pas de distance physique au transbordement
+      travel_time_h = 0,    # Temps de manutention non modélisé ici
+      vehicule_id   = paste0(couts_transb$vehicule_origine[r],
+                             "->",
+                             couts_transb$vehicule_destination[r]),
+      type          = "transbordement"
+    )
+  }
+}
+
+cat("  Arêtes de transbordement créées :", k, "\n\n")
+
+# ── Assemblage du graphe multi-modal ──────────────────────────────────────────
+all_edges_mm <- bind_rows(c(edges_intra, edges_transb))
+
+# Table des nœuds : chaque nœud de base existe en N_vehicules exemplaires
+vertices_mm <- tibble(
+  name      = seq_len(n_noeuds * n_vehicules),
+  node_base = rep(seq_len(n_noeuds), n_vehicules),
+  vehicule  = rep(VEHICULES_IDS$vehicule_id, each = n_noeuds)
+)
+
+graphe_multimodal <- igraph::graph_from_data_frame(
+  all_edges_mm,
+  directed = FALSE,
+  vertices = vertices_mm
+)
+
+cat("✓ Graphe multi-modal construit\n")
+cat("  Nœuds  :", igraph::vcount(graphe_multimodal),
+    "(", n_noeuds, "×", n_vehicules, "couches)\n")
+cat("  Arêtes :", igraph::ecount(graphe_multimodal),
+    "dont", k, "transbordements\n\n")
+
 
 # ==============================================================================
-# PARTIE 10 : CARTES PAR VÉHICULE — PILOTÉES PAR LA TABLE params_flotte
+# PARTIE 14 : CARTES PAR VÉHICULE — PILOTÉES PAR LA TABLE params_flotte
 # ==============================================================================
 
-cat("=== PARTIE 10 : Cartes de coûts par véhicule ===\n")
+cat("=== PARTIE 14 : Cartes de coûts par véhicule ===\n")
 
 for (i in seq_len(nrow(VEHICULES_IDS))) {
   
@@ -1814,7 +1813,7 @@ tmap_mode("plot")
 
 
 # ==============================================================================
-# PARTIE 11 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
+# PARTIE 15 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
 # ==============================================================================
 # La matrice OD donne le coût, la distance et le temps de trajet optimal entre
 # chaque paire d'entrepôts. Elle est calculée par l'algorithme de Dijkstra
@@ -1826,7 +1825,7 @@ tmap_mode("plot")
 #   - Joinable : directement utilisable dans le modèle gravitaire (Partie 18)
 #   - Compact : ne stocke que les paires connectées (pas de zéros inutiles)
 
-cat("=== PARTIE 11 : Matrice OD dans DuckDB ===\n")
+cat("=== PARTIE 15 : Matrice OD dans DuckDB ===\n")
 
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
@@ -1861,36 +1860,38 @@ idx     <- 0
 
 for (i in seq_along(warehouse_nodes_base)) {
   
-  # Nœuds sources : entrepôt i dans CHAQUE couche véhicule
   sources_i <- sapply(seq_len(n_vehicules),
                       function(v) node_multi(v, warehouse_nodes_base[i]))
+  
+  # Tous les nœuds destination (toutes couches × tous entrepôts) en une seule passe
+  targets_all <- as.vector(sapply(
+    seq_len(n_vehicules),
+    function(v) node_multi(v, warehouse_nodes_base)
+  ))
+  
+  # Une seule passe depuis i vers tous les j × toutes les couches
+  dists_all <- igraph::distances(
+    graphe_multimodal,
+    v       = sources_i,
+    to      = targets_all,
+    weights = igraph::E(graphe_multimodal)$weight
+  )
   
   for (j in seq_along(warehouse_nodes_base)) {
     if (i == j) next
     
-    # Nœuds destinations : entrepôt j dans CHAQUE couche véhicule
-    targets_j <- sapply(seq_len(n_vehicules),
-                        function(v) node_multi(v, warehouse_nodes_base[j]))
-    
-    # Matrice des coûts : N_vehicules × N_vehicules
-    # distances() calcule toutes les combinaisons en une seule passe
-    dists_matrix <- igraph::distances(
-      graphe_multimodal,
-      v       = sources_i,
-      to      = targets_j,
-      weights = igraph::E(graphe_multimodal)$weight
-    )
-    
-    min_cout <- min(dists_matrix, na.rm = TRUE)
-    if (is.infinite(min_cout)) next   # Zones non connectées
+    # Colonnes correspondant à l'entrepôt j dans toutes les couches véhicules
+    cols_j   <- j + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
+    min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
+    if (is.infinite(min_cout)) next
     
     # Identifier la meilleure combinaison de véhicules
-    best_idx  <- which(dists_matrix == min_cout, arr.ind = TRUE)[1, ]
+    best_idx  <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)[1, ]
     best_from <- sources_i[best_idx[1]]
-    best_to   <- targets_j[best_idx[2]]
+    best_to   <- targets_all[cols_j[best_idx[2]]]
     
     # Récupérer le chemin réel pour distance et temps
-    path_obj   <- igraph::shortest_paths(
+    path_obj  <- igraph::shortest_paths(
       graphe_multimodal,
       from    = best_from,
       to      = best_to,
@@ -1909,10 +1910,8 @@ for (i in seq_along(warehouse_nodes_base)) {
       cout_usd          = min_cout,
       distance_km       = sum(edge_data$length_km[edges_path],     na.rm = TRUE),
       temps_h           = sum(edge_data$travel_time_h[edges_path], na.rm = TRUE),
-      # Traçabilité : quel véhicule au départ et à l'arrivée ?
       vehicule_depart   = VEHICULES_IDS$vehicule_id[best_idx[1]],
       vehicule_arrivee  = VEHICULES_IDS$vehicule_id[best_idx[2]],
-      # Combien de transbordements sur le chemin optimal ?
       n_transbordements = sum(edge_data$type[edges_path] == "transbordement")
     )
   }
@@ -1941,7 +1940,7 @@ cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
 
 # ==============================================================================
-# PARTIE 12 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
+# PARTIE 16 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
 # ==============================================================================
 # COPY TO est la commande DuckDB pour exporter des tables vers des fichiers.
 # Avantages sur write.csv() :
@@ -1949,7 +1948,7 @@ cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 #   - Vitesse : écriture multithread native de DuckDB
 #   - SQL : filtrer/transformer les données à l'export sans créer de df R intermédiaire
 
-cat("=== PARTIE 12 : Export via DuckDB ===\n")
+cat("=== PARTIE 16 : Export via DuckDB ===\n")
 
 # Chargement de la table des arêtes finales dans DuckDB (sans géométrie)
 aretes_finales <- reseau_rwanda %>%
@@ -2003,7 +2002,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 
 
 # ==============================================================================
-# PARTIE 13 : TABLE INPUT-OUTPUT DU RWANDA
+# PARTIE 17 : TABLE INPUT-OUTPUT DU RWANDA
 # ==============================================================================
 # La table Input-Output de Leontief modélise les interdépendances sectorielles :
 #   a_ij = part de la production du secteur j consommée en intrant par le secteur i
@@ -2021,7 +2020,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 #   2. Charger avec readxl::read_excel("io_rwanda.xlsx")
 #   3. Remplacer les matrices A et production_totale ci-dessous
 
-cat("=== PARTIE 13 : Table Input-Output dans DuckDB ===\n")
+cat("=== PARTIE 17 : Table Input-Output dans DuckDB ===\n")
 
 # 8 secteurs représentatifs de l'économie rwandaise en 2022
 SECTEURS   <- c("Agriculture","Mines","Agro_industrie","Industrie",
@@ -2122,7 +2121,7 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 
 
 # ==============================================================================
-# PARTIE 14 : GÉNÉRATION DES OFFRES ET DEMANDES PAR ZONE
+# PARTIE 18 : GÉNÉRATION DES OFFRES ET DEMANDES PAR ZONE
 # ==============================================================================
 # Chaque zone d'entreposage est caractérisée par :
 #   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
@@ -2136,7 +2135,7 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 #   ville     → profil équilibré, Commerce local dominant
 #   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
 
-cat("=== PARTIE 14 : Offres et demandes par zone ===\n")
+cat("=== PARTIE 18 : Offres et demandes par zone ===\n")
 
 # Profils d'offre (ce que chaque type de zone produit et offre au marché)
 PROFILS_OFFRE <- list(
@@ -2248,10 +2247,10 @@ cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 
 
 # ==============================================================================
-# PARTIE 15 : MODÈLE GRAVITAIRE DES ÉCHANGES
+# PARTIE 19 : MODÈLE GRAVITAIRE DES ÉCHANGES
 # ==============================================================================
 
-cat("=== PARTIE 15 : Modèle gravitaire des échanges ===\n\n")
+cat("=== PARTIE 19 : Modèle gravitaire des échanges ===\n\n")
 
 # Le modèle gravitaire estime les flux commerciaux bilatéraux :
 #
@@ -2368,10 +2367,10 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 
 # ==============================================================================
-# PARTIE 16 : MODÉLISATION DU FRET ET AFFECTATION AU RÉSEAU
+# PARTIE 20 : MODÉLISATION DU FRET ET AFFECTATION AU RÉSEAU
 # ==============================================================================
 
-cat("=== PARTIE 16 : Modélisation du fret et affectation au réseau ===\n")
+cat("=== PARTIE 20 : Modélisation du fret et affectation au réseau ===\n")
 
 # --- Étape 1 : Conversion des flux monétaires en tonnes ---
 cat("Conversion des flux en tonnes...\n")
@@ -2499,7 +2498,7 @@ volumes_par_zone <- tibble(
 print(volumes_par_zone)
 cat("\n")
 
-# === DIAGNOSTIC PARTIE 16 ===
+# === DIAGNOSTIC PARTIE 20 ===
 
 cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
 
@@ -2535,10 +2534,10 @@ for (i in 1:min(5, length(warehouse_node_ids))) {
 }
 
 # ==============================================================================
-# PARTIE 17 : VISUALISATIONS DES ÉCHANGES MODÉLISÉS
+# PARTIE 21 : VISUALISATIONS DES ÉCHANGES MODÉLISÉS
 # ==============================================================================
 
-cat("=== PARTIE 17 : Visualisations des échanges modélisés ===\n\n")
+cat("=== PARTIE 21 : Visualisations des échanges modélisés ===\n\n")
 
 # --- Préparation des couches spatiales ---
 
