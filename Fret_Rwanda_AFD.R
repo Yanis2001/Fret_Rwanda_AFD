@@ -158,7 +158,7 @@ PALETTE_COUTS <- c("#FFF7BC", "#FEC44F", "#D94701", "#7F0000")
 # Lecture : faible coût = jaune pâle, coût élevé = bordeaux
 
 # ── Ratio de coût entre véhicules (gradient rouge → jaune → vert) ────────────
-# Rouge = le poids lourd coûte beaucoup plus ; vert = coûts similaires
+# Rouge = coût du véhicule au numérateur élevé relativement à celui au dénominateur ; vert = inverse
 PALETTE_RATIO <- c("#D73027", "#FC8D59", "#FEE090", "#91CF60", "#1A9850")
 
 # ── Volume de trafic fret (gradient bleu clair → violet) ─────────────────────
@@ -195,8 +195,6 @@ cat("✓ Palettes de couleurs définies\n\n")
 # ── Table 1 : paramètres scalaires par véhicule ──────────────────────────────
 params_flotte_df <- tribble(
   ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain,
-  # facteur_urbain : multiplicateur de coût en zone résidentielle/commerciale
-  # 1.0 = pas de pénalité, >1.0 = surcoût (restrictions, vitesse réduite, manœuvres)
   "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,
   "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,
   "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60
@@ -271,12 +269,12 @@ duck_write(facteurs_pente_df, "facteurs_pente_flotte")
 # Pour ajouter une combinaison : ajouter une ligne dans ce tribble.
 couts_transbordement_df <- tribble(
   ~vehicule_origine,  ~vehicule_destination, ~cout_usd_fixe,
-  "camion_lourd",     "camion_moyen",         25.0,
+  "camion_lourd",     "camion_moyen",          25.0,
   "camion_lourd",     "camionnette",           40.0,
   "camion_moyen",     "camion_lourd",          25.0,
   "camion_moyen",     "camionnette",           15.0,
   "camionnette",      "camion_moyen",          15.0,
-  "camionnette",      "camion_lourd",           40.0
+  "camionnette",      "camion_lourd",          40.0
 )
 duck_write(couts_transbordement_df, "couts_transbordement")
 
@@ -1197,11 +1195,10 @@ if (nrow(noeuds_sf) == 0) {
 
 cat("=== PARTIE 9 BIS : Zones d'usage du sol ===\n")
 
-# ── Chargement des zones résidentielles et commerciales (pénalité poids lourds) ──
 # ── Chargement des zones résidentielles et commerciales ──
 zones_urbaines <- st_read(
   chemin_pbf, layer = "multipolygons",
-  query = "SELECT landuse, _ogr_geometry_ FROM multipolygons
+  query = "SELECT * FROM multipolygons
            WHERE landuse IN ('residential','commercial','retail')",
   quiet = TRUE
 ) %>%
@@ -1214,7 +1211,7 @@ zones_urbaines <- st_read(
 # ── Chargement des zones industrielles ──
 zones_industrielles <- st_read(
   chemin_pbf, layer = "multipolygons",
-  query = "SELECT landuse, _ogr_geometry_ FROM multipolygons
+  query = "SELECT * FROM multipolygons
            WHERE landuse = 'industrial'",
   quiet = TRUE
 ) %>%
@@ -1229,7 +1226,7 @@ zones_industrielles <- st_read(
 # ── Chargement des zones retail ──
 zones_retail <- st_read(
   chemin_pbf, layer = "multipolygons",
-  query = "SELECT landuse, _ogr_geometry_ FROM multipolygons
+  query = "SELECT * FROM multipolygons
            WHERE landuse = 'retail'",
   quiet = TRUE
 ) %>%
@@ -1240,7 +1237,7 @@ zones_retail <- st_read(
   st_transform(crs = 32735) %>%
   mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
   filter(aire_km2 > 0.005)
-
+    
 cat("  Zones retail :", nrow(zones_retail), "\n\n")
 
 # ── Taguage des arêtes : zone_urbaine = TRUE si l'arête traverse une zone dense ──
@@ -1953,6 +1950,45 @@ cat("  Arêtes de transbordement créées :", k, "\n\n")
 # ── Assemblage du graphe multi-modal ──────────────────────────────────────────
 all_edges_mm <- bind_rows(c(edges_intra, edges_transb))
 
+# ── Table de mapping : arête multi-modale → arête physique + véhicule ─────────
+# Nécessaire pour l'affectation All-or-Nothing en Partie 20
+# Chaque arête intra-couche du graphe multi-modal est associée à :
+#   - son indice dans le réseau physique (arete_physique_idx)
+#   - son véhicule (vehicule_id)
+#   - son type (route ou transbordement)
+
+n_aretes_physiques <- nrow(aretes_base_tbl)
+
+# Les arêtes intra-couche sont numérotées de 1 à N_vehicules × N_aretes_physiques
+# dans l'ordre : couche 1 (arêtes 1..N), couche 2 (arêtes N+1..2N), etc.
+# Les arêtes de transbordement viennent ensuite.
+
+mapping_aretes_mm <- bind_rows(
+  # Arêtes intra-couche (routes)
+  lapply(seq_len(n_vehicules), function(v_idx) {
+    tibble(
+      idx_mm           = seq_len(n_aretes_physiques) + (v_idx - 1) * n_aretes_physiques,
+      arete_physique_idx = seq_len(n_aretes_physiques),
+      vehicule_id      = VEHICULES_IDS$vehicule_id[v_idx],
+      type             = "route"
+    )
+  }),
+  # Arêtes de transbordement
+  tibble(
+    idx_mm             = seq(
+      n_vehicules * n_aretes_physiques + 1,
+      n_vehicules * n_aretes_physiques + length(edges_transb)
+    ),
+    arete_physique_idx = NA_integer_,
+    vehicule_id        = NA_character_,
+    type               = "transbordement"
+  )
+)
+
+cat("  Table de mapping créée :", nrow(mapping_aretes_mm), "arêtes\n")
+cat("  dont routes        :", sum(mapping_aretes_mm$type == "route"), "\n")
+cat("  dont transbordements:", sum(mapping_aretes_mm$type == "transbordement"), "\n\n")
+
 # Table des nœuds : chaque nœud de base existe en N_vehicules exemplaires
 vertices_mm <- tibble(
   name      = seq_len(n_noeuds * n_vehicules),
@@ -2312,13 +2348,41 @@ cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
 cat("=== PARTIE 16 : Export via DuckDB ===\n")
 
-# Chargement de la table des arêtes finales dans DuckDB (sans géométrie)
+# ── Récupération des coûts de tous les véhicules depuis DuckDB ────────────────
+couts_wide <- duck_query("
+  SELECT
+    arete_id,
+    MAX(CASE WHEN vehicule_id = 'camionnette'  THEN cost_per_tkm          END) AS cost_tkm_camionnette,
+    MAX(CASE WHEN vehicule_id = 'camion_moyen' THEN cost_per_tkm          END) AS cost_tkm_camion_moyen,
+    MAX(CASE WHEN vehicule_id = 'camion_lourd' THEN cost_per_tkm          END) AS cost_tkm_camion_lourd,
+    MAX(CASE WHEN vehicule_id = 'camionnette'  THEN cost_generalized_usd  END) AS cost_usd_camionnette,
+    MAX(CASE WHEN vehicule_id = 'camion_moyen' THEN cost_generalized_usd  END) AS cost_usd_camion_moyen,
+    MAX(CASE WHEN vehicule_id = 'camion_lourd' THEN cost_generalized_usd  END) AS cost_usd_camion_lourd,
+    AVG(cost_generalized_usd)                                                   AS cost_generalise_moyen
+  FROM aretes_couts_tous
+  GROUP BY arete_id
+  ORDER BY arete_id
+")
+
+# ── Construction de la table des arêtes finales enrichie ─────────────────────
 aretes_finales <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
+  mutate(
+    cost_tkm_camionnette  = couts_wide$cost_tkm_camionnette,
+    cost_tkm_camion_moyen = couts_wide$cost_tkm_camion_moyen,
+    cost_tkm_camion_lourd = couts_wide$cost_tkm_camion_lourd,
+    cost_usd_camionnette  = couts_wide$cost_usd_camionnette,
+    cost_usd_camion_moyen = couts_wide$cost_usd_camion_moyen,
+    cost_usd_camion_lourd = couts_wide$cost_usd_camion_lourd,
+    cost_generalise_moyen = couts_wide$cost_generalise_moyen
+  ) %>%
   select(osm_id, name, road_type, surface, length_km, slope_mean,
-         elevation_gain, elevation_loss, speed_kmh, fuel_consumption_L,
-         cost_fuel_usd, cost_wear_usd, cost_time_usd, cost_generalized_usd, cost_per_tkm)
+         elevation_gain, elevation_loss,
+         cost_tkm_camionnette, cost_tkm_camion_moyen, cost_tkm_camion_lourd,
+         cost_usd_camionnette, cost_usd_camion_moyen, cost_usd_camion_lourd,
+         cost_generalise_moyen,
+         volume_tonnes, classe_trafic)
 
 duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 
@@ -2838,69 +2902,147 @@ tonnage_total <- sum(flux_tonnes_total)
 cat("  Tonnage total modélisé:",
     format(round(tonnage_total), big.mark = " "), "tonnes\n\n")
 
-# --- Étape 2 : Affectation All-or-Nothing au réseau ---
-# Pour chaque paire OD avec flux significatif, tout le fret
-# emprunte le chemin de coût généralisé minimal (Dijkstra)
+# --- Étape 2 : Affectation All-or-Nothing multi-modale au réseau ---
+# Pour chaque paire OD, le chemin optimal dans le graphe multi-modal
+# est décomposé en arêtes physiques avec leur véhicule associé.
+# Le volume est affecté par arête ET par véhicule.
 
-cat("Affectation du fret au réseau (algorithme All-or-Nothing)...\n")
+cat("Affectation du fret au réseau (All-or-Nothing multi-modal)...\n")
 
-SEUIL_FLUX_TONNES <- 50  # Ignorer les flux < 50 tonnes
+SEUIL_FLUX_TONNES <- 50
 
-# Initialiser le vecteur de charge sur chaque arête
-n_edges <- igraph::ecount(graphe_igraph)
-volume_trafic <- numeric(n_edges)  # En tonnes
+# Matrice de volumes par arête physique ET par véhicule
+# Dimensions : N_aretes_physiques × N_vehicules
+volume_trafic_mm <- matrix(
+  0,
+  nrow = n_aretes_physiques,
+  ncol = n_vehicules,
+  dimnames = list(NULL, VEHICULES_IDS$vehicule_id)
+)
 
-# Compteurs
-paires_traitees <- 0
+paires_traitees       <- 0
 paires_non_connectees <- 0
 
 for (i in seq_len(n_warehouses)) {
-  # Calcul en batch depuis la zone i vers toutes les autres
-  from_node <- warehouse_node_ids[i]
   
-  # Sélectionner destinations avec flux suffisant
-  to_indices <- which(flux_tonnes_total[i, ] > SEUIL_FLUX_TONNES & 
-                        seq_len(n_warehouses) != i)
+  sources_i <- sapply(seq_len(n_vehicules),
+                      function(v) node_multi(v, warehouse_nodes_base[i]))
   
-  if (length(to_indices) == 0) next
+  targets_all <- as.vector(sapply(
+    seq_len(n_vehicules),
+    function(v) node_multi(v, warehouse_nodes_base)
+  ))
   
-  to_nodes <- warehouse_node_ids[to_indices]
-  
-  # Plus courts chemins depuis i vers tous les to_nodes en une seule passe
-  chemins_batch <- igraph::shortest_paths(
-    graphe_igraph,
-    from   = from_node,
-    to     = to_nodes,
-    weights= igraph::E(graphe_igraph)$cost_generalized_usd,
-    output = "epath"
+  dists_all <- igraph::distances(
+    graphe_multimodal,
+    v       = sources_i,
+    to      = targets_all,
+    weights = igraph::E(graphe_multimodal)$weight
   )
   
-  for (k in seq_along(to_indices)) {
-    j <- to_indices[k]
-    flux_ij <- flux_tonnes_total[i, j]
-    edges_path <- chemins_batch$epath[[k]]
+  for (j in seq_len(n_warehouses)) {
+    if (i == j) next
     
-    if (length(edges_path) > 0) {
-      volume_trafic[edges_path] <- volume_trafic[edges_path] + flux_ij
-      paires_traitees <- paires_traitees + 1
-    } else {
+    flux_ij <- flux_tonnes_total[i, j]
+    if (flux_ij <= SEUIL_FLUX_TONNES) next
+    
+    cols_j   <- j + (seq_len(n_vehicules) - 1) * n_warehouses
+    min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
+    if (is.infinite(min_cout)) {
       paires_non_connectees <- paires_non_connectees + 1
+      next
     }
+    
+    best_idx  <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)[1, ]
+    best_from <- sources_i[best_idx[1]]
+    best_to   <- targets_all[cols_j[best_idx[2]]]
+    
+    # Récupérer le chemin détaillé (indices d'arêtes dans le graphe multi-modal)
+    path_obj   <- igraph::shortest_paths(
+      graphe_multimodal,
+      from    = best_from,
+      to      = best_to,
+      weights = igraph::E(graphe_multimodal)$weight,
+      output  = "epath"
+    )
+    edges_path_mm <- as.integer(path_obj$epath[[1]])
+    
+    if (length(edges_path_mm) == 0) {
+      paires_non_connectees <- paires_non_connectees + 1
+      next
+    }
+    
+    # ── Remappage : arête multi-modale → arête physique + véhicule ────────────
+    for (edge_mm in edges_path_mm) {
+      
+      # Chercher dans la table de mapping
+      mapping_row <- mapping_aretes_mm[mapping_aretes_mm$idx_mm == edge_mm, ]
+      
+      # Ignorer les transbordements (pas d'arête physique)
+      if (nrow(mapping_row) == 0 || mapping_row$type == "transbordement") next
+      
+      idx_phys <- mapping_row$arete_physique_idx
+      veh_id   <- mapping_row$vehicule_id
+      
+      # Vérification de validité
+      if (is.na(idx_phys) || is.na(veh_id)) next
+      if (idx_phys < 1 || idx_phys > n_aretes_physiques) next
+      
+      # Colonne correspondant au véhicule
+      col_veh <- which(VEHICULES_IDS$vehicule_id == veh_id)
+      if (length(col_veh) == 0) next
+      
+      # Affectation du volume
+      volume_trafic_mm[idx_phys, col_veh] <- 
+        volume_trafic_mm[idx_phys, col_veh] + flux_ij
+    }
+    
+    paires_traitees <- paires_traitees + 1
   }
   
   if (i %% 3 == 0) cat("  Zone", i, "/", n_warehouses, "traitée\n")
 }
 
-cat("✓ Affectation terminée\n")
-cat("  Paires traitées     :", paires_traitees, "\n")
+# Volume total toutes couches confondues (pour la cartographie)
+volume_trafic <- rowSums(volume_trafic_mm)
+
+cat("✓ Affectation multi-modale terminée\n")
+cat("  Paires traitées      :", paires_traitees, "\n")
 cat("  Paires non connectées:", paires_non_connectees, "\n\n")
+
+# ── Statistiques de répartition modale ────────────────────────────────────────
+cat("Répartition modale du trafic (tonnes × km) :\n")
+for (v in seq_len(n_vehicules)) {
+  veh_id  <- VEHICULES_IDS$vehicule_id[v]
+  veh_nom <- VEHICULES_IDS$nom[v]
+  
+  # Récupérer les longueurs des arêtes physiques
+  longueurs_km <- reseau_rwanda %>%
+    activate("edges") %>%
+    as_tibble() %>%
+    pull(length_km)
+  
+  tkm_veh <- sum(volume_trafic_mm[, v] * longueurs_km, na.rm = TRUE)
+  pct      <- round(tkm_veh / sum(volume_trafic * longueurs_km, na.rm = TRUE) * 100, 1)
+  cat("  ", veh_nom, ":", format(round(tkm_veh), big.mark=" "), "t×km (", pct, "%)\n")
+}
+cat("\n")
 
 # --- Étape 3 : Intégration des volumes au réseau ---
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(
-    volume_tonnes = volume_trafic,
-    # Catégories de trafic fret
+    volume_tonnes          = volume_trafic,
+    # Volume par type de véhicule (utile pour analyses modales)
+    volume_camionnette     = volume_trafic_mm[, "camionnette"],
+    volume_camion_moyen    = volume_trafic_mm[, "camion_moyen"],
+    volume_camion_lourd    = volume_trafic_mm[, "camion_lourd"],
+    # Part de chaque véhicule sur chaque arête
+    part_camion_lourd      = if_else(
+      volume_tonnes > 0,
+      round(volume_camion_lourd / volume_tonnes * 100, 1),
+      0
+    ),
     classe_trafic = case_when(
       volume_tonnes == 0       ~ "Aucun",
       volume_tonnes < 500      ~ "Très faible",
@@ -3073,6 +3215,37 @@ tmap_save(carte_fret,
           file.path(DIR_OUTPUT,"carte_trafic_fret.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("✓ Carte trafic fret sauvegardée\n")
+
+
+# ── Carte : part du camion lourd par arête ────────────────────────────────────
+aretes_avec_trafic <- reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf() %>%
+  filter(volume_tonnes > 0)
+
+carte_modal <- fond_carte() +
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col = "#DDDDDD", lwd = 0.3) +
+  tm_shape(aretes_avec_trafic) +
+  tm_lines(
+    col       = "part_camion_lourd",
+    col.scale = tm_scale_intervals(
+      style  = "fixed",
+      breaks = c(0, 25, 50, 75, 100),
+      values = c("#1A9850","#FEE090","#FC8D59","#D73027")
+    ),
+    col.legend = tm_legend(title = "Part camion\nlourd (%)"),
+    lwd = 1.5
+  ) +
+  tm_title("Répartition modale — Part du camion lourd") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left","bottom")) +
+  tm_compass(position  = c("right","top"))
+
+tmap_save(carte_modal,
+          file.path(DIR_OUTPUT,"carte_repartition_modale.png"),
+          width = 3000, height = 2400, dpi = 300)
+cat("✓ Carte répartition modale sauvegardée\n")
 
 
 # ============================================================
