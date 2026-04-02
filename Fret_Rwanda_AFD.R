@@ -278,6 +278,65 @@ couts_transbordement_df <- tribble(
 )
 duck_write(couts_transbordement_df, "couts_transbordement")
 
+# ── Table 5 : coûts de transport pré-frontière par pays et par secteur ────────
+# Ces coûts représentent le coût moyen de transport d'une marchandise
+# depuis son point d'origine dans le pays étranger jusqu'à la frontière rwandaise.
+# Ils s'ajoutent au coût de transport interne rwandais dans le modèle gravitaire.
+# Source : estimations calibrées sur les données de coût de transport régional
+# (Banque Mondiale, CPCS, données COMESA).
+# Unité : USD par tonne
+
+couts_prebordure_df <- tribble(
+  ~pays,       ~secteur,         ~cout_usd_tonne,
+  # ── Ouganda (corridors Nord : Kampala → Gatuna/Kagitumba) ─────────────────
+  # Distance moyenne Kampala-frontière Rwanda : ~500km, routes bitumées
+  "Ouganda",   "Agriculture",     18.0,
+  "Ouganda",   "Mines",           12.0,
+  "Ouganda",   "Agro_industrie",  15.0,
+  "Ouganda",   "Industrie",       14.0,
+  "Ouganda",   "Construction",    22.0,
+  "Ouganda",   "Commerce",        13.0,
+  "Ouganda",   "Transport",        8.0,
+  "Ouganda",   "Services",         3.0,
+  # ── Tanzanie (corridor Est : Dar es Salaam → Rusumo) ─────────────────────
+  # Distance moyenne port Dar-frontière Rwanda : ~1300km
+  # Coûts plus élevés car corridor plus long et qualité route variable
+  "Tanzanie",  "Agriculture",     45.0,
+  "Tanzanie",  "Mines",           28.0,
+  "Tanzanie",  "Agro_industrie",  38.0,
+  "Tanzanie",  "Industrie",       35.0,
+  "Tanzanie",  "Construction",    55.0,
+  "Tanzanie",  "Commerce",        32.0,
+  "Tanzanie",  "Transport",       20.0,
+  "Tanzanie",  "Services",         5.0,
+  # ── RDC (corridor Ouest : Goma → Rubavu) ─────────────────────────────────
+  # Distance courte mais infrastructure très dégradée
+  # Coûts élevés malgré la proximité géographique
+  "RDC",       "Agriculture",     25.0,
+  "RDC",       "Mines",           18.0,
+  "RDC",       "Agro_industrie",  22.0,
+  "RDC",       "Industrie",       28.0,
+  "RDC",       "Construction",    35.0,
+  "RDC",       "Commerce",        20.0,
+  "RDC",       "Transport",       12.0,
+  "RDC",       "Services",         4.0,
+  # ── Burundi (corridor Sud : Bujumbura → Bugarama/Rusizi) ─────────────────
+  # Distance moyenne Bujumbura-frontière Rwanda : ~150km
+  # Infrastructure correcte sur axe principal
+  "Burundi",   "Agriculture",     12.0,
+  "Burundi",   "Mines",            9.0,
+  "Burundi",   "Agro_industrie",  10.0,
+  "Burundi",   "Industrie",       11.0,
+  "Burundi",   "Construction",    16.0,
+  "Burundi",   "Commerce",         9.0,
+  "Burundi",   "Transport",        6.0,
+  "Burundi",   "Services",         2.0
+)
+duck_write(couts_prebordure_df, "couts_prebordure")
+
+cat("✓ Coûts pré-frontière chargés dans DuckDB :",
+    nrow(couts_prebordure_df), "lignes\n\n")
+
 # Véhicule de référence pour la matrice OD et le modèle gravitaire
 VEHICULE_REFERENCE   <- "camion_moyen"
 CONSO_PAR_METRE_D_PLUS <- 0.03
@@ -1295,6 +1354,7 @@ entreposages_manuels <- tibble(
     "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
     "Frontière Gatuna (Ouganda)", "Frontière Rusumo (Tanzanie)",
     "Frontière Rubavu/Goma (RDC)", "Frontière Kagitumba (Ouganda)",
+    "Frontière Bugarama (Burundi)",
     "Huye (Butare) - Centre Sud", "Musanze - Centre Nord",
     "Rubavu - Centre Ouest", "Rusizi - Centre Sud-Ouest",
     "Bugesera SEZ (Agro-industrie)",
@@ -1303,14 +1363,27 @@ entreposages_manuels <- tibble(
   type = c(
     "hub","sez","marche",
     "frontiere","frontiere","frontiere","frontiere",
-    "ville","ville","ville","ville",
-    "sez",
-    "ville","ville","ville"
+    "frontiere","ville","ville","ville","ville",
+    "sez","ville","ville","ville"
   ),
-  lon = c(30.0619,30.1300,30.0588,30.0890,30.7850,29.2600,30.7500,
-          29.7388,29.6333,29.2650,29.0100,30.1500,29.7400,29.7550,30.4300),
-  lat = c(-1.9536,-1.9000,-1.9700,-1.3800,-2.3800,-1.6667,-1.3100,
-          -2.5965,-1.4992,-1.6750,-2.4900,-2.1000,-2.0850,-2.3500,-1.8700),
+  # pays = NULL pour les zones internes, nom du pays pour les frontières
+  # Utilisé pour associer les coûts pré-frontière en Partie 19
+  pays = c(
+    NA, NA, NA,
+    "Ouganda", "Tanzanie", "RDC", "Ouganda",
+    "Burundi",
+    NA, NA, NA, NA,
+    NA,
+    NA, NA, NA
+  ),
+  lon = c(30.0619, 30.1300, 30.0588, 30.0890, 
+          30.7850, 29.2600, 30.7500, 29.0200, 
+          29.7388, 29.6333, 29.2650, 29.0100,
+          30.1500, 29.7400, 29.7550, 30.4300),
+  lat = c(-1.9536, -1.9000, -1.9700, -1.3800, 
+          -2.3800, -1.6667, -1.3100, -2.6200, 
+          -2.5965, -1.4992, -1.6750, -2.4900,
+          -2.1000, -2.0850, -2.3500, -1.8700),
   source = "manuel"
 )
 
@@ -1421,14 +1494,18 @@ if (nrow(zones_retail) > 0) {
 }
 
 # ── Assemblage final ──────────────────────────────────────────────────────────
+# Dans le bloc d'assemblage final, ajouter pays dans le select
 entreposages_fictifs <- bind_rows(
   entreposages_manuels,
-  villes_nouvelles,
-  zones_indus_nouvelles,
-  zones_retail_nouvelles
+  villes_nouvelles %>% mutate(pays = NA_character_),
+  zones_indus_nouvelles %>% mutate(pays = NA_character_),
+  zones_retail_nouvelles %>% mutate(pays = NA_character_)
 ) %>%
   # Supprimer les éventuels doublons résiduels sur les coordonnées
   distinct(lon, lat, .keep_all = TRUE)
+
+# Mettre à jour la table DuckDB
+duck_write(entreposages_fictifs, "zones_entreposage")
 
 cat("\n✓ Entrepôts totaux :", nrow(entreposages_fictifs), "\n")
 cat("  dont manuels    :", sum(entreposages_fictifs$source == "manuel"), "\n")
@@ -1475,6 +1552,12 @@ reseau_rwanda <- reseau_rwanda %>%
     warehouse_type = if_else(                                              # Type de l'entrepôt (ex: "port", "aéroport", "centre logistique"), sinon NA
       is_warehouse,
       entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],  # Cette ligne permet de trouver le type d'un entrepôt associé à un identifiant de nœud
+      NA_character_
+    ),
+    # ── pays d'origine pour les points frontière ──────────────────────────────
+    warehouse_pays = if_else(
+      is_warehouse,
+      entreposages_avec_snap$pays[match(node_id, entreposages_avec_snap$noeud_proche_id)],
       NA_character_
     )
   )
@@ -2410,6 +2493,12 @@ dbExecute(con, paste0(
   file.path(DIR_OUTPUT,'aretes_finales.csv'),
   "'(FORMAT CSV, HEADER)"
 ))
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM couts_prebordure) TO '",
+  file.path(DIR_OUTPUT, "couts_prebordure.csv"),
+  "' (FORMAT CSV, HEADER)"
+))
+cat("  ✓ couts_prebordure.csv\n")
 
 # Exports Parquet depuis DuckDB
 # Lisible directement avec : Python → pd.read_parquet() ; R → arrow::read_parquet()
@@ -2574,7 +2663,9 @@ PROFILS_OFFRE <- list(
   ville    = c(Agriculture=0.12, Mines=0.02, Agro_industrie=0.08, Industrie=0.05,
                Construction=0.15, Commerce=0.30, Transport=0.10, Services=0.18),
   marche   = c(Agriculture=0.45, Mines=0.01, Agro_industrie=0.20, Industrie=0.03,
-               Construction=0.02, Commerce=0.20, Transport=0.05, Services=0.04)
+               Construction=0.02, Commerce=0.20, Transport=0.05, Services=0.04),
+  industrie= c(Agriculture=0.02, Mines=0.05, Agro_industrie=0.10, Industrie=0.50,
+                Construction=0.15, Commerce=0.08, Transport=0.07, Services=0.03)
 )
 
 # Profils de demande (ce que chaque type de zone consomme en provenance des autres)
@@ -2588,7 +2679,9 @@ PROFILS_DEMANDE <- list(
   ville    = c(Agriculture=0.15, Mines=0.02, Agro_industrie=0.18, Industrie=0.10,
                Construction=0.12, Commerce=0.22, Transport=0.08, Services=0.13),
   marche   = c(Agriculture=0.38, Mines=0.01, Agro_industrie=0.22, Industrie=0.06,
-               Construction=0.04, Commerce=0.20, Transport=0.05, Services=0.04)
+               Construction=0.04, Commerce=0.20, Transport=0.05, Services=0.04),
+  industrie= c(Agriculture=0.05, Mines=0.10, Agro_industrie=0.10, Industrie=0.35,
+                Construction=0.15, Commerce=0.08, Transport=0.12, Services=0.05)
 )
 
 # Taille économique relative de chaque zone
@@ -2608,7 +2701,8 @@ TAILLE_ZONE <- c(
   "Bugesera SEZ (Agro-industrie)" = 0.22,  # SEZ en développement près de l'aéroport
   "Muhanga"                       = 0.08,  # Carrefour de transit
   "Nyanza"                        = 0.07,  # Ancienne capitale royale
-  "Rwamagana"                     = 0.09   # Capitale de la Province de l'Est
+  "Rwamagana"                     = 0.09,  # Capitale de la Province de l'Est
+  "Frontière Bugarama (Burundi)"  = 0.12   # Corridor Sud modéré
 )
 
 # Part du PIB qui "voyage" entre zones (le reste est consommé localement)
@@ -2814,6 +2908,70 @@ C_ij <- matrice_couts
 diag(C_ij) <- NA          # Pas d'échange intrazone
 C_ij[C_ij == 0] <- NA     # Zones non connectées → pas de flux
 
+# ── Récupération des coûts pré-frontière depuis DuckDB ────────────────────────
+couts_prebordure <- duck_query("SELECT * FROM couts_prebordure")
+
+# ── Identification des entrepôts frontière et de leur pays ────────────────────
+entrepots_frontiere <- noeuds_entreposage %>%
+  filter(warehouse_type == "frontiere") %>%
+  left_join(
+    entreposages_fictifs %>% select(nom, pays),
+    by = c("warehouse_name" = "nom")
+  )
+
+cat("  Entrepôts frontière avec pays :\n")
+print(entrepots_frontiere %>% select(warehouse_name, pays))
+
+# ── Construction d'une matrice de coûts pré-frontière par secteur ─────────────
+# Dimensions : n_warehouses × n_warehouses × N_SECTEURS
+# C_prebordure[i, j, s] = coût pré-frontière si i est une frontière, 0 sinon
+# Note : le coût pré-frontière s'applique sur l'axe des origines (i)
+# car c'est la marchandise qui arrive de l'étranger vers le Rwanda
+
+C_prebordure <- array(
+  0,
+  dim      = c(n_warehouses, n_warehouses, N_SECTEURS),
+  dimnames = list(
+    noeuds_entreposage$warehouse_name,
+    noeuds_entreposage$warehouse_name,
+    SECTEURS
+  )
+)
+
+for (i in seq_len(n_warehouses)) {
+  nom_zone  <- noeuds_entreposage$warehouse_name[i]
+  type_zone <- noeuds_entreposage$warehouse_type[i]
+  
+  if (type_zone != "frontiere") next
+  
+  # Récupérer le pays de ce point frontière
+  pays_zone <- entrepots_frontiere$pays[
+    entrepots_frontiere$warehouse_name == nom_zone
+  ]
+  if (length(pays_zone) == 0 || is.na(pays_zone)) next
+  
+  # Récupérer les coûts pré-frontière pour ce pays
+  couts_pays <- couts_prebordure %>%
+    filter(pays == pays_zone)
+  
+  for (s in SECTEURS) {
+    cout_s <- couts_pays$cout_usd_tonne[couts_pays$secteur == s]
+    if (length(cout_s) == 0) next
+    
+    # Convertir coût USD/tonne en USD en utilisant TONNES_PAR_musd
+    # pour être cohérent avec l'unité de C_ij (USD par flux)
+    # On normalise par un flux unitaire de référence
+    cout_usd_flux <- cout_s / TONNES_PAR_musd[s] * 1000
+    # (diviser par tonnes/MUSD × 1000 donne USD par 1000 USD de flux)
+    
+    # Affecter à toutes les destinations j depuis ce point frontière i
+    C_prebordure[i, , s] <- cout_usd_flux
+  }
+}
+
+cat("✓ Matrice de coûts pré-frontière construite\n\n")
+
+
 # --- Calcul des flux gravitaires par secteur ---
 cat("Calcul des flux gravitaires...\n")
 
@@ -2824,6 +2982,14 @@ flux_total      <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
 
 for (s in SECTEURS) {
   beta_s <- BETA_SECTEUR[s]
+  
+  # C_ij effective = coût réseau interne + coût pré-frontière
+  C_ij_effectif <- C_ij + C_prebordure[, , s]
+  C_ij_effectif[is.na(C_ij_effectif)] <- NA  # Conserver les NA (zones non connectées)
+  
+  # Friction sur la C_ij effective
+  friction <- C_ij_effectif^(-beta_s)
+  friction[is.na(friction)] <- 0
   
   # Friction : zones proches ont plus d'échanges
   friction <- C_ij^(-beta_s)
