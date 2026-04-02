@@ -87,6 +87,14 @@ cat("✓ Tous les packages sont chargés\n\n")
 #   3. Exporter en Parquet/CSV via COPY TO sans charger toute la donnée en RAM
 #   4. Exécuter des jointures et agrégations sur de gros volumes hors-mémoire
 
+# Fermeture propre la connexion à DuckDB afin de la rouvrir ensuite proprement
+if (exists("con")) {
+  tryCatch(
+    DBI::dbDisconnect(con, shutdown = TRUE),
+    error = function(e) NULL
+  )
+}
+
 cat("=== Connexion DuckDB ===\n")
 
 # Chemin vers le fichier de base de données (créé s'il n'existe pas)
