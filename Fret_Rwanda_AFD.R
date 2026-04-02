@@ -132,10 +132,12 @@ duck_query <- function(sql) dbGetQuery(con, sql)
 
 # ── Table 1 : paramètres scalaires par véhicule ──────────────────────────────
 params_flotte_df <- tribble(
-  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain,
+  # facteur_urbain : multiplicateur de coût en zone résidentielle/commerciale
+  # 1.0 = pas de pénalité, >1.0 = surcoût (restrictions, vitesse réduite, manœuvres)
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60
 )
 duck_write(params_flotte_df, "params_flotte")
 
@@ -269,6 +271,50 @@ routes_rwanda_raw <- st_read(
 )
 
 cat("✓ Données chargées :", nrow(routes_rwanda_raw), "segments\n\n")
+
+# Vérification des landuse disponibles
+landuse_test <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT landuse FROM multipolygons
+           WHERE landuse IN ('residential','commercial','industrial','retail')",
+  quiet = TRUE
+)
+cat("Zones par landuse :\n")
+print(table(landuse_test$landuse))
+
+# Vérification des place disponibles
+place_test <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT place FROM multipolygons
+           WHERE place IN ('city','town','village','suburb','neighbourhood')",
+  quiet = TRUE
+)
+cat("\nZones par place :\n")
+print(table(place_test$place))
+
+# Vérifier le nom de la colonne géométrie dans la couche points
+villes_raw <- st_read(
+  chemin_pbf, layer = "points",
+  query = "SELECT name, place FROM points
+           WHERE place IN ('city','town')",
+  quiet = TRUE
+)
+cat("Colonnes disponibles :\n")
+print(names(villes_raw))
+
+villes_osm <- st_read(
+  chemin_pbf, layer = "points",
+  query = "SELECT name, place FROM points
+           WHERE place IN ('city','town')",
+  quiet = TRUE
+) %>%
+  st_as_sf() %>%
+  st_transform(crs = 32735) %>%
+  filter(!is.na(name)) %>%
+  mutate(type = if_else(place == "city", "hub", "ville"))
+
+cat("Villes récupérées :", nrow(villes_osm), "\n")
+print(villes_osm %>% st_drop_geometry() %>% select(name, place))
 
 
 # ==============================================================================
@@ -581,9 +627,11 @@ tmap_save(carte_verif_routes,
           width = 3000, height = 2400, dpi = 300)
 
 # Ouvre une carte zoomable dans l'onglet Viewer de RStudio
-tmap_mode("view")
-print(carte_verif_routes)
-tmap_mode("plot")   # Remettre en mode statique pour la suite du script
+if (FALSE) {
+  tmap_mode("view")
+  print(carte_verif_routes)
+  tmap_mode("plot")   # Remettre en mode statique pour la suite du script
+}
 
 cat("✓ Carte de vérification générée\n\n")
 
@@ -995,10 +1043,11 @@ tmap_save(
   file.path(DIR_OUTPUT, "carte_aretes_perdues_partie7.png"),
   width = 3000, height = 2400, dpi = 300
 )
-
-tmap_mode("view")
-print(carte_aretes_perdues)
-tmap_mode("plot")
+if (FALSE) {
+  tmap_mode("view")
+  print(carte_aretes_perdues)
+  tmap_mode("plot")
+}
 
 cat("✓ Carte des arêtes perdues sauvegardée\n\n")
 
@@ -1091,6 +1140,106 @@ if (nrow(noeuds_sf) == 0) {
 }
 
 # ==============================================================================
+# PARTIE 9 BIS : CHARGEMENT DES ZONES D'USAGE DU SOL ET TAGUAGE DES ARÊTES
+# ==============================================================================
+# On charge les zones résidentielles, commerciales, industrielles et retail
+# depuis le PBF, puis on détermine pour chaque arête du réseau si elle traverse
+# une zone urbaine dense (résidentielle ou commerciale).
+# Cette information sera utilisée en Partie 13 pour appliquer la pénalité
+# urbaine aux poids lourds.
+
+cat("=== PARTIE 9 BIS : Zones d'usage du sol ===\n")
+
+# ── Chargement des zones résidentielles et commerciales (pénalité poids lourds) ──
+zones_urbaines <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT landuse FROM multipolygons
+           WHERE landuse IN ('residential','commercial','retail')",
+  quiet = TRUE
+) %>%
+  rename(geometry = `_ogr_geometry_`) %>%
+  st_as_sf() %>%
+  st_make_valid() %>%
+  filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
+  st_transform(crs = 32735)
+
+cat("  Zones urbaines (résidentiel + commercial + retail) :",
+    nrow(zones_urbaines), "\n")
+
+# ── Chargement des zones industrielles (origines de fret) ─────────────────────
+zones_industrielles <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT landuse FROM multipolygons
+           WHERE landuse = 'industrial'",
+  quiet = TRUE
+) %>%
+  rename(geometry = `_ogr_geometry_`) %>%
+  st_as_sf() %>%
+  st_make_valid() %>%
+  filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
+  st_transform(crs = 32735) %>%
+  mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
+  filter(aire_km2 > 0.01)   # Supprimer les micro-zones
+
+cat("  Zones industrielles :", nrow(zones_industrielles), "\n")
+
+# ── Chargement des zones retail (destinations commerciales) ───────────────────
+zones_retail <- st_read(
+  chemin_pbf, layer = "multipolygons",
+  query = "SELECT landuse FROM multipolygons
+           WHERE landuse = 'retail'",
+  quiet = TRUE
+) %>%
+  rename(geometry = `_ogr_geometry_`) %>%
+  st_as_sf() %>%
+  st_make_valid() %>%
+  filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
+  st_transform(crs = 32735) %>%
+  mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
+  filter(aire_km2 > 0.005)
+
+cat("  Zones retail :", nrow(zones_retail), "\n\n")
+
+# ── Taguage des arêtes : zone_urbaine = TRUE si l'arête traverse une zone dense ──
+# On utilise le centroïde de chaque arête pour l'intersection (plus rapide
+# qu'une intersection complète ligne × polygone sur 29 000 arêtes)
+cat("  Taguage des arêtes du réseau...\n")
+
+aretes_centroides <- reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf() %>%
+  st_centroid(of_largest_polygon = FALSE) %>%
+  mutate(arete_idx = row_number())
+
+# Union des zones urbaines pour une seule opération d'intersection
+zones_urbaines_union <- zones_urbaines %>%
+  st_union() %>%
+  st_make_valid()
+
+# st_intersects retourne une liste de vecteurs d'indices — lengths() > 0 = intersection
+in_urbain <- lengths(st_intersects(aretes_centroides, zones_urbaines_union)) > 0
+
+# Intégration dans le réseau
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(zone_urbaine = in_urbain)
+
+n_urbain <- sum(in_urbain)
+cat("  Arêtes en zone urbaine :", n_urbain,
+    "(", round(n_urbain / igraph::ecount(reseau_rwanda) * 100, 1), "% du réseau)\n\n")
+
+# Stocker dans DuckDB pour usage dans la table des coûts (Partie 13)
+duck_write(
+  tibble(
+    zone_urbaine    = c(TRUE, FALSE),
+    label_zone      = c("urbaine", "rurale")
+  ),
+  "ref_zones"
+)
+
+cat("✓ Zones d'usage du sol chargées et arêtes taguées\n\n")
+
+# ==============================================================================
 # PARTIE 10 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
 # ==============================================================================
 # Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
@@ -1100,36 +1249,154 @@ if (nrow(noeuds_sf) == 0) {
 
 cat("=== PARTIE 10 : Création des nœuds d'entreposage ===\n")
 
-entreposages_fictifs <- tibble(
+# ── Entrepôts manuels  ────────────────────────────────────────────────────────
+entreposages_manuels <- tibble(
   nom  = c(
-    # Capitale : hub logistique et industriel principal du pays
     "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
-    # Frontières : points d'entrée/sortie des marchandises importées/exportées
     "Frontière Gatuna (Ouganda)", "Frontière Rusumo (Tanzanie)",
     "Frontière Rubavu/Goma (RDC)", "Frontière Kagitumba (Ouganda)",
-    # Capitales de province : centres de redistribution régionale
     "Huye (Butare) - Centre Sud", "Musanze - Centre Nord",
     "Rubavu - Centre Ouest", "Rusizi - Centre Sud-Ouest",
-    # Zone économique spéciale agro-industrielle
     "Bugesera SEZ (Agro-industrie)",
-    # Centres urbains secondaires
     "Muhanga", "Nyanza", "Rwamagana"
   ),
   type = c(
-    "hub","sez","marche",                              # Kigali
-    "frontiere","frontiere","frontiere","frontiere",   # Frontières
-    "ville","ville","ville","ville",                   # Villes de province
-    "sez",                                             # Bugesera
-    "ville","ville","ville"                            # Centres secondaires
+    "hub","sez","marche",
+    "frontiere","frontiere","frontiere","frontiere",
+    "ville","ville","ville","ville",
+    "sez",
+    "ville","ville","ville"
   ),
-  # Coordonnées approximatives en WGS84 (longitude, latitude en degrés décimaux)
   lon = c(30.0619,30.1300,30.0588,30.0890,30.7850,29.2600,30.7500,
           29.7388,29.6333,29.2650,29.0100,30.1500,29.7400,29.7550,30.4300),
   lat = c(-1.9536,-1.9000,-1.9700,-1.3800,-2.3800,-1.6667,-1.3100,
-          -2.5965,-1.4992,-1.6750,-2.4900,-2.1000,-2.0850,-2.3500,-1.8700)
+          -2.5965,-1.4992,-1.6750,-2.4900,-2.1000,-2.0850,-2.3500,-1.8700),
+  source = "manuel"
 )
 
-# Stocker dans DuckDB
+# ── Entrepôts depuis city/town OSM ───────────────────────────────────────────
+# On exclut les villes déjà présentes dans les entrepôts manuels
+# via une jointure spatiale avec buffer de 3km (même ville = même localité)
+villes_osm_sf <- villes_osm %>%
+  mutate(
+    lon = st_coordinates(geometry)[,1],
+    lat = st_coordinates(geometry)[,2]
+  ) %>%
+  st_drop_geometry()
+
+# Conversion des entrepôts manuels en sf pour la comparaison spatiale
+manuels_sf <- entreposages_manuels %>%
+  st_as_sf(coords = c("lon","lat"), crs = 32735)
+
+villes_osm_sf2 <- villes_osm %>%
+  mutate(lon = st_coordinates(geometry)[,1],
+         lat = st_coordinates(geometry)[,2])
+
+# Identifier les villes OSM non dupliquées avec les entrepôts manuels
+idx_proches <- st_is_within_distance(villes_osm, manuels_sf, dist = 3000)
+villes_nouvelles <- villes_osm[lengths(idx_proches) == 0, ] %>%
+  mutate(
+    nom    = paste0(name, " (OSM)"),
+    type   = if_else(place == "city", "hub", "ville"),
+    lon    = st_coordinates(geometry)[,1],
+    lat    = st_coordinates(geometry)[,2],
+    source = "osm_place"
+  ) %>%
+  st_drop_geometry() %>%
+  select(nom, type, lon, lat, source)
+
+cat("  Villes OSM city/town nouvelles (non dupliquées) :",
+    nrow(villes_nouvelles), "\n")
+
+# ── Entrepôts depuis zones industrielles (origines de fret) ──────────────────
+if (nrow(zones_industrielles) > 0) {
+  
+  # Centroïdes des zones industrielles significatives (> 0.05 km²)
+  centroides_indus <- zones_industrielles %>%
+    filter(aire_km2 > 0.05) %>%
+    st_centroid(of_largest_polygon = FALSE) %>%
+    mutate(
+      lon = st_coordinates(geometry)[,1],
+      lat = st_coordinates(geometry)[,2],
+      nom = paste0("Zone industrielle ", row_number()),
+      type   = "industrie",
+      source = "osm_industrial"
+    ) %>%
+    st_drop_geometry() %>%
+    select(nom, type, lon, lat, source)
+  
+  # Dédoublonnage : supprimer les zones trop proches d'un entrepôt existant
+  centroides_indus_sf <- centroides_indus %>%
+    st_as_sf(coords = c("lon","lat"), crs = 32735)
+  
+  tous_existants <- bind_rows(
+    entreposages_manuels %>% st_as_sf(coords = c("lon","lat"), crs = 32735),
+    villes_nouvelles    %>% st_as_sf(coords = c("lon","lat"), crs = 32735)
+  )
+  
+  idx_indus_proches <- st_is_within_distance(centroides_indus_sf,
+                                             tous_existants, dist = 2000)
+  zones_indus_nouvelles <- centroides_indus[lengths(idx_indus_proches) == 0, ]
+  
+  cat("  Zones industrielles nouvelles :", nrow(zones_indus_nouvelles), "\n")
+} else {
+  zones_indus_nouvelles <- tibble(nom=character(), type=character(),
+                                  lon=numeric(), lat=numeric(), source=character())
+}
+
+# ── Entrepôts depuis zones retail (destinations commerciales) ─────────────────
+if (nrow(zones_retail) > 0) {
+  
+  centroides_retail <- zones_retail %>%
+    filter(aire_km2 > 0.01) %>%
+    st_centroid(of_largest_polygon = FALSE) %>%
+    mutate(
+      lon    = st_coordinates(geometry)[,1],
+      lat    = st_coordinates(geometry)[,2],
+      nom    = paste0("Zone retail ", row_number()),
+      type   = "marche",
+      source = "osm_retail"
+    ) %>%
+    st_drop_geometry() %>%
+    select(nom, type, lon, lat, source)
+  
+  # Dédoublonnage
+  centroides_retail_sf <- centroides_retail %>%
+    st_as_sf(coords = c("lon","lat"), crs = 32735)
+  
+  tous_existants2 <- bind_rows(
+    entreposages_manuels      %>% st_as_sf(coords = c("lon","lat"), crs = 32735),
+    villes_nouvelles          %>% st_as_sf(coords = c("lon","lat"), crs = 32735),
+    zones_indus_nouvelles     %>% st_as_sf(coords = c("lon","lat"), crs = 32735)
+  )
+  
+  idx_retail_proches <- st_is_within_distance(centroides_retail_sf,
+                                              tous_existants2, dist = 1000)
+  zones_retail_nouvelles <- centroides_retail[lengths(idx_retail_proches) == 0, ]
+  
+  cat("  Zones retail nouvelles :", nrow(zones_retail_nouvelles), "\n")
+} else {
+  zones_retail_nouvelles <- tibble(nom=character(), type=character(),
+                                   lon=numeric(), lat=numeric(), source=character())
+}
+
+# ── Assemblage final ──────────────────────────────────────────────────────────
+entreposages_fictifs <- bind_rows(
+  entreposages_manuels,
+  villes_nouvelles,
+  zones_indus_nouvelles,
+  zones_retail_nouvelles
+) %>%
+  # Supprimer les éventuels doublons résiduels sur les coordonnées
+  distinct(lon, lat, .keep_all = TRUE)
+
+cat("\n✓ Entrepôts totaux :", nrow(entreposages_fictifs), "\n")
+cat("  dont manuels    :", sum(entreposages_fictifs$source == "manuel"), "\n")
+cat("  dont OSM villes :", sum(entreposages_fictifs$source == "osm_place"), "\n")
+cat("  dont industriels:", sum(entreposages_fictifs$source == "osm_industrial"), "\n")
+cat("  dont retail     :", sum(entreposages_fictifs$source == "osm_retail"), "\n\n")
+
+# Ajout de la colonne source dans la table DuckDB
 duck_write(entreposages_fictifs, "zones_entreposage")
 
 # Conversion en objet sf et reprojection en UTM 35S (même CRS que le réseau)
@@ -1303,6 +1570,12 @@ duck_query("
       f.facteur_conso_pente,
       f.prix_carburant,
       f.valeur_temps,
+      f.facteur_urbain,
+      -- Application de la pénalité urbaine :
+      -- En zone résidentielle/commerciale, les poids lourds sont pénalisés
+      -- via un multiplicateur sur le coût du temps et l'usure
+      CASE WHEN a.zone_urbaine = TRUE THEN f.facteur_urbain ELSE 1.0 END
+        AS facteur_urbain_applique,
       f.capacite_tonnes,
       -- Facteur surface et coût d'usure : résolu ici par CASE (fonction si-alors-sinon) pour éviter
       -- une jointure supplémentaire (params_surface n'est plus une table séparée)
@@ -1393,16 +1666,16 @@ duck_query("
     length_km * usure_usd_km                        AS cost_wear_usd,
     (length_km / speed_kmh) * valeur_temps          AS cost_time_usd,
     travel_time_h,
-    -- Coût généralisé calculé directement ici (somme des 3 composantes)
+    -- Coût généralisé avec pénalité urbaine sur le temps et l'usure
     fuel_consumption_L * prix_carburant
-      + length_km * usure_usd_km
-      + (length_km / speed_kmh) * valeur_temps      AS cost_generalized_usd,
-    -- Coût au km (NULLIF évite la division par zéro)
+      + length_km * usure_usd_km * facteur_urbain_applique
+      + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique
+                                                              AS cost_generalized_usd,
     (fuel_consumption_L * prix_carburant
-      + length_km * usure_usd_km
-      + (length_km / speed_kmh) * valeur_temps)
+      + length_km * usure_usd_km * facteur_urbain_applique
+      + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique)
       / NULLIF(length_km, 0)
-      / NULLIF(capacite_tonnes, 0)               AS cost_per_tkm
+      / NULLIF(capacite_tonnes, 0)                            AS cost_per_tkm
   FROM avec_couts
 ")
 
@@ -1703,7 +1976,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   cat("  ✓", nom_fichier, "\n")
 }
 
-tmap_mode("view")
+
 cartes_vehicules <- list()
 
 for (i in seq_len(nrow(VEHICULES_IDS))) {
@@ -1740,13 +2013,14 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
     tm_title(paste("Coûts de Transport —", nom_veh))
 }
-
+if (FALSE){
+tmap_mode("view")
 cat("✓ Cartes créées :", paste(names(cartes_vehicules), collapse=", "), "\n")
 cat("  Pour afficher, entrer dans la console : print(cartes_vehicules[['camionnette']])\n")
 cat("                                          print(cartes_vehicules[['camion_moyen']])\n")
 cat("                                          print(cartes_vehicules[['camion_lourd']])\n")
 tmap_mode("plot")
-
+}
 
 # ── Carte comparative : ratio coût par km camion lourd vs camionnette ─────────
 # Requête SQL directe : le calcul du ratio se fait entièrement dans DuckDB
@@ -1787,9 +2061,54 @@ if (nrow(ratio_df) > 0) {
 
 cat("✓", nrow(VEHICULES_IDS), "cartes + 1 carte comparative générées\n\n")
 
+if (FALSE){
 tmap_mode("view")
 print(carte_ratio)
 tmap_mode("plot")
+}
+
+# ── Carte comparative : ratio coût par tkm camion moyen vs camionnette ────────
+ratio_moyen_df <- duck_query("
+  SELECT
+    a.arete_id,
+    a.cost_per_tkm / NULLIF(b.cost_per_tkm, 0) AS ratio_moyen_vs_camionnette
+  FROM
+    (SELECT arete_id, cost_per_tkm FROM aretes_couts_tous WHERE vehicule_id = 'camion_moyen') a
+  JOIN
+    (SELECT arete_id, cost_per_tkm FROM aretes_couts_tous WHERE vehicule_id = 'camionnette') b
+  USING (arete_id)
+  ORDER BY arete_id
+")
+
+if (nrow(ratio_moyen_df) > 0) {
+  reseau_ratio_moyen <- reseau_rwanda %>%
+    activate("edges") %>%
+    mutate(ratio_moyen_vs_camionnette = ratio_moyen_df$ratio_moyen_vs_camionnette)
+  
+  carte_ratio_moyen <- fond_carte() +
+    tm_shape(reseau_ratio_moyen %>% activate("edges") %>% st_as_sf()) +
+    tm_lines(
+      col       = "ratio_moyen_vs_camionnette",
+      col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.rd_yl_gn"),
+      col.legend = tm_legend(title="Ratio coût\nmoyen / camionnette"),
+      lwd = 1.5
+    ) +
+    tm_title("Surcoût relatif — Camion moyen vs Camionnette") +
+    tm_layout(legend.outside=TRUE, frame=TRUE) +
+    tm_scalebar(position=c("left","bottom")) +
+    tm_compass(position=c("right","top"))
+  
+  tmap_save(carte_ratio_moyen,
+            file.path(DIR_OUTPUT,"carte_ratio_moyen_camionnette.png"),
+            width=3000, height=2400, dpi=300)
+  cat("  ✓ carte_ratio_moyen_camionnette.png\n")
+}
+
+if (FALSE) {
+tmap_mode("view")
+print(carte_ratio_moyen)
+tmap_mode("plot")
+}
 
 # ── Carte des pentes (indépendante du véhicule) ───────────────────────────────
 carte_pentes <- fond_carte() +
@@ -1807,10 +2126,11 @@ tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
           width=3000, height=2400, dpi=300)
 cat("  ✓ carte_pentes_rwanda.png\n")
 
+if (FALSE) {
 tmap_mode("view")
 print(carte_pentes)
 tmap_mode("plot")
-
+}
 
 # ==============================================================================
 # PARTIE 15 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
@@ -2199,6 +2519,94 @@ offre_zones   <- matrix(0, n_warehouses, N_SECTEURS,
                         dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
 demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
                         dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
+
+# ── Calcul de la composition d'usage du sol autour de chaque entrepôt ─────────
+# Pour chaque entrepôt, on calcule la part de chaque landuse dans un buffer
+# de 2km. Cette composition module les profils d'offre/demande.
+
+cat("  Calcul de la composition landuse par zone...\n")
+
+# Union de toutes les zones par type pour les intersections
+zones_all <- bind_rows(
+  zones_urbaines    %>% select(geometry),
+  zones_industrielles %>% select(geometry)
+) %>% st_make_valid()
+
+# Buffer de 2km autour de chaque entrepôt
+entreposages_buffer <- entreposages_sf %>%
+  st_buffer(dist = 2000) %>%
+  mutate(zone_idx = row_number())
+
+# Calcul des aires de chaque type de landuse dans chaque buffer
+calc_part_landuse <- function(buffer_geom, zones_type) {
+  inter <- tryCatch(
+    st_intersection(buffer_geom, zones_type %>% st_union()),
+    error = function(e) NULL
+  )
+  if (is.null(inter) || length(inter) == 0) return(0)
+  as.numeric(st_area(inter)) / as.numeric(st_area(buffer_geom))
+}
+
+part_urbain    <- numeric(n_warehouses)
+part_industriel <- numeric(n_warehouses)
+
+for (i in seq_len(n_warehouses)) {
+  buf <- entreposages_buffer[i, ]$geometry
+  part_urbain[i]     <- calc_part_landuse(buf, zones_urbaines)
+  part_industriel[i] <- calc_part_landuse(buf, zones_industrielles)
+  if (i %% 5 == 0) cat("  Landuse par zone :", round(i/n_warehouses*100), "%\n")
+}
+
+cat("✓ Composition landuse calculée\n\n")
+
+# ── Modification des profils selon la composition landuse ─────────────────────
+# Principe : plus une zone est industrielle, plus son profil d'offre favorise
+# l'Industrie et la Construction ; plus elle est urbaine, plus elle favorise
+# le Commerce et les Services.
+
+for (i in 1:n_warehouses) {
+  nom_zone  <- noeuds_entreposage$warehouse_name[i]
+  type_zone <- noeuds_entreposage$warehouse_type[i]
+  taille    <- TAILLE_ZONE[nom_zone]
+  if (is.na(taille)) taille <- 0.10
+  
+  bruit_o <- runif(N_SECTEURS, 0.80, 1.20)
+  bruit_d <- runif(N_SECTEURS, 0.80, 1.20)
+  
+  # Profil de base selon le type de zone
+  profil_o <- PROFILS_OFFRE[[type_zone]]
+  profil_d <- PROFILS_DEMANDE[[type_zone]]
+  
+  # ── Ajustement selon la part industrielle ──────────────────────────────────
+  # Chaque point de part industrielle renforce Industrie et Construction
+  # et réduit proportionnellement Commerce et Services
+  p_ind <- min(part_industriel[i], 0.5)   # Plafond à 50% pour éviter les extrêmes
+  if (p_ind > 0.05) {
+    bonus_ind <- p_ind * 0.3   # Amplitude max du bonus
+    profil_o["Industrie"]    <- profil_o["Industrie"]    + bonus_ind
+    profil_o["Construction"] <- profil_o["Construction"] + bonus_ind * 0.5
+    profil_o["Commerce"]     <- profil_o["Commerce"]     - bonus_ind * 0.8
+    profil_o["Services"]     <- profil_o["Services"]     - bonus_ind * 0.7
+    # Renormalisation pour que la somme reste à 1
+    profil_o <- pmax(profil_o, 0.01)
+    profil_o <- profil_o / sum(profil_o)
+  }
+  
+  # ── Ajustement selon la part urbaine ──────────────────────────────────────
+  p_urb <- min(part_urbain[i], 0.8)
+  if (p_urb > 0.1) {
+    bonus_urb <- p_urb * 0.2
+    profil_d["Commerce"]  <- profil_d["Commerce"]  + bonus_urb
+    profil_d["Services"]  <- profil_d["Services"]  + bonus_urb * 0.8
+    profil_d["Industrie"] <- profil_d["Industrie"] - bonus_urb * 0.9
+    profil_d["Construction"] <- profil_d["Construction"] - bonus_urb * 0.9
+    profil_d <- pmax(profil_d, 0.01)
+    profil_d <- profil_d / sum(profil_d)
+  }
+  
+  offre_zones[i,]   <- profil_o * taille * echelle_offre   / sum(TAILLE_ZONE) * bruit_o
+  demande_zones[i,] <- profil_d * taille * echelle_demande / sum(TAILLE_ZONE) * bruit_d
+}
 
 for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
@@ -2936,7 +3344,7 @@ aretes_fret_export <- reseau_rwanda %>%
   st_as_sf() %>%
   select(osm_id, name, road_type, surface,
          length_km, speed_kmh,
-         cost_generalized_usd, cost_per_km,
+         cost_generalized_usd, cost_per_tkm,
          volume_tonnes, classe_trafic)
 
 st_write(aretes_fret_export,
