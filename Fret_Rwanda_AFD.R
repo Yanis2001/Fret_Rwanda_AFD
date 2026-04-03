@@ -2565,7 +2565,7 @@ N_SECTEURS <- length(SECTEURS)
 #   proviennent de l'Agriculture (grains, fruits, légumes pour transformation)
 A <- matrix(c(
   # ← Secteur fournisseur (lignes) / Secteur consommateur (colonnes) →
-  #  Agri  Mines AgroI Indus Const Comm  Trans Serv
+  # Agri  Mines AgroI Indus Const Comm  Trans Serv
   0.08, 0.00, 0.45, 0.05, 0.01, 0.05, 0.02, 0.03,  # Agriculture
   0.00, 0.05, 0.01, 0.08, 0.05, 0.00, 0.01, 0.00,  # Mines
   0.05, 0.00, 0.08, 0.02, 0.00, 0.06, 0.03, 0.04,  # Agro-industrie
