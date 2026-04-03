@@ -18,7 +18,7 @@
 #  car DuckDB spatial n'est pas encore intégré avec sfnetworks.
 #
 # ── POUR RETROUVER LE DÉPÔT GITHUB ───────────────────────────────────────────
-#  system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+#  system("git clone https://github.com/GEMMES-AFD/Transport.git")
 #  Pour activer l'onglet Git dans RStudio : File -> Open Project
 ################################################################################
 
@@ -28,9 +28,17 @@
 token <- Sys.getenv("GITHUB_PAT")
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
 
+################################################################################
+# PARTIE I — INITIALISATION ET CONFIGURATION
+# Met en place l'environnement complet avant tout traitement :
+# packages, base DuckDB, palettes graphiques et paramètres de la flotte.
+# Modifier cette partie impacte potentiellement l'ensemble du script.
+################################################################################
 
 # ==============================================================================
-# PARTIE 0 : INSTALLATION ET CHARGEMENT DES PACKAGES
+# I.1 : Packages et options
+# Installe et charge les packages nécessaires. Augmente le timeout pour
+# les téléchargements de gros fichiers (DEM, PBF).
 # ==============================================================================
 
 # Liste exhaustive des packages nécessaires avec leur rôle :
@@ -76,16 +84,11 @@ set.seed(123)
 
 cat("✓ Tous les packages sont chargés\n\n")
 
-
 # ==============================================================================
-# PARTIE 0 BIS : CONNEXION DUCKDB
+# I.2 : Connexion DuckDB et fonctions utilitaires
+# Ouvre la base analytique persistante et définit les raccourcis duck_write()
+# et duck_query() utilisés dans toutes les parties suivantes.
 # ==============================================================================
-# DuckDB crée un fichier .duckdb sur disque (comme SQLite) qui persiste entre
-# les sessions. Avantages par rapport à des data.frames R :
-#   1. Reprendre l'analyse sans tout recalculer (les tables sont déjà là)
-#   2. Interroger les résultats directement en SQL depuis R ou un client externe
-#   3. Exporter en Parquet/CSV via COPY TO sans charger toute la donnée en RAM
-#   4. Exécuter des jointures et agrégations sur de gros volumes hors-mémoire
 
 # Fermeture propre la connexion à DuckDB afin de la rouvrir ensuite proprement
 if (exists("con")) {
@@ -127,11 +130,10 @@ duck_write <- function(df, table_name) {
 duck_query <- function(sql) dbGetQuery(con, sql)
 
 # ==============================================================================
-# PARTIE 1 :  PALETTES DE COULEURS — DÉFINITION CENTRALISÉE
+# I.3 : Palettes de couleurs centralisées
+# Définit toutes les couleurs utilisées dans les cartes. Modifier ici
+# répercute les changements sur l'ensemble des visualisations du script.
 # ==============================================================================
-# Toutes les couleurs utilisées dans les cartes sont définies ici.
-# Pour modifier une couleur : changer uniquement ce bloc.
-# Format : vecteur nommé (nom de catégorie = code couleur hexadécimal)
 
 # ── Types de routes ───────────────────────────────────────────────────────────
 PALETTE_ROAD_TYPE <- c(
@@ -190,15 +192,11 @@ cat("✓ Palettes de couleurs définies\n\n")
 
 
 # ==============================================================================
-# PARTIE 2 : DÉFINITION DE LA FLOTTE — TABLES DUCKDB
+# I.4 : Paramètres de la flotte de véhicules
+# Définit les 3 tables DuckDB décrivant la flotte (coûts, vitesses, pentes,
+# transbordements, coûts pré-frontière). Pour ajouter un véhicule :
+# modifier uniquement ce bloc, le reste du script s'adapte automatiquement.
 # ==============================================================================
-# Structure en 3 tables normalisées :
-#   params_flotte        : 1 ligne par véhicule (scalaires économiques)
-#   vitesses_flotte      : 1 ligne par véhicule × road_type × surface
-#   facteurs_pente_flotte: 1 ligne par véhicule × slope_category
-#
-# Pour ajouter un véhicule : ajouter des lignes dans les 3 tibbles ci-dessous.
-# Aucune autre modification n'est nécessaire dans le reste du script.
 
 # ── Table 1 : paramètres scalaires par véhicule ──────────────────────────────
 params_flotte_df <- tribble(
@@ -357,11 +355,19 @@ cat("✓ Flotte chargée dans DuckDB :",
     paste(VEHICULES_IDS$vehicule_id, collapse = ", "), "\n\n")
 
 
-# ==============================================================================
-# PARTIE 2 : ACQUISITION DES DONNÉES ROUTIÈRES (FICHIER GEOFABRIK)
-# ==============================================================================
+################################################################################
+# PARTIE II — ACQUISITION DES DONNÉES GÉOGRAPHIQUES
+# Télécharge et charge en mémoire toutes les sources de données brutes.
+# Aucun calcul ni transformation ici — uniquement du chargement.
+# Si les fichiers sources changent (nouveau PBF, nouveau DEM), relancer
+# cette partie invalide le cache des pentes (supprimer pentes_cache.rds).
+################################################################################
 
-cat("=== PARTIE 2 : Chargement des données routières ===\n")
+# ==============================================================================
+# II.1 : Données routières (PBF)
+# Télécharge le fichier PBF depuis MinIO et charge les segments routiers
+# utiles au fret via une requête GDAL filtrée sur les types de routes.
+# ==============================================================================
 
 # ── Téléchargement depuis MinIO (SSP Cloud) ───────────────────────────────────
 # Le fichier PBF (Protocolbuffer Binary Format) est le format natif d'OpenStreetMap.
@@ -398,6 +404,12 @@ routes_rwanda_raw <- st_read(
 )
 
 cat("✓ Données chargées :", nrow(routes_rwanda_raw), "segments\n\n")
+
+# ==============================================================================
+# II.2 : Couches administratives et fond de carte
+# Extrait frontières, provinces, lacs et parcs depuis le PBF.
+# Définit fond_carte(), la fonction réutilisée dans toutes les cartes du script.
+# ==============================================================================
 
 # Vérification des landuse disponibles
 landuse_test <- st_read(
@@ -443,16 +455,6 @@ villes_osm <- st_read(
 cat("Villes récupérées :", nrow(villes_osm), "\n")
 print(villes_osm %>% st_drop_geometry() %>% select(name, place))
 
-
-# ==============================================================================
-# PARTIE 3 : NETTOYAGE ET PRÉPARATION DES DONNÉES ROUTIÈRES
-# ==============================================================================
-# Stratégie DuckDB : les attributs textuels (surface, vitesse…) sont extraits
-# d'abord en R (opération non vectorisable en SQL pur), puis l'harmonisation
-# des valeurs est réalisée en SQL via CASE WHEN — plus lisible et plus rapide
-# que des chaînes de case_when() imbriqués dans mutate().
-
-cat("=== PARTIE 3 : Nettoyage des données routières ===\n")
 
 # ── Extraction des tags OSM depuis la colonne other_tags ──────────────────────
 # Dans les fichiers PBF, les attributs secondaires (surface, vitesse max, etc.)
@@ -540,13 +542,6 @@ routes_rwanda <- routes_attrs_raw %>%
 
 cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
 
-# ==============================================================================
-# PARTIE 4 : VÉRIFICATION VISUELLE + EXTRACTION DES COUCHES ADMINISTRATIVES
-# ==============================================================================
-# On extrait ici toutes les couches géographiques de référence depuis le PBF
-# (frontière, provinces, lacs) 
-
-cat("=== PARTIE 4 : Couches administratives + vérification visuelle ===\n")
 
 # ── Frontière nationale (admin_level = 2) ─────────────────────────────────────
 rwanda_boundary <- st_read(
@@ -755,15 +750,20 @@ if (FALSE) {
 
 cat("✓ Carte de vérification générée\n\n")
 
+
 # ==============================================================================
-# PARTIE 5 : ACQUISITION DES DONNÉES D'ÉLÉVATION
+# II.3 : Modèle Numérique de Terrain (DEM)
+# Télécharge le DEM SRTM depuis AWS via elevatr. En cas d'échec, génère
+# un DEM fictif calibré sur la topographie réelle du Rwanda.
+# Utilisé uniquement en Partie IV.2 pour le calcul des pentes.
 # ==============================================================================
+
+
 # Le DEM (Digital Elevation Model) est une grille de pixels où chaque valeur
 # représente l'altitude en mètres au-dessus du niveau de la mer.
 # Il sera utilisé pour calculer la pente de chaque segment routier
 # (ratio dénivelé/longueur × 100 = pourcentage de pente).
 
-cat("=== PARTIE 5 : Téléchargement des données d'élévation ===\n")
 
 # Créer l'emprise géographique à partir de la bbox des routes
 # pour ne télécharger que la zone d'intérêt (Rwanda uniquement)
@@ -833,19 +833,28 @@ dem_rwanda <- clamp(dem_rwanda, lower = 800, upper = 4600, values = NA)
 cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
 cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "m\n\n")
 
+################################################################################
+# PARTIE III — CONSTRUCTION ET CORRECTION DU RÉSEAU ROUTIER
+# Transforme les segments OSM bruts en graphe sfnetworks topologiquement
+# cohérent, puis extrait la composante géante (réseau principal connecté).
+# Toute modification ici invalide le cache des pentes.
+################################################################################
+
+# ==============================================================================
+# III.1 : Nettoyage et harmonisation des attributs
+# Extrait les tags OSM (surface, vitesse, sens unique) via regex, puis
+# harmonise les valeurs hétérogènes en SQL via DuckDB (CASE WHEN).
+# ==============================================================================
+
+
 # Cartographier rapidement pour identifier visuellement les anomalies
 plot(dem_rwanda, main = "DEM Rwanda — vérification")
 plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 
-# ==============================================================================
-# PARTIE 6 : CRÉATION DU GRAPHE ROUTIER AVEC SFNETWORKS
-# ==============================================================================
 # sfnetworks représente le réseau routier comme un graphe topologique où :
 #   - les NŒUDS sont les intersections et extrémités de routes
 #   - les ARÊTES sont les segments de route entre deux nœuds
 # Ce graphe servira ensuite à igraph pour le calcul de plus courts chemins.
-
-cat("=== PARTIE 6 : Création du graphe routier ===\n")
 
 # ── Homogénéisation des types de géométrie ───────────────────────────────────
 # Le fichier PBF peut contenir des MULTILINESTRING (plusieurs lignes groupées)
