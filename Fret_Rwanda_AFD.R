@@ -1289,18 +1289,9 @@ zones_industrielles <- st_read(
   mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
   filter(aire_km2 > 0.01)
 
-# ── Chargement des zones retail ──
-zones_retail <- st_read(
-  chemin_pbf, layer = "multipolygons",
-  query = "SELECT * FROM multipolygons
-           WHERE landuse = 'retail'",
-  quiet = TRUE
-) %>%
-  rename(geometry = `_ogr_geometry_`) %>%
-  st_as_sf() %>%
-  st_make_valid() %>%
-  filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
-  st_transform(crs = 32735) %>%
+# ── Extraction des zones retail depuis zones_urbaines (déjà chargées) ─────────
+zones_retail <- zones_urbaines %>%
+  filter(landuse == "retail") %>%
   mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
   filter(aire_km2 > 0.005)
     
@@ -1518,9 +1509,6 @@ entreposages_fictifs <- bind_rows(
 ) %>%
   # Supprimer les éventuels doublons résiduels sur les coordonnées
   distinct(lon, lat, .keep_all = TRUE)
-
-# Mettre à jour la table DuckDB
-duck_write(entreposages_fictifs, "zones_entreposage")
 
 cat("\n✓ Entrepôts totaux :", nrow(entreposages_fictifs), "\n")
 cat("  dont manuels    :", sum(entreposages_fictifs$source == "manuel"), "\n")
@@ -2083,6 +2071,27 @@ mapping_aretes_mm <- bind_rows(
   )
 )
 
+# ── Vecteurs d'accès direct pour le remappage (Partie 20) ─────────────────────
+# Indexés par idx_mm → accès en O(1) au lieu de O(n) par recherche dans le tibble
+# Taille = n_vehicules × n_aretes_physiques + n_transbordements
+max_idx_mm <- max(mapping_aretes_mm$idx_mm)
+
+lookup_type     <- character(max_idx_mm)
+lookup_physique <- integer(max_idx_mm)
+lookup_vehicule <- character(max_idx_mm)
+
+lookup_type[mapping_aretes_mm$idx_mm]     <- mapping_aretes_mm$type
+lookup_physique[mapping_aretes_mm$idx_mm] <- 
+  ifelse(is.na(mapping_aretes_mm$arete_physique_idx), 
+         0L, 
+         mapping_aretes_mm$arete_physique_idx)
+lookup_vehicule[mapping_aretes_mm$idx_mm] <- 
+  ifelse(is.na(mapping_aretes_mm$vehicule_id), 
+         "", 
+         mapping_aretes_mm$vehicule_id)
+
+cat("  Vecteurs de lookup construits — taille :", max_idx_mm, "\n\n")
+
 cat("  Table de mapping créée :", nrow(mapping_aretes_mm), "arêtes\n")
 cat("  dont routes        :", sum(mapping_aretes_mm$type == "route"), "\n")
 cat("  dont transbordements:", sum(mapping_aretes_mm$type == "transbordement"), "\n\n")
@@ -2266,7 +2275,7 @@ if (nrow(ratio_moyen_df) > 0) {
     tm_shape(reseau_ratio_moyen %>% activate("edges") %>% st_as_sf()) +
     tm_lines(
       col       = "ratio_moyen_vs_camionnette",
-      col.scale = tm_scale_intervals(style="quantile", n=5, values="brewer.rd_yl_gn"),
+      col.scale = tm_scale_intervals(style="quantile", n=5, values=PALETTE_RATIO),
       col.legend = tm_legend(title="Ratio coût\nmoyen / camionnette"),
       lwd = 1.5
     ) +
@@ -3152,28 +3161,16 @@ for (i in seq_len(n_warehouses)) {
       next
     }
     
-    # ── Remappage : arête multi-modale → arête physique + véhicule ────────────
+    # ── Remappage vectorisé : arête multi-modale → arête physique + véhicule ──
     for (edge_mm in edges_path_mm) {
-      
-      # Chercher dans la table de mapping
-      mapping_row <- mapping_aretes_mm[mapping_aretes_mm$idx_mm == edge_mm, ]
-      
-      # Ignorer les transbordements (pas d'arête physique)
-      if (nrow(mapping_row) == 0 || mapping_row$type == "transbordement") next
-      
-      idx_phys <- mapping_row$arete_physique_idx
-      veh_id   <- mapping_row$vehicule_id
-      
-      # Vérification de validité
-      if (is.na(idx_phys) || is.na(veh_id)) next
-      if (idx_phys < 1 || idx_phys > n_aretes_physiques) next
-      
-      # Colonne correspondant au véhicule
-      col_veh <- which(VEHICULES_IDS$vehicule_id == veh_id)
+      if (edge_mm > max_idx_mm) next
+      if (lookup_type[edge_mm] == "transbordement" || lookup_type[edge_mm] == "") next
+      idx_phys <- lookup_physique[edge_mm]
+      veh_id   <- lookup_vehicule[edge_mm]
+      if (idx_phys < 1 || idx_phys > n_aretes_physiques || veh_id == "") next
+      col_veh  <- which(VEHICULES_IDS$vehicule_id == veh_id)
       if (length(col_veh) == 0) next
-      
-      # Affectation du volume
-      volume_trafic_mm[idx_phys, col_veh] <- 
+      volume_trafic_mm[idx_phys, col_veh] <-
         volume_trafic_mm[idx_phys, col_veh] + flux_ij
     }
     
