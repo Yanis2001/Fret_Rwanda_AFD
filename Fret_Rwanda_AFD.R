@@ -1337,6 +1337,121 @@ duck_write(
 cat("✓ Zones d'usage du sol chargées et arêtes taguées\n\n")
 
 # ==============================================================================
+# PARTIE 11 (DÉPLACÉE) : CALCUL DES PENTES POUR CHAQUE ARÊTE
+# ==============================================================================
+# Seul un changement sur le réseau (Parties 6-9) ou le DEM (Partie 5)
+# nécessite de relancer cette partie.
+#
+# CACHE : les pentes sont sauvegardées dans outputs/pentes_cache.rds
+# Le cache est invalidé automatiquement si le nombre d'arêtes change.
+# Pour forcer un recalcul complet : supprimer outputs/pentes_cache.rds
+# ==============================================================================
+
+cat("=== PARTIE 11 : Calcul des pentes ===\n")
+
+CACHE_PENTES <- file.path(DIR_OUTPUT, "pentes_cache.rds")
+
+aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+n_aretes         <- nrow(aretes_avec_geom)
+
+# ── Tentative de chargement du cache ──────────────────────────────────────────
+cache_valide <- FALSE
+
+if (file.exists(CACHE_PENTES)) {
+  
+  cat("  Cache trouvé :", CACHE_PENTES, "\n")
+  cache <- readRDS(CACHE_PENTES)
+  
+  # Contrôle de validité : le nombre d'arêtes doit correspondre
+  # Si le réseau a été modifié (nouvelles corrections topo, nouveau PBF…),
+  # le cache est rejeté et le calcul repart de zéro.
+  if (!is.null(cache$n_aretes) && cache$n_aretes == n_aretes) {
+    pentes_df    <- cache$pentes_df
+    cache_valide <- TRUE
+    cat("  ✓ Cache valide (", n_aretes, "arêtes) — calcul des pentes ignoré\n\n")
+  } else {
+    cat("  ⚠ Cache invalide : réseau modifié (",
+        cache$n_aretes, "arêtes en cache vs",
+        n_aretes, "arêtes actuelles) — recalcul...\n")
+  }
+}
+
+# ── Calcul si pas de cache valide ─────────────────────────────────────────────
+if (!cache_valide) {
+  
+  cat("  Calcul des pentes pour", n_aretes, "arêtes...\n")
+  
+  calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
+    
+    longueur <- as.numeric(st_length(ligne_geom))
+    n_points <- max(2, floor(longueur / espacement))
+    points   <- if (longueur < espacement * 2)
+      st_line_sample(ligne_geom, n = 2, type = "regular")
+    else
+      st_line_sample(ligne_geom, n = n_points, type = "regular")
+    
+    points_sf   <- st_cast(points, "POINT")
+    elevations  <- terra::extract(dem, vect(points_sf), method = "bilinear")
+    elev_values <- elevations[, 2]
+    
+    if (any(is.na(elev_values)) || length(elev_values) < 2)
+      return(list(slope_mean=0, elevation_gain=0, elevation_loss=0, rugosity=0))
+    
+    denivele_net   <- elev_values[length(elev_values)] - elev_values[1]
+    slope_mean_pct <- (denivele_net / longueur) * 100
+    differences    <- diff(elev_values)
+    elevation_gain <- sum(differences[differences > 0], na.rm = TRUE)
+    elevation_loss <- abs(sum(differences[differences < 0], na.rm = TRUE))
+    rugosity       <- (elevation_gain + elevation_loss) / longueur
+    
+    list(slope_mean     = slope_mean_pct,
+         elevation_gain = elevation_gain,
+         elevation_loss = elevation_loss,
+         rugosity       = rugosity)
+  }
+  
+  resultats_pentes <- vector("list", n_aretes)
+  
+  for (i in seq_len(n_aretes)) {
+    if (i %% 500 == 0 || i == n_aretes)
+      cat("  Pentes :", round(i / n_aretes * 100, 1), "%\n")
+    resultats_pentes[[i]] <- calculer_pente_arete(
+      aretes_avec_geom$geometry[i],
+      dem_rwanda,
+      espacement = 100
+    )
+  }
+  
+  pentes_df <- bind_rows(resultats_pentes)
+  
+  # ── Sauvegarde du cache ──────────────────────────────────────────────────────
+  # On sauvegarde pentes_df + le nombre d'arêtes pour validation future
+  saveRDS(
+    list(pentes_df = pentes_df, n_aretes = n_aretes),
+    CACHE_PENTES
+  )
+  cat("  ✓ Cache sauvegardé :", CACHE_PENTES, "\n\n")
+}
+
+# ── Intégration des pentes dans le réseau (toujours exécuté) ──────────────────
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(
+    slope_mean      = pentes_df$slope_mean,
+    elevation_gain  = pentes_df$elevation_gain,
+    elevation_loss  = pentes_df$elevation_loss,
+    rugosity        = pentes_df$rugosity,
+    slope_category  = case_when(
+      abs(slope_mean) < 2 ~ "plat",
+      abs(slope_mean) < 5 ~ "legere",
+      abs(slope_mean) < 8 ~ "moderee",
+      TRUE                ~ "forte"
+    )
+  )
+
+cat("✓ Pentes intégrées dans le réseau\n\n")
+
+# ==============================================================================
 # PARTIE 10 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
 # ==============================================================================
 # Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
@@ -1569,100 +1684,6 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
 # ==============================================================================
-# PARTIE 11 : CALCUL DES PENTES POUR CHAQUE ARÊTE
-# ==============================================================================
-# La pente d'un segment routier influence à la fois la vitesse des véhicules
-# et leur consommation de carburant. On la calcule en échantillonnant des points
-# le long de chaque arête et en extrayant leur altitude depuis le DEM.
-
-cat("=== PARTIE 11 : Calcul des pentes ===\n")
-
-calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
-  
-  # Calcul de la longueur du segment en mètres (CRS métrique requis)
-  longueur <- as.numeric(st_length(ligne_geom))
-  
-  # Nombre de points d'échantillonnage (au moins 2 : début et fin)
-  n_points <- max(2, floor(longueur / espacement))  # floor() arrondit nmb décimal vers le bas 
-  points   <- if (longueur < espacement * 2)
-    st_line_sample(ligne_geom, n = 2, type = "regular")         # Création de 2 points seulement car segment de moins de 200m
-  else
-    st_line_sample(ligne_geom, n = n_points, type = "regular")  # Un point tous les 100m
-  
-  # st_cast() éclate le MULTIPOINT en POINTs individuels pour terra::extract()
-  points_sf <- st_cast(points, "POINT")
-  
-  # terra::extract() récupère la valeur du pixel DEM sous chaque point
-  # method = "bilinear" : interpolation entre les 4 pixels voisins (plus précis)
-  # vect() convertit l'objet sf en format terra::SpatVector (requis par terra)
-  elevations  <- terra::extract(dem, vect(points_sf), method = "bilinear")
-  elev_values <- elevations[, 2]  # Colonne 1 = ID du point, colonne 2 = altitude
-  
-  # Gestion des NA (points hors de l'emprise du DEM) : retour à zéro plutôt qu'erreur
-  if (any(is.na(elev_values)) || length(elev_values) < 2)
-    return(list(slope_mean=0, elevation_gain=0, elevation_loss=0, rugosity=0))
-  
-  # Pente nette (début → fin) en pourcentage : dénivelé / longueur × 100
-  # Positive = montée ; négative = descente
-  denivele_net   <- elev_values[length(elev_values)] - elev_values[1]
-  slope_mean_pct <- (denivele_net / longueur) * 100
-  
-  # diff() calcule les différences entre valeurs consécutives du vecteur d'élévation
-  # Dénivelé cumulé positif (D+) = somme des montées entre points successifs
-  # Dénivelé cumulé négatif (D-) = somme des descentes (valeur absolue)
-  differences    <- diff(elev_values)                                     
-  elevation_gain <- sum(differences[differences > 0], na.rm = TRUE)
-  elevation_loss <- abs(sum(differences[differences < 0], na.rm = TRUE))
-  
-  # Rugosité altimétrique : (D+ + D-) / longueur
-  # Mesure l'ondulation du profil — élevée sur une route très accidentée
-  rugosity <- (elevation_gain + elevation_loss) / longueur
-  
-  list(slope_mean=slope_mean_pct, elevation_gain=elevation_gain,
-       elevation_loss=elevation_loss, rugosity=rugosity)
-}
-
-
-# Passe les arètes du reseau_rwanda au format sf
-aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf() 
-n_aretes         <- nrow(aretes_avec_geom) # Compte le nombre d'arètes
-resultats_pentes <- vector("list", n_aretes) # Crée un vecteur de n_aretes élément dont chacun peut contenir une liste 
-
-# Itération pour l'ensemble des arètes du réseau
-for (i in seq_len(n_aretes)) { 
-  # Affiche la progression en % tous les 500 itérations ainsi qu'à la dernière itération
-  if (i %% 500 == 0 || i == n_aretes) cat("  Pentes :", round(i/n_aretes*100,1), "%\n")
-  # Rempli le vecteur liste resultats_pentes avec les paramètres de la fonction calculer_pente_arete qu'on vient de créer
-  resultats_pentes[[i]] <- calculer_pente_arete(
-    aretes_avec_geom$geometry[i],
-    dem_rwanda,
-    espacement = 100   # Un point d'élévation tous les 100 mètres
-  )
-}
-
-# bind_rows() convertit la liste de listes en data.frame (une ligne = une arête)
-pentes_df <- bind_rows(resultats_pentes)
-
-# Intégration des pentes dans le réseau sfnetworks
-reseau_rwanda <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(
-    slope_mean      = pentes_df$slope_mean,
-    elevation_gain  = pentes_df$elevation_gain,
-    elevation_loss  = pentes_df$elevation_loss,
-    rugosity        = pentes_df$rugosity,
-    # Catégorisation de la pente pour les CASE WHEN SQL et la cartographie
-    slope_category  = case_when(
-      abs(slope_mean) < 2 ~ "plat",     # Plaine : quasi-aucun impact
-      abs(slope_mean) < 5 ~ "legere",   # Légère : impact modéré
-      abs(slope_mean) < 8 ~ "moderee",  # Modérée : impact significatif
-      TRUE                ~ "forte"     # Forte : impact majeur (cols, falaises)
-    )
-  )
-
-cat("✓ Pentes calculées pour toutes les arêtes\n\n")
-
-# ==============================================================================
 # PARTIE 12 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
 # ==============================================================================
 # Formules appliquées :
@@ -1793,10 +1814,10 @@ duck_query("
     (length_km / speed_kmh) * valeur_temps          AS cost_time_usd,
     travel_time_h,
     -- Coût généralisé avec pénalité urbaine sur le temps et l'usure
-    fuel_consumption_L * prix_carburant
+    (fuel_consumption_L * prix_carburant
       + length_km * usure_usd_km * facteur_urbain_applique
-      + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique
-                                                              AS cost_generalized_usd,
+      + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique)
+      / NULLIF(capacite_tonnes, 0)                            AS cost_generalized_usd,
     (fuel_consumption_L * prix_carburant
       + length_km * usure_usd_km * facteur_urbain_applique
       + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique)
