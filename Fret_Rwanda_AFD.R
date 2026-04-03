@@ -1569,13 +1569,13 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
 # ==============================================================================
-# PARTIE 12 : CALCUL DES PENTES POUR CHAQUE ARÊTE
+# PARTIE 11 : CALCUL DES PENTES POUR CHAQUE ARÊTE
 # ==============================================================================
 # La pente d'un segment routier influence à la fois la vitesse des véhicules
 # et leur consommation de carburant. On la calcule en échantillonnant des points
 # le long de chaque arête et en extrayant leur altitude depuis le DEM.
 
-cat("=== PARTIE 12 : Calcul des pentes ===\n")
+cat("=== PARTIE 11 : Calcul des pentes ===\n")
 
 calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
   
@@ -1663,7 +1663,7 @@ reseau_rwanda <- reseau_rwanda %>%
 cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 
 # ==============================================================================
-# PARTIE 13 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
+# PARTIE 12 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
 # ==============================================================================
 # Formules appliquées :
 #   speed_kmh     = vitesse_base × facteur_pente
@@ -1673,7 +1673,7 @@ cat("✓ Pentes calculées pour toutes les arêtes\n\n")
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
 #   cost_total    = cost_fuel + cost_wear + cost_time  [coût généralisé]
 
-cat("=== PARTIE 13 : Coûts généralisés ===\n")
+cat("=== PARTIE 12 : Coûts généralisés ===\n")
 
 aretes_df <- reseau_rwanda %>%
   activate("edges") %>% st_as_sf() %>% st_drop_geometry() %>%
@@ -1935,7 +1935,7 @@ cat("Nb arêtes réseau         :", n_reseau, "\n")
 cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\n")
 
 # ==============================================================================
-# PARTIE 11 : GRAPHE MULTI-MODAL AVEC TRANSBORDEMENTS AUX ENTREPÔTS
+# PARTIE 13 : GRAPHE MULTI-MODAL AVEC TRANSBORDEMENTS AUX ENTREPÔTS
 # ==============================================================================
 # Structure du graphe en couches :
 #
@@ -1949,7 +1949,7 @@ cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\
 # Le Dijkstra sur ce graphe étendu trouve automatiquement la combinaison
 # optimale de véhicules pour chaque paire OD.
 
-cat("=== PARTIE 11 : Construction du graphe multi-modal ===\n")
+cat("=== PARTIE 13 : Construction du graphe multi-modal ===\n")
 
 # ── Paramètres de base ────────────────────────────────────────────────────────
 n_vehicules <- nrow(VEHICULES_IDS)
