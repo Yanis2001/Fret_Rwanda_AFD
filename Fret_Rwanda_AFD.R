@@ -127,7 +127,7 @@ duck_write <- function(df, table_name) {
 duck_query <- function(sql) dbGetQuery(con, sql)
 
 # ==============================================================================
-# PALETTES DE COULEURS — DÉFINITION CENTRALISÉE
+# PARTIE 1 :  PALETTES DE COULEURS — DÉFINITION CENTRALISÉE
 # ==============================================================================
 # Toutes les couleurs utilisées dans les cartes sont définies ici.
 # Pour modifier une couleur : changer uniquement ce bloc.
@@ -190,7 +190,7 @@ cat("✓ Palettes de couleurs définies\n\n")
 
 
 # ==============================================================================
-# PARTIE 1 : DÉFINITION DE LA FLOTTE — TABLES DUCKDB
+# PARTIE 2 : DÉFINITION DE LA FLOTTE — TABLES DUCKDB
 # ==============================================================================
 # Structure en 3 tables normalisées :
 #   params_flotte        : 1 ligne par véhicule (scalaires économiques)
@@ -298,36 +298,36 @@ couts_prebordure_df <- tribble(
   ~pays,       ~secteur,         ~cout_usd_tonne,
   # ── Ouganda (corridors Nord : Kampala → Gatuna/Kagitumba) ─────────────────
   # Distance moyenne Kampala-frontière Rwanda : ~500km, routes bitumées
-  "Ouganda",   "Agriculture",     18.0,
-  "Ouganda",   "Mines",           12.0,
-  "Ouganda",   "Agro_industrie",  15.0,
-  "Ouganda",   "Industrie",       14.0,
-  "Ouganda",   "Construction",    22.0,
-  "Ouganda",   "Commerce",        13.0,
-  "Ouganda",   "Transport",        8.0,
-  "Ouganda",   "Services",         3.0,
+  "Ouganda",   "Agriculture",     35.0,   
+  "Ouganda",   "Mines",           25.0,
+  "Ouganda",   "Agro_industrie",  30.0,
+  "Ouganda",   "Industrie",       28.0,
+  "Ouganda",   "Construction",    42.0,
+  "Ouganda",   "Commerce",        26.0,
+  "Ouganda",   "Transport",       18.0,
+  "Ouganda",   "Services",         8.0,
   # ── Tanzanie (corridor Est : Dar es Salaam → Rusumo) ─────────────────────
   # Distance moyenne port Dar-frontière Rwanda : ~1300km
   # Coûts plus élevés car corridor plus long et qualité route variable
-  "Tanzanie",  "Agriculture",     45.0,
-  "Tanzanie",  "Mines",           28.0,
-  "Tanzanie",  "Agro_industrie",  38.0,
-  "Tanzanie",  "Industrie",       35.0,
-  "Tanzanie",  "Construction",    55.0,
-  "Tanzanie",  "Commerce",        32.0,
-  "Tanzanie",  "Transport",       20.0,
-  "Tanzanie",  "Services",         5.0,
+  "Tanzanie",  "Agriculture",     90.0,  
+  "Tanzanie",  "Mines",           55.0,
+  "Tanzanie",  "Agro_industrie",  75.0,
+  "Tanzanie",  "Industrie",       70.0,
+  "Tanzanie",  "Construction",   110.0,
+  "Tanzanie",  "Commerce",        65.0,
+  "Tanzanie",  "Transport",       45.0,
+  "Tanzanie",  "Services",        12.0,
   # ── RDC (corridor Ouest : Goma → Rubavu) ─────────────────────────────────
   # Distance courte mais infrastructure très dégradée
   # Coûts élevés malgré la proximité géographique
-  "RDC",       "Agriculture",     25.0,
-  "RDC",       "Mines",           18.0,
-  "RDC",       "Agro_industrie",  22.0,
-  "RDC",       "Industrie",       28.0,
-  "RDC",       "Construction",    35.0,
-  "RDC",       "Commerce",        20.0,
-  "RDC",       "Transport",       12.0,
-  "RDC",       "Services",         4.0,
+  "RDC",       "Agriculture",     28.0,
+  "RDC",       "Mines",           20.0,
+  "RDC",       "Agro_industrie",  25.0,
+  "RDC",       "Industrie",       30.0,
+  "RDC",       "Construction",    38.0,
+  "RDC",       "Commerce",        22.0,
+  "RDC",       "Transport",       14.0,
+  "RDC",       "Services",         5.0,
   # ── Burundi (corridor Sud : Bujumbura → Bugarama/Rusizi) ─────────────────
   # Distance moyenne Bujumbura-frontière Rwanda : ~150km
   # Infrastructure correcte sur axe principal
@@ -1529,6 +1529,7 @@ cat("  Villes OSM dans ou proches du Rwanda :", nrow(villes_osm), "\n")
 # Identifier les villes OSM non dupliquées avec les entrepôts manuels
 idx_proches <- st_is_within_distance(villes_osm, manuels_sf, dist = 3000)
 villes_nouvelles <- villes_osm[lengths(idx_proches) == 0, ] %>%
+  st_transform(crs = 4326) %>%
   mutate(
     nom    = paste0(name, " (OSM)"),
     type   = if_else(place == "city", "hub", "ville"),
@@ -1549,6 +1550,7 @@ if (nrow(zones_industrielles) > 0) {
   centroides_indus <- zones_industrielles %>%
     filter(aire_km2 > 0.05) %>%
     st_centroid(of_largest_polygon = FALSE) %>%
+    st_transform(crs = 4326) %>%
     mutate(
       lon = st_coordinates(geometry)[,1],
       lat = st_coordinates(geometry)[,2],
@@ -1813,11 +1815,7 @@ duck_query("
     length_km * usure_usd_km                        AS cost_wear_usd,
     (length_km / speed_kmh) * valeur_temps          AS cost_time_usd,
     travel_time_h,
-    -- Coût généralisé avec pénalité urbaine sur le temps et l'usure
-    (fuel_consumption_L * prix_carburant
-      + length_km * usure_usd_km * facteur_urbain_applique
-      + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique)
-      / NULLIF(capacite_tonnes, 0)                            AS cost_generalized_usd,
+    -- Coût par tkm avec pénalité urbaine sur le temps et l'usure
     (fuel_consumption_L * prix_carburant
       + length_km * usure_usd_km * facteur_urbain_applique
       + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique)
@@ -1832,9 +1830,9 @@ stats_flotte <- duck_query("
     vehicule_id,
     vehicule_nom,
     ROUND(AVG(cost_per_tkm), 3)                                AS cout_par_tkm_moyen,
-    ROUND(AVG(cost_fuel_usd / cost_generalized_usd) * 100, 1) AS part_carburant_pct,
-    ROUND(AVG(cost_time_usd / cost_generalized_usd) * 100, 1) AS part_temps_pct,
-    ROUND(AVG(cost_wear_usd / cost_generalized_usd) * 100, 1) AS part_usure_pct
+    ROUND(AVG(cost_fuel_usd / NULLIF(cost_per_tkm * length_km, 0)) * 100, 1) AS part_carburant_pct,
+    ROUND(AVG(cost_time_usd / NULLIF(cost_per_tkm * length_km, 0)) * 100, 1) AS part_temps_pct,
+    ROUND(AVG(cost_wear_usd / NULLIF(cost_per_tkm * length_km, 0)) * 100, 1) AS part_usure_pct
   FROM aretes_couts_tous
   GROUP BY vehicule_id, vehicule_nom
   ORDER BY cout_par_tkm_moyen
@@ -1867,7 +1865,6 @@ reseau_rwanda <- reseau_rwanda %>%
     cost_fuel_usd        = aretes_ref$cost_fuel_usd,
     cost_wear_usd        = aretes_ref$cost_wear_usd,
     cost_time_usd        = aretes_ref$cost_time_usd,
-    cost_generalized_usd = aretes_ref$cost_generalized_usd,
     cost_per_tkm         = aretes_ref$cost_per_tkm
   )
 
@@ -1879,13 +1876,13 @@ cat("  Lignes :", duck_query("SELECT COUNT(*) AS n FROM aretes_couts_tous")$n,
 aretes_check <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
 
 verif <- tibble(
-  colonne = c("length_km", "speed_kmh", "travel_time_h", "cost_generalized_usd"),
+  colonne = c("length_km", "speed_kmh", "travel_time_h", "cost_per_tkm"),
   n_na    = c(
     sum(is.na(aretes_check$length_km)            | is.nan(aretes_check$length_km)),
     sum(is.na(aretes_check$speed_kmh)            | is.nan(aretes_check$speed_kmh)),
     sum(is.na(aretes_check$travel_time_h)        | is.nan(aretes_check$travel_time_h)),
-    sum(is.na(aretes_check$cost_generalized_usd) | is.nan(aretes_check$cost_generalized_usd) |
-          is.infinite(aretes_check$cost_generalized_usd))
+    sum(is.na(aretes_check$cost_per_tkm) | is.nan(aretes_check$cost_per_tkm) |
+          is.infinite(aretes_check$cost_per_tkm))
   )
 )
 print(verif)
@@ -1923,8 +1920,6 @@ cat("longueur_geom = 0 ou NA (géométrie):",
 # 3. Vérifier si length_km dans reseau_rwanda correspond à longueur_m / 1000
 cat("length_km NA dans reseau_rwanda  :", 
     sum(is.na(aretes_diag$length_km)), "\n")
-cat("cost_generalized_usd NA          :", 
-    sum(is.na(aretes_diag$cost_generalized_usd)), "\n\n")
 
 # 4. Chercher si aretes_base dans DuckDB a des longueur_m = 0
 zero_duckdb <- duck_query("
@@ -1999,7 +1994,7 @@ for (v_idx in seq_len(n_vehicules)) {
   
   # Coûts et attributs depuis DuckDB pour ce véhicule
   couts_veh <- duck_query(glue::glue("
-    SELECT arete_id, cost_generalized_usd, length_km, travel_time_h
+    SELECT arete_id, cost_per_tkm, length_km, travel_time_h
     FROM aretes_couts_tous
     WHERE vehicule_id = '{id_veh}'
     ORDER BY arete_id
@@ -2008,7 +2003,7 @@ for (v_idx in seq_len(n_vehicules)) {
   edges_intra[[v_idx]] <- tibble(
     from          = node_multi(v_idx, aretes_base_tbl$from),
     to            = node_multi(v_idx, aretes_base_tbl$to),
-    weight        = couts_veh$cost_generalized_usd,
+    weight        = couts_veh$cost_per_tkm * couts_veh$length_km,
     length_km     = couts_veh$length_km,
     travel_time_h = couts_veh$travel_time_h,
     vehicule_id   = id_veh,
@@ -2150,7 +2145,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   
   # Récupérer les coûts depuis DuckDB (une requête SQL, pas de R intermédiaire)
   couts_veh <- duck_query(glue::glue("
-    SELECT arete_id, cost_per_tkm, cost_generalized_usd, speed_kmh
+    SELECT arete_id, cost_per_tkm, speed_kmh
     FROM aretes_couts_tous
     WHERE vehicule_id = '{id_veh}'
     ORDER BY arete_id
@@ -2160,7 +2155,6 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     activate("edges") %>%
     mutate(
       cost_per_tkm          = couts_veh$cost_per_tkm,
-      cost_generalized_usd = couts_veh$cost_generalized_usd,
       speed_kmh            = couts_veh$speed_kmh
     )
   
@@ -2193,7 +2187,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   cat(nom_veh, "\n")
   
   couts_veh <- duck_query(glue::glue("
-    SELECT arete_id, cost_per_tkm, cost_generalized_usd, speed_kmh
+    SELECT arete_id, cost_per_tkm, speed_kmh
     FROM aretes_couts_tous
     WHERE vehicule_id = '{id_veh}'
     ORDER BY arete_id
@@ -2204,7 +2198,6 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     activate("edges") %>%
     mutate(
       cost_per_tkm          = couts_veh$cost_per_tkm,
-      cost_generalized_usd = couts_veh$cost_generalized_usd,
       speed_kmh            = couts_veh$speed_kmh
     )
   cat("reseau_tmp créé\n")
@@ -2365,10 +2358,10 @@ cat("Entreposages :", n_warehouses, "\n")
 
 # ── Préparation du graphe igraph pour Dijkstra ────────────────────────────────
 # as_tbl_graph() convertit sfnetworks en tidygraph/igraph tout en conservant
-# les attributs des nœuds et des arêtes (notamment cost_generalized_usd).
+# les attributs des nœuds et des arêtes.
 graphe_igraph      <- reseau_rwanda %>%
   activate("edges") %>%
-  mutate(weight = cost_generalized_usd) %>%   # weight = métrique de coût pour Dijkstra
+  mutate(weight = cost_per_tkm * length_km) %>%   # weight = métrique de coût pour Dijkstra
   as_tbl_graph()
 
 # Indices igraph des nœuds d'entreposage (igraph indexe de 1 à N)
@@ -2482,11 +2475,7 @@ couts_wide <- duck_query("
     arete_id,
     MAX(CASE WHEN vehicule_id = 'camionnette'  THEN cost_per_tkm          END) AS cost_tkm_camionnette,
     MAX(CASE WHEN vehicule_id = 'camion_moyen' THEN cost_per_tkm          END) AS cost_tkm_camion_moyen,
-    MAX(CASE WHEN vehicule_id = 'camion_lourd' THEN cost_per_tkm          END) AS cost_tkm_camion_lourd,
-    MAX(CASE WHEN vehicule_id = 'camionnette'  THEN cost_generalized_usd  END) AS cost_usd_camionnette,
-    MAX(CASE WHEN vehicule_id = 'camion_moyen' THEN cost_generalized_usd  END) AS cost_usd_camion_moyen,
-    MAX(CASE WHEN vehicule_id = 'camion_lourd' THEN cost_generalized_usd  END) AS cost_usd_camion_lourd,
-    AVG(cost_generalized_usd)                                                   AS cost_generalise_moyen
+    MAX(CASE WHEN vehicule_id = 'camion_lourd' THEN cost_per_tkm          END) AS cost_tkm_camion_lourd
   FROM aretes_couts_tous
   GROUP BY arete_id
   ORDER BY arete_id
@@ -2499,17 +2488,11 @@ aretes_finales <- reseau_rwanda %>%
   mutate(
     cost_tkm_camionnette  = couts_wide$cost_tkm_camionnette,
     cost_tkm_camion_moyen = couts_wide$cost_tkm_camion_moyen,
-    cost_tkm_camion_lourd = couts_wide$cost_tkm_camion_lourd,
-    cost_usd_camionnette  = couts_wide$cost_usd_camionnette,
-    cost_usd_camion_moyen = couts_wide$cost_usd_camion_moyen,
-    cost_usd_camion_lourd = couts_wide$cost_usd_camion_lourd,
-    cost_generalise_moyen = couts_wide$cost_generalise_moyen
+    cost_tkm_camion_lourd = couts_wide$cost_tkm_camion_lourd
   ) %>%
   select(osm_id, name, road_type, surface, length_km, slope_mean,
          elevation_gain, elevation_loss,
-         cost_tkm_camionnette, cost_tkm_camion_moyen, cost_tkm_camion_lourd,
-         cost_usd_camionnette, cost_usd_camion_moyen, cost_usd_camion_lourd,
-         cost_generalise_moyen)
+         cost_tkm_camionnette, cost_tkm_camion_moyen, cost_tkm_camion_lourd)
 
 duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 
@@ -3002,14 +2985,8 @@ for (i in seq_len(n_warehouses)) {
     cout_s <- couts_pays$cout_usd_tonne[couts_pays$secteur == s]
     if (length(cout_s) == 0) next
     
-    # Convertir coût USD/tonne en USD en utilisant TONNES_PAR_musd
-    # pour être cohérent avec l'unité de C_ij (USD par flux)
-    # On normalise par un flux unitaire de référence
-    cout_usd_flux <- cout_s / TONNES_PAR_musd[s] * 1000
-    # (diviser par tonnes/MUSD × 1000 donne USD par 1000 USD de flux)
-    
     # Affecter à toutes les destinations j depuis ce point frontière i
-    C_prebordure[i, , s] <- cout_usd_flux
+    C_prebordure[i, , s] <- cout_s
   }
 }
 
@@ -3031,12 +3008,8 @@ for (s in SECTEURS) {
   C_ij_effectif <- C_ij + C_prebordure[, , s]
   C_ij_effectif[is.na(C_ij_effectif)] <- NA  # Conserver les NA (zones non connectées)
   
-  # Friction sur la C_ij effective
-  friction <- C_ij_effectif^(-beta_s)
-  friction[is.na(friction)] <- 0
-  
   # Friction : zones proches ont plus d'échanges
-  friction <- C_ij^(-beta_s)
+  friction <- C_ij_effectif^(-beta_s)
   friction[is.na(friction)] <- 0
   
   # Offres et demandes sectorielles
@@ -3316,7 +3289,7 @@ for (i in 1:min(5, length(warehouse_node_ids))) {
       graphe_igraph,
       v    = warehouse_node_ids[i],
       to   = warehouse_node_ids[j],
-      weights = igraph::E(graphe_igraph)$cost_generalized_usd
+      weights = igraph::E(graphe_igraph)$weight
     )
     cat("  ", i, "→", j, ":",
         ifelse(is.infinite(dist_ij), "NON CONNECTÉ", paste(round(dist_ij, 2), "USD")), "\n")
@@ -3737,8 +3710,7 @@ aretes_fret_export <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
   select(osm_id, name, road_type, surface,
-         length_km, speed_kmh,
-         cost_generalized_usd, cost_per_tkm,
+         length_km, speed_kmh, cost_per_tkm,
          volume_tonnes, classe_trafic,
          volume_camionnette, volume_camion_moyen, volume_camion_lourd,
          part_camion_lourd)
