@@ -1244,7 +1244,6 @@ noeuds_sf <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
 noeuds_sf$composante <- composantes_finales$membership
 
 cat("Nombre de nœuds dans noeuds_sf :", nrow(noeuds_sf), "\n")
-cat("Valeurs uniques de taille_composante :", unique(noeuds_sf$taille_composante), "\n")
 if (nrow(noeuds_sf) == 0) {
   cat("⚠ noeuds_sf est vide. Vérifie la construction de reseau_rwanda.\n")
 } else {
@@ -1407,11 +1406,19 @@ villes_osm_sf <- villes_osm %>%
 
 # Conversion des entrepôts manuels en sf pour la comparaison spatiale
 manuels_sf <- entreposages_manuels %>%
-  st_as_sf(coords = c("lon","lat"), crs = 32735)
+  st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+  st_transform(crs = 32735)
 
 villes_osm_sf2 <- villes_osm %>%
   mutate(lon = st_coordinates(geometry)[,1],
          lat = st_coordinates(geometry)[,2])
+
+# Filtrer uniquement les villes dans le territoire rwandais
+# Évite que les villes des pays voisins se snappent toutes sur les mêmes nœuds frontières
+villes_osm <- villes_osm %>%
+  st_filter(rwanda_national %>% st_buffer(dist = 5000))
+# Buffer de 5km pour garder les villes très proches de la frontière
+cat("  Villes OSM dans ou proches du Rwanda :", nrow(villes_osm), "\n")
 
 # Identifier les villes OSM non dupliquées avec les entrepôts manuels
 idx_proches <- st_is_within_distance(villes_osm, manuels_sf, dist = 3000)
@@ -2472,8 +2479,7 @@ aretes_finales <- reseau_rwanda %>%
          elevation_gain, elevation_loss,
          cost_tkm_camionnette, cost_tkm_camion_moyen, cost_tkm_camion_lourd,
          cost_usd_camionnette, cost_usd_camion_moyen, cost_usd_camion_lourd,
-         cost_generalise_moyen,
-         volume_tonnes, classe_trafic)
+         cost_generalise_moyen)
 
 duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 
@@ -3708,19 +3714,21 @@ write.csv(recap_zones,
           file.path(DIR_OUTPUT,"offre_demande_zones.csv"),
           row.names = FALSE)
 
+# ── Export complémentaire : réseau avec volumes fret ─────────────────────────
 aretes_fret_export <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
   select(osm_id, name, road_type, surface,
          length_km, speed_kmh,
          cost_generalized_usd, cost_per_tkm,
-         volume_tonnes, classe_trafic)
+         volume_tonnes, classe_trafic,
+         volume_camionnette, volume_camion_moyen, volume_camion_lourd,
+         part_camion_lourd)
 
 st_write(aretes_fret_export,
-         file.path(DIR_OUTPUT,"reseau_rwanda_avec_fret.gpkg"),
+         file.path(DIR_OUTPUT, "reseau_rwanda_avec_fret.gpkg"),
          delete_dsn = TRUE, quiet = TRUE)
-
-cat("✓ Données exportées\n\n")
+cat("✓ GeoPackage avec volumes fret exporté\n")
 
 
 # ==============================================================================
