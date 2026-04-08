@@ -37,8 +37,19 @@
 # Sys.getenv() lit la variable d'environnement GITHUB_PAT sans l'exposer
 # dans le code source (bonne pratique de sécurité).
 token <- Sys.getenv("GITHUB_PAT")
+# Configurer le helper de credentials
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
+<<<<<<< HEAD
 
+=======
+# S'assurer que le remote 'origin' pointe vers mon dépôt perso
+system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+# Ajouter une deuxième pushurl sur ce même remote
+system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
+# Vérifier la configuration
+system("git remote -v")
+>>>>>>> 61067bd (kzvfc)
 ################################################################################
 # PARTIE I — INITIALISATION ET CONFIGURATION
 # Met en place l'environnement complet avant tout traitement :
@@ -2809,10 +2820,13 @@ if (FALSE) {
 # minimise le coût total, potentiellement en changeant de véhicule.
 # La "matrice OD" (Origine-Destination) est le tableau carré n×n qui contient
 # le coût optimal pour aller de chaque entrepôt vers chaque autre entrepôt.
+<<<<<<< HEAD
 
 # Rendre les noms de zones uniques
 noeuds_entreposage <- noeuds_entreposage %>%
   mutate(warehouse_name = make.unique(warehouse_name, sep = "_"))
+=======
+>>>>>>> 61067bd (kzvfc)
 
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
@@ -2846,6 +2860,41 @@ warehouse_node_ids <- which(igraph::V(graphe_igraph)$is_warehouse)
 
 od_rows <- list()
 idx     <- 0
+
+# ── Mise en cache de la matrice OD ────────────────────────────────────────────
+# Le calcul de Dijkstra multi-modal est très long (plusieurs dizaines de minutes
+# pour 106 zones). Pour éviter de le refaire à chaque exécution du script,
+# on sauvegarde le résultat dans un fichier ".rds" (format binaire R).
+# À la prochaine exécution, si le réseau et le nombre de zones n'ont pas changé,
+# on charge directement le fichier sauvegardé — le calcul est alors instantané.
+# Pour forcer un recalcul complet (ex : après avoir ajouté des zones ou modifié
+# le réseau), il suffit de supprimer le fichier "outputs/od_cache.rds".
+CACHE_OD <- file.path(DIR_OUTPUT, "od_cache.rds")
+cache_od_valide <- FALSE
+
+# file.exists() : vérifie si le fichier cache existe déjà sur le disque.
+if (file.exists(CACHE_OD)) {
+  cache_od <- readRDS(CACHE_OD)  # Charge le fichier sauvegardé en mémoire R
+  
+  # Double vérification : le cache n'est valide que si le nombre de zones ET
+  # le nombre d'arêtes correspondent exactement à la session actuelle.
+  # Si l'un ou l'autre a changé (ex : nouveau PBF, nouvelles zones ajoutées),
+  # le cache est rejeté et le calcul repart de zéro automatiquement.
+  if (!is.null(cache_od$n_warehouses) && cache_od$n_warehouses == n_warehouses &&
+      !is.null(cache_od$n_aretes)     && cache_od$n_aretes     == n_aretes_physiques) {
+    od_long         <- cache_od$od_long
+    cache_od_valide <- TRUE
+    cat("  ✓ Cache OD valide (", n_warehouses, "zones ×",
+        n_aretes_physiques, "arêtes) — calcul Dijkstra ignoré\n\n")
+  } else {
+    cat("  ⚠ Cache OD invalide — recalcul Dijkstra...\n")
+  }
+}
+
+# Si pas de cache valide, on lance le calcul complet puis on sauvegarde.
+if (!cache_od_valide) {
+  od_rows <- list()
+  idx     <- 0
 
 for (i in seq_along(warehouse_nodes_base)) {
   
@@ -2918,6 +2967,18 @@ for (i in seq_along(warehouse_nodes_base)) {
 }
 
 od_long <- bind_rows(od_rows)
+
+# saveRDS() : sauvegarde l'objet R dans un fichier binaire sur le disque.
+# On sauvegarde à la fois les résultats (od_long) et les paramètres de
+# validation (n_warehouses, n_aretes) pour pouvoir vérifier la validité
+# du cache lors des prochaines exécutions.
+saveRDS(
+  list(od_long = od_long, n_warehouses = n_warehouses,
+       n_aretes = n_aretes_physiques),
+  CACHE_OD
+)
+cat("  ✓ Cache OD sauvegardé :", CACHE_OD, "\n\n")
+}
 duck_write(od_long, "matrice_od")
 
 # Statistiques enrichies incluant les transbordements
@@ -3275,8 +3336,18 @@ demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
 # Une zone industrielle entourée de grandes zones industrielles aura un profil
 # d'offre encore plus orienté "Industrie" que la moyenne de son type.
 
-cat("  Calcul de la composition landuse par zone...\n")
+# ── Mise en cache du calcul de composition landuse ────────────────────────────
+# Pour chaque zone d'entreposage, on calcule la part de surface urbanisée et
+# industrielle dans un rayon de 2km. Ce calcul nécessite des intersections
+# géométriques entre les buffers de chaque zone et les polygones de landuse,
+# ce qui peut prendre plusieurs minutes.
+# Comme pour les pentes et la matrice OD, on met le résultat en cache pour
+# éviter de le recalculer inutilement à chaque exécution.
+# Le cache est invalidé si le nombre de zones change (nouvelle zone ajoutée).
+CACHE_LANDUSE <- file.path(DIR_OUTPUT, "landuse_cache.rds")
+cache_landuse_valide <- FALSE
 
+<<<<<<< HEAD
 # Union de toutes les zones par type pour les intersections
 zones_all <- bind_rows(
   zones_urbaines    %>% select(geometry),
@@ -3299,16 +3370,44 @@ calc_part_landuse <- function(buffer_geom, zones_type) {
   )
   if (is.null(inter) || length(inter) == 0) return(0)
   as.numeric(st_area(inter)) / as.numeric(st_area(buffer_geom))
+=======
+if (file.exists(CACHE_LANDUSE)) {
+  cache_lu <- readRDS(CACHE_LANDUSE)
+  # On vérifie que le nombre de zones est identique à la session actuelle.
+  # Si de nouvelles zones ont été ajoutées, le cache est rejeté.
+  if (!is.null(cache_lu$n_warehouses) && cache_lu$n_warehouses == n_warehouses) {
+    part_urbain     <- cache_lu$part_urbain
+    part_industriel <- cache_lu$part_industriel
+    cache_landuse_valide <- TRUE
+    cat("  ✓ Cache landuse valide (", n_warehouses, "zones) — calcul ignoré\n\n")
+  } else {
+    cat("  ⚠ Cache landuse invalide — recalcul...\n")
+  }
+>>>>>>> 61067bd (kzvfc)
 }
 
-part_urbain    <- numeric(n_warehouses)
-part_industriel <- numeric(n_warehouses)
-
-for (i in seq_len(n_warehouses)) {
-  buf <- entreposages_buffer[i, ]$geometry
-  part_urbain[i]     <- calc_part_landuse(buf, zones_urbaines)
-  part_industriel[i] <- calc_part_landuse(buf, zones_industrielles)
-  if (i %% 5 == 0) cat("  Landuse par zone :", round(i/n_warehouses*100), "%\n")
+if (!cache_landuse_valide) {
+  cat("  Calcul de la composition landuse par zone...\n")
+  
+  # Deux vecteurs numériques initialisés à zéro, un par type de landuse.
+  # numeric(n) crée un vecteur de n zéros — on les remplira zone par zone.
+  part_urbain     <- numeric(n_warehouses)
+  part_industriel <- numeric(n_warehouses)
+  
+  for (i in seq_len(n_warehouses)) {
+    buf <- entreposages_buffer[i, ]$geometry
+    part_urbain[i]     <- calc_part_landuse(buf, zones_urbaines)
+    part_industriel[i] <- calc_part_landuse(buf, zones_industrielles)
+    if (i %% 5 == 0) cat("  Landuse par zone :", round(i/n_warehouses*100), "%\n")
+  }
+  
+  # Sauvegarde des deux vecteurs + le nombre de zones pour validation future
+  saveRDS(
+    list(part_urbain = part_urbain, part_industriel = part_industriel,
+         n_warehouses = n_warehouses),
+    CACHE_LANDUSE
+  )
+  cat("  ✓ Cache landuse sauvegardé\n\n")
 }
 
 cat("✓ Composition landuse calculée\n\n")
@@ -4027,88 +4126,105 @@ cat("Génération de la carte des flux OD (desire lines)...\n")
 
 SEUIL_DESIRE <- quantile(flux_total[flux_total > 0], 0.40)
 
-# Construire les lignes OD
-desire_list <- list()
-k <- 0
+# ── Pré-calcul des coordonnées (hors boucle) ──────────────────────────────────
+# Évite les which() répétés dans la double boucle
+coords_lookup <- coords_zones_sf %>%
+  st_drop_geometry() %>%
+  mutate(
+    X = st_coordinates(coords_zones_sf)[, "X"],
+    Y = st_coordinates(coords_zones_sf)[, "Y"]
+  ) %>%
+  select(warehouse_name, X, Y)
 
-for (i in 1:n_warehouses) {
-  for (j in 1:n_warehouses) {
-    if (i == j) next
-    flux_ij <- flux_total[i, j]
-    if (is.na(flux_ij) || flux_ij < SEUIL_DESIRE) next
-    
-    idx_i <- which(coords_zones_sf$warehouse_name ==
-                     noeuds_entreposage$warehouse_name[i])
-    idx_j <- which(coords_zones_sf$warehouse_name ==
-                     noeuds_entreposage$warehouse_name[j])
-    
-    if (length(idx_i) == 0 || length(idx_j) == 0) next
-    
-    pt_i <- st_coordinates(coords_zones_sf[idx_i, ])
-    pt_j <- st_coordinates(coords_zones_sf[idx_j, ])
-    
-    if (any(is.na(pt_i)) || any(is.na(pt_j))) next
-    
-    k <- k + 1
-    desire_list[[k]] <- list(
-      Origine     = noeuds_entreposage$warehouse_name[i],
-      Destination = noeuds_entreposage$warehouse_name[j],
-      flux_musd   = as.numeric(flux_ij),                            # 
-      flux_kt     = as.numeric(flux_tonnes_total[i, j] / 1000),    # 
-      geom        = st_linestring(rbind(
-        c(pt_i[1, "X"], pt_i[1, "Y"]),
-        c(pt_j[1, "X"], pt_j[1, "Y"])
-      ))
-    )
-  }
-}
+# Index nommé pour accès O(1) au lieu de which() O(n)
+coords_X <- setNames(coords_lookup$X, coords_lookup$warehouse_name)
+coords_Y <- setNames(coords_lookup$Y, coords_lookup$warehouse_name)
 
-if (k > 0) {
+# ── Construction vectorisée des desire lines ──────────────────────────────────
+# Passage du format matriciel au format long en une seule opération
+flux_long <- flux_total %>%
+  as.data.frame() %>%
+  rownames_to_column("Origine") %>%
+  pivot_longer(-Origine, names_to = "Destination", values_to = "flux_musd") %>%
+  filter(
+    Origine != Destination,
+    !is.na(flux_musd),
+    flux_musd >= SEUIL_DESIRE
+  ) %>%
+  # Jointure pour récupérer les tonnes
+  left_join(
+    flux_tonnes_total %>%
+      as.data.frame() %>%
+      rownames_to_column("Origine") %>%
+      pivot_longer(-Origine, names_to = "Destination", values_to = "flux_tonnes"),
+    by = c("Origine", "Destination")
+  ) %>%
+  mutate(flux_kt = flux_tonnes / 1000) %>%
+  # Filtrer les zones sans coordonnées
+  filter(
+    Origine     %in% names(coords_X),
+    Destination %in% names(coords_X)
+  )
+
+cat("  Paires OD à représenter :", nrow(flux_long), "\n")
+
+# ── Création des géométries en une passe ──────────────────────────────────────
+if (nrow(flux_long) > 0) {
   
-  # Création de desire_sf AVANT carte_od
+  geoms <- mapply(
+    function(ori, dst) {
+      st_linestring(rbind(
+        c(coords_X[ori], coords_Y[ori]),
+        c(coords_X[dst], coords_Y[dst])
+      ))
+    },
+    flux_long$Origine,
+    flux_long$Destination,
+    SIMPLIFY = FALSE
+  )
+  
   desire_sf <- st_sf(
-    Origine     = sapply(desire_list, `[[`, "Origine"),
-    Destination = sapply(desire_list, `[[`, "Destination"),
-    flux_musd   = as.numeric(sapply(desire_list, `[[`, "flux_musd")),
-    flux_kt     = as.numeric(sapply(desire_list, `[[`, "flux_kt")),
-    geometry    = st_sfc(lapply(desire_list, `[[`, "geom"), crs = 32735)
+    Origine     = flux_long$Origine,
+    Destination = flux_long$Destination,
+    flux_musd   = as.numeric(flux_long$flux_musd),
+    flux_kt     = as.numeric(flux_long$flux_kt),
+    geometry    = st_sfc(geoms, crs = 32735)
   ) %>%
     mutate(flux_log = as.numeric(log10(flux_musd + 0.01)))
   
-  cat("  Desire lines créées:", nrow(desire_sf), "\n")
-  cat("  flux_musd range:", round(min(desire_sf$flux_musd), 3),
+  cat("  Desire lines créées :", nrow(desire_sf), "\n")
+  cat("  flux_musd range :", round(min(desire_sf$flux_musd), 3),
       "-", round(max(desire_sf$flux_musd), 3), "\n")
   
+  # ── Carte (résolution réduite si trop lente) ──────────────────────────────
   carte_od <- fond_carte() +
-    
     tm_shape(desire_sf) +
     tm_lines(
-      col = "flux_musd",
-      col.scale = tm_scale_intervals(style="quantile", n=5, values=PALETTE_FLUX_OD),
+      col        = "flux_musd",
+      col.scale  = tm_scale_intervals(style = "quantile", n = 5,
+                                      values = PALETTE_FLUX_OD),
       col.legend = tm_legend(title = "Flux commercial\n(M USD)"),
-      lwd = "flux_log",
-      lwd.scale = tm_scale(values.range = c(0.5, 5)),
+      lwd        = "flux_log",
+      lwd.scale  = tm_scale(values.range = c(0.5, 5)),
       lwd.legend = tm_legend(show = FALSE),
-      col_alpha = 0.65
+      col_alpha  = 0.65
     ) +
-    
     tm_shape(coords_zones_sf) +
     tm_dots(
-      fill = "warehouse_type",
-      fill.scale = tm_scale(values = PALETTE_ZONE_TYPE),
+      fill        = "warehouse_type",
+      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
       fill.legend = tm_legend(title = "Type de zone"),
-      size = 0.45
+      size        = 0.45
     ) +
-    
     tm_title("Flux Commerciaux Interzonaux\nModèle gravitaire - Rwanda") +
     tm_layout(legend.outside = TRUE, frame = TRUE) +
     tm_scalebar(position = c("left", "bottom")) +
-    tm_compass(position = c("right", "top"))
+    tm_compass(position  = c("right", "top"))
   
   tmap_save(carte_od,
-            file.path(DIR_OUTPUT,"carte_flux_od.png"),
-            width = 3000, height = 2400, dpi = 300)
-  cat("✓ Carte flux OD sauvegardée (", k, "flux représentés)\n")
+            file.path(DIR_OUTPUT, "carte_flux_od.png"),
+            width = 2000, height = 1600, dpi = 200)  # Résolution réduite
+  cat("✓ Carte flux OD sauvegardée\n")
   
 } else {
   cat("⚠ Aucune desire line à représenter\n")
