@@ -39,9 +39,7 @@
 token <- Sys.getenv("GITHUB_PAT")
 # Configurer le helper de credentials
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
-<<<<<<< HEAD
 
-=======
 # S'assurer que le remote 'origin' pointe vers mon dépôt perso
 system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
 # Ajouter une deuxième pushurl sur ce même remote
@@ -49,7 +47,6 @@ system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret
 system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
 # Vérifier la configuration
 system("git remote -v")
->>>>>>> 61067bd (kzvfc)
 ################################################################################
 # PARTIE I — INITIALISATION ET CONFIGURATION
 # Met en place l'environnement complet avant tout traitement :
@@ -2820,13 +2817,6 @@ if (FALSE) {
 # minimise le coût total, potentiellement en changeant de véhicule.
 # La "matrice OD" (Origine-Destination) est le tableau carré n×n qui contient
 # le coût optimal pour aller de chaque entrepôt vers chaque autre entrepôt.
-<<<<<<< HEAD
-
-# Rendre les noms de zones uniques
-noeuds_entreposage <- noeuds_entreposage %>%
-  mutate(warehouse_name = make.unique(warehouse_name, sep = "_"))
-=======
->>>>>>> 61067bd (kzvfc)
 
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
@@ -3347,30 +3337,6 @@ demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
 CACHE_LANDUSE <- file.path(DIR_OUTPUT, "landuse_cache.rds")
 cache_landuse_valide <- FALSE
 
-<<<<<<< HEAD
-# Union de toutes les zones par type pour les intersections
-zones_all <- bind_rows(
-  zones_urbaines    %>% select(geometry),
-  zones_industrielles %>% select(geometry)
-) %>% st_make_valid()
-
-# Buffer de 2km autour de chaque entrepôt
-entreposages_buffer <- entreposages_sf %>%
-  st_buffer(dist = 2000) %>%
-  mutate(zone_idx = row_number())
-
-# Calcul des aires de chaque type de landuse dans chaque buffer.
-# st_intersection() : calcule la géométrie à l'intersection de deux polygones.
-# st_area() : calcule l'aire d'une géométrie en m².
-# La part de landuse = aire_intersection / aire_buffer.
-calc_part_landuse <- function(buffer_geom, zones_type) {
-  inter <- tryCatch(
-    st_intersection(buffer_geom, zones_type %>% st_union()),
-    error = function(e) NULL
-  )
-  if (is.null(inter) || length(inter) == 0) return(0)
-  as.numeric(st_area(inter)) / as.numeric(st_area(buffer_geom))
-=======
 if (file.exists(CACHE_LANDUSE)) {
   cache_lu <- readRDS(CACHE_LANDUSE)
   # On vérifie que le nombre de zones est identique à la session actuelle.
@@ -3383,7 +3349,6 @@ if (file.exists(CACHE_LANDUSE)) {
   } else {
     cat("  ⚠ Cache landuse invalide — recalcul...\n")
   }
->>>>>>> 61067bd (kzvfc)
 }
 
 if (!cache_landuse_valide) {
