@@ -1993,7 +1993,13 @@ entreposages_avec_snap <- entreposages_sf %>%
     distance_snap   = as.numeric(
       st_distance(geometry, noeuds_reseau[noeud_proche_id,], by_element = TRUE)
     )
-  )
+  ) %>%
+  # ── Garder un seul entrepôt par nœud : priorité aux OSM villes, puis manuels,
+  #    puis industriels (order de source dans entreposages_fictifs)
+  arrange(match(source, c("osm_place", "manuel","osm_industrial","osm_retail"))) %>%
+  distinct(noeud_proche_id, .keep_all = TRUE)
+
+cat("  Entrepôts après dédoublonnage par nœud :", nrow(entreposages_avec_snap), "\n")
 
 # Associe le noeud le plus proche à chaque entrepot ainsi que son type.
 # match(A, B) : pour chaque élément de A, trouve sa position dans B.
@@ -2804,6 +2810,10 @@ if (FALSE) {
 # La "matrice OD" (Origine-Destination) est le tableau carré n×n qui contient
 # le coût optimal pour aller de chaque entrepôt vers chaque autre entrepôt.
 
+# Rendre les noms de zones uniques
+noeuds_entreposage <- noeuds_entreposage %>%
+  mutate(warehouse_name = make.unique(warehouse_name, sep = "_"))
+
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
   activate("nodes") %>%
@@ -3593,11 +3603,17 @@ flux_par_secteur_df <- tibble(
 cat("\nFlux par secteur:\n")
 print(flux_par_secteur_df)
 
+# Vérifier les doublons dans les noms de zones
+cat("Doublons dans warehouse_name :\n")
+print(noeuds_entreposage$warehouse_name[duplicated(noeuds_entreposage$warehouse_name)])
+
 # Top 10 des paires OD
 # pivot_longer() : transforme la matrice carrée en format long (1 ligne = 1 paire OD).
 # filter(flux_musd > 0.01) : exclut les flux négligeables (< 10 000 USD).
 # arrange(desc()) : trie par ordre décroissant de flux.
-flux_total_long <- as.data.frame(flux_total) %>%
+flux_total_long <- flux_total %>%
+  as.data.frame() %>%
+  setNames(make.unique(colnames(.), sep = "_")) %>%
   rownames_to_column("Origine") %>%
   pivot_longer(-Origine, names_to = "Destination", values_to = "flux_musd") %>%
   filter(flux_musd > 0.01) %>%
