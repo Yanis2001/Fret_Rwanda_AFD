@@ -405,12 +405,6 @@ routes_rwanda_raw <- st_read(
 
 cat("✓ Données chargées :", nrow(routes_rwanda_raw), "segments\n\n")
 
-# ==============================================================================
-# II.2 : Couches administratives et fond de carte
-# Extrait frontières, provinces, lacs et parcs depuis le PBF.
-# Définit fond_carte(), la fonction réutilisée dans toutes les cartes du script.
-# ==============================================================================
-
 # Vérification des landuse disponibles
 landuse_test <- st_read(
   chemin_pbf, layer = "multipolygons",
@@ -430,6 +424,13 @@ place_test <- st_read(
 )
 cat("\nZones par place :\n")
 print(table(place_test$place))
+
+# ==============================================================================
+# II.2 : Nettoyage des attributs routiers
+# Extrait les tags OSM (surface, vitesse, sens unique) via regex, puis
+# harmonise les valeurs hétérogènes en SQL via DuckDB (CASE WHEN).
+# ==============================================================================
+
 
 # Vérifier le nom de la colonne géométrie dans la couche points
 villes_raw <- st_read(
@@ -542,6 +543,11 @@ routes_rwanda <- routes_attrs_raw %>%
 
 cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
 
+# ==============================================================================
+# II.3 : Couches administratives et fond de carte
+# Extrait frontières, provinces, lacs et parcs depuis le PBF.
+# Définit fond_carte(), la fonction réutilisée dans toutes les cartes du script.
+# ==============================================================================
 
 # ── Frontière nationale (admin_level = 2) ─────────────────────────────────────
 rwanda_boundary <- st_read(
@@ -750,20 +756,17 @@ if (FALSE) {
 
 cat("✓ Carte de vérification générée\n\n")
 
-
 # ==============================================================================
-# II.3 : Modèle Numérique de Terrain (DEM)
-# Télécharge le DEM SRTM depuis AWS via elevatr. En cas d'échec, génère
-# un DEM fictif calibré sur la topographie réelle du Rwanda.
+# II.4 : Modèle Numérique de Terrain (DEM) 
+# Télécharge le DEM SRTM depuis AWS via elevatr. En cas d'échec, génère 
+# un DEM fictif calibré sur la topographie réelle du Rwanda. 
 # Utilisé uniquement en Partie IV.2 pour le calcul des pentes.
 # ==============================================================================
-
 
 # Le DEM (Digital Elevation Model) est une grille de pixels où chaque valeur
 # représente l'altitude en mètres au-dessus du niveau de la mer.
 # Il sera utilisé pour calculer la pente de chaque segment routier
 # (ratio dénivelé/longueur × 100 = pourcentage de pente).
-
 
 # Créer l'emprise géographique à partir de la bbox des routes
 # pour ne télécharger que la zone d'intérêt (Rwanda uniquement)
@@ -833,6 +836,11 @@ dem_rwanda <- clamp(dem_rwanda, lower = 800, upper = 4600, values = NA)
 cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
 cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "m\n\n")
 
+# Cartographier rapidement pour identifier visuellement les anomalies
+plot(dem_rwanda, main = "DEM Rwanda — vérification")
+plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
+
+
 ################################################################################
 # PARTIE III — CONSTRUCTION ET CORRECTION DU RÉSEAU ROUTIER
 # Transforme les segments OSM bruts en graphe sfnetworks topologiquement
@@ -841,15 +849,10 @@ cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "
 ################################################################################
 
 # ==============================================================================
-# III.1 : Nettoyage et harmonisation des attributs
-# Extrait les tags OSM (surface, vitesse, sens unique) via regex, puis
-# harmonise les valeurs hétérogènes en SQL via DuckDB (CASE WHEN).
+# III.1 : Création du graphe sfnetworks
+# Convertit les LINESTRING en réseau nœuds/arêtes non orienté.
+# Nœuds = intersections et extrémités ; arêtes = segments de route.
 # ==============================================================================
-
-
-# Cartographier rapidement pour identifier visuellement les anomalies
-plot(dem_rwanda, main = "DEM Rwanda — vérification")
-plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 
 # sfnetworks représente le réseau routier comme un graphe topologique où :
 #   - les NŒUDS sont les intersections et extrémités de routes
@@ -874,15 +877,16 @@ cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
 
 
 # ==============================================================================
-# PARTIE 7 : CORRECTIONS TOPOLOGIQUES DU RÉSEAU
+# III.2 : Corrections topologiques
+# Subdivision aux intersections, suppression des pseudo-nœuds.
+# Résout la fragmentation du réseau OSM (routes qui se croisent sans nœud).
 # ==============================================================================
+
 # Les données OSM contiennent fréquemment des erreurs topologiques :
 #   1. Routes qui se croisent sans nœud d'intersection (pont raté, erreur de saisie)
 #   2. Nœuds intermédiaires inutiles (points de degré 2 sur une ligne droite)
 # Ces erreurs créent des composantes connexes multiples (le réseau est "fragmenté")
 # et empêchent les algorithmes de plus court chemin de trouver des itinéraires.
-
-cat("=== PARTIE 7 : Corrections topologiques ===\n")
 
 # ── Étape 1 : Subdivision aux intersections ───────────────────────────────────
 # to_spatial_subdivision() détecte les croisements de routes sans nœud commun
@@ -1005,10 +1009,10 @@ pct_noeuds          <- round(length(noeuds_geante) / igraph::vcount(reseau_lisse
 cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% du réseau)\n")
 
 # ==============================================================================
-# PARTIE 8 : DIAGNOSTIC DES ARÊTES PERDUES
+# III.3 : Diagnostic et extraction de la composante géante
+# Analyse les arêtes exclues (type, surface, province), génère la carte
+# de diagnostic, puis filtre le réseau sur la composante géante uniquement.
 # ==============================================================================
-
-cat("=== PARTIE 8 : Diagnostic des arêtes hors composante géante ===\n")
 
 # Vérifier les colonnes disponibles dans rwanda_provinces
 cat("Colonnes de rwanda_provinces :\n")
@@ -1172,10 +1176,6 @@ if (FALSE) {
 
 cat("✓ Carte des arêtes perdues sauvegardée\n\n")
 
-# ==============================================================================
-# PARTIE 9 : EXTRACTION DE LA COMPOSANTE GÉANTE
-# ==============================================================================
-
 pb_geante <- progress_bar$new(
   format = "  Filtrage   [:bar] :percent | durée : :elapsed",
   total  = length(noeuds_geante),
@@ -1259,16 +1259,20 @@ if (nrow(noeuds_sf) == 0) {
   cat("✓ noeuds_sf est valide.\n")
 }
 
-# ==============================================================================
-# PARTIE 9 BIS : CHARGEMENT DES ZONES D'USAGE DU SOL ET TAGUAGE DES ARÊTES
-# ==============================================================================
-# On charge les zones résidentielles, commerciales, industrielles et retail
-# depuis le PBF, puis on détermine pour chaque arête du réseau si elle traverse
-# une zone urbaine dense (résidentielle ou commerciale).
-# Cette information sera utilisée en Partie 13 pour appliquer la pénalité
-# urbaine aux poids lourds.
+################################################################################
+# PARTIE IV — ENRICHISSEMENT DU RÉSEAU
+# Ajoute trois couches d'information au réseau routier :
+#   - zones urbaines (pénalité sur les poids lourds en ville)
+#   - pentes (impact sur vitesse et consommation)
+#   - entrepôts (origines/destinations du modèle de fret)
+# Les Parties V à VIII dépendent de ces attributs mais pas les unes des autres.
+################################################################################
 
-cat("=== PARTIE 9 BIS : Zones d'usage du sol ===\n")
+# ==============================================================================
+# IV.1 : Zones d'usage du sol
+# Charge les zones résidentielles, commerciales, industrielles et retail depuis le PBF.
+# Tague chaque arête du réseau avec zone_urbaine = TRUE/FALSE via centroïde.
+# ==============================================================================
 
 # ── Chargement des zones résidentielles et commerciales ──
 zones_urbaines <- st_read(
@@ -1346,17 +1350,12 @@ duck_write(
 cat("✓ Zones d'usage du sol chargées et arêtes taguées\n\n")
 
 # ==============================================================================
-# PARTIE 11 (DÉPLACÉE) : CALCUL DES PENTES POUR CHAQUE ARÊTE
+# IV.2 : Calcul des pentes (avec cache)
+# Échantillonne des points d'élévation le long de chaque arête depuis le DEM.
+# Résultat mis en cache dans outputs/pentes_cache.rds — recalcul uniquement
+# si le nombre d'arêtes change. 
+# Pour forcer le recalcul : supprimer le fichier .rds.
 # ==============================================================================
-# Seul un changement sur le réseau (Parties 6-9) ou le DEM (Partie 5)
-# nécessite de relancer cette partie.
-#
-# CACHE : les pentes sont sauvegardées dans outputs/pentes_cache.rds
-# Le cache est invalidé automatiquement si le nombre d'arêtes change.
-# Pour forcer un recalcul complet : supprimer outputs/pentes_cache.rds
-# ==============================================================================
-
-cat("=== PARTIE 11 : Calcul des pentes ===\n")
 
 CACHE_PENTES <- file.path(DIR_OUTPUT, "pentes_cache.rds")
 
@@ -1461,14 +1460,14 @@ reseau_rwanda <- reseau_rwanda %>%
 cat("✓ Pentes intégrées dans le réseau\n\n")
 
 # ==============================================================================
-# PARTIE 10 : DÉFINITION DES NŒUDS D'ENTREPOSAGE
+# IV.3 : Nœuds d'entreposage
+# Construit la liste des zones économiques (manuelles + OSM city/town +
+# zones industrielles), les dédoublonne, les snappe sur le réseau routier
+# et les intègre comme attributs des nœuds (is_warehouse, warehouse_type…).
 # ==============================================================================
+
 # Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
 # Ils représentent des zones économiques importantes (hub, SEZ, frontières…).
-# ATTENTION : ces données sont fictives mais réalistes ; les coordonnées sont
-# approximatives. Remplacer par les vraies localisations si disponibles.
-
-cat("=== PARTIE 10 : Création des nœuds d'entreposage ===\n")
 
 # ── Entrepôts manuels  ────────────────────────────────────────────────────────
 entreposages_manuels <- tibble(
@@ -1694,18 +1693,29 @@ reseau_rwanda <- reseau_rwanda %>%
 cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 
 
+################################################################################
+# PARTIE V — CALCUL DES COÛTS DE TRANSPORT
+# Calcule les coûts généralisés (USD/tkm) pour chaque arête × véhicule via
+# une requête SQL DuckDB, puis assemble le graphe multi-modal à 3 couches
+# (une par véhicule) avec arêtes de transbordement aux entrepôts.
+# Dépend de la Partie IV complète. Les Parties VI et VII en dépendent.
+################################################################################
+
 # ==============================================================================
-# PARTIE 12 : COÛTS GÉNÉRALISÉS — REQUÊTE SQL UNIQUE SUR TOUTE LA FLOTTE
+# V.1 : Coûts généralisés par véhicule (SQL DuckDB)
+# Requête SQL chaînée en 5 CTEs : vitesse → pente → consommation → coût.
+# Produit la table aretes_couts_tous (N_arêtes × N_véhicules lignes).
+# cost_per_tkm = (carburant + usure × facteur_urbain + temps × facteur_urbain)
+#                / capacite_tonnes / length_km
 # ==============================================================================
+
 # Formules appliquées :
 #   speed_kmh     = vitesse_base × facteur_pente
 #   conso (L/100km) = conso_base × facteur_surface × (1 + slope × FACTEUR / 100)
 #   cost_fuel     = (length_km × conso/100) × prix_carburant
 #   cost_wear     = length_km × usure_usd_km
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
-#   cost_total    = cost_fuel + cost_wear + cost_time  [coût généralisé]
 
-cat("=== PARTIE 12 : Coûts généralisés ===\n")
 
 aretes_df <- reseau_rwanda %>%
   activate("edges") %>% st_as_sf() %>% st_drop_geometry() %>%
@@ -1960,21 +1970,11 @@ cat("Nb arêtes réseau         :", n_reseau, "\n")
 cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\n")
 
 # ==============================================================================
-# PARTIE 13 : GRAPHE MULTI-MODAL AVEC TRANSBORDEMENTS AUX ENTREPÔTS
+# V.2 : Graphe multi-modal avec transbordements
+# Réplique le réseau en 3 couches (une par véhicule) et ajoute des arêtes
+# de transbordement aux entrepôts uniquement. Le Dijkstra sur ce graphe
+# trouve automatiquement la combinaison optimale de véhicules pour chaque OD.
 # ==============================================================================
-# Structure du graphe en couches :
-#
-#   Couche camionnette  : nœuds  1        →  N_noeuds
-#   Couche camion_moyen : nœuds  N+1      →  2×N_noeuds
-#   Couche camion_lourd : nœuds  2×N+1    →  3×N_noeuds
-#
-#   Arêtes intra-couche : routes normales avec coûts propres à chaque véhicule
-#   Arêtes inter-couches: transbordements aux entrepôts uniquement (coût fixe)
-#
-# Le Dijkstra sur ce graphe étendu trouve automatiquement la combinaison
-# optimale de véhicules pour chaque paire OD.
-
-cat("=== PARTIE 13 : Construction du graphe multi-modal ===\n")
 
 # ── Paramètres de base ────────────────────────────────────────────────────────
 n_vehicules <- nrow(VEHICULES_IDS)
@@ -2142,10 +2142,10 @@ cat("  Arêtes :", igraph::ecount(graphe_multimodal),
 
 
 # ==============================================================================
-# PARTIE 14 : CARTES PAR VÉHICULE — PILOTÉES PAR LA TABLE params_flotte
+# V.3 : Cartes de coûts et de pentes
+# Génère une carte de cost_per_tkm par véhicule, deux cartes de ratio
+# (lourd/camionnette, moyen/camionnette) et la carte des pentes.
 # ==============================================================================
-
-cat("=== PARTIE 14 : Cartes de coûts par véhicule ===\n")
 
 for (i in seq_len(nrow(VEHICULES_IDS))) {
   
@@ -2340,20 +2340,19 @@ print(carte_pentes)
 tmap_mode("plot")
 }
 
-# ==============================================================================
-# PARTIE 15 : MATRICE ORIGINE-DESTINATION STOCKÉE DANS DUCKDB
-# ==============================================================================
-# La matrice OD donne le coût, la distance et le temps de trajet optimal entre
-# chaque paire d'entrepôts. Elle est calculée par l'algorithme de Dijkstra
-# (igraph) et stockée dans DuckDB en FORMAT LONG plutôt qu'en matrices carrées R.
-#
-# Format long (avantages sur les matrices carrées) :
-#   - Requêtable : SELECT ... WHERE nom_origine = 'Kigali' ORDER BY cout_usd
-#   - Filtrable : ignorer les paires non connectées sans "trous" dans la matrice
-#   - Joinable : directement utilisable dans le modèle gravitaire (Partie 18)
-#   - Compact : ne stocke que les paires connectées (pas de zéros inutiles)
+################################################################################
+# PARTIE VI — MATRICE ORIGINE-DESTINATION
+# Calcule les coûts de transport optimaux entre toutes les paires d'entrepôts
+# via Dijkstra multi-modal, stocke la matrice OD dans DuckDB et exporte
+# le réseau enrichi (GeoPackage, CSV, Parquet).
+################################################################################
 
-cat("=== PARTIE 15 : Matrice OD dans DuckDB ===\n")
+# ==============================================================================
+# VI.1 : Dijkstra et matrice OD
+# Pour chaque paire d'entrepôts, cherche le chemin de moindre coût dans le
+# graphe multi-modal. Stocke les résultats (coût, distance, temps, véhicules
+# utilisés, transbordements) dans la table DuckDB matrice_od.
+# ==============================================================================
 
 # Extraction des nœuds identifiés comme entrepôts dans le réseau
 noeuds_entreposage <- reseau_rwanda %>%
@@ -2468,15 +2467,17 @@ cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
 
 # ==============================================================================
-# PARTIE 16 : EXPORT VIA DUCKDB (PARQUET + CSV + GEOPACKAGE)
+# VI.2 : Exports du réseau (GeoPackage, CSV, Parquet)
+# Exporte le réseau routier enrichi (coûts par véhicule, pentes, topologie)
+# et la matrice OD dans tous les formats de sortie via DuckDB COPY TO.
 # ==============================================================================
+
 # COPY TO est la commande DuckDB pour exporter des tables vers des fichiers.
 # Avantages sur write.csv() :
 #   - Parquet : format colonnaire compressé (~10× plus compact que CSV)
 #   - Vitesse : écriture multithread native de DuckDB
 #   - SQL : filtrer/transformer les données à l'export sans créer de df R intermédiaire
 
-cat("=== PARTIE 16 : Export via DuckDB ===\n")
 
 # ── Récupération des coûts de tous les véhicules depuis DuckDB ────────────────
 couts_wide <- duck_query("
@@ -2552,9 +2553,24 @@ dbExecute(con, paste0(
 cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 
 
+################################################################################
+# PARTIE VII — MODÈLE ÉCONOMIQUE
+# Construit la chaîne économique complète :
+#   Table IO → multiplicateurs Leontief → offres/demandes par zone
+#   → modèle gravitaire avec friction sur coûts de transport (C_ij)
+#     et coûts pré-frontière (C_prebordure).
+# Dépend de la Partie VI (matrice OD) pour construire C_ij.
+################################################################################
+
 # ==============================================================================
-# PARTIE 17 : TABLE INPUT-OUTPUT DU RWANDA
+# VII.1 : Table Input-Output de Leontief
+# Définit les 8 secteurs, la matrice des coefficients techniques A,
+# les productions totales et les facteurs de conversion valeur → tonnes.
+# Calcule les multiplicateurs de Leontief (I-A)^(-1) et stocke dans DuckDB.
+# NOTE : données fictives calibrées sur le Rwanda 2022. Pour utiliser les
+# données NISR réelles, remplacer A et production_totale ici uniquement.
 # ==============================================================================
+
 # La table Input-Output de Leontief modélise les interdépendances sectorielles :
 #   a_ij = part de la production du secteur j consommée en intrant par le secteur i
 #   Production totale : X = (I - A)^(-1) × D  [équation de Leontief]
@@ -2563,15 +2579,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # Interprétation de (I - A)^(-1) :
 #   Un élément [i,j] donne l'augmentation de production du secteur i nécessaire
 #   pour satisfaire une augmentation de 1 USD de demande finale dans le secteur j.
-#
-# NOTE : La table IO officielle du Rwanda (NISR) n'est pas disponible librement.
-# Ces données sont fictives mais calibrées sur la structure économique connue.
-# Pour utiliser les données réelles :
-#   1. Télécharger sur https://www.statistics.gov.rw (NISR)
-#   2. Charger avec readxl::read_excel("io_rwanda.xlsx")
-#   3. Remplacer les matrices A et production_totale ci-dessous
 
-cat("=== PARTIE 17 : Table Input-Output dans DuckDB ===\n")
 
 # 8 secteurs représentatifs de l'économie rwandaise en 2022
 SECTEURS   <- c("Agriculture","Mines","Agro_industrie","Industrie",
@@ -2672,8 +2680,13 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 
 
 # ==============================================================================
-# PARTIE 18 : GÉNÉRATION DES OFFRES ET DEMANDES PAR ZONE
+# VII.2 : Offres et demandes par zone
+# Affecte à chaque zone un profil sectoriel d'offre et de demande selon son
+# type (hub, sez, frontière…), modulé par la composition landuse (urbain/
+# industriel) dans un buffer de 2km. Volumes calibrés sur l'échelle nationale
+# via PART_ECHANGEABLE = 35%.
 # ==============================================================================
+
 # Chaque zone d'entreposage est caractérisée par :
 #   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
 #   - un profil sectoriel de demande (ce qu'elle consomme/importe des autres zones)
@@ -2686,7 +2699,6 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 #   ville     → profil équilibré, Commerce local dominant
 #   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
 
-cat("=== PARTIE 18 : Offres et demandes par zone ===\n")
 
 # Profils d'offre (ce que chaque type de zone produit et offre au marché)
 PROFILS_OFFRE <- list(
@@ -2891,23 +2903,27 @@ cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 
 
 # ==============================================================================
-# PARTIE 19 : MODÈLE GRAVITAIRE DES ÉCHANGES
+# VII.3 : Modèle gravitaire
+# T_ij^s = K^s × O_i^s × D_j^s × (C_ij + C_prebordure_ij^s)^(-beta_s)
+# C_ij        = coût réseau interne (matrice OD Partie VI)
+# C_prebordure = coût de transport depuis le pays étranger jusqu'à la frontière
+# beta_s      = sensibilité au coût par secteur (2.5 Construction, 0.9 Services)
 # ==============================================================================
 
-cat("=== PARTIE 19 : Modèle gravitaire des échanges ===\n\n")
 
 # Le modèle gravitaire estime les flux commerciaux bilatéraux :
 #
-#   T_ij^s = K^s * O_i^s * D_j^s * F_ij
+#   T_ij^s = K^s * O_i^s * D_j^s *(C_ij + C_prebordure_ij^s)^(-beta_s)
 #
 # où :
-#   T_ij^s  = flux du secteur s de la zone i vers la zone j (M USD)
-#   O_i^s   = offre du secteur s en zone i
-#   D_j^s   = demande du secteur s en zone j
-#   F_ij    = facteur de friction = C_ij^(-beta)
-#   C_ij    = coût généralisé de transport (USD) entre i et j
-#   beta    = paramètre de friction (sensibilité au coût)
-#   K^s     = constante de calibration par secteur
+#   T_ij^s            = flux du secteur s de la zone i vers la zone j (M USD)
+#   O_i^s             = offre du secteur s en zone i
+#   D_j^s             = demande du secteur s en zone j
+#   F_ij              = facteur de friction = C_ij^(-beta)
+#   C_ij              = coût généralisé de transport (USD) entre i et j
+#   C_prebordure_ij^s = coût généralisé de transport (USD) entre i et j lors i est une ville frontalière (intègre le coût de transport intra-pays frontaliers)
+#   beta_s            = paramètre de friction (sensibilité au coût) par secteur
+#   K^s               = constante de calibration par secteur
 
 cat("Paramètres du modèle gravitaire:\n")
 
@@ -3072,11 +3088,19 @@ cat("✓ Flux total modélisé:", round(sum(flux_total), 1), "M USD\n")
 cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 
-# ==============================================================================
-# PARTIE 20 : MODÉLISATION DU FRET ET AFFECTATION AU RÉSEAU
-# ==============================================================================
+################################################################################
+# PARTIE VIII — AFFECTATION DU FRET ET RÉSULTATS
+# Convertit les flux monétaires (M USD) en tonnes, affecte chaque flux OD
+# au chemin optimal du graphe multi-modal (All-or-Nothing), puis produit
+# l'ensemble des visualisations et exports finaux.
+################################################################################
 
-cat("=== PARTIE 20 : Modélisation du fret et affectation au réseau ===\n")
+# ==============================================================================
+# VIII.1 : Conversion et affectation All-or-Nothing
+# Convertit M USD → tonnes via TONNES_PAR_musd par secteur, puis affecte
+# chaque paire OD (seuil > 50t) sur son chemin optimal dans le graphe
+# multi-modal. Produit volume_trafic_mm : N_arêtes × N_véhicules.
+# ==============================================================================
 
 # --- Étape 1 : Conversion des flux monétaires en tonnes ---
 cat("Conversion des flux en tonnes...\n")
@@ -3270,7 +3294,7 @@ volumes_par_zone <- tibble(
 print(volumes_par_zone)
 cat("\n")
 
-# === DIAGNOSTIC PARTIE 20 ===
+# === DIAGNOSTIC ===
 
 cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
 
@@ -3306,10 +3330,10 @@ for (i in 1:min(5, length(warehouse_node_ids))) {
 }
 
 # ==============================================================================
-# PARTIE 21 : VISUALISATIONS DES ÉCHANGES MODÉLISÉS
+# VIII.2 : Visualisations
+# Génère 5 sorties graphiques : carte du trafic fret, carte de répartition
+# modale, desire lines OD, graphiques sectoriels et heatmap de la matrice OD.
 # ==============================================================================
-
-cat("=== PARTIE 21 : Visualisations des échanges modélisés ===\n\n")
 
 # --- Préparation des couches spatiales ---
 
@@ -3693,7 +3717,9 @@ cat("✓ Graphique composition sectorielle sauvegardé\n\n")
 
 
 # ==============================================================================
-# EXPORT DES DONNÉES DE FRET
+# VIII.3 : Exports finaux
+# Exporte toutes les matrices (flux M USD, flux tonnes, offre/demande, IO)
+# en CSV et le réseau complet avec volumes fret en GeoPackage.
 # ==============================================================================
 
 cat("Export des données du modèle de fret...\n")
