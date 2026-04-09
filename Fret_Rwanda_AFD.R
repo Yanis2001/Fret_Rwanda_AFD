@@ -19,30 +19,22 @@
 #
 # ── POUR RETROUVER LE DÉPÔT GITHUB ───────────────────────────────────────────
 #  system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-#  Pour activer l'onglet Git dans RStudio : File -> Open Project
 ################################################################################
 
 # ==============================================================================
 # CONNEXION GIT
-# Ces deux lignes configurent Git (le système de gestion de versions) pour
-# qu'il puisse se connecter à GitHub en utilisant un mot de passe sécurisé
-# stocké dans les variables d'environnement du système (et non écrit en dur
-# dans le code, ce qui serait une mauvaise pratique de sécurité).
-# token <- Sys.getenv("GITHUB_PAT") : récupère le Personal Access Token GitHub
-# stocké dans les variables d'environnement du système d'exploitation.
-# system() : exécute une commande système (ici, une commande Git en ligne de commande).
 # ==============================================================================
 
 # Authentification Git via le Personal Access Token stocké en variable d'env.
 # Sys.getenv() lit la variable d'environnement GITHUB_PAT sans l'exposer
 # dans le code source (bonne pratique de sécurité).
 token <- Sys.getenv("GITHUB_PAT")
-# Configurer le helper de credentials
+# Configurer le helper de credentials : plus besoin de mettre le mot de passe et nom d'utilisateur avant de pusher sur Git
 system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
 
 # S'assurer que le remote 'origin' pointe vers mon dépôt perso
 system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-# Ajouter une deuxième pushurl sur ce même remote
+# Pusher le script sur deux Git
 system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
 system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
 # Vérifier la configuration
@@ -61,13 +53,6 @@ system("git remote -v")
 # les téléchargements de gros fichiers (DEM, PBF).
 # ==============================================================================
 
-# En R, un "package" est une extension qui ajoute des fonctionnalités.
-# Par exemple, "sf" ajoute la capacité de lire des cartes, "ggplot2" permet
-# de faire des graphiques avancés, etc. Sans ces packages, R ne saurait pas
-# faire de cartographie ou d'analyse de réseau.
-# La liste ci-dessous recense tous les packages dont ce script a besoin.
-
-# Liste exhaustive des packages nécessaires avec leur rôle :
 packages_requis <- c(
   "sf",            # Manipulation de données géospatiales vectorielles (points, lignes, polygones)
   "osmdata",       # Extraction de données OpenStreetMap via l'API Overpass
@@ -85,7 +70,7 @@ packages_requis <- c(
   "aws.s3",        # Accès aux objets stockés sur SSP Cloud (MinIO compatible S3)
   "duckdb",        # Base analytique embarquée — moteur SQL sans serveur
   "DBI",           # Interface R standard pour les bases de données (pilote DuckDB)
-  "scales",         # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
+  "scales",        # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
   "progress"       # Barre de progression
 )
 
@@ -95,9 +80,6 @@ packages_requis <- c(
 # exécution, ce qui prendrait plusieurs minutes inutilement.
 # "dependencies = TRUE" signifie : installe aussi les packages dont ces packages
 # ont eux-mêmes besoin pour fonctionner.
-
-# Fonction d'installation conditionnelle : n'installe que les packages absents
-# pour ne pas réinstaller inutilement à chaque exécution du script.
 installer_si_necessaire <- function(packages) {
   # installed.packages()[,"Package"] retourne le vecteur des packages installés
   nouveaux <- packages[!(packages %in% installed.packages()[, "Package"])]
@@ -109,24 +91,17 @@ installer_si_necessaire(packages_requis)
 # invisible() évite d'afficher un message de confirmation dans la console pour
 # chaque package chargé. lapply() est une boucle compacte qui applique la
 # fonction library() à chaque élément de la liste packages_requis.
-# library() rend un package utilisable dans la session R courante.
-
-# Chargement silencieux (invisible supprime l'affichage des messages de chargement)
 invisible(lapply(packages_requis, library, character.only = TRUE))
 
 # options(timeout = 600) : donne 600 secondes (10 minutes) au lieu des 60 secondes
 # par défaut avant d'abandonner un téléchargement. Utile pour les gros fichiers
 # géographiques comme le DEM (modèle d'élévation) ou le PBF (données OSM Rwanda).
-
-# Augmenter le timeout global pour les téléchargements de gros fichiers (DEM, PBF)
 options(timeout = 600)
 
 # set.seed(123) : fixe le "germe" du générateur de nombres aléatoires.
 # R utilise des nombres pseudo-aléatoires : en fixant le germe, on garantit
 # que les mêmes "nombres aléatoires" seront générés à chaque exécution,
 # ce qui rend les résultats reproductibles.
-
-# Graine aléatoire pour la reproductibilité des données fictives générées 
 set.seed(123)
 
 cat("✓ Tous les packages sont chargés\n\n")
@@ -138,11 +113,11 @@ cat("✓ Tous les packages sont chargés\n\n")
 # ==============================================================================
 
 # DuckDB est une base de données SQL embarquée : elle fonctionne directement
-# dans R sans avoir besoin d'un serveur séparé (contrairement à PostgreSQL
-# ou MySQL). On peut lui envoyer des requêtes SQL pour manipuler des tableaux
-# de données très efficacement — plus vite que des boucles R sur de grands volumes.
-# Le fichier "reseau_rwanda.duckdb" stocke toutes les tables sur le disque,
-# ce qui permet de reprendre le travail sans recalculer depuis zéro.
+# dans R sans avoir besoin d'un serveur séparé. On peut lui envoyer des requêtes 
+# SQL pour manipuler des tableaux de données très efficacement — plus vite que 
+# des boucles R sur de grands volumes. Le fichier "reseau_rwanda.duckdb" stocke 
+# toutes les tables sur le disque, ce qui permet de reprendre le travail sans 
+# recalculer depuis zéro.
 
 # Fermeture propre de la connexion à DuckDB afin de la rouvrir ensuite proprement
 if (exists("con")) {
@@ -178,8 +153,6 @@ cat("✓ DuckDB connecté :", DB_PATH, "\n\n")
 # dir.create() le crée s'il n'existe pas encore.
 # showWarnings = FALSE : n'affiche pas de message si le dossier existe déjà.
 # recursive = TRUE : crée aussi les dossiers parents si nécessaire.
-
-# Répertoire de sortie local (évite les erreurs de permissions sur /mnt/)
 DIR_OUTPUT <- "outputs"
 dir.create(DIR_OUTPUT, showWarnings = FALSE, recursive = TRUE)
 
@@ -191,19 +164,14 @@ dir.create(DIR_OUTPUT, showWarnings = FALSE, recursive = TRUE)
 # quand on relance le script sans vouloir d'erreur "table already exists").
 # invisible(df) retourne df sans l'afficher dans la console, ce qui permet
 # d'enchaîner les opérations avec l'opérateur %>%.
-
-# Écrit un data.frame R dans DuckDB (crée ou remplace la table).
-# overwrite = TRUE évite les erreurs si la table existe déjà (utile pour relancer).
 duck_write <- function(df, table_name) {
   dbWriteTable(con, table_name, df, overwrite = TRUE)
-  invisible(df)  # Retourne df invisiblement pour permettre le chaînage (%>%)
+  invisible(df)  
 }
 
 # duck_query() : raccourci pour envoyer une requête SQL à DuckDB et récupérer
 # le résultat sous forme de tableau R (data.frame).
 # dbGetQuery() envoie le SQL, attend la réponse, et la renvoie en R.
-
-# Exécute une requête SQL et retourne le résultat sous forme de data.frame R.
 duck_query <- function(sql) dbGetQuery(con, sql)
 
 # ==============================================================================
@@ -211,11 +179,6 @@ duck_query <- function(sql) dbGetQuery(con, sql)
 # Définit toutes les couleurs utilisées dans les cartes. Modifier ici
 # répercute les changements sur l'ensemble des visualisations du script.
 # ==============================================================================
-
-# Les palettes sont des vecteurs R nommés : chaque élément associe un nom
-# (ex : "motorway") à un code couleur hexadécimal (ex : "#E41A1C" = rouge vif).
-# En centralisant toutes les couleurs ici, si on veut changer la couleur des
-# autoroutes, on modifie une seule ligne au lieu de chercher dans tout le script.
 
 # ── Types de routes ───────────────────────────────────────────────────────────
 PALETTE_ROAD_TYPE <- c(
