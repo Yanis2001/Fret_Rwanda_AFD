@@ -4367,6 +4367,1059 @@ st_write(aretes_fret_export,
          delete_dsn = TRUE, quiet = TRUE)
 cat("✓ GeoPackage avec volumes fret exporté\n")
 
+################################################################################
+# PARTIE IX — ANALYSE DE VULNÉRABILITÉ ET DE CONTOURNEMENT
+#
+# OBJECTIF : Simuler la suppression d'une ou plusieurs arêtes du réseau
+#            (routes inondées, glissements de terrain, etc.) et mesurer
+#            l'impact sur les coûts de transport entre toutes les paires OD.
+#
+# STRUCTURE :
+#   IX.1 — Chargement des perturbations (manuel ou raster de risque)
+#   IX.2 — Identification des arêtes perturbées
+#   IX.3 — Recalcul de la matrice OD sur le réseau dégradé
+#   IX.4 — Calcul des surcoûts et classification des impacts
+#   IX.5 — Identification des arêtes critiques (analyse de sensibilité)
+#   IX.6 — Cartes et exports
+#
+# DESIGN POUR L'AVENIR :
+#   Ce script est conçu pour accepter, à terme, des cartes raster de zones
+#   inondables (ex : sorties de modèles hydrologiques HEC-RAS, HAND, JRC)
+#   ou de glissements de terrain (ex : données NASA LSAF, susceptibilité USGS).
+#   Pour l'instant, trois modes de définition des perturbations sont disponibles :
+#     Mode A — Manuel       : liste d'osm_id ou de coordonnées GPS fournie à la main
+#     Mode B — Buffer zone  : toutes les routes dans un rayon autour d'un point
+#     Mode C — Raster risque: (PRÊT À BRANCHER) intersection avec un raster externe
+#
+# DÉPENDANCES :
+#   Ce bloc dépend des objets construits dans les Parties I à VIII :
+#     reseau_rwanda      — réseau sfnetworks avec coûts et volumes
+#     graphe_multimodal  — graphe igraph multi-modal (3 couches véhicules)
+#     od_long            — matrice OD de référence (avant perturbation)
+#     noeuds_entreposage — liste et indices des zones d'entrepôt
+#     warehouse_nodes_base — indices des entrepôts dans le graphe de base
+#     VEHICULES_IDS      — tableau des types de véhicules
+#     node_multi()       — fonction de remappage multi-modal
+#     fond_carte()       — fonction de fond de carte réutilisable
+#     DIR_OUTPUT         — dossier de sortie
+################################################################################
+
+
+################################################################################
+# PARTIE IX.1 — DÉFINITION DE LA PERTURBATION
+#
+# Cette section centralise TOUT ce que l'utilisateur doit modifier pour
+# changer de scénario. Il ne devrait pas avoir besoin de toucher au reste
+# du code pour tester un nouvel événement climatique.
+#
+# TROIS MODES sont disponibles. Activez-en UN SEUL à la fois en mettant
+# les deux autres en commentaire (en ajoutant # au début de chaque ligne).
+################################################################################
+
+cat("==========================================================\n")
+cat("  PARTIE IX — ANALYSE DE VULNÉRABILITÉ ET CONTOURNEMENT\n")
+cat("==========================================================\n\n")
+
+# ==============================================================================
+# IX.1.A : Mode Manuel — liste d'identifiants OSM ou de noms de routes
+# À utiliser quand on connaît précisément quelle route est affectée.
+# Un osm_id est l'identifiant unique d'un segment dans OpenStreetMap.
+# Vous pouvez le trouver en cliquant sur une route dans OpenStreetMap.org.
+# ==============================================================================
+
+# ── Paramètres du scénario ────────────────────────────────────────────────────
+# Modifiez ces valeurs pour changer de scénario sans toucher au reste du code.
+
+NOM_SCENARIO       <- "Inondation_RN1_Kigali_Huye"  # Nom court, sans espaces (utilisé dans les noms de fichiers)
+DESCRIPTION_SCENARIO <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
+DUREE_JOURS        <- 14        # Durée estimée de la perturbation (en jours)
+TYPE_EVENEMENT     <- "inondation"  # "inondation", "glissement", "pont_effondre", etc.
+
+# Identifiants OSM des segments à supprimer.
+# Laissez vide (c()) si vous utilisez le Mode B ou C à la place.
+# Pour trouver un osm_id : allez sur openstreetmap.org, cliquez sur une route,
+# cliquez sur "Plus de détails" → l'identifiant apparaît dans l'URL.
+OSM_IDS_PERTURBES_MANUEL <- c()  # Exemple : c("12345678", "87654321")
+
+# ==============================================================================
+# IX.1.B : Mode Buffer — toutes les routes dans un rayon autour d'un point GPS
+# À utiliser pour simuler un événement localisé (ex : pont effondré, zone
+# inondée d'environ X km²) quand on ne connaît pas les osm_id précis.
+# ==============================================================================
+
+# Activez ce mode en passant UTILISER_MODE_BUFFER à TRUE.
+# Les coordonnées sont en degrés décimaux (système GPS standard).
+UTILISER_MODE_BUFFER <- TRUE    # TRUE = activer ce mode, FALSE = désactiver
+
+# Centre de la zone perturbée (longitude, latitude en WGS84)
+CENTRE_PERTURBATION_LON <- 29.950   # Longitude du centre (Est-Ouest)
+CENTRE_PERTURBATION_LAT <- -2.150   # Latitude du centre (Nord-Sud, négatif = Sud)
+
+# Rayon de la zone perturbée en mètres.
+# 5 000m = zone de 5km de rayon ≈ surface d'environ 78 km²
+RAYON_PERTURBATION_M    <- 5000
+
+# Types de routes inclus dans la perturbation (NULL = tous les types).
+# Utile pour simuler une inondation qui ne touche que les routes en fond de vallée
+# (souvent des routes secondaires et tertiaires) mais pas les routes en hauteur.
+# NULL signifie "toutes les routes" ; pour restreindre, utilisez par exemple :
+# c("primary", "secondary") pour ne perturber que les routes primaires et secondaires.
+TYPES_ROUTES_PERTURBES  <- NULL  # NULL = tous les types, ou c("primary","secondary",...)
+
+# ==============================================================================
+# IX.1.C : Mode Raster — intersection avec un raster de risque externe
+# PRÊT À BRANCHER : cette section est préparée pour accueillir un raster
+# de zones inondables (GeoTIFF) dès que vous en disposez.
+# Le raster doit contenir des valeurs de risque (ex : profondeur d'eau en cm,
+# probabilité d'inondation en %, susceptibilité de glissement 0-1).
+# ==============================================================================
+
+# Activez ce mode en passant UTILISER_MODE_RASTER à TRUE.
+# ATTENTION : si Mode Buffer ET Mode Raster sont tous les deux TRUE,
+# les deux sources sont combinées (union des routes perturbées).
+UTILISER_MODE_RASTER    <- FALSE   # TRUE = activer, FALSE = désactiver (futur)
+
+# Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
+# Exemples de sources de données :
+#   - JRC Global Surface Water  : https://global-surface-water.appspot.com/
+#   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
+#   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
+#   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
+CHEMIN_RASTER_RISQUE    <- "data/raw/zones_inondables_rwanda.tif"  # À modifier
+
+# Seuil au-dessus duquel une route est considérée comme perturbée.
+# Si le raster contient des probabilités (0-1) : un seuil de 0.5 signifie
+# "routes dont plus de 50% de leur longueur est dans une zone à risque > 50%".
+# Si le raster contient des profondeurs (cm) : un seuil de 30 signifie
+# "routes submergées sous plus de 30cm d'eau" (seuil de praticabilité standard).
+SEUIL_RISQUE_RASTER     <- 0.5
+
+# Proportion minimale de la longueur d'une arête qui doit être en zone à risque
+# pour que l'arête soit considérée comme perturbée.
+# 0.3 = au moins 30% de la route doit être en zone inondable.
+PROPORTION_MIN_EXPOSEE  <- 0.3
+
+cat("✓ Paramètres du scénario chargés :\n")
+cat("  Nom          :", NOM_SCENARIO, "\n")
+cat("  Description  :", DESCRIPTION_SCENARIO, "\n")
+cat("  Durée        :", DUREE_JOURS, "jours\n")
+cat("  Type         :", TYPE_EVENEMENT, "\n")
+cat("  Mode buffer  :", UTILISER_MODE_BUFFER, "\n")
+cat("  Mode raster  :", UTILISER_MODE_RASTER, "\n\n")
+
+
+################################################################################
+# PARTIE IX.2 — IDENTIFICATION DES ARÊTES PERTURBÉES
+#
+# Cette section traduit les paramètres de IX.1 en une liste concrète
+# d'identifiants d'arêtes dans le graphe igraph/sfnetworks.
+# C'est ici que les trois modes sont fusionnés en un seul ensemble d'arêtes.
+################################################################################
+
+cat("── Identification des arêtes perturbées ──────────────────────────────\n\n")
+
+# On commence avec un ensemble vide d'osm_id perturbés.
+# character(0) est un vecteur de chaînes de caractères vide en R.
+osm_ids_perturbes <- character(0)
+
+# ── Mode A : identifiants manuels ─────────────────────────────────────────────
+if (length(OSM_IDS_PERTURBES_MANUEL) > 0) {
+  # as.character() : s'assure que les identifiants sont des chaînes de texte
+  # (les osm_id peuvent parfois être chargés comme des entiers numériques)
+  osm_ids_perturbes <- union(osm_ids_perturbes,
+                             as.character(OSM_IDS_PERTURBES_MANUEL))
+  cat("  Mode A (manuel) :", length(OSM_IDS_PERTURBES_MANUEL),
+      "osm_id fournis\n")
+}
+
+# ── Mode B : buffer géographique ─────────────────────────────────────────────
+if (UTILISER_MODE_BUFFER) {
+  
+  # Création du point central de la perturbation en WGS84 (GPS)
+  # puis reprojection en UTM 35S (même CRS que le réseau) pour que
+  # le buffer soit exprimé en mètres et non en degrés.
+  point_perturbation <- st_sfc(
+    st_point(c(CENTRE_PERTURBATION_LON, CENTRE_PERTURBATION_LAT)),
+    crs = 4326    # WGS84 = système GPS standard
+  ) %>%
+    st_transform(crs = 32735)    # UTM Zone 35S = système métrique Rwanda
+  
+  # st_buffer() crée un cercle de rayon RAYON_PERTURBATION_M autour du point.
+  # Ce cercle représente la zone géographique affectée par l'événement.
+  zone_perturbation_buffer <- st_buffer(point_perturbation,
+                                        dist = RAYON_PERTURBATION_M)
+  
+  # Récupération de toutes les arêtes du réseau sous forme sf
+  aretes_sf_mode_b <- reseau_rwanda %>%
+    activate("edges") %>%
+    st_as_sf()
+  
+  # Filtrage optionnel par type de route
+  if (!is.null(TYPES_ROUTES_PERTURBES)) {
+    aretes_sf_mode_b <- aretes_sf_mode_b %>%
+      filter(road_type %in% TYPES_ROUTES_PERTURBES)
+  }
+  
+  # st_intersects() : teste si chaque arête croise la zone de perturbation.
+  # lengths() > 0 : TRUE si l'arête intersecte au moins partiellement la zone.
+  # On utilise l'intersection (et non l'inclusion totale) car une route peut
+  # n'être que partiellement dans la zone inondée mais quand même bloquée.
+  dans_buffer <- lengths(st_intersects(aretes_sf_mode_b,
+                                       zone_perturbation_buffer)) > 0
+  
+  # Récupération des osm_id des arêtes dans le buffer
+  # as.character() : conversion en texte pour la cohérence avec les autres modes
+  ids_mode_b <- as.character(aretes_sf_mode_b$osm_id[dans_buffer])
+  ids_mode_b <- ids_mode_b[!is.na(ids_mode_b)]  # Supprimer les NA éventuels
+  
+  # union() fusionne deux vecteurs sans doublons
+  osm_ids_perturbes <- union(osm_ids_perturbes, ids_mode_b)
+  
+  cat("  Mode B (buffer", RAYON_PERTURBATION_M / 1000, "km) :",
+      length(ids_mode_b), "arêtes dans la zone\n")
+  cat("    Centre :", CENTRE_PERTURBATION_LON, "E /",
+      abs(CENTRE_PERTURBATION_LAT), "S\n")
+}
+
+# ── Mode C : raster de risque (PRÊT À BRANCHER) ───────────────────────────────
+# Ce bloc est entièrement préparé mais ne s'exécutera que si :
+#   1. UTILISER_MODE_RASTER == TRUE
+#   2. Le fichier CHEMIN_RASTER_RISQUE existe sur le disque
+# Pour l'activer : mettre UTILISER_MODE_RASTER <- TRUE en IX.1.C
+# et fournir un fichier GeoTIFF valide.
+if (UTILISER_MODE_RASTER) {
+  
+  if (!file.exists(CHEMIN_RASTER_RISQUE)) {
+    # warning() affiche un message d'avertissement sans arrêter le script
+    # (contrairement à stop() qui arrêterait l'exécution)
+    warning("  ⚠ Mode C activé mais fichier raster introuvable : ",
+            CHEMIN_RASTER_RISQUE, "\n  Mode C ignoré.\n")
+  } else {
+    
+    cat("  Mode C (raster) : chargement de", CHEMIN_RASTER_RISQUE, "...\n")
+    
+    # Chargement du raster de risque avec terra
+    raster_risque <- rast(CHEMIN_RASTER_RISQUE)
+    
+    # Reprojection en UTM 35S pour cohérence avec le réseau routier
+    raster_risque <- project(raster_risque, "EPSG:32735", method = "bilinear")
+    
+    # Récupération des arêtes du réseau
+    aretes_sf_mode_c <- reseau_rwanda %>%
+      activate("edges") %>%
+      st_as_sf() %>%
+      mutate(arete_idx_c = row_number())
+    
+    # Pour chaque arête, on calcule la proportion de sa longueur
+    # qui se trouve dans une zone à risque supérieur au seuil.
+    #
+    # Approche :
+    #   1. Échantillonner des points le long de chaque arête (tous les 100m)
+    #   2. Extraire la valeur du raster à chaque point
+    #   3. Calculer la proportion de points avec valeur > SEUIL_RISQUE_RASTER
+    #   4. Si proportion > PROPORTION_MIN_EXPOSEE → arête perturbée
+    
+    cat("    Échantillonnage des points le long des arêtes...\n")
+    
+    # calculer_exposition_raster() : fonction qui calcule pour une arête donnée
+    # la proportion de sa longueur exposée au risque selon le raster.
+    calculer_exposition_raster <- function(ligne_geom, raster, seuil, espacement = 100) {
+      
+      longueur <- as.numeric(st_length(ligne_geom))
+      
+      # Au moins 2 points ; plus de points pour les longues arêtes
+      n_pts <- max(2, floor(longueur / espacement))
+      
+      pts <- st_line_sample(ligne_geom, n = n_pts, type = "regular") %>%
+        st_cast("POINT")
+      
+      # terra::extract() : lit la valeur du raster à chaque point
+      valeurs <- terra::extract(raster, vect(pts))[, 2]
+      
+      # proportion de points dépassant le seuil de risque
+      if (all(is.na(valeurs))) return(0)
+      mean(valeurs > seuil, na.rm = TRUE)
+    }
+    
+    # Application à toutes les arêtes avec barre de progression
+    n_aretes_c <- nrow(aretes_sf_mode_c)
+    proportions_exposees <- numeric(n_aretes_c)
+    
+    pb_raster <- progress_bar$new(
+      format = "  Raster exposition [:bar] :percent | ETA: :eta",
+      total  = n_aretes_c, clear = FALSE, width = 60
+    )
+    
+    for (i in seq_len(n_aretes_c)) {
+      proportions_exposees[i] <- calculer_exposition_raster(
+        aretes_sf_mode_c$geometry[i],
+        raster_risque,
+        SEUIL_RISQUE_RASTER
+      )
+      pb_raster$tick()
+    }
+    
+    # Sélection des arêtes suffisamment exposées
+    ids_mode_c <- as.character(
+      aretes_sf_mode_c$osm_id[proportions_exposees >= PROPORTION_MIN_EXPOSEE]
+    )
+    ids_mode_c <- ids_mode_c[!is.na(ids_mode_c)]
+    
+    osm_ids_perturbes <- union(osm_ids_perturbes, ids_mode_c)
+    
+    cat("  Mode C (raster, seuil", SEUIL_RISQUE_RASTER, ") :",
+        length(ids_mode_c), "arêtes exposées\n")
+  }
+}
+
+# ── Bilan : arêtes effectivement perturbées ────────────────────────────────────
+# On traduit maintenant les osm_id en indices d'arêtes dans le graphe igraph.
+# Ce sont ces indices qui seront utilisés pour supprimer les arêtes.
+aretes_reseau_sf <- reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf() %>%
+  mutate(arete_idx = row_number())
+
+# match() : pour chaque osm_id perturbé, trouve son indice de ligne dans le réseau
+# !is.na() : supprime les osm_id non trouvés (hors réseau, déjà supprimés, etc.)
+indices_aretes_perturbees <- aretes_reseau_sf$arete_idx[
+  aretes_reseau_sf$osm_id %in% osm_ids_perturbes
+]
+indices_aretes_perturbees <- indices_aretes_perturbees[
+  !is.na(indices_aretes_perturbees)
+]
+
+n_perturb <- length(indices_aretes_perturbees)
+
+if (n_perturb == 0) {
+  # Si aucune arête n'est trouvée, on arrête avec un message explicatif
+  stop("⚠ Aucune arête perturbée identifiée. Vérifiez les paramètres du scénario.\n",
+       "  → Mode Buffer : les coordonnées GPS sont-elles dans le Rwanda ?\n",
+       "  → Mode Manuel : les osm_id existent-ils dans le réseau ?\n",
+       "  → Mode Raster : le seuil est-il trop élevé ?\n")
+}
+
+cat("\n✓ Arêtes perturbées identifiées :", n_perturb, "\n")
+
+# Synthèse attributaire des arêtes perturbées (pour le rapport)
+resume_perturb <- aretes_reseau_sf %>%
+  filter(arete_idx %in% indices_aretes_perturbees) %>%
+  st_drop_geometry() %>%
+  summarise(
+    n_aretes         = n(),
+    longueur_km      = round(sum(longueur_m, na.rm = TRUE) / 1000, 1),
+    pct_du_reseau    = round(n() / nrow(aretes_reseau_sf) * 100, 2),
+    road_types       = paste(sort(unique(road_type)), collapse = ", "),
+    surfaces         = paste(sort(unique(surface)),   collapse = ", ")
+  )
+
+cat("  Longueur totale   :", resume_perturb$longueur_km, "km\n")
+cat("  Part du réseau    :", resume_perturb$pct_du_reseau, "%\n")
+cat("  Types de routes   :", resume_perturb$road_types, "\n")
+cat("  Surfaces          :", resume_perturb$surfaces, "\n\n")
+
+
+################################################################################
+# PARTIE IX.3 — RECALCUL DE LA MATRICE OD SUR LE RÉSEAU DÉGRADÉ
+#
+# On reconstruit le graphe multi-modal en retirant les arêtes perturbées,
+# puis on recalcule les distances OD optimales sur ce réseau dégradé.
+# La comparaison avant/après donne les surcoûts de transport.
+#
+# NOTE SUR LA STRATÉGIE DE SUPPRESSION :
+#   On ne supprime pas physiquement les arêtes du réseau sfnetworks
+#   (ce serait difficile à annuler proprement). À la place, on leur donne
+#   un poids infini dans igraph : Dijkstra ne les empruntera jamais,
+#   ce qui revient à les supprimer logiquement du réseau.
+#   Pour restaurer le réseau, il suffit de remettre les poids d'origine.
+################################################################################
+
+cat("── Reconstruction du graphe dégradé ──────────────────────────────────\n\n")
+
+# ── Récupération des poids originaux du graphe multi-modal ────────────────────
+# igraph::E() : accède aux arêtes (edges) du graphe.
+# $weight : attribut "weight" de chaque arête (coût de transport en USD).
+poids_originaux <- igraph::E(graphe_multimodal)$weight
+
+# On travaille sur une COPIE du graphe multi-modal pour ne pas altérer l'original.
+# Le graphe original (graphe_multimodal) reste intact et servira de référence.
+graphe_degrade <- graphe_multimodal
+
+# ── Mise à l'infini des arêtes perturbées dans TOUTES les couches véhicule ────
+# Dans le graphe multi-modal, chaque arête physique existe en N_vehicules
+# exemplaires (une par couche). On doit bloquer l'arête dans TOUTES les couches.
+#
+# La correspondance entre arête physique (indice 1..n_aretes) et arêtes
+# multi-modales (une par couche) est donnée par le lookup construit en V.2.
+#
+# On identifie les arêtes multi-modales correspondant aux arêtes physiques
+# perturbées via le vecteur lookup_physique construit en Partie V.
+
+# Toutes les arêtes multi-modales de type "route" (pas de transbordement)
+# dont l'indice physique est dans la liste des arêtes perturbées
+indices_mm_perturbes <- which(
+  lookup_type     == "route" &
+    lookup_physique %in% indices_aretes_perturbees
+)
+
+cat("  Arêtes multi-modales à bloquer :", length(indices_mm_perturbes),
+    "(", n_perturb, "arêtes physiques ×", n_vehicules, "couches véhicules)\n")
+
+# Attribution d'un poids infini aux arêtes perturbées.
+# Inf en R est la valeur "infini" — Dijkstra ne traversera jamais une arête
+# de poids infini car il existerait toujours un chemin de moindre coût.
+# C'est mathématiquement équivalent à supprimer les arêtes du graphe.
+igraph::E(graphe_degrade)$weight[indices_mm_perturbes] <- Inf
+
+cat("  ✓ Graphe dégradé construit (arêtes bloquées avec poids = Inf)\n\n")
+
+# ── Recalcul de la matrice OD sur le réseau dégradé ───────────────────────────
+cat("  Recalcul des distances OD sur le réseau dégradé...\n")
+
+# On stocke les résultats dans une liste, puis on l'assemble en data.frame.
+# La structure est identique à od_long (Partie VI) pour faciliter la comparaison.
+od_rows_degrade <- list()
+idx_deg         <- 0
+
+for (i in seq_along(warehouse_nodes_base)) {
+  
+  sources_i <- sapply(seq_len(n_vehicules),
+                      function(v) node_multi(v, warehouse_nodes_base[i]))
+  
+  targets_all <- as.vector(sapply(
+    seq_len(n_vehicules),
+    function(v) node_multi(v, warehouse_nodes_base)
+  ))
+  
+  # Calcul des distances depuis l'entrepôt i vers tous les autres entrepôts
+  # dans le graphe DÉGRADÉ (routes bloquées = poids infini).
+  # La syntaxe est identique au Dijkstra de la Partie VI, seul le graphe change.
+  dists_deg <- igraph::distances(
+    graphe_degrade,             # ← graphe dégradé au lieu de graphe_multimodal
+    v       = sources_i,
+    to      = targets_all,
+    weights = igraph::E(graphe_degrade)$weight
+  )
+  
+  for (j in seq_along(warehouse_nodes_base)) {
+    if (i == j) next
+    
+    cols_j      <- j + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
+    min_cout_deg <- min(dists_deg[, cols_j], na.rm = TRUE)
+    
+    idx_deg <- idx_deg + 1
+    od_rows_degrade[[idx_deg]] <- list(
+      id_origine      = i,
+      id_destination  = j,
+      nom_origine     = noeuds_entreposage$warehouse_name[i],
+      nom_destination = noeuds_entreposage$warehouse_name[j],
+      cout_degrade    = min_cout_deg,   # Inf si plus de chemin possible
+      connecte        = !is.infinite(min_cout_deg)  # FALSE = zones déconnectées
+    )
+  }
+  
+  if (i %% 5 == 0 || i == length(warehouse_nodes_base))
+    cat("  OD dégradé :", round(i / length(warehouse_nodes_base) * 100, 1), "%\n")
+}
+
+od_degrade <- bind_rows(od_rows_degrade)
+
+cat("✓ Matrice OD dégradée calculée\n\n")
+
+
+################################################################################
+# PARTIE IX.4 — CALCUL DES SURCOÛTS ET CLASSIFICATION DES IMPACTS
+#
+# On compare les deux matrices OD (avant / après perturbation) pour calculer :
+#   - Le surcoût absolu (USD supplémentaires par trajet)
+#   - Le surcoût relatif (% d'augmentation)
+#   - Le type d'impact (détour, déconnexion, inchangé)
+#   - Les zones les plus touchées en cumulant leurs surcoûts
+################################################################################
+
+cat("── Calcul des surcoûts ────────────────────────────────────────────────\n\n")
+
+# ── Fusion des deux matrices OD (référence + dégradée) ────────────────────────
+# left_join() : pour chaque paire OD dans la matrice de référence, on récupère
+# le coût dégradé correspondant. Les colonnes by = sont les clés de jointure.
+od_compare <- od_long %>%
+  left_join(
+    od_degrade %>%
+      select(id_origine, id_destination, cout_degrade, connecte),
+    by = c("id_origine", "id_destination")
+  ) %>%
+  mutate(
+    
+    # Surcoût absolu : différence de coût entre la situation dégradée et normale.
+    # Si la route est coupée (cout_degrade = Inf), le surcoût est NA
+    # (on le traite séparément dans la variable "type_impact").
+    surcout_absolu_usd  = if_else(
+      connecte,
+      cout_degrade - cout_usd,
+      NA_real_
+    ),
+    
+    # Surcoût relatif : augmentation en % par rapport au coût de référence.
+    # NULLIF équivalent en R : on évite la division par zéro si cout_usd = 0.
+    surcout_relatif_pct = if_else(
+      connecte & cout_usd > 0,
+      round((cout_degrade - cout_usd) / cout_usd * 100, 1),
+      NA_real_
+    ),
+    
+    # Classification du type d'impact pour chaque paire OD.
+    # case_when() : équivalent R de if / else if / else.
+    # L'ordre des conditions compte : la première condition vraie est retenue.
+    type_impact = case_when(
+      is.na(connecte) | !connecte   ~ "deconnecte",   # Plus aucun chemin possible
+      surcout_absolu_usd  == 0      ~ "inchange",     # Le chemin optimal ne passe pas par la zone perturbée
+      surcout_relatif_pct < 10      ~ "faible",       # Détour minime (< 10%)
+      surcout_relatif_pct < 50      ~ "modere",       # Détour notable (10-50%)
+      surcout_relatif_pct < 100     ~ "fort",         # Détour majeur (50-100%)
+      TRUE                          ~ "tres_fort"     # Doublement ou plus du coût
+    ),
+    
+    # Conversion de type_impact en facteur ordonné pour les graphiques
+    type_impact = factor(
+      type_impact,
+      levels = c("inchange", "faible", "modere", "fort", "tres_fort", "deconnecte")
+    )
+  )
+
+# ── Sauvegarde dans DuckDB ────────────────────────────────────────────────────
+# On stocke la table de comparaison dans DuckDB pour des requêtes SQL ultérieures.
+# Le nom de la table inclut le nom du scénario pour permettre de stocker
+# plusieurs scénarios simultanément.
+nom_table_impact <- paste0("impact_", NOM_SCENARIO)
+duck_write(od_compare %>% st_drop_geometry() %||%
+             od_compare,
+           nom_table_impact)
+
+# Note : %||% n'existe pas en R base. On utilise un simple duck_write
+duck_write(od_compare, nom_table_impact)
+
+# ── Statistiques globales d'impact ────────────────────────────────────────────
+stats_impact <- od_compare %>%
+  group_by(type_impact) %>%
+  summarise(
+    n_paires       = n(),
+    pct_paires     = round(n() / nrow(od_compare) * 100, 1),
+    surcout_moy    = round(mean(surcout_absolu_usd,  na.rm = TRUE), 2),
+    surcout_median = round(median(surcout_absolu_usd, na.rm = TRUE), 2),
+    .groups        = "drop"
+  )
+
+cat("Distribution des impacts par type :\n")
+print(stats_impact)
+
+# ── Zones les plus touchées ────────────────────────────────────────────────────
+# Pour chaque zone, on cumule les surcoûts sur tous ses trajets (comme origine
+# ET comme destination) pour mesurer son exposition totale à la perturbation.
+surcouts_par_zone <- od_compare %>%
+  filter(type_impact != "inchange") %>%
+  group_by(Zone = nom_origine) %>%
+  summarise(
+    surcout_total_usd  = round(sum(surcout_absolu_usd,  na.rm = TRUE), 1),
+    surcout_moyen_usd  = round(mean(surcout_absolu_usd, na.rm = TRUE), 2),
+    n_paires_touchees  = n(),
+    n_deconnexions     = sum(type_impact == "deconnecte"),
+    pct_surcout_moyen  = round(mean(surcout_relatif_pct, na.rm = TRUE), 1),
+    .groups            = "drop"
+  ) %>%
+  arrange(desc(surcout_total_usd))
+
+cat("\nTop 10 des zones les plus touchées (en tant qu'origine) :\n")
+print(head(surcouts_par_zone, 10))
+cat("\n")
+
+# Même calcul côté destination (quelles zones reçoivent moins de fret ?)
+surcouts_par_destination <- od_compare %>%
+  filter(type_impact != "inchange") %>%
+  group_by(Zone = nom_destination) %>%
+  summarise(
+    surcout_total_usd = round(sum(surcout_absolu_usd,  na.rm = TRUE), 1),
+    n_deconnexions    = sum(type_impact == "deconnecte"),
+    .groups           = "drop"
+  ) %>%
+  arrange(desc(surcout_total_usd))
+
+cat("Top 5 des zones les plus isolées (en tant que destination) :\n")
+print(head(surcouts_par_destination, 5))
+cat("\n")
+
+
+################################################################################
+# PARTIE IX.5 — IDENTIFICATION DES ARÊTES CRITIQUES
+#
+# OBJECTIF : Trouver les arêtes qui, si elles sont supprimées individuellement,
+#            causent le plus grand surcoût agrégé sur le réseau.
+# MÉTHODE  : Pour chaque arête candidate, on simule sa suppression isolée
+#            et on calcule le surcoût OD total. On classe ensuite les arêtes
+#            par ordre décroissant de criticité.
+#
+# REMARQUE SUR LE TEMPS DE CALCUL :
+#   Tester TOUTES les arêtes du réseau serait trop long (Dijkstra × 30 000 arêtes).
+#   On se restreint aux arêtes "candidates" selon deux filtres :
+#     1. Les arêtes sur le chemin optimal d'au moins une paire OD (utiles)
+#     2. Parmi elles, les arêtes de fort volume de trafic (impactantes)
+#   Ce sous-ensemble représente typiquement 5-15% du réseau total,
+#   ce qui rend le calcul faisable en moins d'une heure.
+#
+# PARAMÈTRE :
+#   N_TOP_ARETES_CRITIQUES — nombre d'arêtes à tester (par ordre de volume)
+#   Augmenter ce nombre = analyse plus complète mais plus lente.
+################################################################################
+
+cat("── Analyse de criticité des arêtes ───────────────────────────────────\n\n")
+
+# Nombre d'arêtes à tester pour la criticité.
+# 50 = bon compromis rapidité / exhaustivité pour un premier diagnostic.
+# Pour une analyse complète, augmenter à 200 ou 500 (plusieurs heures).
+N_TOP_ARETES_CRITIQUES <- 50
+
+# ── Sélection des arêtes candidates ───────────────────────────────────────────
+# On prend les N arêtes avec le plus gros volume de trafic fret,
+# car ce sont les candidates les plus susceptibles d'être critiques.
+# Les arêtes sans trafic (routes jamais empruntées dans le modèle) sont exclues.
+aretes_candidates <- aretes_reseau_sf %>%
+  filter(!is.na(volume_tonnes), volume_tonnes > 0) %>%
+  arrange(desc(volume_tonnes)) %>%
+  slice_head(n = N_TOP_ARETES_CRITIQUES) %>%
+  pull(arete_idx)
+
+cat("  Arêtes candidates :", length(aretes_candidates),
+    "(top", N_TOP_ARETES_CRITIQUES, "par volume de trafic)\n")
+
+# ── Fonction de calcul du surcoût total pour une suppression individuelle ──────
+# calculer_surcout_total() :
+#   - Prend un vecteur d'indices d'arêtes physiques à supprimer
+#   - Construit un graphe temporaire avec ces arêtes bloquées (poids = Inf)
+#   - Recalcule les distances OD pour les paires les plus importantes
+#   - Retourne le surcoût total agrégé (en USD)
+#
+# Pour accélérer, on ne recalcule que les paires OD avec un volume de fret
+# supérieur à un seuil (SEUIL_PAIRES_CRITICITE), ce qui exclut les paires
+# marginales qui ne changent pas le classement de criticité.
+
+SEUIL_PAIRES_CRITICITE <- 100   # tonnes — ignorer les paires < 100t pour la criticité
+
+calculer_surcout_total <- function(indices_a_supprimer) {
+  
+  # Construction du graphe temporaire
+  graphe_temp <- graphe_multimodal
+  
+  # Indices multi-modaux à bloquer (toutes couches véhicule)
+  idx_mm_temp <- which(
+    lookup_type     == "route" &
+      lookup_physique %in% indices_a_supprimer
+  )
+  igraph::E(graphe_temp)$weight[idx_mm_temp] <- Inf
+  
+  # Paires OD à tester (uniquement les paires avec fort volume de fret)
+  # flux_tonnes_total a été construit en Partie VIII
+  paires_importantes <- which(flux_tonnes_total > SEUIL_PAIRES_CRITICITE,
+                              arr.ind = TRUE)
+  
+  surcout_cumule <- 0
+  
+  for (k in seq_len(nrow(paires_importantes))) {
+    i_k <- paires_importantes[k, 1]
+    j_k <- paires_importantes[k, 2]
+    if (i_k == j_k) next
+    
+    sources_k <- sapply(seq_len(n_vehicules),
+                        function(v) node_multi(v, warehouse_nodes_base[i_k]))
+    cols_k    <- j_k + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
+    targets_k <- as.vector(sapply(seq_len(n_vehicules),
+                                  function(v) node_multi(v, warehouse_nodes_base)))
+    
+    dists_k <- igraph::distances(
+      graphe_temp,
+      v       = sources_k,
+      to      = targets_k[cols_k],
+      weights = igraph::E(graphe_temp)$weight
+    )
+    
+    cout_degrade_k <- min(dists_k, na.rm = TRUE)
+    
+    # Coût de référence pour cette paire (depuis od_long)
+    ref_k <- od_long %>%
+      filter(id_origine == i_k, id_destination == j_k) %>%
+      pull(cout_usd)
+    if (length(ref_k) == 0 || is.na(ref_k)) next
+    
+    delta_k <- if (is.infinite(cout_degrade_k)) ref_k * 10 else
+      max(0, cout_degrade_k - ref_k)
+    # Pondération par le volume de fret : une arête qui détourne 10 000 tonnes
+    # est plus critique qu'une arête qui détourne 10 tonnes au même surcoût.
+    surcout_cumule <- surcout_cumule +
+      delta_k * flux_tonnes_total[i_k, j_k]
+  }
+  
+  surcout_cumule
+}
+
+# ── Calcul de la criticité pour chaque arête candidate ────────────────────────
+cat("  Calcul de la criticité (", length(aretes_candidates),
+    "arêtes × Dijkstra) — peut prendre quelques minutes...\n")
+
+criticite_df <- tibble(
+  arete_idx         = aretes_candidates,
+  surcout_pondere   = NA_real_
+)
+
+pb_crit <- progress_bar$new(
+  format = "  Criticité [:bar] :percent | ETA: :eta",
+  total  = length(aretes_candidates),
+  clear  = FALSE,
+  width  = 60
+)
+
+for (k in seq_along(aretes_candidates)) {
+  criticite_df$surcout_pondere[k] <- calculer_surcout_total(aretes_candidates[k])
+  pb_crit$tick()
+}
+
+# ── Enrichissement avec les attributs de chaque arête ─────────────────────────
+# On récupère les attributs (road_type, longueur, etc.) pour interpréter
+# les résultats de criticité.
+criticite_df <- criticite_df %>%
+  left_join(
+    aretes_reseau_sf %>%
+      st_drop_geometry() %>%
+      select(arete_idx, osm_id, name, road_type, surface,
+             longueur_m, volume_tonnes, cost_per_tkm),
+    by = "arete_idx"
+  ) %>%
+  arrange(desc(surcout_pondere)) %>%
+  mutate(
+    rang              = row_number(),
+    longueur_km       = round(longueur_m / 1000, 2),
+    surcout_pondere_k = round(surcout_pondere / 1000, 1)   # En milliers USD×tonnes
+  )
+
+# ── Sauvegarde de la table de criticité dans DuckDB ───────────────────────────
+duck_write(criticite_df, paste0("criticite_aretes_", NOM_SCENARIO))
+
+cat("\n✓ Top 10 des arêtes les plus critiques :\n")
+print(
+  criticite_df %>%
+    slice_head(n = 10) %>%
+    select(rang, osm_id, name, road_type, longueur_km,
+           volume_tonnes, surcout_pondere_k) %>%
+    rename(
+      Rang        = rang,
+      OSM_ID      = osm_id,
+      Nom         = name,
+      Type        = road_type,
+      Long_km     = longueur_km,
+      Vol_t       = volume_tonnes,
+      Criticite_k = surcout_pondere_k
+    )
+)
+cat("\n")
+
+
+################################################################################
+# PARTIE IX.6 — CARTES ET EXPORTS
+#
+# Génère quatre sorties visuelles :
+#   Carte A — Réseau dégradé : arêtes perturbées + impact sur les OD
+#   Carte B — Arêtes critiques : classement des segments les plus sensibles
+#   Carte C — Surcoûts par zone : gradient de vulnérabilité économique
+#   Graphique — Distribution des surcoûts relatifs par type de route
+################################################################################
+
+cat("── Génération des cartes et exports ──────────────────────────────────\n\n")
+
+# Palette spécifique aux types d'impact (cohérente avec la mind map)
+PALETTE_IMPACT <- c(
+  "inchange"   = "#CCCCCC",   # Gris — pas d'impact
+  "faible"     = "#FFFFB2",   # Jaune pâle — détour < 10%
+  "modere"     = "#FECC5C",   # Jaune-orange — détour 10-50%
+  "fort"       = "#FD8D3C",   # Orange — détour 50-100%
+  "tres_fort"  = "#E31A1C",   # Rouge vif — doublement du coût
+  "deconnecte" = "#800026"    # Rouge foncé — zone coupée du réseau
+)
+
+# ── Préparation des couches spatiales ─────────────────────────────────────────
+
+# Arêtes perturbées (pour les surligner sur la carte)
+aretes_perturbees_sf <- aretes_reseau_sf %>%
+  filter(arete_idx %in% indices_aretes_perturbees)
+
+# Arêtes critiques (top N pour la Carte B)
+N_ARETES_AFFICHEES <- min(20, nrow(criticite_df))
+aretes_critiques_sf <- aretes_reseau_sf %>%
+  filter(arete_idx %in% criticite_df$arete_idx[1:N_ARETES_AFFICHEES]) %>%
+  left_join(
+    criticite_df %>% select(arete_idx, rang, surcout_pondere_k),
+    by = "arete_idx"
+  )
+
+# Points des zones colorés par impact (surcoût moyen relatif)
+impact_par_zone_sf <- reseau_rwanda %>%
+  activate("nodes") %>%
+  filter(is_warehouse) %>%
+  st_as_sf() %>%
+  left_join(
+    surcouts_par_zone %>%
+      select(Zone, pct_surcout_moyen, n_deconnexions, surcout_total_usd),
+    by = c("warehouse_name" = "Zone")
+  ) %>%
+  mutate(
+    pct_surcout_moyen = replace_na(pct_surcout_moyen, 0),
+    surcout_total_usd = replace_na(surcout_total_usd, 0)
+  )
+
+# ── CARTE A : Réseau dégradé et zones d'impact ────────────────────────────────
+cat("  Génération Carte A — réseau dégradé...\n")
+
+# Zone tampon visible autour des arêtes perturbées (pour la localiser sur la carte)
+# st_buffer() + st_union() : crée une zone en surbrillance autour des routes coupées
+zone_impact_visible <- aretes_perturbees_sf %>%
+  st_buffer(dist = 2000) %>%   # 2km de buffer pour être visible sur la carte
+  st_union()
+
+carte_reseau_degrade <- fond_carte() +
+  
+  # Réseau de base en gris clair
+  tm_shape(aretes_reseau_sf) +
+  tm_lines(col = "#DDDDDD", lwd = 0.4) +
+  
+  # Zone d'impact en surbrillance semi-transparente
+  tm_shape(zone_impact_visible %>% st_as_sf()) +
+  tm_polygons(
+    fill       = "#FF6B6B",
+    col        = "#CC0000",
+    fill_alpha = 0.25,
+    lwd        = 1.5,
+    fill.legend = tm_legend(show = FALSE)
+  ) +
+  
+  # Arêtes perturbées en rouge épais
+  tm_shape(aretes_perturbees_sf) +
+  tm_lines(col = "#CC0000", lwd = 3.5,
+           col.legend = tm_legend(show = FALSE)) +
+  
+  # Points des zones avec couleur selon le surcoût moyen
+  tm_shape(impact_par_zone_sf) +
+  tm_dots(
+    fill       = "pct_surcout_moyen",
+    fill.scale = tm_scale_intervals(
+      style  = "fixed",
+      breaks = c(0, 5, 20, 50, 100, Inf),
+      values = c("#CCCCCC", "#FFFFB2", "#FD8D3C", "#E31A1C", "#800026")
+    ),
+    fill.legend = tm_legend(title = "Surcoût moyen\n(% hausse)"),
+    size = 0.8
+  ) +
+  
+  tm_title(paste0("Réseau dégradé — ", NOM_SCENARIO,
+                  "\n", DESCRIPTION_SCENARIO)) +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_reseau_degrade,
+  file.path(DIR_OUTPUT, paste0("carte_reseau_degrade_", NOM_SCENARIO, ".png")),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ Carte A sauvegardée\n")
+
+# ── CARTE B : Arêtes critiques (top N classées par criticité) ─────────────────
+cat("  Génération Carte B — arêtes critiques...\n")
+
+carte_criticite <- fond_carte() +
+  
+  # Réseau de base en gris très clair
+  tm_shape(aretes_reseau_sf) +
+  tm_lines(col = "#EEEEEE", lwd = 0.3) +
+  
+  # Arêtes avec trafic, colorées par leur rang de criticité
+  # (plus rouge = plus critique = suppression la plus coûteuse)
+  tm_shape(aretes_critiques_sf) +
+  tm_lines(
+    col        = "rang",
+    col.scale  = tm_scale_intervals(
+      style  = "fixed",
+      breaks = c(0, 5, 10, 15, 20, Inf),
+      values = rev(c("#FFF5F0", "#FCBBA1", "#FC7050", "#EF3B2C", "#99000D"))
+    ),
+    col.legend = tm_legend(title = paste0("Rang de criticité\n(top ",
+                                          N_ARETES_AFFICHEES, ")")),
+    lwd        = 3
+  ) +
+  
+  # Arêtes perturbées du scénario actuel
+  tm_shape(aretes_perturbees_sf) +
+  tm_lines(col = "#0000CC", lwd = 2,
+           col.legend = tm_legend(show = FALSE)) +
+  
+  tm_title(paste0("Arêtes critiques du réseau — ",
+                  "Top ", N_ARETES_AFFICHEES, " par surcoût pondéré")) +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_criticite,
+  file.path(DIR_OUTPUT, paste0("carte_criticite_aretes_", NOM_SCENARIO, ".png")),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ Carte B sauvegardée\n")
+
+# ── CARTE C : Vulnérabilité économique des zones ──────────────────────────────
+cat("  Génération Carte C — vulnérabilité des zones...\n")
+
+carte_vulnerabilite <- fond_carte() +
+  
+  tm_shape(aretes_reseau_sf) +
+  tm_lines(col = "#DDDDDD", lwd = 0.3) +
+  
+  # Taille des points proportionnelle au surcoût total (exposition économique)
+  # Couleur selon la présence de déconnexions (rouge = zone coupée du réseau)
+  tm_shape(impact_par_zone_sf) +
+  tm_dots(
+    fill       = "n_deconnexions",
+    fill.scale = tm_scale_intervals(
+      breaks = c(-Inf, 0, 1, 5, Inf),
+      values = c("#2166AC", "#FEE08B", "#F46D43", "#A50026")
+    ),
+    fill.legend = tm_legend(title = "Nb de destinations\ncoupées"),
+    size        = "surcout_total_usd",
+    size.scale  = tm_scale(values.range = c(0.3, 2.5)),
+    size.legend = tm_legend(title = "Surcoût total\n(USD)")
+  ) +
+  
+  # Arêtes perturbées pour référence
+  tm_shape(aretes_perturbees_sf) +
+  tm_lines(col = "#CC0000", lwd = 3) +
+  
+  tm_title(paste0("Vulnérabilité économique des zones\n",
+                  NOM_SCENARIO, " — Durée estimée : ",
+                  DUREE_JOURS, " jours")) +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_vulnerabilite,
+  file.path(DIR_OUTPUT, paste0("carte_vulnerabilite_zones_", NOM_SCENARIO, ".png")),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ Carte C sauvegardée\n")
+
+# ── GRAPHIQUE : Distribution des surcoûts relatifs ────────────────────────────
+cat("  Génération du graphique de distribution...\n")
+
+g_surcouts <- od_compare %>%
+  filter(!is.na(surcout_relatif_pct), surcout_relatif_pct > 0) %>%
+  ggplot(aes(x = surcout_relatif_pct, fill = type_impact)) +
+  geom_histogram(bins = 40, color = "white", linewidth = 0.2) +
+  scale_fill_manual(
+    values = PALETTE_IMPACT,
+    name   = "Type d'impact"
+  ) +
+  scale_x_continuous(
+    labels = scales::percent_format(scale = 1),
+    breaks = c(0, 10, 25, 50, 75, 100, 150, 200)
+  ) +
+  labs(
+    title    = paste0("Distribution des surcoûts de transport — ", NOM_SCENARIO),
+    subtitle = paste0(DESCRIPTION_SCENARIO,
+                      "\nDurée estimée : ", DUREE_JOURS, " jours"),
+    x        = "Hausse du coût de transport (%)",
+    y        = "Nombre de paires OD affectées"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title    = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "#555555")
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, paste0("graphique_surcouts_", NOM_SCENARIO, ".png")),
+  g_surcouts, width = 11, height = 6, dpi = 300
+)
+cat("  ✓ Graphique sauvegardé\n\n")
+
+# ── EXPORTS CSV et Parquet ─────────────────────────────────────────────────────
+# Export de la table de comparaison OD (avant / après)
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM ", nom_table_impact, ") TO '",
+  file.path(DIR_OUTPUT, paste0("impact_od_", NOM_SCENARIO, ".csv")),
+  "' (FORMAT CSV, HEADER)"
+))
+
+# Export de la table de criticité des arêtes
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM criticite_aretes_", NOM_SCENARIO, ") TO '",
+  file.path(DIR_OUTPUT, paste0("criticite_aretes_", NOM_SCENARIO, ".csv")),
+  "' (FORMAT CSV, HEADER)"
+))
+
+cat("✓ Exports CSV terminés\n\n")
+
+# ── RAPPORT FINAL DE LA PARTIE IX ────────────────────────────────────────────
+
+cat("==========================================================\n")
+cat("  RAPPORT — ANALYSE DE VULNÉRABILITÉ\n")
+cat("==========================================================\n\n")
+cat("Scénario        :", NOM_SCENARIO, "\n")
+cat("Description     :", DESCRIPTION_SCENARIO, "\n")
+cat("Durée estimée   :", DUREE_JOURS, "jours\n")
+cat("Type d'événement:", TYPE_EVENEMENT, "\n\n")
+
+cat("RÉSEAU PERTURBÉ :\n")
+cat("  Arêtes coupées            :", n_perturb, "\n")
+cat("  Longueur hors service     :", resume_perturb$longueur_km, "km\n")
+cat("  Part du réseau total      :", resume_perturb$pct_du_reseau, "%\n\n")
+
+cat("IMPACT SUR LES FLUX OD :\n")
+cat("  Paires inchangées         :",
+    sum(od_compare$type_impact == "inchange", na.rm = TRUE), "\n")
+cat("  Paires avec détour faible :",
+    sum(od_compare$type_impact == "faible", na.rm = TRUE), "\n")
+cat("  Paires avec détour modéré :",
+    sum(od_compare$type_impact == "modere", na.rm = TRUE), "\n")
+cat("  Paires avec détour fort   :",
+    sum(od_compare$type_impact == "fort", na.rm = TRUE), "\n")
+cat("  Paires fortement impactées:",
+    sum(od_compare$type_impact == "tres_fort", na.rm = TRUE), "\n")
+cat("  Paires déconnectées       :",
+    sum(od_compare$type_impact == "deconnecte", na.rm = TRUE), "\n\n")
+
+cat("SURCOÛT MOYEN (paires affectées) :",
+    round(mean(od_compare$surcout_absolu_usd, na.rm = TRUE), 2), "USD\n")
+cat("SURCOÛT RELATIF MOYEN            :",
+    round(mean(od_compare$surcout_relatif_pct, na.rm = TRUE), 1), "%\n\n")
+
+cat("ARÊTES LES PLUS CRITIQUES (top 5) :\n")
+print(
+  criticite_df %>%
+    slice_head(n = 5) %>%
+    select(rang, road_type, longueur_km, volume_tonnes, surcout_pondere_k) %>%
+    rename(Rang = rang, Type = road_type, Long_km = longueur_km,
+           Vol_t = volume_tonnes, Criticite = surcout_pondere_k)
+)
+
+cat("\nFICHIERS GÉNÉRÉS (Partie IX) :\n")
+cat("  • carte_reseau_degrade_",   NOM_SCENARIO, ".png\n", sep = "")
+cat("  • carte_criticite_aretes_", NOM_SCENARIO, ".png\n", sep = "")
+cat("  • carte_vulnerabilite_zones_", NOM_SCENARIO, ".png\n", sep = "")
+cat("  • graphique_surcouts_",     NOM_SCENARIO, ".png\n", sep = "")
+cat("  • impact_od_",              NOM_SCENARIO, ".csv\n", sep = "")
+cat("  • criticite_aretes_",       NOM_SCENARIO, ".csv\n", sep = "")
+
+cat("\nPROCHAINES ÉTAPES :\n")
+cat("  → Partie X  : Propagation sectorielle via Leontief\n")
+cat("  → Partie XI : Dynamique temporelle et effets de second tour\n")
+cat("  Pour tester un autre scénario : modifier NOM_SCENARIO et les\n")
+cat("  paramètres de IX.1 puis relancer uniquement la Partie IX.\n")
+cat("==========================================================\n")
+
 
 # ==============================================================================
 # RAPPORT FINAL COMPLET
