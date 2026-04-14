@@ -1054,7 +1054,7 @@ cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
 
 # Les données OSM contiennent fréquemment des erreurs topologiques :
 #   1. Routes qui se croisent sans nœud d'intersection (pont raté, erreur de saisie)
-#   2. Nœuds intermédiaires inutiles (points de degré 2 sur une ligne droite)
+#   2. Nœuds intermédiaires inutiles (points au milieu d'une ligne droite)
 # Ces erreurs créent des composantes connexes multiples (le réseau est "fragmenté")
 # et empêchent les algorithmes de plus court chemin de trouver des itinéraires.
 # Imaginez une carte routière papier où certaines routes semblent se croiser
