@@ -1947,6 +1947,10 @@ entreposages_sf <- entreposages_fictifs %>%
   st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
   st_transform(crs = 32735)
 
+# Création des buffers circulaires de 2km autour de chaque entrepôt.
+entreposages_buffer <- entreposages_sf %>%
+  st_buffer(dist = 2000)
+
 # ── Accrochage (snapping) des entrepôts au réseau ────────────────────────────
 # Les coordonnées des entrepôts ne tombent pas exactement sur le réseau routier.
 # st_nearest_feature() trouve pour chaque entrepôt le nœud du réseau le plus proche.
@@ -3290,6 +3294,73 @@ demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
 # Une zone industrielle entourée de grandes zones industrielles aura un profil
 # d'offre encore plus orienté "Industrie" que la moyenne de son type.
 
+# calc_part_landuse() : calcule la proportion de la surface d'un buffer
+# qui est couverte par des polygones d'usage du sol (zones urbaines ou industrielles).
+#
+# Paramètres :
+#   buffer_geom — géométrie sf d'un seul buffer circulaire (autour d'un entrepôt)
+#   zones_sf    — objet sf contenant les polygones de landuse à tester
+#                 (zones_urbaines ou zones_industrielles selon l'appel)
+#
+# Retourne :
+#   Un nombre entre 0 et 1 :
+#     0   = aucune zone de ce type dans le buffer
+#     0.4 = 40% de la surface du buffer est couverte par ce type de zone
+#     1   = le buffer est entièrement dans une zone de ce type
+#
+# Exemple d'interprétation :
+#   calc_part_landuse(buf, zones_industrielles) = 0.35
+#   → 35% de la zone dans un rayon de 2km autour de l'entrepôt est industrielle
+#   → son profil d'offre sera davantage orienté "Industrie" et "Construction"
+
+calc_part_landuse <- function(buffer_geom, zones_sf) {
+  
+  # Vérification préalable : si la couche de zones est vide (ex : pas de zones
+  # industrielles dans le PBF), on retourne directement 0 sans calcul.
+  if (nrow(zones_sf) == 0) return(0)
+  
+  # Encapsulation de la géométrie brute dans un objet sf complet avec son CRS.
+  # st_sfc() : crée une colonne géométrique à partir d'une géométrie brute.
+  # st_as_sf() : transforme en objet sf manipulable par les fonctions spatiales.
+  # Le CRS 32735 (UTM Zone 35S) est celui de tout le réseau routier — il est
+  # indispensable de le spécifier ici car buffer_geom est une géométrie brute
+  # extraite d'un objet sf, qui a perdu son CRS au passage.
+  buffer_sf <- st_as_sf(st_sfc(buffer_geom, crs = 32735))
+  
+  # st_intersection() : calcule la géométrie commune entre le buffer et les zones.
+  # Résultat : les fragments des polygones de landuse qui se trouvent à l'intérieur
+  # du buffer circulaire de 2km autour de l'entrepôt.
+  # Si aucun polygone ne chevauche le buffer, st_intersection retourne un sf vide.
+  # suppressWarnings() : évite les messages d'avertissement sur les géométries
+  # complexes (lignes de bord, coins de polygones) qui n'impactent pas le résultat.
+  intersection <- suppressWarnings(st_intersection(zones_sf, buffer_sf))
+  
+  # Si l'intersection est vide (aucune zone de ce type dans le buffer),
+  # on retourne 0 immédiatement sans calculer d'aire.
+  if (nrow(intersection) == 0) return(0)
+  
+  # Calcul de l'aire totale des fragments d'intersection en mètres carrés.
+  # st_area() retourne un objet "units" (avec unité m²) ; as.numeric() le
+  # convertit en nombre ordinaire pour les opérations arithmétiques.
+  # sum() additionne toutes les surfaces si plusieurs polygones se chevauchent
+  # avec le buffer.
+  aire_intersection <- sum(as.numeric(st_area(intersection)), na.rm = TRUE)
+  
+  # Calcul de l'aire totale du buffer de référence (cercle de 2km de rayon).
+  # Cette valeur est la même pour tous les entrepôts (même rayon) mais on la
+  # recalcule ici pour que la fonction soit générique (indépendante du rayon).
+  aire_buffer <- as.numeric(st_area(buffer_sf))
+  
+  # Protection contre une division par zéro si le buffer a une aire nulle
+  # (ne devrait pas arriver avec des coordonnées valides, mais par sécurité).
+  if (aire_buffer == 0) return(0)
+  
+  # Calcul de la proportion et plafonnement à 1.
+  # min(..., 1) : évite d'obtenir une valeur > 1 en cas d'artefacts géométriques
+  # (ex : légers chevauchements de polygones qui gonflent artificiellement l'aire).
+  min(aire_intersection / aire_buffer, 1)
+}
+
 # ── Mise en cache du calcul de composition landuse ────────────────────────────
 # Pour chaque zone d'entreposage, on calcule la part de surface urbanisée et
 # industrielle dans un rayon de 2km. Ce calcul nécessite des intersections
@@ -3394,22 +3465,6 @@ for (i in 1:n_warehouses) {
   demande_zones[i,] <- profil_d * taille * echelle_demande / sum(TAILLE_ZONE) * bruit_d
 }
 
-for (i in 1:n_warehouses) {
-  nom_zone  <- noeuds_entreposage$warehouse_name[i]
-  type_zone <- noeuds_entreposage$warehouse_type[i]
-  taille    <- TAILLE_ZONE[nom_zone]
-  if (is.na(taille)) taille <- 0.10   # Taille par défaut pour les zones inconnues
-  
-  # Bruit multiplicatif ±20% pour simuler l'hétérogénéité réelle entre zones similaires
-  # runif(N, 0.8, 1.2) génère N valeurs uniformément distribuées entre 0.8 et 1.2
-  bruit_o <- runif(N_SECTEURS, 0.80, 1.20)
-  bruit_d <- runif(N_SECTEURS, 0.80, 1.20)
-  
-  # Volume final = profil sectoriel × taille relative × échelle nationale × bruit
-  # sum(TAILLE_ZONE) normalise pour que la somme des parts soit cohérente avec l'échelle
-  offre_zones[i,]   <- PROFILS_OFFRE[[type_zone]]   * taille * echelle_offre   / sum(TAILLE_ZONE) * bruit_o
-  demande_zones[i,] <- PROFILS_DEMANDE[[type_zone]] * taille * echelle_demande / sum(TAILLE_ZONE) * bruit_d
-}
 
 # ── Stockage dans DuckDB en format long ───────────────────────────────────────
 # Format long (1 ligne = 1 zone × 1 secteur) plus adapté aux jointures SQL
@@ -4891,11 +4946,6 @@ od_compare <- od_long %>%
 # Le nom de la table inclut le nom du scénario pour permettre de stocker
 # plusieurs scénarios simultanément.
 nom_table_impact <- paste0("impact_", NOM_SCENARIO)
-duck_write(od_compare %>% st_drop_geometry() %||%
-             od_compare,
-           nom_table_impact)
-
-# Note : %||% n'existe pas en R base. On utilise un simple duck_write
 duck_write(od_compare, nom_table_impact)
 
 # ── Statistiques globales d'impact ────────────────────────────────────────────
