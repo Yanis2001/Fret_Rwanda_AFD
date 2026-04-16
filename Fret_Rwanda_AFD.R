@@ -2194,8 +2194,8 @@ duck_query("
     (fuel_consumption_L * prix_carburant
       + length_km * usure_usd_km * facteur_urbain_applique
       + travel_time_h * valeur_temps * facteur_urbain_applique)
-      / NULLIF(length_km, 0)
-      / NULLIF(capacite_tonnes, 0)                            AS cost_per_tkm
+      / (NULLIF(length_km, 0)
+      * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm
   FROM avec_couts
 ")
 
