@@ -415,12 +415,9 @@ cat("✓ Coûts pré-frontière chargés dans DuckDB :",
 # VEHICULE_REFERENCE : le type de camion utilisé par défaut pour calculer
 # la matrice OD et alimenter le modèle gravitaire quand on n'a pas besoin
 # de distinguer les véhicules.
-# CONSO_PAR_METRE_D_PLUS : litres de carburant supplémentaires consommés
-# pour chaque mètre de dénivelé positif (montée), indépendamment du véhicule.
 
 # Véhicule de référence pour la matrice OD et le modèle gravitaire
 VEHICULE_REFERENCE   <- "camion_moyen"
-CONSO_PAR_METRE_D_PLUS <- 0.03
 
 # Récupérer les ids pour les boucles de cartographie (Partie 10)
 VEHICULES_IDS <- duck_query("SELECT vehicule_id, nom FROM params_flotte")
@@ -1859,11 +1856,16 @@ if (nrow(zones_industrielles) > 0) {
   # Dédoublonnage : supprimer les zones trop proches d'un entrepôt existant
   # bind_rows() : empile verticalement deux tableaux ayant les mêmes colonnes.
   centroides_indus_sf <- centroides_indus %>%
-    st_as_sf(coords = c("lon","lat"), crs = 32735)
+    st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+    st_transform(crs = 32735)
   
   tous_existants <- bind_rows(
-    entreposages_manuels %>% st_as_sf(coords = c("lon","lat"), crs = 32735),
-    villes_nouvelles    %>% st_as_sf(coords = c("lon","lat"), crs = 32735)
+    entreposages_manuels %>%
+      st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+      st_transform(crs = 32735),
+    villes_nouvelles %>%
+      st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+      st_transform(crs = 32735)
   )
   
   idx_indus_proches <- st_is_within_distance(centroides_indus_sf,
@@ -1896,12 +1898,19 @@ if (nrow(zones_retail) > 0) {
   
   # Dédoublonnage
   centroides_retail_sf <- centroides_retail %>%
-    st_as_sf(coords = c("lon","lat"), crs = 32735)
+    st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+    st_transform(crs = 32735)
   
   tous_existants2 <- bind_rows(
-    entreposages_manuels      %>% st_as_sf(coords = c("lon","lat"), crs = 32735),
-    villes_nouvelles          %>% st_as_sf(coords = c("lon","lat"), crs = 32735),
-    zones_indus_nouvelles     %>% st_as_sf(coords = c("lon","lat"), crs = 32735)
+    entreposages_manuels %>%
+      st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+      st_transform(crs = 32735),
+    villes_nouvelles %>%
+      st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+      st_transform(crs = 32735),
+    zones_indus_nouvelles %>%
+      st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+      st_transform(crs = 32735)
   )
   
   idx_retail_proches <- st_is_within_distance(centroides_retail_sf,
@@ -1972,6 +1981,8 @@ entreposages_avec_snap <- entreposages_sf %>%
   ) %>%
   # ── Garder un seul entrepôt par nœud : priorité aux OSM villes, puis manuels,
   #    puis industriels (order de source dans entreposages_fictifs)
+  #    arrange() les ranges dans l'ordre et distinct() ne garde que la première
+  #    occurrance de noeud_proche_id
   arrange(match(source, c("osm_place", "manuel","osm_industrial","osm_retail"))) %>%
   distinct(noeud_proche_id, .keep_all = TRUE)
 
@@ -4805,10 +4816,7 @@ graphe_degrade <- graphe_multimodal
 # exemplaires (une par couche). On doit bloquer l'arête dans TOUTES les couches.
 #
 # La correspondance entre arête physique (indice 1..n_aretes) et arêtes
-# multi-modales (une par couche) est donnée par le lookup construit en V.2.
-#
-# On identifie les arêtes multi-modales correspondant aux arêtes physiques
-# perturbées via le vecteur lookup_physique construit en Partie V.
+# multi-modales (une par couche) est donnée par le vecteur lookup construit en V.2.
 
 # Toutes les arêtes multi-modales de type "route" (pas de transbordement)
 # dont l'indice physique est dans la liste des arêtes perturbées
