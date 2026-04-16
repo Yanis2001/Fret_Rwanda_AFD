@@ -2163,7 +2163,7 @@ duck_query("
   avec_couts AS (
     SELECT
       *,
-      NULLIF(longueur_m, 0) / 1000.0                                    AS length_km,
+       NULLIF(longueur_m, 0) / 1000.0                                  AS length_km,
       (NULLIF(longueur_m, 0) / 1000.0) / NULLIF(speed_kmh, 0)          AS travel_time_h,
       (NULLIF(longueur_m, 0) / 1000.0) * (conso_L_per_100km / 100.0)   AS fuel_consumption_L
     FROM avec_conso
@@ -2187,13 +2187,13 @@ duck_query("
     fuel_consumption_L,
     fuel_consumption_L * prix_carburant             AS cost_fuel_usd,
     length_km * usure_usd_km                        AS cost_wear_usd,
-    (length_km / speed_kmh) * valeur_temps          AS cost_time_usd,
+    travel_time_h * valeur_temps                    AS cost_time_usd,
     travel_time_h,
     -- Coût par tkm avec pénalité urbaine sur le temps et l'usure
     -- Formule : (carburant + usure_pénalisée + temps_pénalisé) / distance / capacité
     (fuel_consumption_L * prix_carburant
       + length_km * usure_usd_km * facteur_urbain_applique
-      + (length_km / speed_kmh) * valeur_temps * facteur_urbain_applique)
+      + travel_time_h * valeur_temps * facteur_urbain_applique)
       / NULLIF(length_km, 0)
       / NULLIF(capacite_tonnes, 0)                            AS cost_per_tkm
   FROM avec_couts
