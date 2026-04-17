@@ -2509,12 +2509,14 @@ mapping_aretes_mm <- bind_rows(
 # C'est beaucoup plus rapide qu'une recherche dans un tableau (O(n)).
 # Indexés par idx_mm → accès en O(1) au lieu de O(n) par recherche dans le tibble
 # Taille = n_vehicules × n_aretes_physiques + n_transbordements
-max_idx_mm <- max(mapping_aretes_mm$idx_mm)
 
+# Initialisation à la bonne taille des vecteur lookup
+max_idx_mm <- max(mapping_aretes_mm$idx_mm)
 lookup_type     <- character(max_idx_mm)
 lookup_physique <- integer(max_idx_mm)
 lookup_vehicule <- character(max_idx_mm)
 
+# A l'indice idx_mm, on associe si c'est une route ou non, le numéro de l'arête dans le réseau et le véhicule
 lookup_type[mapping_aretes_mm$idx_mm]     <- mapping_aretes_mm$type
 lookup_physique[mapping_aretes_mm$idx_mm] <- 
   ifelse(is.na(mapping_aretes_mm$arete_physique_idx), 
@@ -3159,9 +3161,9 @@ TONNES_PAR_musd <- c(
 # A %*% x donne le vecteur des consommations intermédiaires : pour chaque secteur i,
 # la somme de a_ij × production_j sur tous les secteurs j fournisseurs.
 conso_interm   <- as.vector(A %*% production_totale)
-# Valeur ajoutée = production - consommations intermédiaires (travail + capital)
+# Valeur ajoutée = production - consommations intermédiaires 
 valeur_ajoutee <- production_totale - conso_interm
-# Demande finale ≈ 85% de la valeur ajoutée (ménages + investissement + exports nets)
+# Demande finale ≈ 85% de la valeur ajoutée 
 demande_finale <- valeur_ajoutee * 0.85
 
 # ── Stockage dans DuckDB ──────────────────────────────────────────────────────
@@ -3649,9 +3651,6 @@ for (s in SECTEURS) {
   C_ij_effectif[is.na(C_ij_effectif)] <- NA  # Conserver les NA (zones non connectées)
   
   # Friction : zones proches ont plus d'échanges
-  # x^(-beta) : fonction puissance négative — décroissante avec le coût.
-  # Si C_ij = 100 et beta = 2 : friction = 100^(-2) = 0.0001 (très freiné).
-  # Si C_ij = 10  et beta = 2 : friction = 10^(-2)  = 0.01   (moins freiné).
   friction <- C_ij_effectif^(-beta_s)
   friction[is.na(friction)] <- 0
   
