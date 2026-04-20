@@ -2867,12 +2867,17 @@ if (!cache_od_valide) {
   od_rows <- list()
   idx     <- 0
 
-for (i in seq_along(warehouse_nodes_base)) {
-  
-  # sources_i : indices des nœuds dans le graphe multi-modal correspondant
-  # à l'entrepôt i dans chacune des 3 couches véhicule.
-  sources_i <- sapply(seq_len(n_vehicules),
-                      function(v) node_multi(v, warehouse_nodes_base[i]))
+  for (i in seq_along(warehouse_nodes_base)) {
+    
+    # Nettoyage mémoire périodique : libère les objets R inutilisés tous les
+    # 10 passages. Sans cela, les matrices de distances accumulées en mémoire
+    # au fil des itérations peuvent saturer la RAM et provoquer un crash.
+    if (i %% 10 == 0) gc()
+    
+    # sources_i : indices des nœuds dans le graphe multi-modal correspondant
+    # à l'entrepôt i dans chacune des 3 couches véhicule.
+    sources_i <- sapply(seq_len(n_vehicules),
+                        function(v) node_multi(v, warehouse_nodes_base[i]))
   
   # Tous les nœuds destination (toutes couches × tous entrepôts) en une seule passe
   targets_all <- as.vector(sapply(
@@ -3780,6 +3785,11 @@ paires_non_connectees <- 0
 
 for (i in seq_len(n_warehouses)) {
   
+  # Nettoyage mémoire périodique : libère les objets R inutilisés tous les
+  # 10 passages. Sans cela, les matrices de distances accumulées en mémoire
+  # au fil des itérations peuvent saturer la RAM et provoquer un crash.
+  if (i %% 10 == 0) gc()
+  
   sources_i <- sapply(seq_len(n_vehicules),
                       function(v) node_multi(v, warehouse_nodes_base[i]))
   
@@ -4134,27 +4144,78 @@ coords_lookup <- coords_zones_sf %>%
 coords_X <- setNames(coords_lookup$X, coords_lookup$warehouse_name)
 coords_Y <- setNames(coords_lookup$Y, coords_lookup$warehouse_name)
 
-# ── Construction vectorisée des desire lines ──────────────────────────────────
-# Passage du format matriciel au format long en une seule opération
-flux_long <- flux_total %>%
+# ── FIX : Rendre les noms de colonnes uniques AVANT pivot_longer ──────────────
+# La matrice flux_total peut contenir des noms de zones dupliqués (ex : deux
+# zones appelées "Kigali") car make.unique() n'a pas été appliqué en amont.
+# pivot_longer() refuse de travailler sur une matrice avec des colonnes de même
+# nom (erreur "must have unique names"). On corrige donc ici en ajoutant un
+# suffixe numérique aux doublons : "Kigali" → "Kigali", "Kigali_1", "Kigali_2".
+# On applique la même correction aux lignes (rownames) pour cohérence, car les
+# jointures left_join() ultérieures comparent Origine (rowname) et Destination
+# (colname) : ils doivent utiliser le même système de nommage.
+flux_total_fixe <- flux_total
+colnames(flux_total_fixe) <- make.unique(colnames(flux_total_fixe), sep = "_")
+rownames(flux_total_fixe) <- make.unique(rownames(flux_total_fixe), sep = "_")
+
+# Même correction appliquée à flux_tonnes_total (matrice de flux en tonnes).
+# On réutilise exactement les mêmes noms que flux_total_fixe pour garantir
+# que les deux matrices sont parfaitement alignées lors de la jointure.
+# Sans cela, left_join(by = c("Origine","Destination")) échouerait car les
+# identifiants des deux matrices ne correspondraient plus.
+flux_tonnes_total_fixe <- flux_tonnes_total
+colnames(flux_tonnes_total_fixe) <- colnames(flux_total_fixe)
+rownames(flux_tonnes_total_fixe) <- rownames(flux_total_fixe)
+
+# ── Reconstruction des vecteurs de coordonnées avec les noms corrigés ─────────
+# coords_X et coords_Y sont des vecteurs nommés : le nom est l'identifiant de
+# la zone (warehouse_name) et la valeur est sa coordonnée géographique en mètres
+# (système UTM 35S). On les utilise ensuite pour construire les géométries des
+# desire lines : coords_X["Kigali"] donne directement la coordonnée X de Kigali.
+# On recalcule ces vecteurs ici avec les noms dédoublonnés pour que les accès
+# coords_X[ori] et coords_Y[dst] dans la boucle de géométries trouvent toujours
+# la bonne zone, même en présence de doublons.
+coords_zones_sf_fix <- coords_zones_sf %>%
+  mutate(warehouse_name_fix = make.unique(warehouse_name, sep = "_"))
+
+coords_X <- setNames(
+  st_coordinates(coords_zones_sf)[, "X"],   # Coordonnées X (Est-Ouest) en mètres
+  coords_zones_sf_fix$warehouse_name_fix     # Noms dédoublonnés comme clés
+)
+coords_Y <- setNames(
+  st_coordinates(coords_zones_sf)[, "Y"],   # Coordonnées Y (Nord-Sud) en mètres
+  coords_zones_sf_fix$warehouse_name_fix
+)
+
+# ── Passage de la matrice de flux au format long (1 ligne = 1 paire OD) ───────
+# La matrice flux_total_fixe est en format "large" : N_zones lignes × N_zones
+# colonnes. pivot_longer() la transforme en format "long" : 1 ligne par paire
+# (Origine, Destination), ce qui est bien plus facile à filtrer et à joindre.
+# On filtre dès ici pour ne conserver que les flux significatifs
+# (>= SEUIL_DESIRE, calculé comme le 40e percentile des flux non nuls) afin de
+# ne pas surcharger la carte avec des milliers de lignes quasi invisibles.
+flux_long <- flux_total_fixe %>%
   as.data.frame() %>%
-  rownames_to_column("Origine") %>%
+  rownames_to_column("Origine") %>%        # Les noms de lignes deviennent une colonne
   pivot_longer(-Origine, names_to = "Destination", values_to = "flux_musd") %>%
   filter(
-    Origine != Destination,
-    !is.na(flux_musd),
-    flux_musd >= SEUIL_DESIRE
+    Origine != Destination,                # Exclure les flux intrazone (diagonale)
+    !is.na(flux_musd),                     # Supprimer les paires sans données
+    flux_musd >= SEUIL_DESIRE              # Ne garder que les flux suffisamment importants
   ) %>%
-  # Jointure pour récupérer les tonnes
+  # Ajout des tonnes correspondantes depuis flux_tonnes_total_fixe.
+  # On fait une jointure sur les deux clés (Origine, Destination) pour récupérer
+  # le volume physique (tonnes) associé au flux monétaire (M USD) de chaque paire.
   left_join(
-    flux_tonnes_total %>%
+    flux_tonnes_total_fixe %>%
       as.data.frame() %>%
       rownames_to_column("Origine") %>%
       pivot_longer(-Origine, names_to = "Destination", values_to = "flux_tonnes"),
     by = c("Origine", "Destination")
   ) %>%
-  mutate(flux_kt = flux_tonnes / 1000) %>%
-  # Filtrer les zones sans coordonnées
+  mutate(flux_kt = flux_tonnes / 1000) %>% # Conversion tonnes → milliers de tonnes (kt)
+  # Sécurité finale : ne garder que les paires dont les deux zones ont des
+  # coordonnées connues dans coords_X/Y. Sans ce filtre, la boucle de création
+  # des géométries produirait des points NA qui feraient planter st_sfc().
   filter(
     Origine     %in% names(coords_X),
     Destination %in% names(coords_X)
@@ -4162,20 +4223,34 @@ flux_long <- flux_total %>%
 
 cat("  Paires OD à représenter :", nrow(flux_long), "\n")
 
-# ── Création des géométries en une passe ──────────────────────────────────────
+# ── Création des géométries de desire lines (une par paire OD) ────────────────
+# Une "desire line" est un segment rectiligne reliant le centroïde de la zone
+# d'origine au centroïde de la zone de destination. Elle représente visuellement
+# l'intensité du flux commercial entre deux zones, indépendamment du chemin
+# réellement emprunté sur le réseau routier.
+# On utilise une boucle for plutôt que mapply() (version précédente) car mapply()
+# allouait toutes les géométries simultanément en RAM, ce qui provoquait un crash
+# de RStudio sur les sessions avec peu de mémoire disponible. La boucle for crée
+# les géométries une par une : l'empreinte mémoire instantanée reste constante
+# quelle que soit la taille de flux_long.
+# vector("list", n) : initialise une liste vide de n éléments. C'est plus
+# efficace que de faire grandir la liste dynamiquement avec c() à chaque tour
+# de boucle, car R n'a pas besoin de réallouer la mémoire à chaque itération.
 if (nrow(flux_long) > 0) {
   
-  geoms <- mapply(
-    function(ori, dst) {
-      st_linestring(rbind(
-        c(coords_X[ori], coords_Y[ori]),
-        c(coords_X[dst], coords_Y[dst])
-      ))
-    },
-    flux_long$Origine,
-    flux_long$Destination,
-    SIMPLIFY = FALSE
-  )
+  geoms <- vector("list", nrow(flux_long))
+  
+  for (k in seq_len(nrow(flux_long))) {
+    ori <- flux_long$Origine[k]   # Identifiant de la zone d'origine
+    dst <- flux_long$Destination[k]   # Identifiant de la zone de destination
+    # st_linestring() crée un segment géométrique à partir de deux points.
+    # rbind() empile les coordonnées [X_origine, Y_origine] et [X_dest, Y_dest]
+    # en une matrice 2×2 que st_linestring() interprète comme début et fin du segment.
+    geoms[[k]] <- st_linestring(rbind(
+      c(coords_X[ori], coords_Y[ori]),   # Point de départ : centroïde de l'origine
+      c(coords_X[dst], coords_Y[dst])    # Point d'arrivée : centroïde de la destination
+    ))
+  }
   
   desire_sf <- st_sf(
     Origine     = flux_long$Origine,
