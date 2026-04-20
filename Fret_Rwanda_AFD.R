@@ -3644,10 +3644,20 @@ cat("✓ Matrice de coûts pré-frontière construite\n\n")
 cat("Calcul des flux gravitaires...\n")
 
 flux_gravitaire <- list()   # Matrice de flux par secteur (M USD)
-flux_total      <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
-                          dimnames = list(noeuds_entreposage$warehouse_name,
-                                          noeuds_entreposage$warehouse_name))
 
+# Création de la matrice de flux total avec des noms de zones UNIQUES.
+# noeuds_entreposage$warehouse_name peut contenir des doublons si deux zones
+# portent le même nom (ex : deux zones OSM appelées "Kigali").
+# make.unique() règle ce problème une fois pour toutes ici, ce qui évite
+# les erreurs "must have unique names" lors de tous les pivot_longer(),
+# rownames_to_column() et write.csv() qui utilisent flux_total plus loin
+# (Partie VIII.1, VIII.2, VIII.3). Sans cette correction, il faudrait
+# appliquer make.unique() manuellement à chaque utilisation de flux_total.
+noms_zones_uniques <- make.unique(noeuds_entreposage$warehouse_name, sep = "_")
+
+flux_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
+                     dimnames = list(noms_zones_uniques,
+                                     noms_zones_uniques))
 for (s in SECTEURS) {
   beta_s <- BETA_SECTEUR[s]
   
@@ -3747,9 +3757,13 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 # --- Étape 1 : Conversion des flux monétaires en tonnes ---
 cat("Conversion des flux en tonnes...\n")
 
+# On réutilise noms_zones_uniques (défini juste au-dessus) pour que
+# flux_tonnes_total et flux_total aient exactement les mêmes identifiants
+# de lignes et colonnes. C'est indispensable pour que les jointures
+# left_join() entre les deux matrices fonctionnent correctement.
 flux_tonnes_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
-                            dimnames = list(noeuds_entreposage$warehouse_name,
-                                            noeuds_entreposage$warehouse_name))
+                            dimnames = list(noms_zones_uniques,
+                                            noms_zones_uniques))
 
 # Pour chaque secteur, convertir M USD → tonnes en multipliant par TONNES_PAR_musd.
 # Ex : 10 M USD d'Agriculture × 8000 tonnes/M USD = 80 000 tonnes de fret agricole.
@@ -4144,48 +4158,6 @@ coords_lookup <- coords_zones_sf %>%
 coords_X <- setNames(coords_lookup$X, coords_lookup$warehouse_name)
 coords_Y <- setNames(coords_lookup$Y, coords_lookup$warehouse_name)
 
-# ── FIX : Rendre les noms de colonnes uniques AVANT pivot_longer ──────────────
-# La matrice flux_total peut contenir des noms de zones dupliqués (ex : deux
-# zones appelées "Kigali") car make.unique() n'a pas été appliqué en amont.
-# pivot_longer() refuse de travailler sur une matrice avec des colonnes de même
-# nom (erreur "must have unique names"). On corrige donc ici en ajoutant un
-# suffixe numérique aux doublons : "Kigali" → "Kigali", "Kigali_1", "Kigali_2".
-# On applique la même correction aux lignes (rownames) pour cohérence, car les
-# jointures left_join() ultérieures comparent Origine (rowname) et Destination
-# (colname) : ils doivent utiliser le même système de nommage.
-flux_total_fixe <- flux_total
-colnames(flux_total_fixe) <- make.unique(colnames(flux_total_fixe), sep = "_")
-rownames(flux_total_fixe) <- make.unique(rownames(flux_total_fixe), sep = "_")
-
-# Même correction appliquée à flux_tonnes_total (matrice de flux en tonnes).
-# On réutilise exactement les mêmes noms que flux_total_fixe pour garantir
-# que les deux matrices sont parfaitement alignées lors de la jointure.
-# Sans cela, left_join(by = c("Origine","Destination")) échouerait car les
-# identifiants des deux matrices ne correspondraient plus.
-flux_tonnes_total_fixe <- flux_tonnes_total
-colnames(flux_tonnes_total_fixe) <- colnames(flux_total_fixe)
-rownames(flux_tonnes_total_fixe) <- rownames(flux_total_fixe)
-
-# ── Reconstruction des vecteurs de coordonnées avec les noms corrigés ─────────
-# coords_X et coords_Y sont des vecteurs nommés : le nom est l'identifiant de
-# la zone (warehouse_name) et la valeur est sa coordonnée géographique en mètres
-# (système UTM 35S). On les utilise ensuite pour construire les géométries des
-# desire lines : coords_X["Kigali"] donne directement la coordonnée X de Kigali.
-# On recalcule ces vecteurs ici avec les noms dédoublonnés pour que les accès
-# coords_X[ori] et coords_Y[dst] dans la boucle de géométries trouvent toujours
-# la bonne zone, même en présence de doublons.
-coords_zones_sf_fix <- coords_zones_sf %>%
-  mutate(warehouse_name_fix = make.unique(warehouse_name, sep = "_"))
-
-coords_X <- setNames(
-  st_coordinates(coords_zones_sf)[, "X"],   # Coordonnées X (Est-Ouest) en mètres
-  coords_zones_sf_fix$warehouse_name_fix     # Noms dédoublonnés comme clés
-)
-coords_Y <- setNames(
-  st_coordinates(coords_zones_sf)[, "Y"],   # Coordonnées Y (Nord-Sud) en mètres
-  coords_zones_sf_fix$warehouse_name_fix
-)
-
 # ── Passage de la matrice de flux au format long (1 ligne = 1 paire OD) ───────
 # La matrice flux_total_fixe est en format "large" : N_zones lignes × N_zones
 # colonnes. pivot_longer() la transforme en format "long" : 1 ligne par paire
@@ -4241,7 +4213,7 @@ if (nrow(flux_long) > 0) {
   geoms <- vector("list", nrow(flux_long))
   
   for (k in seq_len(nrow(flux_long))) {
-    ori <- flux_long$Origine[k]   # Identifiant de la zone d'origine
+    ori <- flux_long$Origine[k]       # Identifiant de la zone d'origine
     dst <- flux_long$Destination[k]   # Identifiant de la zone de destination
     # st_linestring() crée un segment géométrique à partir de deux points.
     # rbind() empile les coordonnées [X_origine, Y_origine] et [X_dest, Y_dest]
