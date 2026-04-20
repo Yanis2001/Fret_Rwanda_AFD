@@ -1557,7 +1557,7 @@ n_urbain <- sum(in_urbain)
 cat("  Arêtes en zone urbaine :", n_urbain,
     "(", round(n_urbain / igraph::ecount(reseau_rwanda) * 100, 1), "% du réseau)\n\n")
 
-# Stocker dans DuckDB pour usage dans la table des coûts (Partie 13)
+# Stocker dans DuckDB pour usage dans la table des coûts 
 duck_write(
   tibble(
     zone_urbaine    = c(TRUE, FALSE),
@@ -1576,7 +1576,7 @@ cat("✓ Zones d'usage du sol chargées et arêtes taguées\n\n")
 # Pour forcer le recalcul : supprimer le fichier .rds.
 # ==============================================================================
 
-# Le calcul des pentes est l'opération la plus longue du script (~30 min).
+# Le calcul des pentes est une opération particulièrement longue (~30 min).
 # Pour ne pas le refaire à chaque exécution, on sauvegarde le résultat dans
 # un fichier "cache" (.rds = format binaire R). À la prochaine exécution,
 # si le réseau n'a pas changé, on charge directement le cache.
@@ -1692,8 +1692,7 @@ if (!cache_valide) {
   cat("  ✓ Cache sauvegardé :", CACHE_PENTES, "\n\n")
 }
 
-# ── Intégration des pentes dans le réseau (toujours exécuté) ──────────────────
-# Que le cache ait été chargé ou recalculé, on intègre les pentes dans le réseau.
+# ── Intégration des pentes dans le réseau ─────────────────────────────────────
 # case_when() : équivalent de plusieurs if/else imbriqués — catégorise la pente
 # en 4 classes selon sa valeur absolue (abs() = ignore le signe montée/descente).
 reseau_rwanda <- reseau_rwanda %>%
@@ -1772,27 +1771,12 @@ entreposages_manuels <- tibble(
   source = "manuel"
 )
 
-# ── Entrepôts depuis city/town OSM ───────────────────────────────────────────
-# On exclut les villes déjà présentes dans les entrepôts manuels
-# via une jointure spatiale avec buffer de 3km (même ville = même localité).
-# st_is_within_distance() : renvoie TRUE si deux géométries sont à moins de
-# "dist" mètres l'une de l'autre.
-villes_osm_sf <- villes_osm %>%
-  mutate(
-    lon = st_coordinates(geometry)[,1],
-    lat = st_coordinates(geometry)[,2]
-  ) %>%
-  st_drop_geometry()
-
 # Conversion des entrepôts manuels en sf pour la comparaison spatiale
 manuels_sf <- entreposages_manuels %>%
   st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
   st_transform(crs = 32735)
 
-villes_osm_sf2 <- villes_osm %>%
-  mutate(lon = st_coordinates(geometry)[,1],
-         lat = st_coordinates(geometry)[,2])
-
+# ── Entrepôts depuis city/town OSM ───────────────────────────────────────────
 # Filtrer uniquement les villes dans le territoire rwandais
 # Évite que les villes des pays voisins se snappent toutes sur les mêmes nœuds frontières
 # st_filter() : ne garde que les géométries qui intersectent le polygone donné.
@@ -1993,7 +1977,7 @@ reseau_rwanda <- reseau_rwanda %>%
       # Cette ligne permet de trouver le nom d'un entrepôt associé à un identifiant de nœud
       NA_character_
     ),
-    warehouse_type = if_else(                                              # Type de l'entrepôt (ex: "port", "aéroport", "centre logistique"), sinon NA
+    warehouse_type = if_else(                                              # Type de l'entrepôt (ex: "marche", "ville", "centre industriel"), sinon NA
       is_warehouse,
       entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],  # Cette ligne permet de trouver le type d'un entrepôt associé à un identifiant de nœud
       NA_character_
@@ -2022,7 +2006,7 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 # Requête SQL chaînée en 5 CTEs : vitesse → pente → consommation → coût.
 # Produit la table aretes_couts_tous (N_arêtes × N_véhicules lignes).
 # cost_per_tkm = (carburant + usure × facteur_urbain + temps × facteur_urbain)
-#                / capacite_tonnes / length_km
+#                / (capacite_tonnes × length_km)
 # ==============================================================================
 
 # Formules appliquées :
@@ -2032,11 +2016,6 @@ cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
 #   cost_wear     = length_km × usure_usd_km
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
 #
-# Le "coût généralisé" additionne trois composantes :
-#   1. Coût du carburant : dépend de la distance, la surface, la pente
-#   2. Coût d'usure du véhicule : dépend de la distance et la surface
-#   3. Coût du temps : dépend de la distance et la vitesse (et la valeur du temps
-#      du chauffeur/marchandise)
 # L'unité finale (USD/tkm) permet de comparer des routes de longueurs différentes.
 
 # st_drop_geometry() : nécessaire car DuckDB ne peut pas stocker des colonnes
@@ -2181,9 +2160,9 @@ duck_query("
     travel_time_h,
     -- Coût par tkm avec pénalité urbaine sur le temps et l'usure
     -- Formule : (carburant + usure_pénalisée + temps_pénalisé) / distance / capacité
-    (fuel_consumption_L * prix_carburant
-      + length_km * usure_usd_km * facteur_urbain_applique
-      + travel_time_h * valeur_temps * facteur_urbain_applique)
+    (cost_fuel_usd
+      + cost_wear_usd * facteur_urbain_applique
+      + cost_time_usd * facteur_urbain_applique)
       / (NULLIF(length_km, 0)
       * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm
   FROM avec_couts
