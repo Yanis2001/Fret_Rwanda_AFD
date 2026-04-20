@@ -1017,10 +1017,6 @@ plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 #   - les NŒUDS sont les intersections et extrémités de routes
 #   - les ARÊTES sont les segments de route entre deux nœuds
 # Ce graphe servira ensuite à igraph pour le calcul de plus courts chemins.
-# Un "graphe" en informatique est une structure de données abstraite composée
-# de "nœuds" (ici des intersections) reliés par des "arêtes" (ici des routes).
-# C'est la structure de données utilisée par tous les GPS pour calculer
-# des itinéraires.
 
 # ── Homogénéisation des types de géométrie ───────────────────────────────────
 # Le fichier PBF peut contenir des MULTILINESTRING (plusieurs lignes groupées)
@@ -1376,7 +1372,7 @@ cat("✓ Carte des arêtes perdues sauvegardée\n\n")
 
 # progress_bar$new() : crée une barre de progression qui s'affiche dans la console.
 # total = length(noeuds_geante) : nombre d'itérations attendues.
-# pb_geante$tick() : avance la barre d'un pas à chaque itération.
+# Avance la barre d'un pas à chaque itération.
 pb_geante <- progress_bar$new(
   format = "  Filtrage   [:bar] :percent | durée : :elapsed",
   total  = length(noeuds_geante),
@@ -1413,17 +1409,14 @@ cat("✓ longueur_m recalculée sur toutes les arêtes\n")
 cat("  Arêtes avec longueur_m = 0 ou NA :", n_na_longueur, "(doit être 0)\n\n")
 
 # to_spatial_subdivision() crée des fragments de longueur nulle aux intersections
-# quand deux nœuds sont géométriquement confondus. On les élimine ici,
-# avant le calcul des pentes (Partie 11) et des coûts (Partie 12),
-# pour éviter toute propagation de NA en aval.
-# Un NA (Not Available) en R représente une valeur manquante/indéfinie.
-# Si une arête a longueur_m = NA, tous les calculs de coûts seront NA aussi.
+# quand deux nœuds sont géométriquement confondus. On les élimine ici pour éviter 
+# toute propagation de NA en aval.
 n_avant_filtre <- igraph::ecount(reseau_rwanda)
 
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(longueur_m_brute = as.numeric(st_length(geometry))) %>%
-  filter(longueur_m_brute > 0.5) %>%        # Seuil 0.5m
+  filter(longueur_m_brute > 0.5) %>%         # Seuil 0.5m
   select(-longueur_m_brute)                  # Colonne temporaire, on la retire
 
 n_apres_filtre <- igraph::ecount(reseau_rwanda)
@@ -1451,9 +1444,6 @@ cat("  100–999 noeuds :", sum(sizes >= 100 & sizes < 1000), "composantes\n")
 cat("  10–99  noeuds  :", sum(sizes >= 10  & sizes < 100),  "composantes\n")
 cat("  2–9    noeuds  :", sum(sizes >= 2   & sizes < 10),   "composantes\n")
 cat("  1      noeud   :", sum(sizes == 1),                  "composantes\n")
-
-cat("\nTop 5 composantes (nb noeuds) :\n")
-print(head(sizes, 5))
 
 cat("Nombre de nœuds dans reseau_rwanda :", igraph::vcount(reseau_rwanda), "\n")
 cat("Nombre d'arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n")
@@ -4165,7 +4155,7 @@ coords_Y <- setNames(coords_lookup$Y, coords_lookup$warehouse_name)
 # On filtre dès ici pour ne conserver que les flux significatifs
 # (>= SEUIL_DESIRE, calculé comme le 40e percentile des flux non nuls) afin de
 # ne pas surcharger la carte avec des milliers de lignes quasi invisibles.
-flux_long <- flux_total_fixe %>%
+flux_long <- flux_total %>%
   as.data.frame() %>%
   rownames_to_column("Origine") %>%        # Les noms de lignes deviennent une colonne
   pivot_longer(-Origine, names_to = "Destination", values_to = "flux_musd") %>%
@@ -4174,11 +4164,11 @@ flux_long <- flux_total_fixe %>%
     !is.na(flux_musd),                     # Supprimer les paires sans données
     flux_musd >= SEUIL_DESIRE              # Ne garder que les flux suffisamment importants
   ) %>%
-  # Ajout des tonnes correspondantes depuis flux_tonnes_total_fixe.
+  # Ajout des tonnes correspondantes depuis flux_tonnes_total.
   # On fait une jointure sur les deux clés (Origine, Destination) pour récupérer
   # le volume physique (tonnes) associé au flux monétaire (M USD) de chaque paire.
   left_join(
-    flux_tonnes_total_fixe %>%
+    flux_tonnes_total %>%
       as.data.frame() %>%
       rownames_to_column("Origine") %>%
       pivot_longer(-Origine, names_to = "Destination", values_to = "flux_tonnes"),
