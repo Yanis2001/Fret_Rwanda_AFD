@@ -2471,7 +2471,7 @@ mapping_aretes_mm <- bind_rows(
   )
 )
 
-# ── Vecteurs d'accès direct pour le remappage (Partie 20) ─────────────────────
+# ── Vecteurs d'accès direct pour le remappage  ────────────────────────────────
 # Ces trois vecteurs permettent de retrouver en O(1) (accès direct par indice)
 # le type, l'indice physique et le véhicule d'une arête multi-modale.
 # O(1) signifie que le temps d'accès est constant, peu importe la taille du vecteur.
