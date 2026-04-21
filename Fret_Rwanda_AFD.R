@@ -3905,6 +3905,63 @@ cat("  Tonnage total modélisé:",
 
 SEUIL_FLUX_TONNES <- 50
 
+CACHE_AFFECTATION      <- file.path(DIR_OUTPUT, "affectation_cache.rds")
+cache_affectation_valide <- FALSE
+
+# Empreinte (hash) des entrées du calcul. Si l'une d'entre elles change,
+# le hash change, et le cache est automatiquement rejeté.
+# digest::digest() produit une empreinte stable de n'importe quel objet R :
+# deux objets identiques donnent le même hash, deux objets différents donnent
+# des hashs différents. On combine plusieurs entrées dans une liste.
+if (!requireNamespace("digest", quietly = TRUE)) {
+  install.packages("digest")
+}
+
+empreinte_entrees <- digest::digest(
+  list(
+    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, PART_ECHANGEABLE
+    seuil             = SEUIL_FLUX_TONNES,
+    n_aretes          = n_aretes_physiques,
+    n_warehouses      = n_warehouses,
+    n_vehicules       = n_vehicules,
+    n_aretes_mm       = igraph::ecount(graphe_multimodal)
+  ),
+  algo = "xxhash64"
+)
+
+if (file.exists(CACHE_AFFECTATION)) {
+  
+  cat("── Tentative de chargement du cache d'affectation ─────────────────────\n")
+  cache_aff <- readRDS(CACHE_AFFECTATION)
+  
+  # Le cache est valide si l'empreinte des entrées correspond.
+  # Une empreinte différente signifie qu'au moins une entrée a changé
+  # (PBF modifié, paramètres économiques modifiés, etc.).
+  if (!is.null(cache_aff$empreinte) &&
+      cache_aff$empreinte == empreinte_entrees) {
+    
+    volume_trafic_mm         <- cache_aff$volume_trafic_mm
+    paires_traitees          <- cache_aff$paires_traitees
+    paires_non_connectees    <- cache_aff$paires_non_connectees
+    cache_affectation_valide <- TRUE
+    
+    cat("  ✓ Cache d'affectation valide\n")
+    cat("    Paires traitées      :", paires_traitees, "\n")
+    cat("    Paires non connectées:", paires_non_connectees, "\n")
+    cat("    → Affectation ignorée (~2-5 min gagnées)\n\n")
+    
+  } else {
+    cat("  ⚠ Cache d'affectation invalide (entrées modifiées) — recalcul\n\n")
+  }
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BLOC CONDITIONNEL : l'affectation ne s'exécute que si pas de cache valide
+# ══════════════════════════════════════════════════════════════════════════════
+if (!cache_affectation_valide) {
+
+# ── ÉTAPE 3 : Pré-filtrage des paires OD à traiter ────────────────────────────
+
 # which(..., arr.ind = TRUE) renvoie les indices (i, j) des éléments qui
 # satisfont la condition sous forme de matrice à 2 colonnes.
 paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
@@ -3916,7 +3973,7 @@ cat("  Paires OD à traiter :", format(n_paires, big.mark = " "),
     "(sur", format(n_warehouses^2 - n_warehouses, big.mark = " "),
     "possibles)\n\n")
 
-# ── ÉTAPE 3 : Préparation des matrices de résultats ──────────────────────────
+# ── ÉTAPE 4 : Préparation des matrices de résultats ──────────────────────────
 volume_trafic_mm <- matrix(
   0,
   nrow = n_aretes_physiques,
@@ -3931,7 +3988,7 @@ paires_non_connectees <- 0
 # (évite l'accès répété à E(graphe_multimodal)$weight qui est coûteux)
 poids_mm <- igraph::E(graphe_multimodal)$weight
 
-# ── ÉTAPE 4 : Boucle principale par zone origine ─────────────────────────────
+# ── ÉTAPE 5 : Boucle principale par zone origine ─────────────────────────────
 # On parcourt les zones origine une par une. Pour chaque origine i, on calcule
 # en UNE SEULE fois les distances vers toutes les destinations (bien plus
 # efficace qu'une requête par paire).
@@ -4079,7 +4136,28 @@ cat("\n✓ Affectation multi-modale terminée\n")
 cat("  Paires traitées      :", paires_traitees, "\n")
 cat("  Paires non connectées:", paires_non_connectees, "\n\n")
 
-afficher_ram("fin VIII.1")
+# ── SAUVEGARDE DU CACHE ────────────────────────────────────────────────────
+cat("=== Sauvegarde du cache d'affectation ===\n")
+
+saveRDS(
+  list(
+    volume_trafic_mm      = volume_trafic_mm,
+    paires_traitees       = paires_traitees,
+    paires_non_connectees = paires_non_connectees,
+    empreinte             = empreinte_entrees,
+    date_creation         = Sys.time()
+  ),
+  CACHE_AFFECTATION
+)
+
+cat("  ✓ Cache sauvegardé :", CACHE_AFFECTATION, "\n")
+cat("  → Au prochain lancement (sans changement), l'affectation sera ignorée\n\n")
+
+}  # fin du if (!cache_affectation_valide)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SUITE : calculs rapides toujours exécutés (qu'on ait un cache ou non)
+# ══════════════════════════════════════════════════════════════════════════════
 
 # ── Statistiques de répartition modale ───────────────────────────────────────
 cat("Répartition modale du trafic (tonnes × km) :\n")
@@ -4100,7 +4178,7 @@ for (v in seq_len(n_vehicules)) {
 }
 cat("\n")
 
-# ── Étape 3 : Intégration des volumes au réseau ──────────────────────────────
+# ── Étape 6 : Intégration des volumes au réseau ──────────────────────────────
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(
@@ -4128,15 +4206,12 @@ reseau_rwanda <- reseau_rwanda %>%
 
 # Nettoyage final
 invisible(gc(full = TRUE))
-afficher_ram("après intégration au réseau")
-
 cat("✓ Partie VIII.1 terminée\n\n")
 
 # ==============================================================================
 # TRANSITION VIII.1 → VIII.2
 # Recrée les objets de statistiques (volumes_par_zone, stats_trafic) qui
 # avaient été supprimés du patch de VIII.1 et qui sont requis en VIII.2.
-# À insérer JUSTE AVANT le bloc "VIII.2 : Visualisations".
 # ==============================================================================
 
 # ── Statistiques de trafic sur le réseau ─────────────────────────────────────
@@ -4178,8 +4253,7 @@ cat("\n")
 
 # ── Diagnostic de connectivité (optionnel mais utile pour debug) ─────────────
 # Ce diagnostic reconstruit brièvement graphe_igraph pour vérifier la 
-# connectivité des entrepôts. Si tu veux économiser la RAM, tu peux
-# entourer ce bloc de if (FALSE) { ... } pour le désactiver.
+# connectivité des entrepôts. 
 
 cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
 
