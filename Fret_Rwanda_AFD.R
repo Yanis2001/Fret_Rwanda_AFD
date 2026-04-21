@@ -2178,10 +2178,10 @@ stats_flotte <- duck_query("
   SELECT
     vehicule_id,
     vehicule_nom,
-    ROUND(AVG(cost_per_tkm), 3)                                AS cout_par_tkm_moyen,
-    ROUND(AVG(cost_fuel_usd / NULLIF(cost_per_tkm * length_km, 0)) * 100, 1) AS part_carburant_pct,
-    ROUND(AVG(cost_time_usd / NULLIF(cost_per_tkm * length_km, 0)) * 100, 1) AS part_temps_pct,
-    ROUND(AVG(cost_wear_usd / NULLIF(cost_per_tkm * length_km, 0)) * 100, 1) AS part_usure_pct
+    ROUND(AVG(cost_per_tkm), 3) AS cout_par_tkm_moyen,
+    ROUND(AVG(cost_fuel_usd / NULLIF(cost_fuel_usd + cost_wear_usd + cost_time_usd, 0)) * 100, 1) AS part_carburant_pct,
+    ROUND(AVG(cost_time_usd / NULLIF(cost_fuel_usd + cost_wear_usd + cost_time_usd, 0)) * 100, 1) AS part_temps_pct,
+    ROUND(AVG(cost_wear_usd / NULLIF(cost_fuel_usd + cost_wear_usd + cost_time_usd, 0)) * 100, 1) AS part_usure_pct
   FROM aretes_couts_tous
   GROUP BY vehicule_id, vehicule_nom
   ORDER BY cout_par_tkm_moyen
