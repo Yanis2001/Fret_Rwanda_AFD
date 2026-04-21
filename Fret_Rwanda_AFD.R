@@ -1990,7 +1990,7 @@ reseau_rwanda <- reseau_rwanda %>%
     )
   )
 
-cat("✓", nrow(entreposages_sf), "entreposages intégrés au réseau\n\n")
+cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n")
 
 
 ################################################################################
