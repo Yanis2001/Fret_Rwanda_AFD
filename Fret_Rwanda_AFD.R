@@ -1005,7 +1005,62 @@ plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 # Transforme les segments OSM bruts en graphe sfnetworks topologiquement
 # cohérent, puis extrait la composante géante (réseau principal connecté).
 # Toute modification ici invalide le cache des pentes.
+#
+# ── MISE EN CACHE ────────────────────────────────────────────────────────────
+# Les corrections topologiques (subdivision aux intersections, suppression
+# des pseudo-nœuds, extraction de la composante géante) prennent ~3-5 min.
+# Le résultat est mis en cache dans outputs/reseau_corrige_cache.rds.
+# Le cache est invalidé automatiquement si :
+#   - le fichier PBF a changé (détection par taille de fichier)
+#   - le nombre de segments d'entrée a changé
+# Pour forcer un recalcul : supprimer le fichier .rds.
 ################################################################################
+
+CACHE_RESEAU     <- file.path(DIR_OUTPUT, "reseau_corrige_cache.rds")
+cache_reseau_valide <- FALSE
+
+# Empreinte du PBF : la taille du fichier est un proxy simple et rapide
+# (quelques ms) pour détecter une modification de la source.
+# Pour une validation plus stricte, on pourrait utiliser digest::digest(file = ...)
+# mais ça prendrait ~1s pour un PBF de 50 Mo, ce qui n'apporte rien en pratique.
+pbf_size_actuelle     <- file.size(chemin_pbf)
+n_segments_entree_act <- nrow(routes_rwanda)
+
+# ── Tentative de chargement du cache ──────────────────────────────────────────
+if (file.exists(CACHE_RESEAU)) {
+  
+  cat("=== PARTIE III — Tentative de chargement du cache réseau ===\n")
+  cache_reseau <- readRDS(CACHE_RESEAU)
+  
+  # Double vérification : le cache n'est valide que si le PBF ET le nombre
+  # de segments d'entrée correspondent exactement à la session actuelle.
+  # Si l'une des deux conditions change, on rejette le cache.
+  if (!is.null(cache_reseau$pbf_size) &&
+      !is.null(cache_reseau$n_segments_entree) &&
+      cache_reseau$pbf_size          == pbf_size_actuelle &&
+      cache_reseau$n_segments_entree == n_segments_entree_act) {
+    
+    reseau_rwanda       <- cache_reseau$reseau_rwanda
+    cache_reseau_valide <- TRUE
+    
+    cat("  ✓ Cache réseau valide\n")
+    cat("    Nœuds  :", igraph::vcount(reseau_rwanda), "\n")
+    cat("    Arêtes :", igraph::ecount(reseau_rwanda), "\n")
+    cat("    → Corrections topologiques ignorées (~3-5 min gagnées)\n\n")
+    
+  } else {
+    cat("  ⚠ Cache réseau invalide (PBF ou segments modifiés) — recalcul\n")
+    cat("    Cache : pbf_size =", cache_reseau$pbf_size,
+        "| n_segments =", cache_reseau$n_segments_entree, "\n")
+    cat("    Actuel: pbf_size =", pbf_size_actuelle,
+        "| n_segments =", n_segments_entree_act, "\n\n")
+  }
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BLOC CONDITIONNEL : III.1 à III.3 ne s'exécutent que si pas de cache valide
+# ══════════════════════════════════════════════════════════════════════════════
+if (!cache_reseau_valide) {
 
 # ==============================================================================
 # III.1 : Création du graphe sfnetworks
@@ -1448,17 +1503,53 @@ cat("  1      noeud   :", sum(sizes == 1),                  "composantes\n")
 cat("Nombre de nœuds dans reseau_rwanda :", igraph::vcount(reseau_rwanda), "\n")
 cat("Nombre d'arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n")
 
-# Répartition géographique : les fragments sont-ils concentrés dans une zone ?
-# On récupère le centroïde de chaque composante pour cartographier la fragmentation
-noeuds_sf <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
-noeuds_sf$composante <- composantes_finales$membership
+rm(composantes_finales)
 
-cat("Nombre de nœuds dans noeuds_sf :", nrow(noeuds_sf), "\n")
-if (nrow(noeuds_sf) == 0) {
-  cat("⚠ noeuds_sf est vide. Vérifie la construction de reseau_rwanda.\n")
+# ════════════════════════════════════════════════════════════════════════════
+# SAUVEGARDE DU CACHE
+# ════════════════════════════════════════════════════════════════════════════
+
+cat("=== Sauvegarde du cache réseau ===\n")
+
+saveRDS(
+  list(
+    reseau_rwanda      = reseau_rwanda,
+    pbf_size           = pbf_size_actuelle,
+    n_segments_entree  = n_segments_entree_act,
+    n_noeuds           = igraph::vcount(reseau_rwanda),
+    n_aretes           = igraph::ecount(reseau_rwanda),
+    date_creation      = Sys.time()
+  ),
+  CACHE_RESEAU
+)
+
+cat("  ✓ Cache sauvegardé :", CACHE_RESEAU, "\n")
+cat("  → Au prochain lancement, la Partie III s'exécutera en <1s\n\n")
+
+}  # fin du if (!cache_reseau_valide)
+
+
+# ── Vérifications communes (toujours exécutées, qu'on ait un cache ou non) ──
+# Ces vérifications sont rapides et permettent de détecter tôt un problème
+# de cohérence avec le reste du script (ex : composante non connectée).
+cat("=== Vérifications post-Partie III ===\n")
+cat("  Nœuds dans reseau_rwanda  :", igraph::vcount(reseau_rwanda), "\n")
+cat("  Arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n")
+
+n_composantes <- igraph::count_components(reseau_rwanda %>% as_tbl_graph())
+if (n_composantes != 1) {
+  warning("  ⚠ Le réseau a ", n_composantes, " composantes (attendu : 1)\n")
 } else {
-  cat("✓ noeuds_sf est valide.\n")
+  cat("  ✓ Réseau entièrement connecté (1 composante)\n")
 }
+
+n_na_longueur <- reseau_rwanda %>%
+  activate("edges") %>% st_as_sf() %>%
+  pull(longueur_m) %>%
+  { sum(is.na(.) | . == 0) }
+
+cat("  Arêtes avec longueur_m = 0 ou NA :", n_na_longueur,
+    "(doit être 0)\n\n")
 
 ################################################################################
 # PARTIE IV — ENRICHISSEMENT DU RÉSEAU
@@ -3744,7 +3835,7 @@ objets_a_supprimer <- c(
   "attrs_df", "attrs_clean", "landuse_test", "place_test", "villes_raw",
   
   # Couches géographiques lourdes
-  "dem_rwanda", "lacs_raw", "parcs_raw", "zones_urbaines_union",
+  "dem_rwanda", "zones_urbaines_union",
   "zones_urbaines", "zones_industrielles", "zones_retail",
   "centroides_indus", "centroides_indus_sf", "centroides_retail",
   "centroides_retail_sf", "tous_existants", "tous_existants2",
@@ -4040,6 +4131,85 @@ invisible(gc(full = TRUE))
 afficher_ram("après intégration au réseau")
 
 cat("✓ Partie VIII.1 terminée\n\n")
+
+# ==============================================================================
+# TRANSITION VIII.1 → VIII.2
+# Recrée les objets de statistiques (volumes_par_zone, stats_trafic) qui
+# avaient été supprimés du patch de VIII.1 et qui sont requis en VIII.2.
+# À insérer JUSTE AVANT le bloc "VIII.2 : Visualisations".
+# ==============================================================================
+
+# ── Statistiques de trafic sur le réseau ─────────────────────────────────────
+stats_trafic <- reseau_rwanda %>%
+  activate("edges") %>%
+  as_tibble() %>%
+  filter(volume_tonnes > 0) %>%
+  summarise(
+    n_aretes_actives = n(),
+    volume_max_t     = max(volume_tonnes),
+    volume_moyen_t   = mean(volume_tonnes),
+    volume_median_t  = median(volume_tonnes)
+  )
+
+cat("Statistiques du trafic fret sur le réseau:\n")
+cat("  Arêtes avec trafic  :",
+    format(stats_trafic$n_aretes_actives, big.mark = " "), "\n")
+cat("  Volume max (arête)  :",
+    format(round(stats_trafic$volume_max_t), big.mark = " "), "tonnes\n")
+cat("  Volume moyen (actif):",
+    format(round(stats_trafic$volume_moyen_t), big.mark = " "), "tonnes\n\n")
+
+# ── Zones les plus actives (origines + destinations cumulées) ────────────────
+# volumes_par_zone est nécessaire en VIII.2 pour dimensionner les points
+# des zones sur les cartes (taille_point ∝ log10(offre + demande)).
+cat("Activité fret par zone (origines + destinations):\n")
+
+volumes_par_zone <- tibble(
+  Zone       = noeuds_entreposage$warehouse_name,
+  Type       = noeuds_entreposage$warehouse_type,
+  Offre_kt   = round(rowSums(flux_tonnes_total) / 1000, 1),
+  Demande_kt = round(colSums(flux_tonnes_total) / 1000, 1)
+) %>%
+  mutate(Total_kt = Offre_kt + Demande_kt) %>%
+  arrange(desc(Total_kt))
+
+print(head(volumes_par_zone, 15))
+cat("\n")
+
+# ── Diagnostic de connectivité (optionnel mais utile pour debug) ─────────────
+# Ce diagnostic reconstruit brièvement graphe_igraph pour vérifier la 
+# connectivité des entrepôts. Si tu veux économiser la RAM, tu peux
+# entourer ce bloc de if (FALSE) { ... } pour le désactiver.
+
+cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
+
+# Reconstruction LÉGÈRE du graphe igraph (on l'avait supprimé en VIII.1)
+graphe_igraph <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(weight = cost_per_tkm * length_km) %>%
+  as_tbl_graph()
+
+warehouse_node_ids <- which(igraph::V(graphe_igraph)$is_warehouse)
+
+composantes <- igraph::components(graphe_igraph)
+cat("Nombre de composantes connexes:", composantes$no, "\n")
+cat("Taille de la plus grande composante:", max(composantes$csize), "nœuds\n\n")
+
+# On ne liste que les 10 premiers entrepôts pour ne pas polluer le log
+cat("Composante de chaque entrepôt (10 premiers) :\n")
+for (i in seq_len(min(10, length(warehouse_node_ids)))) {
+  node_id <- warehouse_node_ids[i]
+  comp    <- composantes$membership[node_id]
+  taille  <- composantes$csize[comp]
+  cat("  [", i, "]", noeuds_entreposage$warehouse_name[i],
+      "→ composante", comp, "(", taille, "nœuds)\n")
+}
+
+# Libération du graphe igraph après diagnostic (on en a fini avec lui)
+rm(graphe_igraph, composantes)
+invisible(gc(verbose = FALSE))
+
+cat("\n✓ Transition VIII.1 → VIII.2 terminée\n\n")
 
 # ==============================================================================
 # VIII.2 : Visualisations
