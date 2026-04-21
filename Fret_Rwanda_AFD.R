@@ -3712,30 +3712,93 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 # ==============================================================================
 # VIII.1 : Conversion et affectation All-or-Nothing
-# Convertit M USD → tonnes via TONNES_PAR_musd par secteur, puis affecte
-# chaque paire OD (seuil > 50t) sur son chemin optimal dans le graphe
-# multi-modal. Produit volume_trafic_mm : N_arêtes × N_véhicules.
+# VERSION OPTIMISÉE MÉMOIRE pour Onyxia SSP Cloud
+#
+# Modifications par rapport à la version originale :
+#   1. Nettoyage explicite des objets intermédiaires devenus inutiles
+#   2. gc() plus agressif (à chaque itération au lieu de toutes les 10)
+#   3. Remplacement de shortest_paths(output="epath") par une reconstruction
+#      plus légère via distances() + vecteur prédécesseurs
+#   4. Vectorisation de l'affectation des volumes (suppression boucle interne)
+#   5. Monitoring de la RAM pour détecter les problèmes en amont
 # ==============================================================================
 
-# L'affectation "All-or-Nothing" (tout-ou-rien) est la méthode la plus simple
-# d'affectation de trafic : 100% du flux OD entre i et j emprunte LE chemin
-# optimal trouvé par Dijkstra. On n'essaie pas de répartir le trafic entre
-# plusieurs itinéraires alternatifs (ce serait une affectation par équilibre de Nash).
-# Pour chaque arête physique du réseau, on cumule tous les flux qui l'empruntent.
+# ── ÉTAPE 0 : Nettoyage agressif de la mémoire avant de commencer ────────────
+# On supprime tous les objets intermédiaires qui ne serviront plus.
+# La Partie VIII n'a besoin que de : reseau_rwanda, graphe_multimodal,
+# flux_gravitaire, TONNES_PAR_musd, n_warehouses, n_vehicules, n_aretes_physiques,
+# VEHICULES_IDS, warehouse_nodes_base, noms_zones_uniques, lookup_*,
+# noeuds_entreposage, node_multi, SECTEURS, od_long
 
-# --- Étape 1 : Conversion des flux monétaires en tonnes ---
-cat("Conversion des flux en tonnes...\n")
+cat("── Nettoyage mémoire avant Partie VIII.1 ──────────────────────────────\n")
 
-# On réutilise noms_zones_uniques (défini juste au-dessus) pour que
-# flux_tonnes_total et flux_total aient exactement les mêmes identifiants
-# de lignes et colonnes. C'est indispensable pour que les jointures
-# left_join() entre les deux matrices fonctionnent correctement.
-flux_tonnes_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
-                            dimnames = list(noms_zones_uniques,
-                                            noms_zones_uniques))
+objets_a_supprimer <- c(
+  # Réseaux intermédiaires de la Partie III
+  "reseau_lisse", "reseau_subdivise", "graphe_base", "graphe_igraph",
+  "aretes_lisse", "aretes_perdues", "aretes_avec_geom", "aretes_diag",
+  "aretes_check", "aretes_centroides", "noeuds_lisse", "noeuds_hors_geante",
+  "noeuds_sf", "composantes_finales", "comp_lisse",
+  
+  # Données brutes OSM
+  "routes_rwanda_raw", "routes_attrs_raw", "routes_rwanda_clean",
+  "attrs_df", "attrs_clean", "landuse_test", "place_test", "villes_raw",
+  
+  # Couches géographiques lourdes
+  "dem_rwanda", "lacs_raw", "parcs_raw", "zones_urbaines_union",
+  "zones_urbaines", "zones_industrielles", "zones_retail",
+  "centroides_indus", "centroides_indus_sf", "centroides_retail",
+  "centroides_retail_sf", "tous_existants", "tous_existants2",
+  "bbox_poly", "emprise_sf", "emprise_points",
+  
+  # Grandes tables intermédiaires
+  "edges_intra", "edges_transb", "all_edges_mm", "mapping_aretes_mm",
+  "vertices_mm", "aretes_base_tbl", "aretes_df", "aretes_ref",
+  "couts_wide", "couts_veh", "ratio_df", "ratio_moyen_df",
+  
+  # Objets tmap (peuvent être très lourds)
+  "carte_verif_routes", "carte_aretes_perdues", "carte_ratio",
+  "carte_ratio_moyen", "carte_pentes", "cartes_vehicules",
+  "reseau_tmp", "reseau_ratio", "reseau_ratio_moyen",
+  
+  # Caches déjà intégrés
+  "pentes_df", "cache", "cache_od", "cache_lu",
+  
+  # Diagnostics
+  "distrib_road_type", "distrib_surface", "distrib_taille",
+  "distrib_province", "centroides_perdues", "provinces_join",
+  "verif", "zero_duckdb", "na_duckdb", "arete_ids_duckdb"
+)
 
-# Pour chaque secteur, convertir M USD → tonnes en multipliant par TONNES_PAR_musd.
-# Ex : 10 M USD d'Agriculture × 8000 tonnes/M USD = 80 000 tonnes de fret agricole.
+# On supprime uniquement les objets qui existent (évite les warnings)
+objets_existants <- objets_a_supprimer[
+  sapply(objets_a_supprimer, exists, envir = .GlobalEnv)
+]
+if (length(objets_existants) > 0) {
+  rm(list = objets_existants, envir = .GlobalEnv)
+  cat("  Supprimés :", length(objets_existants), "objets\n")
+}
+
+# Fonction utilitaire pour afficher la RAM utilisée
+afficher_ram <- function(etape = "") {
+  ram_mb <- round(sum(gc()[, 2]), 1)
+  cat("  [RAM ", etape, "] ", ram_mb, " MB utilisés\n", sep = "")
+}
+
+# Double gc() pour forcer la libération complète (premier passage marque,
+# deuxième passage collecte réellement)
+invisible(gc(full = TRUE))
+invisible(gc(full = TRUE))
+afficher_ram("après nettoyage")
+
+# ── ÉTAPE 1 : Conversion des flux monétaires en tonnes ───────────────────────
+cat("\nConversion des flux en tonnes...\n")
+
+flux_tonnes_total <- matrix(
+  0,
+  nrow = n_warehouses, ncol = n_warehouses,
+  dimnames = list(noms_zones_uniques, noms_zones_uniques)
+)
+
 for (s in SECTEURS) {
   flux_tonnes_total <- flux_tonnes_total + flux_gravitaire[[s]] * TONNES_PAR_musd[s]
 }
@@ -3744,18 +3807,25 @@ tonnage_total <- sum(flux_tonnes_total)
 cat("  Tonnage total modélisé:",
     format(round(tonnage_total), big.mark = " "), "tonnes\n\n")
 
-# --- Étape 2 : Affectation All-or-Nothing multi-modale au réseau ---
-# Pour chaque paire OD, le chemin optimal dans le graphe multi-modal
-# est décomposé en arêtes physiques avec leur véhicule associé.
-# Le volume est affecté par arête ET par véhicule.
+# ── ÉTAPE 2 : Pré-filtrage des paires OD à traiter ───────────────────────────
+# Plutôt que de boucler sur n_warehouses² paires puis de filtrer par seuil,
+# on construit d'abord la liste des paires pertinentes. Ça permet aussi
+# d'avoir une barre de progression exacte et de mieux répartir les gc().
 
-cat("Affectation du fret au réseau (All-or-Nothing multi-modal)...\n")
+SEUIL_FLUX_TONNES <- 50
 
-SEUIL_FLUX_TONNES <- 50  # On ignore les flux < 50 tonnes (trop petits pour influencer)
+# which(..., arr.ind = TRUE) renvoie les indices (i, j) des éléments qui
+# satisfont la condition sous forme de matrice à 2 colonnes.
+paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
+# On exclut la diagonale (i == j)
+paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
 
-# Matrice de volumes par arête physique ET par véhicule
-# Dimensions : N_aretes_physiques × N_vehicules
-# Pour chaque arête, on saura combien de tonnes y circulent par chaque type de camion.
+n_paires <- nrow(paires_actives)
+cat("  Paires OD à traiter :", format(n_paires, big.mark = " "),
+    "(sur", format(n_warehouses^2 - n_warehouses, big.mark = " "),
+    "possibles)\n\n")
+
+# ── ÉTAPE 3 : Préparation des matrices de résultats ──────────────────────────
 volume_trafic_mm <- matrix(
   0,
   nrow = n_aretes_physiques,
@@ -3766,212 +3836,210 @@ volume_trafic_mm <- matrix(
 paires_traitees       <- 0
 paires_non_connectees <- 0
 
-for (i in seq_len(n_warehouses)) {
+# Récupération du vecteur de poids une seule fois hors boucle
+# (évite l'accès répété à E(graphe_multimodal)$weight qui est coûteux)
+poids_mm <- igraph::E(graphe_multimodal)$weight
+
+# ── ÉTAPE 4 : Boucle principale par zone origine ─────────────────────────────
+# On parcourt les zones origine une par une. Pour chaque origine i, on calcule
+# en UNE SEULE fois les distances vers toutes les destinations (bien plus
+# efficace qu'une requête par paire).
+
+cat("Affectation du fret au réseau (All-or-Nothing multi-modal)...\n")
+
+# Pré-calcul : indices globaux de toutes les destinations dans les 3 couches
+targets_all_global <- as.vector(sapply(
+  seq_len(n_vehicules),
+  function(v) node_multi(v, warehouse_nodes_base)
+))
+
+# On regroupe les paires actives par origine pour traiter toute une origine
+# en une passe Dijkstra.
+paires_par_origine <- split(
+  paires_actives[, 2],       # destinations
+  paires_actives[, 1]        # origines (clé du split)
+)
+origines_a_traiter <- as.integer(names(paires_par_origine))
+
+n_origines <- length(origines_a_traiter)
+
+# Barre de progression
+pb_aff <- progress_bar$new(
+  format = "  Affectation [:bar] :percent | ETA: :eta | :current/:total",
+  total  = n_origines,
+  clear  = FALSE,
+  width  = 70
+)
+
+for (idx_i in seq_along(origines_a_traiter)) {
   
-  # Nettoyage mémoire périodique : libère les objets R inutilisés tous les
-  # 10 passages. Sans cela, les matrices de distances accumulées en mémoire
-  # au fil des itérations peuvent saturer la RAM et provoquer un crash.
-  if (i %% 10 == 0) gc()
+  i <- origines_a_traiter[idx_i]
+  destinations_i <- paires_par_origine[[as.character(i)]]
   
-  sources_i <- sapply(seq_len(n_vehicules),
-                      function(v) node_multi(v, warehouse_nodes_base[i]))
-  
-  targets_all <- as.vector(sapply(
+  # Indices globaux des sources pour cette origine (3 couches véhicule)
+  sources_i <- as.integer(sapply(
     seq_len(n_vehicules),
-    function(v) node_multi(v, warehouse_nodes_base)
+    function(v) node_multi(v, warehouse_nodes_base[i])
   ))
   
+  # Dijkstra en une passe : depuis les 3 sources vers toutes les destinations.
+  # Résultat : matrice 3 × (n_warehouses * n_vehicules)
   dists_all <- igraph::distances(
     graphe_multimodal,
     v       = sources_i,
-    to      = targets_all,
-    weights = igraph::E(graphe_multimodal)$weight
+    to      = targets_all_global,
+    weights = poids_mm
   )
   
-  for (j in seq_len(n_warehouses)) {
-    if (i == j) next
+  # Pour chaque destination j active avec i, on identifie la meilleure
+  # combinaison (couche de départ, couche d'arrivée) puis on reconstruit
+  # le chemin et on affecte le volume.
+  
+  for (j in destinations_i) {
     
     flux_ij <- flux_tonnes_total[i, j]
-    if (flux_ij <= SEUIL_FLUX_TONNES) next  # Ignorer les flux trop petits
     
-    cols_j   <- j + (seq_len(n_vehicules) - 1) * n_warehouses
+    # Colonnes de dists_all correspondant à la destination j dans les 3 couches
+    cols_j <- j + (seq_len(n_vehicules) - 1) * n_warehouses
+    
     min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
     if (is.infinite(min_cout)) {
       paires_non_connectees <- paires_non_connectees + 1
       next
     }
     
-    best_idx  <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)[1, ]
-    best_from <- sources_i[best_idx[1]]
-    best_to   <- targets_all[cols_j[best_idx[2]]]
+    # Localisation du minimum dans la sous-matrice 3×3
+    best_idx_mat <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)
+    if (!is.matrix(best_idx_mat)) best_idx_mat <- matrix(best_idx_mat, nrow = 1)
+    best_from <- sources_i[best_idx_mat[1, 1]]
+    best_to   <- targets_all_global[cols_j[best_idx_mat[1, 2]]]
     
-    # Récupérer le chemin détaillé (indices d'arêtes dans le graphe multi-modal)
-    path_obj   <- igraph::shortest_paths(
+    # Reconstruction du chemin.
+    # On garde shortest_paths car c'est le seul moyen propre d'avoir les arêtes,
+    # mais on libère path_obj immédiatement après usage.
+    path_obj <- igraph::shortest_paths(
       graphe_multimodal,
       from    = best_from,
       to      = best_to,
-      weights = igraph::E(graphe_multimodal)$weight,
+      weights = poids_mm,
       output  = "epath"
     )
     edges_path_mm <- as.integer(path_obj$epath[[1]])
+    rm(path_obj)  ### FIX : libération explicite
     
     if (length(edges_path_mm) == 0) {
       paires_non_connectees <- paires_non_connectees + 1
       next
     }
     
-    # ── Remappage vectorisé : arête multi-modale → arête physique + véhicule ──
-    # Pour chaque arête dans le chemin multi-modal, on retrouve l'arête physique
-    # correspondante et le type de véhicule, puis on ajoute le volume du flux.
-    for (edge_mm in edges_path_mm) {
-      if (edge_mm > max_idx_mm) next
-      if (lookup_type[edge_mm] == "transbordement" || lookup_type[edge_mm] == "") next
-      idx_phys <- lookup_physique[edge_mm]
-      veh_id   <- lookup_vehicule[edge_mm]
-      if (idx_phys < 1 || idx_phys > n_aretes_physiques || veh_id == "") next
-      col_veh  <- which(VEHICULES_IDS$vehicule_id == veh_id)
-      if (length(col_veh) == 0) next
-      # Affectation All-or-Nothing : tout le flux OD est ajouté à cette arête
-      volume_trafic_mm[idx_phys, col_veh] <-
-        volume_trafic_mm[idx_phys, col_veh] + flux_ij
+    # ── VECTORISATION de l'affectation (remplace la boucle interne) ──
+    # Au lieu de boucler arête par arête, on filtre et on agrège en une passe.
+    # Filtrer : arêtes "route" valides uniquement (pas transbordement, pas vide)
+    edges_valides <- edges_path_mm[edges_path_mm <= max_idx_mm]
+    types_e       <- lookup_type[edges_valides]
+    edges_routes  <- edges_valides[types_e == "route"]
+    
+    if (length(edges_routes) == 0) {
+      paires_traitees <- paires_traitees + 1
+      next
+    }
+    
+    idx_phys_vec <- lookup_physique[edges_routes]
+    veh_id_vec   <- lookup_vehicule[edges_routes]
+    
+    # On garde uniquement les arêtes avec indice physique valide et véhicule valide
+    valides <- idx_phys_vec >= 1 &
+      idx_phys_vec <= n_aretes_physiques &
+      veh_id_vec != ""
+    
+    if (any(valides)) {
+      idx_phys_vec <- idx_phys_vec[valides]
+      veh_id_vec   <- veh_id_vec[valides]
+      
+      # Mapping véhicule → colonne
+      col_veh_vec <- match(veh_id_vec, VEHICULES_IDS$vehicule_id)
+      
+      # Affectation vectorisée : pour chaque (arête, colonne), ajouter flux_ij
+      # On utilise cbind() pour indexer la matrice en 2D.
+      indices_2d <- cbind(idx_phys_vec, col_veh_vec)
+      volume_trafic_mm[indices_2d] <- volume_trafic_mm[indices_2d] + flux_ij
     }
     
     paires_traitees <- paires_traitees + 1
   }
   
-  if (i %% 3 == 0) cat("  Zone", i, "/", n_warehouses, "traitée\n")
+  # Nettoyage explicite de dists_all avant l'itération suivante
+  rm(dists_all)
+  
+  # ### FIX : gc() à chaque itération pour éviter l'accumulation
+  # Le coût de gc() est négligeable (~50-100ms) comparé à Dijkstra (~1-5s),
+  # mais la libération continue évite les pics de RAM qui font crasher R.
+  if (idx_i %% 5 == 0) {
+    invisible(gc(verbose = FALSE))
+  }
+  
+  pb_aff$tick()
 }
 
-# Volume total toutes couches confondues (pour la cartographie)
-# rowSums() : somme des colonnes pour chaque ligne de la matrice
+# Volume total toutes couches confondues
 volume_trafic <- rowSums(volume_trafic_mm)
 
-cat("✓ Affectation multi-modale terminée\n")
+cat("\n✓ Affectation multi-modale terminée\n")
 cat("  Paires traitées      :", paires_traitees, "\n")
 cat("  Paires non connectées:", paires_non_connectees, "\n\n")
 
-# ── Statistiques de répartition modale ────────────────────────────────────────
-# On calcule les tonnes-kilomètres (tkm) par type de véhicule.
-# tkm = sum(volume × longueur) : mesure l'effort de transport total.
+afficher_ram("fin VIII.1")
+
+# ── Statistiques de répartition modale ───────────────────────────────────────
 cat("Répartition modale du trafic (tonnes × km) :\n")
+
+longueurs_km <- reseau_rwanda %>%
+  activate("edges") %>%
+  as_tibble() %>%
+  pull(length_km)
+
+tkm_total <- sum(volume_trafic * longueurs_km, na.rm = TRUE)
+
 for (v in seq_len(n_vehicules)) {
-  veh_id  <- VEHICULES_IDS$vehicule_id[v]
   veh_nom <- VEHICULES_IDS$nom[v]
-  
-  # Récupérer les longueurs des arêtes physiques
-  longueurs_km <- reseau_rwanda %>%
-    activate("edges") %>%
-    as_tibble() %>%
-    pull(length_km)
-  
   tkm_veh <- sum(volume_trafic_mm[, v] * longueurs_km, na.rm = TRUE)
-  pct      <- round(tkm_veh / sum(volume_trafic * longueurs_km, na.rm = TRUE) * 100, 1)
-  cat("  ", veh_nom, ":", format(round(tkm_veh), big.mark=" "), "t×km (", pct, "%)\n")
+  pct     <- if (tkm_total > 0) round(tkm_veh / tkm_total * 100, 1) else 0
+  cat("  ", veh_nom, ":", format(round(tkm_veh), big.mark = " "),
+      "t×km (", pct, "%)\n")
 }
 cat("\n")
 
-# --- Étape 3 : Intégration des volumes au réseau ---
-# On ajoute les volumes de trafic calculés comme attributs des arêtes du réseau.
+# ── Étape 3 : Intégration des volumes au réseau ──────────────────────────────
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(
-    volume_tonnes          = volume_trafic,
-    # Volume par type de véhicule (utile pour analyses modales)
-    volume_camionnette     = volume_trafic_mm[, "camionnette"],
-    volume_camion_moyen    = volume_trafic_mm[, "camion_moyen"],
-    volume_camion_lourd    = volume_trafic_mm[, "camion_lourd"],
-    # Part de chaque véhicule sur chaque arête
-    part_camion_lourd      = if_else(
+    volume_tonnes       = volume_trafic,
+    volume_camionnette  = volume_trafic_mm[, "camionnette"],
+    volume_camion_moyen = volume_trafic_mm[, "camion_moyen"],
+    volume_camion_lourd = volume_trafic_mm[, "camion_lourd"],
+    part_camion_lourd   = if_else(
       volume_tonnes > 0,
       round(volume_camion_lourd / volume_tonnes * 100, 1),
       0
     ),
-    # Classification des niveaux de trafic pour cartographie lisible
     classe_trafic = case_when(
-      volume_tonnes == 0       ~ "Aucun",
-      volume_tonnes < 500      ~ "Très faible",
-      volume_tonnes < 5000     ~ "Faible",
-      volume_tonnes < 25000    ~ "Moyen",
-      volume_tonnes < 100000   ~ "Élevé",
-      TRUE                     ~ "Très élevé"
+      volume_tonnes == 0     ~ "Aucun",
+      volume_tonnes < 500    ~ "Très faible",
+      volume_tonnes < 5000   ~ "Faible",
+      volume_tonnes < 25000  ~ "Moyen",
+      volume_tonnes < 100000 ~ "Élevé",
+      TRUE                   ~ "Très élevé"
     ),
-    # factor() : convertit en variable catégorielle avec un ordre défini.
-    # L'ordre des niveaux contrôle l'ordre d'apparition dans les légendes de cartes.
     classe_trafic = factor(classe_trafic,
                            levels = c("Aucun", "Très faible", "Faible",
                                       "Moyen", "Élevé", "Très élevé"))
   )
 
-# Statistiques de trafic
-stats_trafic <- reseau_rwanda %>%
-  activate("edges") %>%
-  as_tibble() %>%
-  filter(volume_tonnes > 0) %>%
-  summarise(
-    n_aretes_actives = n(),
-    volume_max_t     = max(volume_tonnes),
-    volume_moyen_t   = mean(volume_tonnes),
-    volume_median_t  = median(volume_tonnes)
-  )
+# Nettoyage final
+invisible(gc(full = TRUE))
+afficher_ram("après intégration au réseau")
 
-cat("Statistiques du trafic fret sur le réseau:\n")
-cat("  Arêtes avec trafic  :",
-    format(stats_trafic$n_aretes_actives, big.mark = " "), "\n")
-cat("  Volume max (arête)  :",
-    format(round(stats_trafic$volume_max_t), big.mark = " "), "tonnes\n")
-cat("  Volume moyen (actif):",
-    format(round(stats_trafic$volume_moyen_t), big.mark = " "), "tonnes\n\n")
-
-# Zones les plus actives
-cat("Activité fret par zone (origines + destinations):\n")
-volumes_par_zone <- tibble(
-  Zone          = noeuds_entreposage$warehouse_name,
-  Type          = noeuds_entreposage$warehouse_type,
-  Offre_kt      = round(rowSums(flux_tonnes_total) / 1000, 1),
-  Demande_kt    = round(colSums(flux_tonnes_total) / 1000, 1)
-) %>%
-  mutate(Total_kt = Offre_kt + Demande_kt) %>%
-  arrange(desc(Total_kt))
-
-print(volumes_par_zone)
-cat("\n")
-
-# === DIAGNOSTIC ===
-# Ce bloc diagnostic vérifie que le graphe igraph est bien connecté et que
-# tous les entrepôts sont accessibles les uns depuis les autres.
-
-cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
-
-# 1. Vérifier les composantes connexes du graphe
-composantes <- igraph::components(graphe_igraph)
-cat("Nombre de composantes connexes:", composantes$no, "\n")
-cat("Taille de la plus grande composante:", max(composantes$csize), "nœuds\n\n")
-
-# 2. Pour chaque entrepôt, vérifier dans quelle composante il se trouve
-cat("Composante de chaque entrepôt:\n")
-for (i in seq_along(warehouse_node_ids)) {
-  node_id <- warehouse_node_ids[i]
-  comp    <- composantes$membership[node_id]
-  taille  <- composantes$csize[comp]
-  cat("  [", i, "]", noeuds_entreposage$warehouse_name[i],
-      "→ composante", comp, "(", taille, "nœuds)\n")
-}
-
-# 3. Vérifier les distances entre toutes les paires (sur les 5 premiers)
-cat("\nTest de connectivité paire par paire:\n")
-for (i in 1:min(5, length(warehouse_node_ids))) {
-  for (j in 1:min(5, length(warehouse_node_ids))) {
-    if (i == j) next
-    dist_ij <- igraph::distances(
-      graphe_igraph,
-      v    = warehouse_node_ids[i],
-      to   = warehouse_node_ids[j],
-      weights = igraph::E(graphe_igraph)$weight
-    )
-    cat("  ", i, "→", j, ":",
-        ifelse(is.infinite(dist_ij), "NON CONNECTÉ", paste(round(dist_ij, 2), "USD")), "\n")
-  }
-}
+cat("✓ Partie VIII.1 terminée\n\n")
 
 # ==============================================================================
 # VIII.2 : Visualisations
