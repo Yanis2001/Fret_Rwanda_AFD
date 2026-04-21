@@ -2894,7 +2894,7 @@ idx     <- 0
 
 # ── Mise en cache de la matrice OD ────────────────────────────────────────────
 # Le calcul de Dijkstra multi-modal est très long (plusieurs dizaines de minutes
-# pour 106 zones). Pour éviter de le refaire à chaque exécution du script,
+# pour 120 zones). Pour éviter de le refaire à chaque exécution du script,
 # on sauvegarde le résultat dans un fichier ".rds" (format binaire R).
 # À la prochaine exécution, si le réseau et le nombre de zones n'ont pas changé,
 # on charge directement le fichier sauvegardé — le calcul est alors instantané.
