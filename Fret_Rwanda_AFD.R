@@ -1407,14 +1407,16 @@ carte_aretes_perdues <- fond_carte() +
   tm_shape(noeuds_hors_geante) +
   tm_dots(fill = "#CC0000", size = 0.2, fill_alpha = 0.5) +
   
-  tm_title("Arêtes exclues de la composante géante\n(~8% du réseau — Partie 7)") +
+  tm_title(paste0("Arêtes exclues de la composante géante\n(",
+                  round(nrow(aretes_perdues) / nrow(aretes_lisse %>% activate("edges") %>% st_as_sf()) * 100, 1),
+                  "% du réseau)")) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
 
 tmap_save(
   carte_aretes_perdues,
-  file.path(DIR_OUTPUT, "carte_aretes_perdues_partie7.png"),
+  file.path(DIR_OUTPUT, "carte_aretes_perdues.png"),
   width = 3000, height = 2400, dpi = 300
 )
 if (FALSE) {
@@ -3029,7 +3031,10 @@ od_stats <- duck_query("
 ")
 
 cat("✓ Matrice OD multi-modale stockée dans DuckDB\n")
-cat("  Paires connectées            :", od_stats$n_paires, "\n")
+cat("  Paires connectées            :", od_stats$n_paires, "(sur ",
+    n_warehouses * (n_warehouses - 1),"paires possibles", 
+    round(od_stats$n_paires / (n_warehouses * (n_warehouses - 1)) * 100, 1),
+    "% de connectivité)\n")
 cat("  Coût moyen                   :", od_stats$cout_moyen_usd, "USD\n")
 cat("  Paires avec transbordement   :", od_stats$paires_avec_transbordement, "\n")
 cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
@@ -3277,7 +3282,8 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 # Affecte à chaque zone un profil sectoriel d'offre et de demande selon son
 # type (hub, sez, frontière…), modulé par la composition landuse (urbain/
 # industriel) dans un buffer de 2km. Volumes calibrés sur l'échelle nationale
-# via PART_ECHANGEABLE = 35%.
+# via PART_ECHANGEABLE = 35%. Cette part exclue les biens et services produits et
+# consommés localement, sans échange inter-zones.
 # ==============================================================================
 
 # Chaque zone d'entreposage est caractérisée par :
