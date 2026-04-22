@@ -3279,11 +3279,27 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 
 # ==============================================================================
 # VII.2 : Offres et demandes par zone
-# Affecte à chaque zone un profil sectoriel d'offre et de demande selon son
-# type (hub, sez, frontière…), modulé par la composition landuse (urbain/
-# industriel) dans un buffer de 2km. Volumes calibrés sur l'échelle nationale
-# via PART_ECHANGEABLE = 35%. Cette part exclue les biens et services produits et
-# consommés localement, sans échange inter-zones.
+# Affecte à chaque zone un profil sectoriel d'offre et de demande via une
+# moyenne pondérée entre le profil de base (déterminé par le type de zone)
+# et les profils des types de zones correspondant aux usages du sol environnants.
+#
+# FORMULE :
+#   profil_final = (profil_base * 1 + profil_industrie * part_ind 
+#                  + profil_hub * part_urb)
+#                / (1 + part_ind + part_urb)
+#
+# Les profils landuse réutilisent PROFILS_OFFRE et PROFILS_DEMANDE déjà
+# définis : les zones industrielles environnantes contribuent via le profil
+# "industrie", les zones urbaines via le profil "urbain" (le type de zone le
+# plus représentatif d'un environnement urbain dense).
+#
+# Cette interpolation convexe garantit que :
+#   1. La somme des parts sectorielles reste toujours égale à 1
+#   2. L'identité structurelle de la zone n'est jamais effacée par son
+#      contexte local (le profil de base a toujours un poids de 1)
+#   3. Les poids sont directement interprétables comme des proportions
+#      de surface dans le buffer de 2km
+#   4. Pas besoin de pmax(), renormalisation, plafonds ou bruit aléatoire
 # ==============================================================================
 
 # Chaque zone d'entreposage est caractérisée par :
@@ -3354,6 +3370,20 @@ TAILLE_ZONE <- c(
   "Rwamagana"                     = 0.09,  # Capitale de la Province de l'Est
   "Frontière Bugarama (Burundi)"  = 0.12   # Corridor Sud modéré
 )
+
+# ── Correspondance entre types de landuse et profils de zone ─────────────────
+# Les zones industrielles dans le buffer sont représentées par le profil
+# "industrie" déjà défini dans PROFILS_OFFRE/DEMANDE.
+# Les zones urbaines sont représentées par le profil "hub" — le type de zone
+# dont la structure économique est la plus proche d'un environnement urbain dense.
+# Ce choix est explicite et discutable : on pourrait utiliser "ville" pour
+# les zones résidentielles si on disposait de données plus granulaires.
+PROFIL_OFFRE_LANDUSE_INDUSTRIEL   <- PROFILS_OFFRE[["industrie"]]
+PROFIL_DEMANDE_LANDUSE_INDUSTRIEL <- PROFILS_DEMANDE[["industrie"]]
+PROFIL_OFFRE_LANDUSE_URBAIN       <- PROFILS_OFFRE[["hub"]]
+PROFIL_DEMANDE_LANDUSE_URBAIN     <- PROFILS_DEMANDE[["hub"]]
+
+cat("✓ Profils landuse définis\n\n")
 
 # Part du PIB qui "voyage" entre zones (le reste est consommé localement)
 # 35% est une hypothèse conservatrice pour un pays enclavé comme le Rwanda
@@ -3502,60 +3532,62 @@ for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
   type_zone <- noeuds_entreposage$warehouse_type[i]
   taille    <- TAILLE_ZONE[nom_zone]
-  if (is.na(taille)) taille <- 0.10
+  if (is.na(taille)) taille <- 0.10    # Valeur par défaut pour les zones OSM
   
-  # Profil de base selon le type de zone
-  profil_o <- PROFILS_OFFRE[[type_zone]]
-  profil_d <- PROFILS_DEMANDE[[type_zone]]
+  # ── Récupération du profil de base selon le type de zone ──────────────────
+  # C'est l'identité structurelle de la zone : une frontière reste une frontière
+  # indépendamment de ce qui l'entoure géographiquement.
+  profil_o_base <- PROFILS_OFFRE[[type_zone]]
+  profil_d_base <- PROFILS_DEMANDE[[type_zone]]
   
-  # ── Ajustement selon la part industrielle ──────────────────────────────────
-  # Chaque point de part industrielle renforce Industrie et Construction
-  # et réduit proportionnellement Commerce et Services
-  p_ind <- min(part_industriel[i], 0.5)   # Plafond à 50% pour éviter les extrêmes
-  if (p_ind > 0.05) {
-    bonus_ind <- p_ind * 0.3   # Amplitude max du bonus
-    profil_o["Industrie"]    <- profil_o["Industrie"]    + bonus_ind
-    profil_o["Construction"] <- profil_o["Construction"] + bonus_ind * 0.5
-    profil_o["Commerce"]     <- profil_o["Commerce"]     - bonus_ind * 0.8
-    profil_o["Services"]     <- profil_o["Services"]     - bonus_ind * 0.7
-    # Renormalisation pour que la somme reste à 1
-    # pmax() : max élément-par-élément — interdit les valeurs négatives (minimum 0.01)
-    profil_o <- pmax(profil_o, 0.01)
-    profil_o <- profil_o / sum(profil_o)
-  }
+  # ── Parts landuse dans le buffer de 2km ───────────────────────────────────
+  # Ces valeurs ont été calculées et mises en cache avant cette boucle.
+  # Elles déterminent le poids des profils landuse dans la moyenne pondérée.
+  p_ind <- part_industriel[i]   # Entre 0 et 1 — pas de plafond nécessaire
+  p_urb <- part_urbain[i]       # car la formule est une interpolation convexe
   
-  # ── Ajustement selon la part urbaine ──────────────────────────────────────
-  p_urb <- min(part_urbain[i], 0.8)
-  if (p_urb > 0.1) {
-    bonus_urb <- p_urb * 0.2
-    profil_d["Commerce"]  <- profil_d["Commerce"]  + bonus_urb
-    profil_d["Services"]  <- profil_d["Services"]  + bonus_urb * 0.8
-    profil_d["Industrie"] <- profil_d["Industrie"] - bonus_urb * 0.9
-    profil_d["Construction"] <- profil_d["Construction"] - bonus_urb * 0.9
-    profil_d <- pmax(profil_d, 0.01)
-    profil_d <- profil_d / sum(profil_d)
-  }
+  # ── Moyenne pondérée des profils (interpolation convexe) ──────────────────
+  # Numérateur   : somme pondérée des profils de base et des profils landuse
+  # Dénominateur : somme des poids (garantit que le résultat somme à 1)
+  #
+  # Exemple pour Rubavu (p_ind=0.08, p_urb=0.35) :
+  #   profil_o_final = (1 * profil_frontiere + 0.08 * profil_industriel
+  #                     + 0.35 * profil_urbain) / (1 + 0.08 + 0.35)
+  #
+  # Le profil de base (poids = 1) ne peut jamais être complètement écrasé
+  # par les profils landuse, même si p_ind + p_urb > 1.
   
-  # Volume final = profil sectoriel × taille relative × échelle nationale × bruit
-  # sum(TAILLE_ZONE) normalise pour que la somme des parts soit cohérente avec l'échelle
-  offre_zones[i,]   <- profil_o * taille * echelle_offre   / sum(TAILLE_ZONE) 
-  demande_zones[i,] <- profil_d * taille * echelle_demande / sum(TAILLE_ZONE) 
+  denominateur_o <- 1 + p_ind + p_urb
+  denominateur_d <- 1 + p_ind + p_urb
+  
+  profil_o_final <- (profil_o_base                    * 1     +
+                       PROFIL_OFFRE_LANDUSE_INDUSTRIEL   * p_ind +
+                       PROFIL_OFFRE_LANDUSE_URBAIN       * p_urb) / denominateur_o
+  
+  profil_d_final <- (profil_d_base                    * 1     +
+                       PROFIL_DEMANDE_LANDUSE_INDUSTRIEL * p_ind +
+                       PROFIL_DEMANDE_LANDUSE_URBAIN     * p_urb) / denominateur_d
+  
+  # ── Volume final = profil × taille × échelle nationale ────────────────────
+  # taille          : poids économique relatif de la zone (Kigali = 1.0)
+  # echelle_offre   : volume total échangeable à l'échelle nationale (M USD)
+  # sum(TAILLE_ZONE): normalisation pour que la somme des parts fasse 1
+  # Pas de bruit aléatoire : l'hétérogénéité est entièrement portée par
+  # la composition landuse, ce qui est plus défendable empiriquement.
+  offre_zones[i,]   <- profil_o_final * taille * echelle_offre   / sum(TAILLE_ZONE)
+  demande_zones[i,] <- profil_d_final * taille * echelle_demande / sum(TAILLE_ZONE)
 }
-
 
 # ── Stockage dans DuckDB en format long ───────────────────────────────────────
 # Format long (1 ligne = 1 zone × 1 secteur) plus adapté aux jointures SQL
-# que les matrices R carrées (1 ligne = 1 zone, 1 colonne = 1 secteur)
-# rownames_to_column() : les noms de lignes (zones) deviennent une colonne "zone".
-# pivot_longer() : chaque colonne-secteur devient une ligne.
 offre_long_df <- as.data.frame(offre_zones) %>%
   rownames_to_column("zone") %>%
-  pivot_longer(-zone, names_to="secteur", values_to="offre_musd")
+  pivot_longer(-zone, names_to = "secteur", values_to = "offre_musd")
 duck_write(offre_long_df, "offre_zones")
 
 demande_long_df <- as.data.frame(demande_zones) %>%
   rownames_to_column("zone") %>%
-  pivot_longer(-zone, names_to="secteur", values_to="demande_musd")
+  pivot_longer(-zone, names_to = "secteur", values_to = "demande_musd")
 duck_write(demande_long_df, "demande_zones")
 
 # Bilan par zone calculé directement en SQL
@@ -3572,7 +3604,6 @@ recap_zones <- duck_query("
 ")
 
 cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
-
 
 # ==============================================================================
 # VII.3 : Modèle gravitaire
