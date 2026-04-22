@@ -3523,6 +3523,21 @@ if (!cache_landuse_valide) {
 
 cat("✓ Composition landuse calculée\n\n")
 
+taille_default <- 0.10  # Valeur par défaut pour les zones OSM
+
+tailles_toutes_zones <- sapply(
+  noeuds_entreposage$warehouse_name,
+  function(nom) {
+    t <- TAILLE_ZONE[nom]
+    if (is.na(t)) taille_default else t   
+  }
+)
+somme_tailles <- sum(tailles_toutes_zones)
+
+cat("  Somme des tailles (", n_warehouses, "zones) :", round(somme_tailles, 2), "\n")
+cat("  dont manuelles :", round(sum(TAILLE_ZONE), 2), "\n")
+cat("  dont OSM (défaut) :", round(somme_tailles - sum(TAILLE_ZONE), 2), "\n\n")
+
 # ── Modification des profils selon la composition landuse ─────────────────────
 # Principe : plus une zone est industrielle, plus son profil d'offre favorise
 # l'Industrie et la Construction ; plus elle est urbaine, plus elle favorise
@@ -3532,7 +3547,7 @@ for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
   type_zone <- noeuds_entreposage$warehouse_type[i]
   taille    <- TAILLE_ZONE[nom_zone]
-  if (is.na(taille)) taille <- 0.10    # Valeur par défaut pour les zones OSM
+  if (is.na(taille)) taille <- taille_default    
   
   # ── Récupération du profil de base selon le type de zone ──────────────────
   # C'est l'identité structurelle de la zone : une frontière reste une frontière
@@ -3557,14 +3572,16 @@ for (i in 1:n_warehouses) {
   # Le profil de base (poids = 1) ne peut jamais être complètement écrasé
   # par les profils landuse, même si p_ind + p_urb > 1.
   
-  denominateur_o <- 1 + p_ind + p_urb
-  denominateur_d <- 1 + p_ind + p_urb
+  poids_base <- 1
   
-  profil_o_final <- (profil_o_base                    * 1     +
+  denominateur_o <- poids_base + p_ind + p_urb
+  denominateur_d <- poids_base + p_ind + p_urb
+  
+  profil_o_final <- (profil_o_base                    * poids_base     +
                        PROFIL_OFFRE_LANDUSE_INDUSTRIEL   * p_ind +
                        PROFIL_OFFRE_LANDUSE_URBAIN       * p_urb) / denominateur_o
   
-  profil_d_final <- (profil_d_base                    * 1     +
+  profil_d_final <- (profil_d_base                    * poids_base     +
                        PROFIL_DEMANDE_LANDUSE_INDUSTRIEL * p_ind +
                        PROFIL_DEMANDE_LANDUSE_URBAIN     * p_urb) / denominateur_d
   
@@ -3574,8 +3591,8 @@ for (i in 1:n_warehouses) {
   # sum(TAILLE_ZONE): normalisation pour que la somme des parts fasse 1
   # Pas de bruit aléatoire : l'hétérogénéité est entièrement portée par
   # la composition landuse, ce qui est plus défendable empiriquement.
-  offre_zones[i,]   <- profil_o_final * taille * echelle_offre   / sum(TAILLE_ZONE)
-  demande_zones[i,] <- profil_d_final * taille * echelle_demande / sum(TAILLE_ZONE)
+  offre_zones[i,]   <- profil_o_final * taille * echelle_offre   / somme_tailles
+  demande_zones[i,] <- profil_d_final * taille * echelle_demande / somme_tailles
 }
 
 # ── Stockage dans DuckDB en format long ───────────────────────────────────────
