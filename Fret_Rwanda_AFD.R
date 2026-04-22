@@ -3361,9 +3361,6 @@ PART_ECHANGEABLE <- 0.35
 echelle_offre    <- sum(production_totale) * PART_ECHANGEABLE
 echelle_demande  <- sum(demande_finale)    * PART_ECHANGEABLE
 
-# Graine différente de la Partie 4 pour des bruits indépendants
-set.seed(456)
-
 # Génération des matrices offre et demande (lignes = zones, colonnes = secteurs)
 # matrix(0, n, m) : crée une matrice de zéros de dimensions n×m.
 # dimnames : noms des lignes (zones) et colonnes (secteurs) pour lisibilité.
@@ -3424,8 +3421,8 @@ calc_part_landuse <- function(buffer_geom, zones_sf) {
   if (nrow(intersection) == 0) return(0)
   
   # Calcul de l'aire totale des fragments d'intersection en mètres carrés.
-  # st_area() retourne un objet "units" (avec unité m²) ; as.numeric() le
-  # convertit en nombre ordinaire pour les opérations arithmétiques.
+  # st_area() calcule l'aire de chaque polygone résultant de l'intersectionen m² ;
+  # as.numeric() le convertit en nombre ordinaire pour les opérations arithmétiques.
   # sum() additionne toutes les surfaces si plusieurs polygones se chevauchent
   # avec le buffer.
   aire_intersection <- sum(as.numeric(st_area(intersection)), na.rm = TRUE)
@@ -3507,10 +3504,6 @@ for (i in 1:n_warehouses) {
   taille    <- TAILLE_ZONE[nom_zone]
   if (is.na(taille)) taille <- 0.10
   
-  # runif(N, 0.8, 1.2) : N nombres aléatoires uniformément distribués entre 0.8 et 1.2
-  bruit_o <- runif(N_SECTEURS, 0.80, 1.20)
-  bruit_d <- runif(N_SECTEURS, 0.80, 1.20)
-  
   # Profil de base selon le type de zone
   profil_o <- PROFILS_OFFRE[[type_zone]]
   profil_d <- PROFILS_DEMANDE[[type_zone]]
@@ -3545,8 +3538,8 @@ for (i in 1:n_warehouses) {
   
   # Volume final = profil sectoriel × taille relative × échelle nationale × bruit
   # sum(TAILLE_ZONE) normalise pour que la somme des parts soit cohérente avec l'échelle
-  offre_zones[i,]   <- profil_o * taille * echelle_offre   / sum(TAILLE_ZONE) * bruit_o
-  demande_zones[i,] <- profil_d * taille * echelle_demande / sum(TAILLE_ZONE) * bruit_d
+  offre_zones[i,]   <- profil_o * taille * echelle_offre   / sum(TAILLE_ZONE) 
+  demande_zones[i,] <- profil_d * taille * echelle_demande / sum(TAILLE_ZONE) 
 }
 
 
