@@ -3640,8 +3640,8 @@ cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 #   O_i^s             = offre du secteur s en zone i
 #   D_j^s             = demande du secteur s en zone j
 #   F_ij              = facteur de friction = C_ij^(-beta)
-#   C_ij              = coût généralisé de transport (USD) entre i et j
-#   C_prebordure_ij^s = coût généralisé de transport (USD) entre i et j lors i est une ville frontalière (intègre le coût de transport intra-pays frontaliers)
+#   C_ij              = coût généralisé de transport (USD / tonne) entre i et j
+#   C_prebordure_ij^s = coût généralisé de transport (USD / tonne) entre i et j lorsque i est une ville frontalière (intègre le coût de transport intra-pays frontaliers)
 #   beta_s            = paramètre de friction (sensibilité au coût) par secteur
 #   K^s               = constante de calibration par secteur
 #
@@ -3728,7 +3728,7 @@ for (i in seq_len(n_warehouses)) {
   # Récupérer le pays de ce point frontière
   pays_zone <- entrepots_frontiere$pays[
     entrepots_frontiere$warehouse_name == nom_zone
-  ]
+    ]
   if (length(pays_zone) == 0 || is.na(pays_zone)) next
   
   # Récupérer les coûts pré-frontière pour ce pays
@@ -3757,9 +3757,7 @@ flux_gravitaire <- list()   # Matrice de flux par secteur (M USD)
 # portent le même nom (ex : deux zones OSM appelées "Kigali").
 # make.unique() règle ce problème une fois pour toutes ici, ce qui évite
 # les erreurs "must have unique names" lors de tous les pivot_longer(),
-# rownames_to_column() et write.csv() qui utilisent flux_total plus loin
-# (Partie VIII.1, VIII.2, VIII.3). Sans cette correction, il faudrait
-# appliquer make.unique() manuellement à chaque utilisation de flux_total.
+# rownames_to_column() et write.csv() qui utilisent flux_total plus loin.
 noms_zones_uniques <- make.unique(noeuds_entreposage$warehouse_name, sep = "_")
 
 flux_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
@@ -3781,7 +3779,7 @@ for (s in SECTEURS) {
   D_s <- demande_zones[, s]
   
   # Flux gravitaire brut : T_ij = O_i * D_j * F_ij
-  # outer(x, y) : produit extérieur — crée une matrice n×m où élément [i,j] = x[i] * y[j]
+  # outer(x, y) : produit extérieur — crée une matrice n×m où chaque élément [i,j] = x[i] * y[j]
   flux_brut <- outer(O_s, D_s) * friction
   diag(flux_brut) <- 0  # Une zone ne peut pas s'échanger avec elle-même
   
