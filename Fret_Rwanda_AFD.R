@@ -3938,7 +3938,7 @@ tonnage_total <- sum(flux_tonnes_total)
 cat("  Tonnage total modélisé:",
     format(round(tonnage_total), big.mark = " "), "tonnes\n\n")
 
-# ── ÉTAPE 2 : Pré-filtrage des paires OD à traiter ───────────────────────────
+# ── ÉTAPE 2 : Pré-filtrage des paires OD à traiter ────────────────────────────
 # Plutôt que de boucler sur n_warehouses² paires puis de filtrer par seuil,
 # on construit d'abord la liste des paires pertinentes. Ça permet aussi
 # d'avoir une barre de progression exacte et de mieux répartir les gc().
