@@ -4008,10 +4008,43 @@ paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
 # On exclut la diagonale (i == j)
 paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
 
+# ── Diagnostic du filtre par seuil ───────────────────────────────────────
+# On calcule le nombre de paires exclues par le seuil SEUIL_FLUX_TONNES
+# pour vérifier que le filtre n'élimine pas trop de flux économiquement
+# significatifs. Une paire exclue = flux trop faible pour être affecté
+# au réseau routier, mais qui contribue quand même au tonnage total.
+
+# Toutes les paires hors diagonale (i ≠ j), sans filtre de seuil
+toutes_paires <- which(flux_tonnes_total > 0, arr.ind = TRUE)
+toutes_paires <- toutes_paires[toutes_paires[, 1] != toutes_paires[, 2], ]
+
+# Paires sous le seuil = toutes les paires actives MOINS celles retenues
+n_paires_sous_seuil <- nrow(toutes_paires) - nrow(paires_actives)
+
+# Tonnage total des paires exclues (pour juger de leur poids économique)
+tonnage_exclu <- sum(flux_tonnes_total[toutes_paires]) - 
+  sum(flux_tonnes_total[paires_actives])
+tonnage_total_avant_filtre <- sum(flux_tonnes_total[toutes_paires])
+
+cat("── Diagnostic du filtre seuil (", SEUIL_FLUX_TONNES, "tonnes) ──────────\n")
+flush.console()
+cat("  Paires totales (flux > 0)  :", nrow(toutes_paires), "\n")
+flush.console()
+cat("  Paires retenues (> seuil)  :", nrow(paires_actives), "\n")
+flush.console()
+cat("  Paires exclues (< seuil)   :", n_paires_sous_seuil,
+    "(", round(n_paires_sous_seuil / nrow(toutes_paires) * 100, 1), "%)\n")
+flush.console()
+cat("  Tonnage exclu              :", format(round(tonnage_exclu), big.mark = " "),
+    "tonnes (", round(tonnage_exclu / tonnage_total_avant_filtre * 100, 2), 
+    "% du total)\n\n")
+flush.console()
+
 n_paires <- nrow(paires_actives)
 cat("  Paires OD à traiter :", format(n_paires, big.mark = " "),
     "(sur", format(n_warehouses^2 - n_warehouses, big.mark = " "),
     "possibles)\n\n")
+flush.console()
 
 # ── ÉTAPE 4 : Préparation des matrices de résultats ──────────────────────────
 # Tableau 3D (arêtes × véhicules × secteurs) pour conserver l'information sectorielle.
@@ -4031,14 +4064,17 @@ paires_non_connectees <- 0
 # (évite l'accès répété à E(graphe_multimodal)$weight qui est coûteux)
 poids_mm <- igraph::E(graphe_multimodal)$weight
 
-# ── ÉTAPE 5 : Boucle principale par zone origine ─────────────────────────────
+# ── ÉTAPE 5 : Boucle principale par zone origine ──────────────────────────────
 # On parcourt les zones origine une par une. Pour chaque origine i, on calcule
 # en UNE SEULE fois les distances vers toutes les destinations (bien plus
 # efficace qu'une requête par paire).
 
 cat("Affectation du fret au réseau (All-or-Nothing multi-modal)...\n")
 
-# Pré-calcul : indices globaux de toutes les destinations dans les 3 couches
+# targets_all_global est un vecteur contenant les indices des nœuds-entrepôts
+# dans le graphe multi-modal, pour chaque couche véhicule. Par exemple, si
+# l'entrepôt A est au nœud 5 du réseau physique, il apparaît 3 fois :
+# une fois par couche véhicule : targets_all_global = (5,..., 1005,..., 2005,...).
 targets_all_global <- as.vector(sapply(
   seq_len(n_vehicules),
   function(v) node_multi(v, warehouse_nodes_base)
@@ -4046,10 +4082,18 @@ targets_all_global <- as.vector(sapply(
 
 # On regroupe les paires actives par origine pour traiter toute une origine
 # en une passe Dijkstra.
+# split(x, f) découpe le vecteur x en morceaux, un par valeur unique de f
+# paires_par_origine = list(
+#  "1" = c(2, 3, 5),    ← depuis l'origine 1, les destinations sont 2, 3 et 5
+#  "2" = c(1, 4),       ← depuis l'origine 2, les destinations sont 1 et 4
+#  "3" = c(1),          ← depuis l'origine 3, la destination est 1
+#  ...)
 paires_par_origine <- split(
   paires_actives[, 2],       # destinations
   paires_actives[, 1]        # origines (clé du split)
 )
+# Vecteur de l'indice des noeuds qui ont une destination après filtrage (si tous 
+# ont au moins une destination, origines_a_traiter = (1,2,...,n_warehouse))
 origines_a_traiter <- as.integer(names(paires_par_origine))
 
 n_origines <- length(origines_a_traiter)
@@ -4073,8 +4117,8 @@ for (idx_i in seq_along(origines_a_traiter)) {
     function(v) node_multi(v, warehouse_nodes_base[i])
   ))
   
-  # Dijkstra en une passe : depuis les 3 sources vers toutes les destinations.
-  # Résultat : matrice 3 × (n_warehouses * n_vehicules)
+  # Dijkstra en une passe : depuis les n_vehicules sources vers toutes les destinations.
+  # Résultat : matrice n_vehicules × (n_warehouses × n_vehicules)
   dists_all <- igraph::distances(
     graphe_multimodal,
     v       = sources_i,
@@ -4091,7 +4135,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
     # ── Dijkstra : calcul du chemin optimal (une seule fois pour la paire i,j) ──
     # On cherche le chemin de moindre coût entre i et j, indépendamment
     # de la nature de la marchandise. Ce chemin sera ensuite utilisé pour
-    # ventiler les volumes de TOUS les secteurs — c'est l'hypothèse centrale :
+    # ventiler les volumes de TOUS les secteurs :
     # le routage physique ne dépend pas du type de marchandise, seulement
     # des coûts de transport (surface, pente, véhicule).
     # Cette hypothèse est cohérente avec la structure du modèle : les
@@ -4128,7 +4172,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
       next
     }
     
-    # ── Identification des arêtes physiques valides sur ce chemin ────────────
+    # ── Identification des arêtes physiques valides sur ce chemin ─────────────
     # On filtre les arêtes "route" (pas les transbordements entre véhicules)
     # et on récupère leur indice physique et leur véhicule associé.
     edges_valides <- edges_path_mm[edges_path_mm <= max_idx_mm]
@@ -4157,7 +4201,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
     veh_id_vec   <- veh_id_vec[valides]
     col_veh_vec  <- match(veh_id_vec, VEHICULES_IDS$vehicule_id)
     
-    # ── Ventilation sectorielle sur le chemin trouvé ─────────────────────────
+    # ── Ventilation sectorielle sur le chemin trouvé ──────────────────────────
     # Le chemin est le même pour tous les secteurs (hypothèse de routage unique).
     # On affecte maintenant le volume de CHAQUE secteur séparément sur ce chemin.
     # Cela permet de savoir, arête par arête, combien de tonnes d'Agriculture,
@@ -4189,9 +4233,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
   # Nettoyage explicite de dists_all avant l'itération suivante
   rm(dists_all)
   
-  # ### FIX : gc() à chaque itération pour éviter l'accumulation
-  # Le coût de gc() est négligeable (~50-100ms) comparé à Dijkstra (~1-5s),
-  # mais la libération continue évite les pics de RAM qui font crasher R.
+  # gc() nettoie la RAM à chaque itération pour éviter les pics de RAM qui font crasher R.
   if (idx_i %% 5 == 0) {
     invisible(gc(verbose = FALSE))
   }
