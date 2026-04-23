@@ -4199,8 +4199,24 @@ for (idx_i in seq_along(origines_a_traiter)) {
   pb_aff$tick()
 }
 
-# Volume total toutes couches confondues
-volume_trafic <- rowSums(volume_trafic_mm)
+# ── Reconstruction des matrices agrégées pour compatibilité avec la suite ──
+# On recalcule les totaux par véhicule et le total global en sommant
+# sur la dimension sectorielle (3ème dimension du tableau 3D).
+# apply(X, c(1,2), sum) : pour chaque combinaison (arête, véhicule),
+# somme sur tous les secteurs → redonne une matrice 2D comme avant.
+volume_trafic_mm  <- apply(volume_trafic_mm_s, c(1, 2), sum)
+volume_trafic     <- rowSums(volume_trafic_mm)
+
+# ── Table sectorielle par arête pour export ───────────────────────────────
+# On calcule aussi le volume total par secteur sur chaque arête,
+# toutes couches véhicule confondues. C'est la donnée la plus utile
+# pour les analyses sectorielles en aval (quelle route porte quel secteur ?).
+# apply(X, c(1,3), sum) : pour chaque combinaison (arête, secteur),
+# somme sur tous les véhicules → matrice n_aretes × N_SECTEURS
+volume_par_secteur <- apply(volume_trafic_mm_s, c(1, 3), sum)
+# On convertit en data.frame pour faciliter l'export CSV
+volume_par_secteur_df <- as.data.frame(volume_par_secteur)
+colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
 
 cat("\n✓ Affectation multi-modale terminée\n")
 cat("  Paires traitées      :", paires_traitees, "\n")
@@ -4829,6 +4845,20 @@ st_write(aretes_fret_export,
          file.path(DIR_OUTPUT, "reseau_rwanda_avec_fret.gpkg"),
          delete_dsn = TRUE, quiet = TRUE)
 cat("✓ GeoPackage avec volumes fret exporté\n")
+
+# Export du détail sectoriel par arête
+# Ce fichier permet de répondre à des questions comme :
+# "Quelle part du trafic sur la RN1 est de l'Agriculture ?"
+aretes_fret_sectoriel <- aretes_fret_export %>%
+  st_drop_geometry() %>%
+  bind_cols(volume_par_secteur_df)
+
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM aretes_fret_sectoriel) TO '",
+  file.path(DIR_OUTPUT, "volumes_fret_par_secteur.csv"),
+  "' (FORMAT CSV, HEADER)"
+))
+cat("✓ Export sectoriel par arête sauvegardé\n")
 
 ################################################################################
 # PARTIE IX — ANALYSE DE VULNÉRABILITÉ ET DE CONTOURNEMENT
