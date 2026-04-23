@@ -3850,7 +3850,6 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 # VIII.1 : Conversion et affectation All-or-Nothing
 # VERSION OPTIMISÉE MÉMOIRE pour Onyxia SSP Cloud
 #
-# Modifications par rapport à la version originale :
 #   1. Nettoyage explicite des objets intermédiaires devenus inutiles
 #   2. gc() plus agressif (à chaque itération au lieu de toutes les 10)
 #   3. Remplacement de shortest_paths(output="epath") par une reconstruction
@@ -3861,10 +3860,6 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 # ── ÉTAPE 0 : Nettoyage agressif de la mémoire avant de commencer ────────────
 # On supprime tous les objets intermédiaires qui ne serviront plus.
-# La Partie VIII n'a besoin que de : reseau_rwanda, graphe_multimodal,
-# flux_gravitaire, TONNES_PAR_musd, n_warehouses, n_vehicules, n_aretes_physiques,
-# VEHICULES_IDS, warehouse_nodes_base, noms_zones_uniques, lookup_*,
-# noeuds_entreposage, node_multi, SECTEURS, od_long
 
 cat("── Nettoyage mémoire avant Partie VIII.1 ──────────────────────────────\n")
 
@@ -4019,11 +4014,14 @@ cat("  Paires OD à traiter :", format(n_paires, big.mark = " "),
     "possibles)\n\n")
 
 # ── ÉTAPE 4 : Préparation des matrices de résultats ──────────────────────────
-volume_trafic_mm <- matrix(
+# Tableau 3D (arêtes × véhicules × secteurs) pour conserver l'information sectorielle.
+# Chaque "tranche" du tableau correspond à un secteur économique.
+# Exemple de lecture : volume_trafic_mm_s[500, "camion_moyen", "Agriculture"]
+# = tonnes d'Agriculture transportées par camion moyen sur l'arête n°500
+volume_trafic_mm_s <- array(
   0,
-  nrow = n_aretes_physiques,
-  ncol = n_vehicules,
-  dimnames = list(NULL, VEHICULES_IDS$vehicule_id)
+  dim      = c(n_aretes_physiques, n_vehicules, N_SECTEURS),
+  dimnames = list(NULL, VEHICULES_IDS$vehicule_id, SECTEURS)
 )
 
 paires_traitees       <- 0
@@ -4090,26 +4088,31 @@ for (idx_i in seq_along(origines_a_traiter)) {
   
   for (j in destinations_i) {
     
-    flux_ij <- flux_tonnes_total[i, j]
+    # ── Dijkstra : calcul du chemin optimal (une seule fois pour la paire i,j) ──
+    # On cherche le chemin de moindre coût entre i et j, indépendamment
+    # de la nature de la marchandise. Ce chemin sera ensuite utilisé pour
+    # ventiler les volumes de TOUS les secteurs — c'est l'hypothèse centrale :
+    # le routage physique ne dépend pas du type de marchandise, seulement
+    # des coûts de transport (surface, pente, véhicule).
+    # Cette hypothèse est cohérente avec la structure du modèle : les
+    # différences sectorielles interviennent dans la GÉNÉRATION des flux
+    # (via beta et profils d'offre/demande) mais pas dans le ROUTAGE.
     
-    # Colonnes de dists_all correspondant à la destination j dans les 3 couches
-    cols_j <- j + (seq_len(n_vehicules) - 1) * n_warehouses
-    
+    cols_j   <- j + (seq_len(n_vehicules) - 1) * n_warehouses
     min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
+    
     if (is.infinite(min_cout)) {
       paires_non_connectees <- paires_non_connectees + 1
       next
     }
     
-    # Localisation du minimum dans la sous-matrice 3×3
+    # Identification de la meilleure combinaison de couches véhicule
     best_idx_mat <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)
     if (!is.matrix(best_idx_mat)) best_idx_mat <- matrix(best_idx_mat, nrow = 1)
     best_from <- sources_i[best_idx_mat[1, 1]]
     best_to   <- targets_all_global[cols_j[best_idx_mat[1, 2]]]
     
-    # Reconstruction du chemin.
-    # On garde shortest_paths car c'est le seul moyen propre d'avoir les arêtes,
-    # mais on libère path_obj immédiatement après usage.
+    # Reconstruction du chemin optimal (liste des arêtes empruntées)
     path_obj <- igraph::shortest_paths(
       graphe_multimodal,
       from    = best_from,
@@ -4118,16 +4121,16 @@ for (idx_i in seq_along(origines_a_traiter)) {
       output  = "epath"
     )
     edges_path_mm <- as.integer(path_obj$epath[[1]])
-    rm(path_obj)  ### FIX : libération explicite
+    rm(path_obj)
     
     if (length(edges_path_mm) == 0) {
       paires_non_connectees <- paires_non_connectees + 1
       next
     }
     
-    # ── VECTORISATION de l'affectation (remplace la boucle interne) ──
-    # Au lieu de boucler arête par arête, on filtre et on agrège en une passe.
-    # Filtrer : arêtes "route" valides uniquement (pas transbordement, pas vide)
+    # ── Identification des arêtes physiques valides sur ce chemin ────────────
+    # On filtre les arêtes "route" (pas les transbordements entre véhicules)
+    # et on récupère leur indice physique et leur véhicule associé.
     edges_valides <- edges_path_mm[edges_path_mm <= max_idx_mm]
     types_e       <- lookup_type[edges_valides]
     edges_routes  <- edges_valides[types_e == "route"]
@@ -4140,22 +4143,44 @@ for (idx_i in seq_along(origines_a_traiter)) {
     idx_phys_vec <- lookup_physique[edges_routes]
     veh_id_vec   <- lookup_vehicule[edges_routes]
     
-    # On garde uniquement les arêtes avec indice physique valide et véhicule valide
+    # On ne garde que les arêtes avec un indice physique et un véhicule valides
     valides <- idx_phys_vec >= 1 &
       idx_phys_vec <= n_aretes_physiques &
       veh_id_vec != ""
     
-    if (any(valides)) {
-      idx_phys_vec <- idx_phys_vec[valides]
-      veh_id_vec   <- veh_id_vec[valides]
+    if (!any(valides)) {
+      paires_traitees <- paires_traitees + 1
+      next
+    }
+    
+    idx_phys_vec <- idx_phys_vec[valides]
+    veh_id_vec   <- veh_id_vec[valides]
+    col_veh_vec  <- match(veh_id_vec, VEHICULES_IDS$vehicule_id)
+    
+    # ── Ventilation sectorielle sur le chemin trouvé ─────────────────────────
+    # Le chemin est le même pour tous les secteurs (hypothèse de routage unique).
+    # On affecte maintenant le volume de CHAQUE secteur séparément sur ce chemin.
+    # Cela permet de savoir, arête par arête, combien de tonnes d'Agriculture,
+    # de Mines, d'Industrie, etc. y transitent — sans recalculer Dijkstra.
+    for (s in SECTEURS) {
       
-      # Mapping véhicule → colonne
-      col_veh_vec <- match(veh_id_vec, VEHICULES_IDS$vehicule_id)
+      # Volume en tonnes pour ce secteur entre i et j
+      # flux_gravitaire[[s]] : matrice n_zones × n_zones des flux en M USD
+      # TONNES_PAR_musd[s]   : facteur de conversion M USD → tonnes pour ce secteur
+      flux_ij_s <- flux_gravitaire[[s]][i, j] * TONNES_PAR_musd[s]
       
-      # Affectation vectorisée : pour chaque (arête, colonne), ajouter flux_ij
-      # On utilise cbind() pour indexer la matrice en 2D.
+      # Si le flux sectoriel est négligeable, on passe au secteur suivant
+      # pour ne pas alourdir inutilement les calculs
+      if (is.na(flux_ij_s) || flux_ij_s < 1) next
+      
+      # Affectation vectorisée : on ajoute le volume sectoriel à chaque arête
+      # du chemin, dans la colonne correspondant au véhicule utilisé,
+      # et dans la tranche correspondant au secteur s.
+      # cbind() construit un index à 2 colonnes pour adresser la matrice 2D
+      # (arête, véhicule) dans la tranche sectorielle.
       indices_2d <- cbind(idx_phys_vec, col_veh_vec)
-      volume_trafic_mm[indices_2d] <- volume_trafic_mm[indices_2d] + flux_ij
+      volume_trafic_mm_s[indices_2d, s] <-
+        volume_trafic_mm_s[indices_2d, s] + flux_ij_s
     }
     
     paires_traitees <- paires_traitees + 1
