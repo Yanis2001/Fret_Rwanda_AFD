@@ -3945,6 +3945,9 @@ cat("  Tonnage total modélisé:",
 
 SEUIL_FLUX_TONNES <- 50
 
+paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
+paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
+
 CACHE_AFFECTATION      <- file.path(DIR_OUTPUT, "affectation_cache.rds")
 cache_affectation_valide <- FALSE
 
@@ -3974,13 +3977,16 @@ if (file.exists(CACHE_AFFECTATION)) {
   cat("── Tentative de chargement du cache d'affectation ─────────────────────\n")
   cache_aff <- readRDS(CACHE_AFFECTATION)
   
-  # Le cache est valide si l'empreinte des entrées correspond.
-  # Une empreinte différente signifie qu'au moins une entrée a changé
-  # (PBF modifié, paramètres économiques modifiés, etc.).
+  # Le cache est valide SEULEMENT si :
+  #   1. l'empreinte correspond (entrées inchangées)
+  #   2. le tableau 3D est présent (ancien format sans volume_trafic_mm_s rejeté)
+  # Cette deuxième condition évite de charger un cache produit par une version
+  # antérieure du script qui ne sauvegardait pas la dimension sectorielle.
   if (!is.null(cache_aff$empreinte) &&
-      cache_aff$empreinte == empreinte_entrees) {
+      cache_aff$empreinte == empreinte_entrees &&
+      !is.null(cache_aff$volume_trafic_mm_s)) {
     
-    volume_trafic_mm         <- cache_aff$volume_trafic_mm
+    volume_trafic_mm_s       <- cache_aff$volume_trafic_mm_s   
     paires_traitees          <- cache_aff$paires_traitees
     paires_non_connectees    <- cache_aff$paires_non_connectees
     cache_affectation_valide <- TRUE
@@ -3991,7 +3997,7 @@ if (file.exists(CACHE_AFFECTATION)) {
     cat("    → Affectation ignorée (~2-5 min gagnées)\n\n")
     
   } else {
-    cat("  ⚠ Cache d'affectation invalide (entrées modifiées) — recalcul\n\n")
+    cat("  ⚠ Cache d'affectation invalide ou obsolète — recalcul\n\n")
   }
 }
 
@@ -4001,12 +4007,6 @@ if (file.exists(CACHE_AFFECTATION)) {
 if (!cache_affectation_valide) {
 
 # ── ÉTAPE 3 : Pré-filtrage des paires OD à traiter ────────────────────────────
-
-# which(..., arr.ind = TRUE) renvoie les indices (i, j) des éléments qui
-# satisfont la condition sous forme de matrice à 2 colonnes.
-paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
-# On exclut la diagonale (i == j)
-paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
 
 # ── Diagnostic du filtre par seuil ───────────────────────────────────────
 # On calcule le nombre de paires exclues par le seuil SEUIL_FLUX_TONNES
@@ -4269,35 +4269,13 @@ for (idx_i in seq_along(origines_a_traiter)) {
   pb_aff$tick()
 }
 
-# ── Reconstruction des matrices agrégées pour compatibilité avec la suite ──
-# On recalcule les totaux par véhicule et le total global en sommant
-# sur la dimension sectorielle (3ème dimension du tableau 3D).
-# apply(X, c(1,2), sum) : pour chaque combinaison (arête, véhicule),
-# somme sur tous les secteurs → redonne une matrice 2D comme avant.
-volume_trafic_mm  <- apply(volume_trafic_mm_s, c(1, 2), sum)
-volume_trafic     <- rowSums(volume_trafic_mm)
-
-# ── Table sectorielle par arête pour export ───────────────────────────────
-# On calcule aussi le volume total par secteur sur chaque arête,
-# toutes couches véhicule confondues. C'est la donnée la plus utile
-# pour les analyses sectorielles en aval (quelle route porte quel secteur ?).
-# apply(X, c(1,3), sum) : pour chaque combinaison (arête, secteur),
-# somme sur tous les véhicules → matrice n_aretes × N_SECTEURS
-volume_par_secteur <- apply(volume_trafic_mm_s, c(1, 3), sum)
-# On convertit en data.frame pour faciliter l'export CSV
-volume_par_secteur_df <- as.data.frame(volume_par_secteur)
-colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
-
-cat("\n✓ Affectation multi-modale terminée\n")
-cat("  Paires traitées      :", paires_traitees, "\n")
-cat("  Paires non connectées:", paires_non_connectees, "\n\n")
 
 # ── SAUVEGARDE DU CACHE ────────────────────────────────────────────────────
 cat("=== Sauvegarde du cache d'affectation ===\n")
 
 saveRDS(
   list(
-    volume_trafic_mm      = volume_trafic_mm,
+    volume_trafic_mm_s    = volume_trafic_mm_s,
     paires_traitees       = paires_traitees,
     paires_non_connectees = paires_non_connectees,
     empreinte             = empreinte_entrees,
@@ -4310,6 +4288,52 @@ cat("  ✓ Cache sauvegardé :", CACHE_AFFECTATION, "\n")
 cat("  → Au prochain lancement (sans changement), l'affectation sera ignorée\n\n")
 
 }  # fin du if (!cache_affectation_valide)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Reconstruction des matrices agrégées (exécutée DANS TOUS LES CAS)
+# ══════════════════════════════════════════════════════════════════════════════
+# Que l'on vienne du cache ou d'un recalcul complet, on dispose maintenant
+# de volume_trafic_mm_s (le tableau 3D complet [arête, véhicule, secteur]).
+# On en dérive les agrégations nécessaires pour la suite du script :
+#   - volume_trafic_mm   : total par (arête, véhicule), sommé sur secteurs
+#   - volume_trafic      : total par arête, sommé sur véhicules ET secteurs
+#   - volume_par_secteur : total par (arête, secteur), sommé sur véhicules
+
+# apply(X, MARGIN, FUN) : applique une fonction sur certaines dimensions d'un tableau.
+# MARGIN = c(1, 2) signifie "pour chaque combinaison des dimensions 1 et 2,
+# applique FUN sur la dimension restante (ici la 3e = secteurs)".
+# Résultat : une matrice 2D [arête, véhicule] avec la somme sur tous les secteurs.
+volume_trafic_mm  <- apply(volume_trafic_mm_s, c(1, 2), sum)
+
+# rowSums() : somme sur les colonnes, pour chaque ligne.
+# Appliqué à volume_trafic_mm (matrice [arête, véhicule]), ça donne le
+# total par arête, tous véhicules confondus.
+volume_trafic     <- rowSums(volume_trafic_mm)
+
+# Cette fois on somme sur la dimension 2 (véhicules) en gardant les
+# dimensions 1 (arêtes) et 3 (secteurs) → matrice [arête, secteur].
+volume_par_secteur <- apply(volume_trafic_mm_s, c(1, 3), sum)
+
+# Conversion en data.frame pour l'export CSV en Partie VIII.3.
+# Les noms de colonnes sont préfixés par "vol_t_" pour indiquer "volume en tonnes".
+volume_par_secteur_df <- as.data.frame(volume_par_secteur)
+colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
+
+# ── Sanity check : le tonnage affecté doit être cohérent ─────────────────────
+# Note : on somme sur toutes les dimensions de volume_trafic_mm_s (tableau 3D).
+# Le tonnage affecté sera plusieurs fois supérieur au tonnage attendu, car
+# chaque flux OD est compté sur TOUTES les arêtes de son chemin (un flux
+# de 100t qui emprunte 20 arêtes contribue 100×20 = 2000 tonnes-arêtes).
+# Ce qui compte, c'est que le ratio soit stable et qu'il n'y ait pas de NA.
+tonnage_affecte <- sum(volume_par_secteur)
+tonnage_attendu <- sum(flux_tonnes_total[paires_actives])
+
+cat("  Tonnage affecté au réseau (cumulé sur toutes les arêtes) :",
+    format(round(tonnage_affecte), big.mark = " "), "tonnes-arêtes\n")
+cat("  Tonnage OD attendu (paires > seuil) :",
+    format(round(tonnage_attendu), big.mark = " "), "tonnes\n")
+cat("  Ratio moyen (≈ longueur moyenne de chemin en arêtes) :",
+    round(tonnage_affecte / tonnage_attendu, 1), "\n")
 
 # Vérification : le tonnage affecté doit être proche du tonnage généré
 # pour les paires au-dessus du seuil (pas égal au total car on filtre
@@ -4609,7 +4633,7 @@ coords_X <- setNames(coords_lookup$X, coords_lookup$warehouse_name)
 coords_Y <- setNames(coords_lookup$Y, coords_lookup$warehouse_name)
 
 # ── Passage de la matrice de flux au format long (1 ligne = 1 paire OD) ───────
-# La matrice flux_total_fixe est en format "large" : N_zones lignes × N_zones
+# La matrice flux_total est en format "large" : N_zones lignes × N_zones
 # colonnes. pivot_longer() la transforme en format "long" : 1 ligne par paire
 # (Origine, Destination), ce qui est bien plus facile à filtrer et à joindre.
 # On filtre dès ici pour ne conserver que les flux significatifs
