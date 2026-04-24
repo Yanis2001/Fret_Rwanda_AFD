@@ -4579,6 +4579,452 @@ tmap_save(carte_fret,
 cat("✓ Carte trafic fret sauvegardée\n")
 
 
+# ============================================================
+# CARTES 4bis : Intensité du fret PAR SECTEUR
+# Une carte par secteur économique, même style que carte_trafic_fret
+# mais en filtrant le volume pour ne garder que les tonnes du secteur.
+# ============================================================
+# Ces cartes sont utiles pour identifier visuellement quelles parties du
+# réseau portent quel type de marchandise. Par exemple : l'Agriculture
+# devrait se concentrer autour des marchés ruraux, tandis que la
+# Construction devrait être concentrée autour de Kigali et des SEZ.
+# ============================================================
+
+cat("\nGénération des cartes sectorielles de trafic...\n")
+
+# On récupère les arêtes du réseau avec leur géométrie (on en a besoin
+# pour afficher sur la carte). On y attache ensuite les volumes sectoriels
+# stockés dans volume_par_secteur_df (construit en Partie VIII.1).
+# volume_par_secteur_df a une ligne par arête physique et une colonne
+# par secteur, nommée "vol_t_<Secteur>" (ex : "vol_t_Agriculture").
+aretes_geom_base <- reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf()
+
+# Sanity check : le nombre de lignes doit correspondre exactement entre
+# la géométrie du réseau et le tableau des volumes sectoriels.
+# Si ce n'est pas le cas, c'est qu'il y a eu un désalignement quelque part
+# (ex : filtrage d'arêtes après construction de volume_par_secteur_df).
+stopifnot(nrow(aretes_geom_base) == nrow(volume_par_secteur_df))
+
+# On attache les colonnes sectorielles à la couche géométrique.
+# bind_cols() accole les colonnes de volume_par_secteur_df (une par secteur)
+# à la table des arêtes. Résultat : chaque arête a maintenant 8 colonnes
+# supplémentaires (une par secteur) contenant le tonnage sectoriel.
+aretes_avec_secteurs <- bind_cols(aretes_geom_base, volume_par_secteur_df)
+
+# Boucle sur tous les secteurs pour générer une carte par secteur.
+# seq_along(SECTEURS) génère les indices 1, 2, ..., N_SECTEURS.
+for (s in SECTEURS) {
+  
+  # Nom de la colonne sectorielle dans le tableau
+  # (cohérent avec le préfixe "vol_t_" défini en Partie VIII.1)
+  col_secteur <- paste0("vol_t_", s)
+  
+  # Extraction des arêtes avec un trafic non nul pour CE secteur uniquement.
+  # .data[[col_secteur]] : syntaxe tidyverse pour utiliser une colonne dont
+  # le nom est stocké dans une variable (ici col_secteur).
+  # On convertit ensuite en variable lisible "vol_t" pour simplifier la suite.
+  aretes_fret_s <- aretes_avec_secteurs %>%
+    filter(.data[[col_secteur]] > 0) %>%
+    mutate(
+      vol_t     = as.numeric(.data[[col_secteur]]),
+      vol_log   = as.numeric(log10(vol_t + 1)),
+      lwd_val   = as.numeric(rescale(log10(vol_t + 1), to = c(0.5, 5)))
+    )
+  
+  # Si aucun trafic pour ce secteur (rare mais possible pour Services),
+  # on passe au secteur suivant sans générer de carte vide.
+  if (nrow(aretes_fret_s) == 0) {
+    cat("  ⚠", s, ": aucun trafic sectoriel, carte non générée\n")
+    next
+  }
+  
+  # Construction de la carte sur le même modèle que carte_trafic_fret,
+  # mais avec la variable vol_t au lieu de volume_tonnes.
+  carte_s <- fond_carte() +
+    
+    # Réseau de base en gris très clair (contexte géographique)
+    tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+    tm_lines(col = "#DDDDDD", lwd = 0.3) +
+    
+    # Arêtes avec trafic pour ce secteur
+    tm_shape(aretes_fret_s) +
+    tm_lines(
+      col        = "vol_t",
+      col.scale  = tm_scale_intervals(style = "quantile", n = 4,
+                                      values = PALETTE_FRET),
+      col.legend = tm_legend(title = paste0("Volume ", s, "\n(tonnes)")),
+      lwd        = "lwd_val",
+      lwd.scale  = tm_scale(values.range = c(0.4, 5)),
+      lwd.legend = tm_legend(show = FALSE)
+    ) +
+    
+    # Points des zones (mêmes couleurs que la carte globale)
+    tm_shape(coords_zones_sf) +
+    tm_dots(
+      fill        = "warehouse_type",
+      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
+      fill.legend = tm_legend(title = "Type de zone"),
+      size        = "taille_point",
+      size.scale  = tm_scale(values.range = c(0.3, 1.8)),
+      size.legend = tm_legend(show = FALSE)
+    ) +
+    
+    tm_title(paste0("Intensité du Trafic Fret — Secteur ", s,
+                    "\nModèle gravitaire - Rwanda")) +
+    tm_layout(legend.outside = TRUE, frame = TRUE) +
+    tm_scalebar(position = c("left", "bottom")) +
+    tm_compass(position  = c("right", "top"))
+  
+  # Sauvegarde avec un nom de fichier qui inclut le nom du secteur
+  # (ex : carte_trafic_fret_Agriculture.png)
+  nom_fichier_s <- paste0("carte_trafic_fret_", s, ".png")
+  tmap_save(
+    carte_s,
+    file.path(DIR_OUTPUT, nom_fichier_s),
+    width = 3000, height = 2400, dpi = 300
+  )
+  cat("  ✓", nom_fichier_s, "\n")
+}
+
+cat("✓", length(SECTEURS), "cartes sectorielles générées\n\n")
+
+
+# ============================================================
+# CARTE 4ter : Secteur DOMINANT par arête
+# Pour chaque arête, on identifie le secteur qui y transporte le plus
+# de tonnes et on colore l'arête selon ce secteur dominant.
+# ============================================================
+# Cette carte complète les cartes sectorielles individuelles en donnant
+# une vue synthétique : quelles routes sont "spécialisées" dans quel secteur ?
+# On verra par exemple que certaines routes sont dominées par l'Agriculture
+# (routes rurales vers marchés), d'autres par le Commerce (corridors
+# internationaux), d'autres par l'Industrie (proximité des SEZ).
+# ============================================================
+
+cat("Génération de la carte du secteur dominant...\n")
+
+# apply(X, MARGIN = 1, FUN) : applique FUN sur chaque ligne de la matrice.
+# which.max() retourne l'indice de la valeur maximale d'un vecteur.
+# Résultat : pour chaque arête (ligne), on obtient l'indice du secteur
+# (colonne) qui a le plus gros volume.
+# Exemple : si l'arête 5 a des volumes (10, 0, 500, 20, 0, 5, 0, 2) par secteur,
+# which.max() retourne 3 (Agro_industrie domine).
+idx_secteur_dominant <- apply(volume_par_secteur, 1, function(ligne) {
+  if (all(ligne == 0)) return(NA_integer_)   # Arête sans trafic → NA
+  which.max(ligne)
+})
+
+# Conversion de l'indice numérique vers le nom du secteur.
+# SECTEURS[NA] retourne NA, donc on garde les arêtes sans trafic en NA.
+secteur_dominant <- SECTEURS[idx_secteur_dominant]
+
+# Part du secteur dominant dans le trafic total de l'arête.
+# Utile pour distinguer les arêtes "spécialisées" (99% d'un seul secteur)
+# des arêtes "mixtes" (30-40% réparti sur plusieurs secteurs).
+# rowSums() : somme par ligne → total toutes catégories confondues.
+total_arete <- rowSums(volume_par_secteur)
+part_dominant <- ifelse(
+  total_arete > 0,
+  # mapply() applique une fonction à deux vecteurs en parallèle.
+  # Ici : pour chaque arête i, on prend volume_par_secteur[i, idx_dominant[i]]
+  mapply(function(i, j) if (is.na(j)) NA else volume_par_secteur[i, j],
+         seq_len(nrow(volume_par_secteur)),
+         idx_secteur_dominant) / total_arete * 100,
+  NA
+)
+
+# On attache ces deux colonnes à la géométrie
+aretes_dominant_sf <- aretes_geom_base %>%
+  mutate(
+    secteur_dominant = secteur_dominant,
+    part_dominant    = part_dominant
+  ) %>%
+  filter(!is.na(secteur_dominant))
+
+# Palette pour les secteurs (une couleur distincte par secteur).
+# RColorBrewer::brewer.pal(8, "Set2") donne 8 couleurs contrastées
+# adaptées à des catégories non ordonnées.
+PALETTE_SECTEURS <- setNames(
+  RColorBrewer::brewer.pal(N_SECTEURS, "Set2"),
+  SECTEURS
+)
+
+carte_dominant <- fond_carte() +
+  
+  # Réseau de base en gris clair
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col = "#EEEEEE", lwd = 0.3) +
+  
+  # Arêtes colorées par secteur dominant
+  # Largeur proportionnelle au volume total (pas sectoriel) pour garder
+  # l'information sur l'intensité globale.
+  tm_shape(aretes_dominant_sf) +
+  tm_lines(
+    col        = "secteur_dominant",
+    col.scale  = tm_scale(values = PALETTE_SECTEURS),
+    col.legend = tm_legend(title = "Secteur\ndominant"),
+    lwd        = 1.5
+  ) +
+  
+  tm_title("Secteur dominant par arête\n(secteur le plus représenté en tonnes)") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_dominant,
+  file.path(DIR_OUTPUT, "carte_secteur_dominant.png"),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ carte_secteur_dominant.png\n\n")
+
+
+# ============================================================
+# GRAPHIQUE : Top 20 des arêtes les plus chargées × composition sectorielle
+# Heatmap qui montre, pour les 20 arêtes au plus fort trafic total,
+# la répartition sectorielle du tonnage.
+# ============================================================
+# Ce graphique complète les cartes en quantifiant précisément la
+# composition du trafic sur les axes critiques. Utile pour identifier
+# les goulots d'étranglement : si une seule arête porte 30% des flux
+# d'Agriculture et 20% des flux de Commerce, sa défaillance aurait
+# un impact sectoriel multiple.
+# ============================================================
+
+cat("Génération de la heatmap top 20 arêtes × secteurs...\n")
+
+# Construction du tableau : une ligne par arête, colonnes = secteurs
+# On part de volume_par_secteur_df (construit en Partie VIII.1).
+top_aretes_df <- volume_par_secteur_df %>%
+  # Ajout d'une colonne avec l'indice de l'arête (pour pouvoir y faire
+  # référence plus tard si besoin) et la somme totale.
+  mutate(
+    arete_id    = row_number(),
+    total_t     = rowSums(across(starts_with("vol_t_")))
+  ) %>%
+  # On ne garde que les 20 arêtes au plus fort trafic total
+  arrange(desc(total_t)) %>%
+  slice_head(n = 20) %>%
+  # On récupère quelques attributs pour enrichir les labels
+  left_join(
+    aretes_geom_base %>%
+      st_drop_geometry() %>%
+      mutate(arete_id = row_number()) %>%
+      select(arete_id, name, road_type),
+    by = "arete_id"
+  ) %>%
+  # Création d'un label lisible : nom de la route si disponible, sinon ID
+  # coalesce(x, y) : renvoie x si non-NA, sinon y (évite d'afficher "NA")
+  mutate(
+    label = paste0(
+      coalesce(name, paste0("Arête #", arete_id)),
+      " (", road_type, ")"
+    ),
+    # On raccourcit les labels trop longs pour qu'ils rentrent dans le graphique
+    label = str_trunc(label, 40),
+    # Factor ordonné : l'ordre est fixé par total_t décroissant, donc le
+    # graphique sera trié automatiquement.
+    label = factor(label, levels = rev(label))  # rev() pour que le top soit en haut
+  )
+
+# Passage au format long pour ggplot (une ligne = une cellule de la heatmap)
+top_aretes_long <- top_aretes_df %>%
+  select(label, starts_with("vol_t_")) %>%
+  pivot_longer(
+    -label,
+    names_to  = "Secteur",
+    values_to = "Volume_t"
+  ) %>%
+  # On retire le préfixe "vol_t_" pour avoir un nom de secteur propre dans la légende
+  mutate(Secteur = str_remove(Secteur, "^vol_t_"))
+
+# Graphique : heatmap avec valeurs numériques affichées dans les cases
+g_top_aretes <- ggplot(top_aretes_long,
+                       aes(x = Secteur, y = label, fill = Volume_t)) +
+  geom_tile(color = "white", linewidth = 0.4) +
+  # Texte dans chaque case : volume en milliers de tonnes, format compact
+  geom_text(
+    aes(label = ifelse(Volume_t > 0,
+                       format(round(Volume_t / 1000, 1), nsmall = 1),
+                       "")),
+    size  = 2.8,
+    color = "black"
+  ) +
+  scale_fill_gradient(
+    low      = "#FFF7EC",
+    high     = "#7F0000",
+    na.value = "#F5F5F5",
+    name     = "Volume\n(tonnes)"
+  ) +
+  labs(
+    title    = "Top 20 des arêtes les plus chargées × composition sectorielle",
+    subtitle = "Volumes affichés en milliers de tonnes",
+    x        = "Secteur",
+    y        = NULL
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x   = element_text(angle = 45, hjust = 1),
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(color = "#666666"),
+    panel.grid    = element_blank()
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, "heatmap_top_aretes_secteurs.png"),
+  g_top_aretes,
+  width = 12, height = 9, dpi = 300
+)
+cat("  ✓ heatmap_top_aretes_secteurs.png\n\n")
+
+
+# ============================================================
+# GRAPHIQUE : Composition sectorielle × type de route
+# Barres empilées montrant, pour chaque type de route (motorway, trunk,
+# primary, secondary, tertiary, unclassified), la répartition
+# sectorielle du tonnage transporté.
+# ============================================================
+# Ce graphique répond à la question : "les différents secteurs utilisent-ils
+# les mêmes types d'infrastructure, ou y a-t-il une spécialisation ?".
+# On s'attend à voir :
+#   - Construction et Mines sur les routes primary/trunk (poids lourds)
+#   - Agriculture et Agro-industrie sur les routes tertiary/unclassified
+#     (dernier kilomètre rural, collecte)
+#   - Services et Commerce plus équilibrés
+# ============================================================
+
+cat("Génération du graphique composition sectorielle × type de route...\n")
+
+# On attache road_type à chaque arête, puis on agrège les tonnages
+# par (type de route, secteur).
+compo_par_type_route <- aretes_geom_base %>%
+  st_drop_geometry() %>%
+  mutate(arete_id = row_number()) %>%
+  select(arete_id, road_type) %>%
+  # Jointure avec les volumes sectoriels via l'indice de ligne
+  bind_cols(volume_par_secteur_df) %>%
+  # Passage au format long pour ggplot
+  pivot_longer(
+    starts_with("vol_t_"),
+    names_to  = "Secteur",
+    values_to = "Volume_t"
+  ) %>%
+  mutate(Secteur = str_remove(Secteur, "^vol_t_")) %>%
+  # Agrégation par (road_type, Secteur)
+  group_by(road_type, Secteur) %>%
+  summarise(Volume_t = sum(Volume_t, na.rm = TRUE), .groups = "drop") %>%
+  # On ne garde que les types de route avec au moins un peu de trafic
+  group_by(road_type) %>%
+  filter(sum(Volume_t) > 0) %>%
+  ungroup()
+
+# Calcul des parts sectorielles (chaque barre somme à 100%)
+compo_par_type_route <- compo_par_type_route %>%
+  group_by(road_type) %>%
+  mutate(
+    total_type = sum(Volume_t),
+    part_pct   = Volume_t / total_type * 100
+  ) %>%
+  ungroup()
+
+# Ordre des types de route : du plus haut niveau (motorway) au plus bas
+# (unclassified). factor() avec levels défini impose cet ordre sur l'axe X.
+ordre_road_type <- c("motorway", "trunk", "primary", "secondary",
+                     "tertiary", "unclassified")
+compo_par_type_route <- compo_par_type_route %>%
+  mutate(road_type = factor(road_type, levels = ordre_road_type))
+
+g_compo_route <- ggplot(compo_par_type_route,
+                        aes(x = road_type, y = part_pct, fill = Secteur)) +
+  geom_col(position = "stack", width = 0.7) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  labs(
+    title    = "Composition sectorielle du trafic par type de route",
+    subtitle = paste0("Part de chaque secteur dans le tonnage total transporté, ",
+                      "par niveau hiérarchique du réseau"),
+    x        = "Type de route",
+    y        = "Part sectorielle (%)",
+    fill     = "Secteur"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title    = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "#666666"),
+    axis.text.x   = element_text(angle = 20, hjust = 1)
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, "graphique_compo_secteurs_type_route.png"),
+  g_compo_route,
+  width = 11, height = 6, dpi = 300
+)
+cat("  ✓ graphique_compo_secteurs_type_route.png\n\n")
+
+
+# ============================================================
+# GRAPHIQUE : Distribution du volume par arête, par secteur (facet grid)
+# Histogrammes en échelle log pour montrer la concentration du trafic
+# au sein de chaque secteur.
+# ============================================================
+# Intérêt : un secteur dont le trafic est concentré sur très peu d'arêtes
+# (distribution très asymétrique) est plus vulnérable aux perturbations
+# que celui réparti largement. C'est un indicateur qualitatif de résilience.
+# L'axe X est en échelle log car la distribution du trafic routier est
+# typiquement très asymétrique (loi de puissance : quelques axes portent
+# l'essentiel du flux).
+# ============================================================
+
+cat("Génération des distributions de trafic par secteur...\n")
+
+distrib_secteurs <- volume_par_secteur_df %>%
+  mutate(arete_id = row_number()) %>%
+  pivot_longer(
+    starts_with("vol_t_"),
+    names_to  = "Secteur",
+    values_to = "Volume_t"
+  ) %>%
+  mutate(Secteur = str_remove(Secteur, "^vol_t_")) %>%
+  # On ne garde que les arêtes avec un trafic non nul
+  # (sinon log10(0) = -Inf et l'histogramme plante)
+  filter(Volume_t > 0)
+
+g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
+  geom_histogram(bins = 30, color = "white", linewidth = 0.2) +
+  # facet_wrap() : une sous-figure par secteur. scales = "free_y" permet à
+  # chaque sous-figure d'avoir sa propre échelle Y (certains secteurs ont
+  # beaucoup moins d'arêtes actives que d'autres).
+  facet_wrap(~ Secteur, scales = "free_y", ncol = 4) +
+  scale_x_log10(
+    labels = scales::label_number(big.mark = " "),
+    breaks = c(1, 10, 100, 1000, 10000, 100000)
+  ) +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title    = "Distribution du volume par arête, par secteur",
+    subtitle = paste0("Échelle log — une distribution étroite indique une ",
+                      "concentration du trafic sur quelques axes"),
+    x        = "Volume par arête (tonnes, échelle log)",
+    y        = "Nombre d'arêtes"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title    = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "#666666"),
+    strip.text    = element_text(face = "bold"),
+    axis.text.x   = element_text(angle = 30, hjust = 1)
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, "distribution_trafic_par_secteur.png"),
+  g_distrib,
+  width = 13, height = 7, dpi = 300
+)
+cat("  ✓ distribution_trafic_par_secteur.png\n\n")
+
+
 # ── Carte : part du camion lourd par arête ────────────────────────────────────
 aretes_avec_trafic <- reseau_rwanda %>%
   activate("edges") %>%
