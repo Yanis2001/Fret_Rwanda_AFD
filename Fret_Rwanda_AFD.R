@@ -4208,6 +4208,15 @@ for (idx_i in seq_along(origines_a_traiter)) {
     # de Mines, d'Industrie, etc. y transitent — sans recalculer Dijkstra.
     for (s in SECTEURS) {
       
+      # ── Indice numérique du secteur dans la 3e dimension du tableau ────────
+      # Le tableau volume_trafic_mm_s a pour dimensions :
+      #   [arête physique, véhicule, secteur]
+      # Pour l'indexer efficacement, on a besoin de l'indice ENTIER du secteur
+      # (1 pour "Agriculture", 2 pour "Mines", etc.) et pas de son nom texte.
+      # match(s, SECTEURS) retourne la position de s dans le vecteur SECTEURS.
+      # Exemple : match("Industrie", SECTEURS) → 4
+      idx_s <- match(s, SECTEURS)
+      
       # Volume en tonnes pour ce secteur entre i et j
       # flux_gravitaire[[s]] : matrice n_zones × n_zones des flux en M USD
       # TONNES_PAR_musd[s]   : facteur de conversion M USD → tonnes pour ce secteur
@@ -4217,14 +4226,33 @@ for (idx_i in seq_along(origines_a_traiter)) {
       # pour ne pas alourdir inutilement les calculs
       if (is.na(flux_ij_s) || flux_ij_s < 1) next
       
-      # Affectation vectorisée : on ajoute le volume sectoriel à chaque arête
-      # du chemin, dans la colonne correspondant au véhicule utilisé,
-      # et dans la tranche correspondant au secteur s.
-      # cbind() construit un index à 2 colonnes pour adresser la matrice 2D
-      # (arête, véhicule) dans la tranche sectorielle.
-      indices_2d <- cbind(idx_phys_vec, col_veh_vec)
-      volume_trafic_mm_s[indices_2d, s] <-
-        volume_trafic_mm_s[indices_2d, s] + flux_ij_s
+      # ── Affectation vectorisée sur un tableau 3D ───────────────────────────
+      # On veut ajouter flux_ij_s à TOUTES les cellules (a, v, s) où :
+      #   - a parcourt les arêtes physiques du chemin (idx_phys_vec)
+      #   - v parcourt les véhicules correspondants (col_veh_vec)
+      #   - s est fixé au secteur courant (idx_s)
+      #
+      # Pour indexer un tableau à N dimensions, on passe une matrice à N colonnes :
+      # chaque LIGNE de cette matrice = un triplet (arête, véhicule, secteur)
+      # qui désigne UNE cellule unique du tableau 3D.
+      #
+      # cbind(idx_phys_vec, col_veh_vec, idx_s) construit cette matrice :
+      #   - idx_phys_vec et col_veh_vec sont des vecteurs de même longueur
+      #     (autant que d'arêtes du chemin)
+      #   - idx_s est un scalaire : R le RECYCLE automatiquement pour qu'il
+      #     apparaisse sur chaque ligne
+      # Résultat : une matrice à 3 colonnes avec une ligne par arête du chemin.
+      indices_3d <- cbind(idx_phys_vec, col_veh_vec, idx_s)
+      
+      # volume_trafic_mm_s[indices_3d] : quand on passe une matrice à N colonnes
+      # à un tableau à N dimensions, R interprète CHAQUE LIGNE comme un jeu
+      # d'indices. C'est l'équivalent vectorisé de faire :
+      #   volume_trafic_mm_s[arete1, veh1, s] += flux_ij_s
+      #   volume_trafic_mm_s[arete2, veh2, s] += flux_ij_s
+      #   ...
+      # mais sans boucle R explicite, donc beaucoup plus rapide.
+      volume_trafic_mm_s[indices_3d] <-
+        volume_trafic_mm_s[indices_3d] + flux_ij_s
     }
     
     paires_traitees <- paires_traitees + 1
@@ -4282,6 +4310,19 @@ cat("  ✓ Cache sauvegardé :", CACHE_AFFECTATION, "\n")
 cat("  → Au prochain lancement (sans changement), l'affectation sera ignorée\n\n")
 
 }  # fin du if (!cache_affectation_valide)
+
+# Vérification : le tonnage affecté doit être proche du tonnage généré
+# pour les paires au-dessus du seuil (pas égal au total car on filtre
+# les flux < SEUIL_FLUX_TONNES).
+tonnage_affecte <- sum(volume_par_secteur)
+tonnage_attendu <- sum(flux_tonnes_total[paires_actives])
+
+cat("  Tonnage affecté au réseau :",
+    format(round(tonnage_affecte), big.mark = " "), "tonnes\n")
+cat("  Tonnage attendu (paires > seuil) :",
+    format(round(tonnage_attendu), big.mark = " "), "tonnes\n")
+cat("  Ratio affecté/attendu :",
+    round(tonnage_affecte / tonnage_attendu, 3), "\n")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SUITE : calculs rapides toujours exécutés (qu'on ait un cache ou non)
