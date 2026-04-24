@@ -1408,7 +1408,7 @@ carte_aretes_perdues <- fond_carte() +
   tm_dots(fill = "#CC0000", size = 0.2, fill_alpha = 0.5) +
   
   tm_title(paste0("Arêtes exclues de la composante géante\n(",
-                  round(nrow(aretes_perdues) / nrow(aretes_lisse %>% activate("edges") %>% st_as_sf()) * 100, 1),
+                  round(nrow(aretes_perdues) / nrow(aretes_lisse) * 100, 1),
                   "% du réseau)")) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
