@@ -4818,15 +4818,14 @@ top_aretes_df <- volume_par_secteur_df %>%
   # Création d'un label lisible : nom de la route si disponible, sinon ID
   # coalesce(x, y) : renvoie x si non-NA, sinon y (évite d'afficher "NA")
   mutate(
-    label = paste0(
+    label_raw = paste0(
       coalesce(name, paste0("Arête #", arete_id)),
       " (", road_type, ")"
     ),
-    # On raccourcit les labels trop longs pour qu'ils rentrent dans le graphique
-    label = str_trunc(label, 40),
-    # Factor ordonné : l'ordre est fixé par total_t décroissant, donc le
-    # graphique sera trié automatiquement.
-    label = factor(label, levels = rev(label))  # rev() pour que le top soit en haut
+    label_raw = str_trunc(label_raw, 40),
+    # Rendre les labels uniques avant de créer le factor
+    label = make.unique(label_raw, sep = " #"),
+    label = factor(label, levels = rev(label))
   )
 
 # Passage au format long pour ggplot (une ligne = une cellule de la heatmap)
@@ -5406,11 +5405,9 @@ aretes_fret_sectoriel <- aretes_fret_export %>%
   st_drop_geometry() %>%
   bind_cols(volume_par_secteur_df)
 
-dbExecute(con, paste0(
-  "COPY (SELECT * FROM aretes_fret_sectoriel) TO '",
-  file.path(DIR_OUTPUT, "volumes_fret_par_secteur.csv"),
-  "' (FORMAT CSV, HEADER)"
-))
+write.csv(aretes_fret_sectoriel,
+          file.path(DIR_OUTPUT, "volumes_fret_par_secteur.csv"),
+          row.names = FALSE)
 cat("✓ Export sectoriel par arête sauvegardé\n")
 
 ################################################################################
