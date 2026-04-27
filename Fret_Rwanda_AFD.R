@@ -3793,7 +3793,7 @@ cat("✓ Profils landuse définis\n\n")
 # Part du PIB qui "voyage" entre zones (le reste est consommé localement)
 # 35% est une hypothèse conservatrice pour un pays enclavé comme le Rwanda
 echelle_offre    <- sum(production_totale) * PART_ECHANGEABLE
-echelle_demande  <- sum(demande_finale)    * PART_ECHANGEABLE
+echelle_demande  <- sum(production_totale) * PART_ECHANGEABLE
 
 # Génération des matrices offre et demande (lignes = zones, colonnes = secteurs)
 # matrix(0, n, m) : crée une matrice de zéros de dimensions n×m.
