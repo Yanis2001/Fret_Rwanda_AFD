@@ -22,6 +22,42 @@
 ################################################################################
 
 # ==============================================================================
+# RESET COMPLET — Suppression de tous les caches
+# Mettre RESET_CACHES <- TRUE pour forcer un recalcul complet depuis zéro.
+# Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
+# ==============================================================================
+
+RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
+
+if (RESET_CACHES) {
+  
+  caches <- c(
+    file.path(DIR_OUTPUT, "reseau_corrige_cache.rds"),
+    file.path(DIR_OUTPUT, "pentes_cache.rds"),
+    file.path(DIR_OUTPUT, "landuse_cache.rds"),
+    file.path(DIR_OUTPUT, "od_cache.rds"),
+    file.path(DIR_OUTPUT, "affectation_cache.rds")
+  )
+  
+  cat("=== RESET COMPLET DES CACHES ===\n")
+  
+  for (f in caches) {
+    if (file.exists(f)) {
+      file.remove(f)
+      cat("  ✓ Supprimé :", basename(f), "\n")
+    } else {
+      cat("  — Absent  :", basename(f), "\n")
+    }
+  }
+  
+  cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
+  cat("  Temps de recalcul estimé : 3-5h selon la machine\n\n")
+  
+} else {
+  cat("  Caches conservés (RESET_CACHES = FALSE)\n\n")
+}
+
+# ==============================================================================
 # CONNEXION GIT
 # ==============================================================================
 
