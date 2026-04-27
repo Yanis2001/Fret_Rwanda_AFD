@@ -106,6 +106,344 @@ set.seed(123)
 
 cat("✓ Tous les packages sont chargés\n\n")
 
+################################################################################
+# PARAMÈTRES GLOBAUX DU MODÈLE
+# Tous les paramètres hard-codés du script sont centralisés ici.
+# Modifier ce bloc unique suffit à reconfigurer l'ensemble du modèle.
+################################################################################
+
+# ==============================================================================
+# P.1 : Chemins et fichiers
+# ==============================================================================
+
+DB_PATH        <- "reseau_rwanda.duckdb"   # Fichier DuckDB persistant
+DIR_OUTPUT     <- "outputs"                # Dossier de sortie de tous les fichiers
+chemin_pbf     <- "rwanda-260315.osm.pbf"  # Nom local du fichier PBF après téléchargement
+
+# Chemins MinIO (SSP Cloud)
+MINIO_BUCKET   <- "yanisdumas"
+MINIO_PBF_PATH <- "data/raw/rwanda-260315.osm.pbf"
+MINIO_BASE_URL <- "minio.lab.sspcloud.fr"
+
+# ==============================================================================
+# P.2 : Paramètres DEM (Modèle Numérique de Terrain)
+# ==============================================================================
+
+DEM_ZOOM          <- 9      # Niveau de zoom elevatr (~300 m/pixel) 
+DEM_ESPACEMENT_M  <- 100    # Pas d'échantillonnage le long des arêtes (mètres)
+DEM_ALTITUDE_MIN  <- 800    # Altitude minimale réaliste au Rwanda (m)
+DEM_ALTITUDE_MAX  <- 4600   # Altitude maximale réaliste au Rwanda (m)
+
+# Paramètres du DEM fictif (utilisé si le téléchargement SRTM échoue)
+DEM_FICTIF_ALT_EST      <- 1500   # Altitude de base côté Est (m)
+DEM_FICTIF_ALT_OUEST    <- 2300   # Altitude de base côté Ouest — dorsale Congo-Nil (m)
+DEM_FICTIF_BRUIT_SD     <- 150    # Écart-type du bruit gaussien simulant les collines (m)
+DEM_FICTIF_RESOLUTION_M <- 90     # Résolution du raster fictif (~comparable SRTM niveau 3)
+
+# ==============================================================================
+# P.3 : Zones urbaines et entrepôts
+# ==============================================================================
+
+# Types de landuse OSM considérés comme zones urbaines
+LANDUSE_URBAIN      <- c("residential", "commercial", "retail")
+
+# Seuil d'aire minimale pour les zones industrielles (km²)
+AIRE_MIN_INDUSTRIEL_KM2 <- 0.01
+
+# Seuil d'aire minimale pour les zones retail (km²)
+AIRE_MIN_RETAIL_KM2 <- 0.005
+
+# Seuil d'aire minimale pour les zones industrielles retenues comme entrepôts (km²)
+AIRE_MIN_ENTREPOT_INDUSTRIEL_KM2 <- 0.05
+
+# Seuil d'aire minimale pour les zones retail retenues comme entrepôts (km²)
+AIRE_MIN_ENTREPOT_RETAIL_KM2 <- 0.01
+
+# Rayon du buffer autour de chaque entrepôt pour le calcul de la composition landuse (m)
+BUFFER_ENTREPOT_M <- 2000
+
+# Distance maximale pour considérer deux entrepôts comme doublons (m)
+DISTANCE_DEDUP_VILLES_M     <- 3000
+DISTANCE_DEDUP_INDUSTRIEL_M <- 2000
+DISTANCE_DEDUP_RETAIL_M     <- 1000
+
+# Taille économique affectée par défaut aux entrepôts OSM (non manuels)
+taille_default <- 0.10
+
+# Buffer autour de la frontière nationale pour inclure les villes frontalières (m)
+BUFFER_FRONTIERE_VILLES_M <- 5000
+
+# ==============================================================================
+# P.4 : Paramètres du graphe et de Dijkstra
+# ==============================================================================
+
+# Seuil de longueur minimale d'une arête pour ne pas être considérée dégénérée (m)
+# Les arêtes en dessous de ce seuil sont supprimées après to_spatial_subdivision()
+SEUIL_LONGUEUR_ARETE_M <- 0.5
+
+# ==============================================================================
+# P.5 : Véhicule de référence et paramètres multi-modal
+# ==============================================================================
+
+# Véhicule utilisé par défaut pour la matrice OD et le modèle gravitaire
+VEHICULE_REFERENCE <- "camion_moyen"
+
+# ==============================================================================
+# P.6 : Paramètres du modèle économique
+# ==============================================================================
+
+# Secteurs économiques modélisés (ordre fixe — ne pas modifier sans recalculer A)
+SECTEURS <- c("Agriculture", "Mines", "Agro_industrie", "Industrie",
+              "Construction", "Commerce", "Transport", "Services")
+
+# Part du PIB considérée comme échangeable entre zones
+# (le reste est consommé localement et ne génère pas de fret interzonal)
+PART_ECHANGEABLE <- 0.35
+
+# Part de la valeur ajoutée qui constitue la demande finale
+PART_DEMANDE_FINALE <- 0.85
+
+# Paramètres de friction par secteur (beta du modèle gravitaire)
+# Beta élevé = très sensible au coût de transport (produits lourds/périssables)
+# Beta faible = peu sensible (haute valeur ajoutée, services quasi-immatériels)
+BETA_SECTEUR <- c(
+  Agriculture    = 2.2,
+  Mines          = 1.2,
+  Agro_industrie = 1.8,
+  Industrie      = 1.6,
+  Construction   = 2.5,
+  Commerce       = 1.7,
+  Transport      = 1.3,
+  Services       = 0.9
+)
+
+# ── Matrice des coefficients techniques A ─────────────────────────────────────
+# a[i,j] = proportion de la production du secteur j (colonne)
+# consommée comme intrant par le secteur i (ligne)
+#
+# Exemple de lecture :
+#   A["Agriculture","Agro_industrie"] = 0.45 → 45% des intrants de l'Agro-industrie
+#   proviennent de l'Agriculture (grains, fruits, légumes pour transformation)
+# matrix() crée une matrice à partir d'un vecteur de valeurs.
+# nrow/ncol : dimensions. byrow = TRUE : remplit ligne par ligne (pas colonne par colonne).
+# dimnames : noms des lignes et colonnes.
+A <- matrix(c(
+  # ← Secteur fournisseur (lignes) / Secteur consommateur (colonnes) →
+  # Agri  Mines AgroI Indus Const Comm  Trans Serv
+  0.08, 0.00, 0.45, 0.05, 0.01, 0.05, 0.02, 0.03,  # Agriculture
+  0.00, 0.05, 0.01, 0.08, 0.05, 0.00, 0.01, 0.00,  # Mines
+  0.05, 0.00, 0.08, 0.02, 0.00, 0.06, 0.03, 0.04,  # Agro-industrie
+  0.02, 0.03, 0.03, 0.06, 0.15, 0.03, 0.04, 0.02,  # Industrie
+  0.01, 0.02, 0.01, 0.02, 0.08, 0.02, 0.03, 0.05,  # Construction
+  0.04, 0.05, 0.06, 0.08, 0.05, 0.06, 0.05, 0.06,  # Commerce
+  0.03, 0.06, 0.04, 0.05, 0.06, 0.07, 0.06, 0.04,  # Transport
+  0.02, 0.02, 0.02, 0.03, 0.04, 0.06, 0.05, 0.08   # Services
+), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
+dimnames = list(SECTEURS, SECTEURS))
+
+# ── Production totale par secteur (millions USD, Rwanda 2022) ─────────────────
+# Calibrées sur Banque Mondiale : PIB Rwanda ~13 Md USD en 2022
+production_totale <- c(
+  Agriculture    = 2100,  # Café, thé, pyrèthre, cultures vivrières (principal secteur)
+  Mines          = 280,   # Coltan, cassitérite, wolfram (3T : exportations majeures)
+  Agro_industrie = 520,   # Transformation alimentaire, boissons, tabac
+  Industrie      = 380,   # Textiles, ciment, matériaux de construction
+  Construction   = 750,   # BTP, infrastructure (très actif : Vision 2050)
+  Commerce       = 1100,  # Commerce de gros et de détail
+  Transport      = 480,   # Transport routier, aérien, services logistiques
+  Services       = 2200   # Finance, tourisme, services publics, éducation, santé
+)
+
+# ── Facteurs de conversion valeur → masse (tonnes par million USD) ────────────
+# Ces facteurs permettent de convertir les flux monétaires (M USD) en tonnes physiques.
+# Un secteur à ratio élevé (Construction) génère beaucoup de tonnes par USD
+# (ciment, gravier = produits lourds et peu chers).
+# À l'inverse, les Services génèrent très peu de fret physique.
+TONNES_PAR_musd <- c(
+  Agriculture    = 8000,   # Produits bruts : lourds, faible valeur (bananes, céréales)
+  Mines          = 3000,   # Minerais : denses, valeur croissante avec la transformation
+  Agro_industrie = 4000,   # Produits transformés (huile, farine, sucre, conserves)
+  Industrie      = 2000,   # Produits manufacturés intermédiaires
+  Construction   = 10000,  # Ciment, gravier, acier : très lourds par rapport à la valeur
+  Commerce       = 1500,   # Mix de biens distribués (alimentaire, électronique, textile)
+  Transport      = 300,    # Services : peu de fret physique directement associé
+  Services       = 100     # Quasi-immatériel (finance, éducation, santé, conseil)
+)
+
+
+# Chaque zone d'entreposage est caractérisée par :
+#   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
+#   - un profil sectoriel de demande (ce qu'elle consomme/importe des autres zones)
+#   - une taille économique relative (Kigali Hub = référence à 1.0)
+#
+# Profils par type de zone :
+#   hub       → fort en Commerce, Transport, Services (Kigali = centre économique)
+#   sez       → fort en Industrie, Agro-industrie (production concentrée)
+#   frontiere → fort en Commerce transfrontalier, Mines (export international)
+#   ville     → profil équilibré, Commerce local dominant
+#   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
+
+
+# Profils d'offre (ce que chaque type de zone produit et offre au marché)
+# Chaque profil est un vecteur dont la somme des valeurs vaut 1 (100% de l'offre).
+# Les valeurs indiquent la part de chaque secteur dans l'offre totale de la zone.
+PROFILS_OFFRE <- list(
+  hub      = c(Agriculture=0.02, Mines=0.01, Agro_industrie=0.15, Industrie=0.12,
+               Construction=0.08, Commerce=0.25, Transport=0.20, Services=0.17),
+  sez      = c(Agriculture=0.05, Mines=0.05, Agro_industrie=0.25, Industrie=0.30,
+               Construction=0.10, Commerce=0.10, Transport=0.10, Services=0.05),
+  frontiere= c(Agriculture=0.15, Mines=0.15, Agro_industrie=0.10, Industrie=0.08,
+               Construction=0.05, Commerce=0.30, Transport=0.12, Services=0.05),
+  ville    = c(Agriculture=0.12, Mines=0.02, Agro_industrie=0.08, Industrie=0.05,
+               Construction=0.15, Commerce=0.30, Transport=0.10, Services=0.18),
+  marche   = c(Agriculture=0.45, Mines=0.01, Agro_industrie=0.20, Industrie=0.03,
+               Construction=0.02, Commerce=0.20, Transport=0.05, Services=0.04),
+  industrie= c(Agriculture=0.02, Mines=0.05, Agro_industrie=0.10, Industrie=0.50,
+               Construction=0.15, Commerce=0.08, Transport=0.07, Services=0.03)
+)
+
+# Profils de demande (ce que chaque type de zone consomme en provenance des autres)
+PROFILS_DEMANDE <- list(
+  hub      = c(Agriculture=0.05, Mines=0.02, Agro_industrie=0.20, Industrie=0.15,
+               Construction=0.10, Commerce=0.20, Transport=0.15, Services=0.13),
+  sez      = c(Agriculture=0.10, Mines=0.08, Agro_industrie=0.15, Industrie=0.25,
+               Construction=0.15, Commerce=0.10, Transport=0.12, Services=0.05),
+  frontiere= c(Agriculture=0.12, Mines=0.06, Agro_industrie=0.12, Industrie=0.12,
+               Construction=0.06, Commerce=0.28, Transport=0.18, Services=0.06),
+  ville    = c(Agriculture=0.15, Mines=0.02, Agro_industrie=0.18, Industrie=0.10,
+               Construction=0.12, Commerce=0.22, Transport=0.08, Services=0.13),
+  marche   = c(Agriculture=0.38, Mines=0.01, Agro_industrie=0.22, Industrie=0.06,
+               Construction=0.04, Commerce=0.20, Transport=0.05, Services=0.04),
+  industrie= c(Agriculture=0.05, Mines=0.10, Agro_industrie=0.10, Industrie=0.35,
+               Construction=0.15, Commerce=0.08, Transport=0.12, Services=0.05)
+)
+
+# Taille économique relative de chaque zone
+# (détermine le volume absolu des échanges générés)
+# Kigali = 1.0 (référence). Un hub à 0.10 génère 10× moins d'échanges que Kigali.
+TAILLE_ZONE <- c(
+  "Kigali - Hub Central"          = 1.00,  # Référence : hub dominant du pays
+  "Kigali - SEZ Masoro"           = 0.35,  # Zone industrielle intégrée à Kigali
+  "Kigali - Marché Kimisagara"    = 0.18,  # Grand marché de gros populaire
+  "Frontière Gatuna (Ouganda)"    = 0.25,  # Principal corridor Nord (vers Kampala)
+  "Frontière Rusumo (Tanzanie)"   = 0.20,  # Corridor Est (vers Dar es Salaam, mer)
+  "Frontière Rubavu/Goma (RDC)"   = 0.30,  # Corridor Ouest (très actif avec la RDC)
+  "Frontière Kagitumba (Ouganda)" = 0.15,  # Frontière secondaire Nord-Est
+  "Huye (Butare) - Centre Sud"    = 0.18,  # 2e ville : université, industrie
+  "Musanze - Centre Nord"         = 0.15,  # Zone touristique volcanique
+  "Rubavu - Centre Ouest"         = 0.14,  # Ville du lac Kivu
+  "Rusizi - Centre Sud-Ouest"     = 0.12,  # Frontalière RDC/Burundi
+  "Bugesera SEZ (Agro-industrie)" = 0.22,  # SEZ en développement près de l'aéroport
+  "Muhanga"                       = 0.08,  # Carrefour de transit
+  "Nyanza"                        = 0.07,  # Ancienne capitale royale
+  "Rwamagana"                     = 0.09,  # Capitale de la Province de l'Est
+  "Frontière Bugarama (Burundi)"  = 0.12   # Corridor Sud modéré
+)
+
+# ==============================================================================
+# P.7 : Paramètres de l'affectation All-or-Nothing
+# ==============================================================================
+
+# Flux minimum (en tonnes) pour qu'une paire OD soit affectée au réseau
+# Les paires en dessous de ce seuil sont ignorées (flux négligeable)
+SEUIL_FLUX_TONNES <- 50
+
+# ==============================================================================
+# P.8 : Paramètres de la carte (visualisation)
+# ==============================================================================
+
+# Dimensions et résolution des exports PNG
+CARTE_LARGEUR_PX  <- 3000
+CARTE_HAUTEUR_PX  <- 2400
+CARTE_DPI         <- 300
+
+# Dimensions réduites pour les cartes lourdes (ex : desire lines)
+CARTE_LARGEUR_PX_REDUIT  <- 2000
+CARTE_HAUTEUR_PX_REDUIT  <- 1600
+CARTE_DPI_REDUIT         <- 200
+
+# Seuil de flux (percentile) en dessous duquel une paire OD
+# n'est pas représentée sur la carte des desire lines
+SEUIL_DESIRE_PERCENTILE <- 0.40
+
+# ==============================================================================
+# P.9 : Paramètres de l'analyse de vulnérabilité (Partie IX)
+# ==============================================================================
+
+# Nombre d'arêtes candidates testées pour l'analyse de criticité
+N_TOP_ARETES_CRITIQUES <- 50
+
+# Seuil de volume fret (tonnes) pour qu'une paire OD soit incluse
+# dans le calcul de criticité (filtre pour accélérer le calcul)
+SEUIL_PAIRES_CRITICITE <- 100
+
+# Nombre d'arêtes critiques affichées sur la carte de criticité
+N_ARETES_AFFICHEES_CRITICITE <- 20
+
+# Paramètres du scénario de perturbation par défaut
+NOM_SCENARIO          <- "Inondation_RN1_Kigali_Huye"
+DESCRIPTION_SCENARIO  <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
+DUREE_JOURS           <- 14
+TYPE_EVENEMENT        <- "inondation"
+
+# Identifiants OSM manuels (vide = aucun) : noter à l'intérieur les identifiants OSM des routes que l'on veut casser
+# Pour trouver un osm_id : allez sur openstreetmap.org, cliquez sur une route,
+# cliquez sur "Plus de détails" → l'identifiant apparaît dans l'URL.
+OSM_IDS_PERTURBES_MANUEL <- c()  # Exemple : c("12345678", "87654321") : ici, deux routes sont affectées
+
+# Paramètres du mode buffer
+
+# Activez ce mode en passant UTILISER_MODE_BUFFER à TRUE.
+# Les coordonnées sont en degrés décimaux (système GPS standard).
+UTILISER_MODE_BUFFER        <- TRUE       # TRUE = activer ce mode, FALSE = désactiver
+
+# Centre de la zone perturbée (longitude, latitude en WGS84)
+CENTRE_PERTURBATION_LON <- 29.950   # Longitude du centre (Est-Ouest)
+CENTRE_PERTURBATION_LAT <- -2.150   # Latitude du centre (Nord-Sud, négatif = Sud)
+
+# Rayon de la zone perturbée en mètres.
+RAYON_PERTURBATION_M        <- 5000
+
+# Types de routes inclus dans la perturbation (NULL = tous les types).
+# Utile pour simuler une inondation qui ne touche que les routes en fond de vallée
+# (souvent des routes secondaires et tertiaires) mais pas les routes en hauteur.
+# NULL signifie "toutes les routes" ; pour restreindre, utilisez par exemple :
+# c("primary", "secondary") pour ne perturber que les routes primaires et secondaires.
+TYPES_ROUTES_PERTURBES  <- NULL  
+
+# Paramètres du mode raster (prêt à brancher)
+
+# Activez ce mode en passant UTILISER_MODE_RASTER à TRUE.
+# ATTENTION : si Mode Buffer ET Mode Raster sont tous les deux TRUE,
+# les deux sources sont combinées (union des routes perturbées).
+UTILISER_MODE_RASTER        <- FALSE
+
+# Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
+# Exemples de sources de données :
+#   - JRC Global Surface Water  : https://global-surface-water.appspot.com/
+#   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
+#   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
+#   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
+CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables_rwanda.tif"  # À modifier
+
+# Seuil au-dessus duquel une route est considérée comme perturbée.
+# Si le raster contient des probabilités (0-1) : un seuil de 0.5 signifie
+# "routes dont plus de 50% de leur longueur est dans une zone à risque > 50%".
+# Si le raster contient des profondeurs (cm) : un seuil de 30 signifie
+# "routes submergées sous plus de 30cm d'eau" (seuil de praticabilité standard).
+SEUIL_RISQUE_RASTER         <- 0.5
+
+# Proportion minimale de la longueur d'une arête qui doit être en zone à risque
+# pour que l'arête soit considérée comme perturbée.
+# 0.3 = au moins 30% de la route doit être en zone inondable.
+PROPORTION_MIN_EXPOSEE      <- 0.3
+
+# Multiplicateur de coût appliqué aux paires déconnectées
+# pour estimer leurs émissions supplémentaires (hypothèse d'itinéraire très long)
+MULTIPLICATEUR_DECONNEXION <- 3
+
+cat("✓ Paramètres globaux chargés\n\n")
+
 # ==============================================================================
 # I.2 : Connexion DuckDB et fonctions utilitaires
 # Ouvre la base analytique persistante et définit les raccourcis duck_write()
@@ -133,9 +471,6 @@ if (exists("con")) {
 
 cat("=== Connexion DuckDB ===\n")
 
-# Chemin vers le fichier de base de données (créé s'il n'existe pas)
-DB_PATH <- "reseau_rwanda.duckdb"
-
 # dbConnect() : ouvre une connexion à la base de données.
 # duckdb() : indique à R quel type de base de données on utilise (le "pilote").
 # dbdir = ":memory:" créerait une base en RAM uniquement (non persistante).
@@ -153,7 +488,6 @@ cat("✓ DuckDB connecté :", DB_PATH, "\n\n")
 # dir.create() le crée s'il n'existe pas encore.
 # showWarnings = FALSE : n'affiche pas de message si le dossier existe déjà.
 # recursive = TRUE : crée aussi les dossiers parents si nécessaire.
-DIR_OUTPUT <- "outputs"
 dir.create(DIR_OUTPUT, showWarnings = FALSE, recursive = TRUE)
 
 # ── Fonctions utilitaires DuckDB ──────────────────────────────────────────────
@@ -450,15 +784,13 @@ cat("✓ Flotte chargée dans DuckDB :",
 # MinIO est une implémentation open-source compatible avec l'API Amazon S3,
 # utilisée sur la plateforme SSP Cloud de l'INSEE/CASD.
 save_object(
-  object    = "data/raw/rwanda-260315.osm.pbf",  # Chemin dans le bucket S3
-  bucket    = "yanisdumas",                        # Nom du bucket MinIO
-  file      = "rwanda-260315.osm.pbf",            # Nom du fichier local après téléchargement
+  object    = MINIO_PBF_PATH,                      # Chemin dans le bucket S3
+  bucket    = MINIO_BUCKET,                        # Nom du bucket MinIO
+  file      = chemin_pbf,                          # Nom du fichier local après téléchargement
   region    = "",                                  # Région vide pour MinIO (non AWS standard)
   use_https = TRUE,
-  base_url  = "minio.lab.sspcloud.fr"             # Point d'accès MinIO SSP Cloud
+  base_url  = MINIO_BASE_URL                       # Point d'accès MinIO SSP Cloud
 )
-
-chemin_pbf <- "rwanda-260315.osm.pbf"
 
 # Vérification de l'existence du fichier avant de continuer.
 # stop() interrompt le script avec un message d'erreur explicite.
@@ -927,9 +1259,8 @@ emprise_sf <- st_as_sf(emprise_points, coords = c("x","y"), crs = 32735) %>%
   st_transform(crs = 4326)
 
 tryCatch({
-  # z = 9 correspond à un zoom de ~300m/pixel, suffisant pour des routes
   # clip = "locations" : on ne récupère les données que dans l'emprise fournie
-  dem_rwanda <- get_elev_raster(emprise_sf, z = 9, clip = "locations")
+  dem_rwanda <- get_elev_raster(emprise_sf, z = DEM_ZOOM, clip = "locations")
   dem_rwanda <- rast(dem_rwanda)   # Conversion raster R → terra SpatRaster
   # Reprojection en UTM 35S pour cohérence avec les routes
   # method = "bilinear" : interpolation bilinéaire (meilleure qualité que "nearest")
@@ -950,8 +1281,7 @@ tryCatch({
                  bbox_routes["ymin"], bbox_routes["ymax"])
   
   # Raster vide avec résolution ~90m (comparable au SRTM niveau 3)
-  # resolution = 90 signifie que chaque pixel représente 90m × 90m sur le terrain.
-  dem_rwanda <<- rast(ext_utm, resolution = 90, crs = "EPSG:32735")
+  dem_rwanda <<- rast(ext_utm, resolution = DEM_FICTIF_RESOLUTION_M, crs = "EPSG:32735")
   
   set.seed(123)   # Graine pour reproductibilité du bruit aléatoire
   n_cells    <- ncell(dem_rwanda)  # Nombre total de pixels dans le raster
@@ -962,8 +1292,8 @@ tryCatch({
   # Gradient d'élévation : 1 500m à l'Est → 2 300m à l'Ouest
   # La formule normalise x_coords entre 0 (Est) et 1 (Ouest) puis multiplie par 800m
   # Cette formule simule la dorsale Congo-Nil qui traverse le Rwanda du Nord au Sud.
-  base_elevation <- 1500 + (max(x_coords) - x_coords) /
-    (max(x_coords) - min(x_coords)) * 800
+  base_elevation <- DEM_FICTIF_ALT_EST + (max(x_coords) - x_coords) /
+    (max(x_coords) - min(x_coords)) * (DEM_FICTIF_ALT_OUEST - DEM_FICTIF_ALT_EST)
   
   # Ajout d'un bruit gaussien (sd=150m) pour simuler collines et vallées
   # rnorm(n, 0, 150) génère n valeurs aléatoires suivant une loi normale
@@ -1473,7 +1803,7 @@ n_avant_filtre <- igraph::ecount(reseau_rwanda)
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(longueur_m_brute = as.numeric(st_length(geometry))) %>%
-  filter(longueur_m_brute > 0.5) %>%         # Seuil 0.5m
+  filter(longueur_m_brute > SEUIL_LONGUEUR_ARETE_M) %>%         # Seuil 0.5m
   select(-longueur_m_brute)                  # Colonne temporaire, on la retire
 
 n_apres_filtre <- igraph::ecount(reseau_rwanda)
@@ -1602,7 +1932,7 @@ zones_industrielles <- st_read(
   filter(st_geometry_type(geometry) %in% c("POLYGON","MULTIPOLYGON")) %>%
   st_transform(crs = 32735) %>%
   mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
-  filter(aire_km2 > 0.01)
+  filter(aire_km2 > AIRE_MIN_INDUSTRIEL_KM2)
 
 # ── Extraction des zones retail depuis zones_urbaines (déjà chargées) ─────────
 # On extrait les zones retail (commerces de détail) qui étaient incluses dans
@@ -1610,7 +1940,7 @@ zones_industrielles <- st_read(
 zones_retail <- zones_urbaines %>%
   filter(landuse == "retail") %>%
   mutate(aire_km2 = as.numeric(st_area(geometry)) / 1e6) %>%
-  filter(aire_km2 > 0.005)
+  filter(aire_km2 > AIRE_MIN_RETAIL_KM2)
 
 cat("  Zones retail :", nrow(zones_retail), "\n\n")
 
@@ -1715,7 +2045,7 @@ if (!cache_valide) {
   #   elevation_gain : cumul des montées (en mètres)
   #   elevation_loss : cumul des descentes (en mètres, valeur positive)
   #   rugosity       : (montées + descentes) / longueur = irrégularité du profil
-  calculer_pente_arete <- function(ligne_geom, dem, espacement = 100) {
+  calculer_pente_arete <- function(ligne_geom, dem, espacement = DEM_ESPACEMENT_M) {
     
     longueur <- as.numeric(st_length(ligne_geom))
     n_points <- max(2, floor(longueur / espacement))
@@ -1873,17 +2203,17 @@ manuels_sf <- entreposages_manuels %>%
 # Filtrer uniquement les villes dans le territoire rwandais
 # Évite que les villes des pays voisins se snappent toutes sur les mêmes nœuds frontières
 # st_filter() : ne garde que les géométries qui intersectent le polygone donné.
-# st_buffer(dist = 5000) : élargit la frontière de 5km pour inclure les villes
+# st_buffer(dist = BUFFER_FRONTIERE_VILLES_M) : élargit la frontière de 5km pour inclure les villes
 # rwandaises situées exactement sur la frontière.
 villes_osm <- villes_osm %>%
-  st_filter(rwanda_national %>% st_buffer(dist = 5000))
+  st_filter(rwanda_national %>% st_buffer(dist = BUFFER_FRONTIERE_VILLES_M))
 # Buffer de 5km pour garder les villes très proches de la frontière
 cat("  Villes OSM dans ou proches du Rwanda :", nrow(villes_osm), "\n")
 
 # Identifier les villes OSM non dupliquées avec les entrepôts manuels
 # lengths(idx_proches) == 0 : sélectionne les villes OSM qui ne sont proches
 # d'AUCUN entrepôt manuel (distances > 3km pour tous).
-idx_proches <- st_is_within_distance(villes_osm, manuels_sf, dist = 3000)
+idx_proches <- st_is_within_distance(villes_osm, manuels_sf, dist = DISTANCE_DEDUP_VILLES_M)
 villes_nouvelles <- villes_osm[lengths(idx_proches) == 0, ] %>%
   st_transform(crs = 4326) %>%
   mutate(
@@ -1907,7 +2237,7 @@ if (nrow(zones_industrielles) > 0) {
   
   # Centroïdes des zones industrielles significatives (> 0.05 km²)
   centroides_indus <- zones_industrielles %>%
-    filter(aire_km2 > 0.05) %>%
+    filter(aire_km2 > AIRE_MIN_ENTREPOT_INDUSTRIEL_KM2) %>%
     st_centroid(of_largest_polygon = FALSE) %>%
     st_transform(crs = 4326) %>%
     mutate(
@@ -1936,7 +2266,7 @@ if (nrow(zones_industrielles) > 0) {
   )
   
   idx_indus_proches <- st_is_within_distance(centroides_indus_sf,
-                                             tous_existants, dist = 2000)
+                                             tous_existants, dist = DISTANCE_DEDUP_INDUSTRIEL_M)
   zones_indus_nouvelles <- centroides_indus[lengths(idx_indus_proches) == 0, ]
   
   cat("  Zones industrielles nouvelles :", nrow(zones_indus_nouvelles), "\n")
@@ -1951,7 +2281,7 @@ if (nrow(zones_industrielles) > 0) {
 if (nrow(zones_retail) > 0) {
   
   centroides_retail <- zones_retail %>%
-    filter(aire_km2 > 0.01) %>%
+    filter(aire_km2 > AIRE_MIN_ENTREPOT_RETAIL_KM2) %>%
     st_centroid(of_largest_polygon = FALSE) %>%
     mutate(
       lon    = st_coordinates(geometry)[,1],
@@ -1981,7 +2311,7 @@ if (nrow(zones_retail) > 0) {
   )
   
   idx_retail_proches <- st_is_within_distance(centroides_retail_sf,
-                                              tous_existants2, dist = 1000)
+                                              tous_existants2, dist = DISTANCE_DEDUP_RETAIL_M)
   zones_retail_nouvelles <- centroides_retail[lengths(idx_retail_proches) == 0, ]
   
   cat("  Zones retail nouvelles :", nrow(zones_retail_nouvelles), "\n")
@@ -2025,7 +2355,7 @@ entreposages_sf <- entreposages_fictifs %>%
 
 # Création des buffers circulaires de 2km autour de chaque entrepôt.
 entreposages_buffer <- entreposages_sf %>%
-  st_buffer(dist = 2000)
+  st_buffer(dist = BUFFER_ENTREPOT_M)
 
 # ── Accrochage (snapping) des entrepôts au réseau ────────────────────────────
 # Les coordonnées des entrepôts ne tombent pas exactement sur le réseau routier.
@@ -3368,64 +3698,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # supplémentaire dans l'Agriculture (pour fournir les matières premières) ?
 # C'est ce que calcule la matrice de Leontief.
 
-
-# 8 secteurs représentatifs de l'économie rwandaise en 2022
-SECTEURS   <- c("Agriculture","Mines","Agro_industrie","Industrie",
-                "Construction","Commerce","Transport","Services")
 N_SECTEURS <- length(SECTEURS)
-
-# ── Matrice des coefficients techniques A ─────────────────────────────────────
-# a[i,j] = proportion de la production du secteur j (colonne)
-# consommée comme intrant par le secteur i (ligne)
-#
-# Exemple de lecture :
-#   A["Agriculture","Agro_industrie"] = 0.45 → 45% des intrants de l'Agro-industrie
-#   proviennent de l'Agriculture (grains, fruits, légumes pour transformation)
-# matrix() crée une matrice à partir d'un vecteur de valeurs.
-# nrow/ncol : dimensions. byrow = TRUE : remplit ligne par ligne (pas colonne par colonne).
-# dimnames : noms des lignes et colonnes.
-A <- matrix(c(
-  # ← Secteur fournisseur (lignes) / Secteur consommateur (colonnes) →
-  # Agri  Mines AgroI Indus Const Comm  Trans Serv
-  0.08, 0.00, 0.45, 0.05, 0.01, 0.05, 0.02, 0.03,  # Agriculture
-  0.00, 0.05, 0.01, 0.08, 0.05, 0.00, 0.01, 0.00,  # Mines
-  0.05, 0.00, 0.08, 0.02, 0.00, 0.06, 0.03, 0.04,  # Agro-industrie
-  0.02, 0.03, 0.03, 0.06, 0.15, 0.03, 0.04, 0.02,  # Industrie
-  0.01, 0.02, 0.01, 0.02, 0.08, 0.02, 0.03, 0.05,  # Construction
-  0.04, 0.05, 0.06, 0.08, 0.05, 0.06, 0.05, 0.06,  # Commerce
-  0.03, 0.06, 0.04, 0.05, 0.06, 0.07, 0.06, 0.04,  # Transport
-  0.02, 0.02, 0.02, 0.03, 0.04, 0.06, 0.05, 0.08   # Services
-), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
-dimnames = list(SECTEURS, SECTEURS))
-
-# ── Production totale par secteur (millions USD, Rwanda 2022) ─────────────────
-# Calibrées sur Banque Mondiale : PIB Rwanda ~13 Md USD en 2022
-production_totale <- c(
-  Agriculture    = 2100,  # Café, thé, pyrèthre, cultures vivrières (principal secteur)
-  Mines          = 280,   # Coltan, cassitérite, wolfram (3T : exportations majeures)
-  Agro_industrie = 520,   # Transformation alimentaire, boissons, tabac
-  Industrie      = 380,   # Textiles, ciment, matériaux de construction
-  Construction   = 750,   # BTP, infrastructure (très actif : Vision 2050)
-  Commerce       = 1100,  # Commerce de gros et de détail
-  Transport      = 480,   # Transport routier, aérien, services logistiques
-  Services       = 2200   # Finance, tourisme, services publics, éducation, santé
-)
-
-# ── Facteurs de conversion valeur → masse (tonnes par million USD) ────────────
-# Ces facteurs permettent de convertir les flux monétaires (M USD) en tonnes physiques.
-# Un secteur à ratio élevé (Construction) génère beaucoup de tonnes par USD
-# (ciment, gravier = produits lourds et peu chers).
-# À l'inverse, les Services génèrent très peu de fret physique.
-TONNES_PAR_musd <- c(
-  Agriculture    = 8000,   # Produits bruts : lourds, faible valeur (bananes, céréales)
-  Mines          = 3000,   # Minerais : denses, valeur croissante avec la transformation
-  Agro_industrie = 4000,   # Produits transformés (huile, farine, sucre, conserves)
-  Industrie      = 2000,   # Produits manufacturés intermédiaires
-  Construction   = 10000,  # Ciment, gravier, acier : très lourds par rapport à la valeur
-  Commerce       = 1500,   # Mix de biens distribués (alimentaire, électronique, textile)
-  Transport      = 300,    # Services : peu de fret physique directement associé
-  Services       = 100     # Quasi-immatériel (finance, éducation, santé, conseil)
-)
 
 # ── Grandeurs dérivées de la table IO ─────────────────────────────────────────
 # %*% : produit matriciel en R (différent de * qui est une multiplication élément par élément).
@@ -3435,7 +3708,7 @@ conso_interm   <- as.vector(A %*% production_totale)
 # Valeur ajoutée = production - consommations intermédiaires 
 valeur_ajoutee <- production_totale - conso_interm
 # Demande finale ≈ 85% de la valeur ajoutée 
-demande_finale <- valeur_ajoutee * 0.85
+demande_finale <- valeur_ajoutee * PART_DEMANDE_FINALE
 
 # ── Stockage dans DuckDB ──────────────────────────────────────────────────────
 io_table <- tibble(
@@ -3503,75 +3776,6 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 #   4. Pas besoin de pmax(), renormalisation, plafonds ou bruit aléatoire
 # ==============================================================================
 
-# Chaque zone d'entreposage est caractérisée par :
-#   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
-#   - un profil sectoriel de demande (ce qu'elle consomme/importe des autres zones)
-#   - une taille économique relative (Kigali Hub = référence à 1.0)
-#
-# Profils par type de zone :
-#   hub       → fort en Commerce, Transport, Services (Kigali = centre économique)
-#   sez       → fort en Industrie, Agro-industrie (production concentrée)
-#   frontiere → fort en Commerce transfrontalier, Mines (export international)
-#   ville     → profil équilibré, Commerce local dominant
-#   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
-
-
-# Profils d'offre (ce que chaque type de zone produit et offre au marché)
-# Chaque profil est un vecteur dont la somme des valeurs vaut 1 (100% de l'offre).
-# Les valeurs indiquent la part de chaque secteur dans l'offre totale de la zone.
-PROFILS_OFFRE <- list(
-  hub      = c(Agriculture=0.02, Mines=0.01, Agro_industrie=0.15, Industrie=0.12,
-               Construction=0.08, Commerce=0.25, Transport=0.20, Services=0.17),
-  sez      = c(Agriculture=0.05, Mines=0.05, Agro_industrie=0.25, Industrie=0.30,
-               Construction=0.10, Commerce=0.10, Transport=0.10, Services=0.05),
-  frontiere= c(Agriculture=0.15, Mines=0.15, Agro_industrie=0.10, Industrie=0.08,
-               Construction=0.05, Commerce=0.30, Transport=0.12, Services=0.05),
-  ville    = c(Agriculture=0.12, Mines=0.02, Agro_industrie=0.08, Industrie=0.05,
-               Construction=0.15, Commerce=0.30, Transport=0.10, Services=0.18),
-  marche   = c(Agriculture=0.45, Mines=0.01, Agro_industrie=0.20, Industrie=0.03,
-               Construction=0.02, Commerce=0.20, Transport=0.05, Services=0.04),
-  industrie= c(Agriculture=0.02, Mines=0.05, Agro_industrie=0.10, Industrie=0.50,
-               Construction=0.15, Commerce=0.08, Transport=0.07, Services=0.03)
-)
-
-# Profils de demande (ce que chaque type de zone consomme en provenance des autres)
-PROFILS_DEMANDE <- list(
-  hub      = c(Agriculture=0.05, Mines=0.02, Agro_industrie=0.20, Industrie=0.15,
-               Construction=0.10, Commerce=0.20, Transport=0.15, Services=0.13),
-  sez      = c(Agriculture=0.10, Mines=0.08, Agro_industrie=0.15, Industrie=0.25,
-               Construction=0.15, Commerce=0.10, Transport=0.12, Services=0.05),
-  frontiere= c(Agriculture=0.12, Mines=0.06, Agro_industrie=0.12, Industrie=0.12,
-               Construction=0.06, Commerce=0.28, Transport=0.18, Services=0.06),
-  ville    = c(Agriculture=0.15, Mines=0.02, Agro_industrie=0.18, Industrie=0.10,
-               Construction=0.12, Commerce=0.22, Transport=0.08, Services=0.13),
-  marche   = c(Agriculture=0.38, Mines=0.01, Agro_industrie=0.22, Industrie=0.06,
-               Construction=0.04, Commerce=0.20, Transport=0.05, Services=0.04),
-  industrie= c(Agriculture=0.05, Mines=0.10, Agro_industrie=0.10, Industrie=0.35,
-               Construction=0.15, Commerce=0.08, Transport=0.12, Services=0.05)
-)
-
-# Taille économique relative de chaque zone
-# (détermine le volume absolu des échanges générés)
-# Kigali = 1.0 (référence). Un hub à 0.10 génère 10× moins d'échanges que Kigali.
-TAILLE_ZONE <- c(
-  "Kigali - Hub Central"          = 1.00,  # Référence : hub dominant du pays
-  "Kigali - SEZ Masoro"           = 0.35,  # Zone industrielle intégrée à Kigali
-  "Kigali - Marché Kimisagara"    = 0.18,  # Grand marché de gros populaire
-  "Frontière Gatuna (Ouganda)"    = 0.25,  # Principal corridor Nord (vers Kampala)
-  "Frontière Rusumo (Tanzanie)"   = 0.20,  # Corridor Est (vers Dar es Salaam, mer)
-  "Frontière Rubavu/Goma (RDC)"   = 0.30,  # Corridor Ouest (très actif avec la RDC)
-  "Frontière Kagitumba (Ouganda)" = 0.15,  # Frontière secondaire Nord-Est
-  "Huye (Butare) - Centre Sud"    = 0.18,  # 2e ville : université, industrie
-  "Musanze - Centre Nord"         = 0.15,  # Zone touristique volcanique
-  "Rubavu - Centre Ouest"         = 0.14,  # Ville du lac Kivu
-  "Rusizi - Centre Sud-Ouest"     = 0.12,  # Frontalière RDC/Burundi
-  "Bugesera SEZ (Agro-industrie)" = 0.22,  # SEZ en développement près de l'aéroport
-  "Muhanga"                       = 0.08,  # Carrefour de transit
-  "Nyanza"                        = 0.07,  # Ancienne capitale royale
-  "Rwamagana"                     = 0.09,  # Capitale de la Province de l'Est
-  "Frontière Bugarama (Burundi)"  = 0.12   # Corridor Sud modéré
-)
-
 # ── Correspondance entre types de landuse et profils de zone ─────────────────
 # Les zones industrielles dans le buffer sont représentées par le profil
 # "industrie" déjà défini dans PROFILS_OFFRE/DEMANDE.
@@ -3588,7 +3792,6 @@ cat("✓ Profils landuse définis\n\n")
 
 # Part du PIB qui "voyage" entre zones (le reste est consommé localement)
 # 35% est une hypothèse conservatrice pour un pays enclavé comme le Rwanda
-PART_ECHANGEABLE <- 0.35
 echelle_offre    <- sum(production_totale) * PART_ECHANGEABLE
 echelle_demande  <- sum(demande_finale)    * PART_ECHANGEABLE
 
@@ -3724,8 +3927,6 @@ if (!cache_landuse_valide) {
 
 cat("✓ Composition landuse calculée\n\n")
 
-taille_default <- 0.10  # Valeur par défaut pour les zones OSM
-
 tailles_toutes_zones <- sapply(
   noeuds_entreposage$warehouse_name,
   function(nom) {
@@ -3852,20 +4053,6 @@ cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 # Services : peu sensible (transactions financières → beta faible).
 
 cat("Paramètres du modèle gravitaire:\n")
-
-# --- Paramètres de friction par secteur ---
-# Beta élevé = très sensible au coût (produits lourds/périssables)
-# Beta faible = peu sensible (haute valeur, export international)
-BETA_SECTEUR <- c(
-  Agriculture    = 2.2,  # Très sensible (périssable, faible valeur/tonne)
-  Mines          = 1.2,  # Peu sensible (haute valeur, destinations fixes)
-  Agro_industrie = 1.8,
-  Industrie      = 1.6,
-  Construction   = 2.5,  # Très sensible (matériaux très lourds)
-  Commerce       = 1.7,
-  Transport      = 1.3,
-  Services       = 0.9   # Peu sensible (services quasi-immatériels)
-)
 
 for (s in SECTEURS) {
   cat("  β(", s, ") =", BETA_SECTEUR[s], "\n")
@@ -4143,8 +4330,6 @@ cat("  Tonnage total modélisé:",
 # Plutôt que de boucler sur n_warehouses² paires puis de filtrer par seuil,
 # on construit d'abord la liste des paires pertinentes. Ça permet aussi
 # d'avoir une barre de progression exacte et de mieux répartir les gc().
-
-SEUIL_FLUX_TONNES <- 50
 
 paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
 paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
@@ -5369,7 +5554,7 @@ cat("✓ Carte répartition modale sauvegardée\n")
 
 cat("Génération de la carte des flux OD (desire lines)...\n")
 
-SEUIL_DESIRE <- quantile(flux_total[flux_total > 0], 0.40)
+SEUIL_DESIRE <- quantile(flux_total[flux_total > 0], SEUIL_DESIRE_PERCENTILE)
 
 # ── Pré-calcul des coordonnées (hors boucle) ──────────────────────────────────
 # Évite les which() répétés dans la double boucle
@@ -5772,83 +5957,13 @@ cat("  PARTIE IX — ANALYSE DE VULNÉRABILITÉ ET CONTOURNEMENT\n")
 cat("==========================================================\n\n")
 
 # ==============================================================================
-# IX.1.A : Mode Manuel — liste d'identifiants OSM ou de noms de routes
-# À utiliser quand on connaît précisément quelle route est affectée.
-# Un osm_id est l'identifiant unique d'un segment dans OpenStreetMap.
-# Vous pouvez le trouver en cliquant sur une route dans OpenStreetMap.org.
-# ==============================================================================
-
-# ── Paramètres du scénario ────────────────────────────────────────────────────
-# Modifiez ces valeurs pour changer de scénario sans toucher au reste du code.
-
-NOM_SCENARIO       <- "Inondation_RN1_Kigali_Huye"  # Nom court, sans espaces (utilisé dans les noms de fichiers)
-DESCRIPTION_SCENARIO <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
-DUREE_JOURS        <- 14        # Durée estimée de la perturbation (en jours)
-TYPE_EVENEMENT     <- "inondation"  # "inondation", "glissement", "pont_effondre", etc.
-
-# Identifiants OSM des segments à supprimer.
-# Laissez vide (c()) si vous utilisez le Mode B ou C à la place.
-# Pour trouver un osm_id : allez sur openstreetmap.org, cliquez sur une route,
-# cliquez sur "Plus de détails" → l'identifiant apparaît dans l'URL.
-OSM_IDS_PERTURBES_MANUEL <- c()  # Exemple : c("12345678", "87654321")
-
-# ==============================================================================
-# IX.1.B : Mode Buffer — toutes les routes dans un rayon autour d'un point GPS
-# À utiliser pour simuler un événement localisé (ex : pont effondré, zone
-# inondée d'environ X km²) quand on ne connaît pas les osm_id précis.
-# ==============================================================================
-
-# Activez ce mode en passant UTILISER_MODE_BUFFER à TRUE.
-# Les coordonnées sont en degrés décimaux (système GPS standard).
-UTILISER_MODE_BUFFER <- TRUE    # TRUE = activer ce mode, FALSE = désactiver
-
-# Centre de la zone perturbée (longitude, latitude en WGS84)
-CENTRE_PERTURBATION_LON <- 29.950   # Longitude du centre (Est-Ouest)
-CENTRE_PERTURBATION_LAT <- -2.150   # Latitude du centre (Nord-Sud, négatif = Sud)
-
-# Rayon de la zone perturbée en mètres.
-# 5 000m = zone de 5km de rayon ≈ surface d'environ 78 km²
-RAYON_PERTURBATION_M    <- 5000
-
-# Types de routes inclus dans la perturbation (NULL = tous les types).
-# Utile pour simuler une inondation qui ne touche que les routes en fond de vallée
-# (souvent des routes secondaires et tertiaires) mais pas les routes en hauteur.
-# NULL signifie "toutes les routes" ; pour restreindre, utilisez par exemple :
-# c("primary", "secondary") pour ne perturber que les routes primaires et secondaires.
-TYPES_ROUTES_PERTURBES  <- NULL  # NULL = tous les types, ou c("primary","secondary",...)
-
-# ==============================================================================
 # IX.1.C : Mode Raster — intersection avec un raster de risque externe
 # PRÊT À BRANCHER : cette section est préparée pour accueillir un raster
 # de zones inondables (GeoTIFF) dès que vous en disposez.
 # Le raster doit contenir des valeurs de risque (ex : profondeur d'eau en cm,
-# probabilité d'inondation en %, susceptibilité de glissement 0-1).
+# probabilité d'inondation ou de glissement de terrain en %).
 # ==============================================================================
 
-# Activez ce mode en passant UTILISER_MODE_RASTER à TRUE.
-# ATTENTION : si Mode Buffer ET Mode Raster sont tous les deux TRUE,
-# les deux sources sont combinées (union des routes perturbées).
-UTILISER_MODE_RASTER    <- FALSE   # TRUE = activer, FALSE = désactiver (futur)
-
-# Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
-# Exemples de sources de données :
-#   - JRC Global Surface Water  : https://global-surface-water.appspot.com/
-#   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
-#   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
-#   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
-CHEMIN_RASTER_RISQUE    <- "data/raw/zones_inondables_rwanda.tif"  # À modifier
-
-# Seuil au-dessus duquel une route est considérée comme perturbée.
-# Si le raster contient des probabilités (0-1) : un seuil de 0.5 signifie
-# "routes dont plus de 50% de leur longueur est dans une zone à risque > 50%".
-# Si le raster contient des profondeurs (cm) : un seuil de 30 signifie
-# "routes submergées sous plus de 30cm d'eau" (seuil de praticabilité standard).
-SEUIL_RISQUE_RASTER     <- 0.5
-
-# Proportion minimale de la longueur d'une arête qui doit être en zone à risque
-# pour que l'arête soit considérée comme perturbée.
-# 0.3 = au moins 30% de la route doit être en zone inondable.
-PROPORTION_MIN_EXPOSEE  <- 0.3
 
 cat("✓ Paramètres du scénario chargés :\n")
 cat("  Nom          :", NOM_SCENARIO, "\n")
