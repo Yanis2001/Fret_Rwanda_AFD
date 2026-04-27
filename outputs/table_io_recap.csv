@@ -1,0 +1,9 @@
+"secteur","production_musd","conso_interm_musd","valeur_ajoutee_musd","demande_finale_musd","tonnes_par_musd"
+"Agriculture",2100,559.1,1540.9,1309.765,8000
+"Mines",280,91.9,188.1,159.885,3000
+"Agro_industrie",520,322.6,197.4,167.79,4000
+"Industrie",380,297.5,82.5,70.125,2000
+"Construction",750,245.8,504.2,428.57,10000
+"Commerce",1100,419.1,680.9,578.765,1500
+"Transport",480,358.4,121.6,103.36,300
+"Services",2200,365.4,1834.6,1559.41,100
