@@ -3602,12 +3602,18 @@ od_long <- bind_rows(od_rows)
 # validation (n_warehouses, n_aretes) pour pouvoir vérifier la validité
 # du cache lors des prochaines exécutions.
 saveRDS(
-  list(od_long = od_long, n_warehouses = n_warehouses,
-       n_aretes = n_aretes_physiques),
+  list(
+    od_long            = od_long,
+    n_warehouses       = n_warehouses,
+    n_aretes           = n_aretes_physiques,
+    empreinte_params   = empreinte_params,      # ← ajout
+    colonnes_od        = names(od_long),        # ← ajout
+    date_creation      = Sys.time()
+  ),
   CACHE_OD
 )
-cat("  ✓ Cache OD sauvegardé :", CACHE_OD, "\n\n")
-}
+cat("  ✓ Cache OD sauvegardé :", CACHE_OD, "\n")
+cat("  Colonnes sauvegardées :", paste(names(od_long), collapse = ", "), "\n\n")
 duck_write(od_long, "matrice_od")
 
 # Statistiques enrichies incluant les transbordements
