@@ -254,10 +254,10 @@ cat("✓ Palettes de couleurs définies\n\n")
 # du temps du chauffeur, coûts d'usure selon le type de route, capacité de
 # chargement, et pénalité en zone urbaine (congestion, restrictions de tonnage).
 params_flotte_df <- tribble(
-  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25,
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090
 )
 duck_write(params_flotte_df, "params_flotte")
 
@@ -2165,6 +2165,13 @@ duck_query("
         WHEN 'unpaved' THEN f.usure_unpaved
         ELSE f.usure_unpaved
       END AS usure_usd_km
+      -- ── Facteurs d'émission récupérés depuis params_flotte ──────────────
+      -- Ces trois colonnes alimenteront les calculs des étapes suivantes.
+      -- Le CO2 est une constante physique (combustion du gazole).
+      -- Le NOx et les PM2.5 varient selon la norme Euro du moteur.
+      f.facteur_emission_co2,
+      f.facteur_emission_nox,
+      f.facteur_emission_pm25
     FROM aretes_base a
     CROSS JOIN params_flotte f
   ),
@@ -2258,6 +2265,20 @@ duck_query("
       + cost_time_usd * facteur_urbain_applique)
       / (NULLIF(length_km, 0)
       * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm
+    -- ── Émissions absolues par arête (pour un trajet chargé) ─────────────
+    fuel_consumption_L * facteur_emission_co2          AS co2_kg,
+    fuel_consumption_L * facteur_emission_nox          AS nox_g,
+    fuel_consumption_L * facteur_emission_pm25         AS pm25_g,
+
+    -- ── Intensité d'émission : CO2, PM2.5 et NOx par tonne-kilomètre ─────────
+    -- NULLIF évite les divisions par zéro sur les arêtes dégénérées
+    -- (longueur nulle ou capacité nulle ne doivent pas propager des NaN).
+    (fuel_consumption_L * facteur_emission_co2)
+      / NULLIF(length_km * capacite_tonnes, 0)         AS co2_kg_par_tkm,
+    (fuel_consumption_L * facteur_emission_nox)
+      / NULLIF(length_km * capacite_tonnes, 0)         AS nox_g_par_tkm
+    (fuel_consumption_L * facteur_emission_pm25)
+      / NULLIF(length_km * capacite_tonnes, 0)         AS pm25_g_par_tkm
   FROM avec_couts
 ")
 
@@ -2320,6 +2341,31 @@ reseau_rwanda <- reseau_rwanda %>%
 cat("✓ Table aretes_couts_tous créée dans DuckDB\n")
 cat("  Lignes :", duck_query("SELECT COUNT(*) AS n FROM aretes_couts_tous")$n,
     "(arêtes × véhicules)\n\n")
+
+# ── Réintégration des émissions dans sfnetworks pour le véhicule de référence ─
+# Même logique que pour les coûts : on récupère les valeurs depuis DuckDB
+# pour le camion_moyen et on les ajoute comme attributs des arêtes du réseau.
+# Cela permet de cartographier les émissions directement depuis reseau_rwanda
+# sans requêter DuckDB à chaque fois.
+aretes_ref_emissions <- duck_query(glue::glue("
+  SELECT arete_id, co2_kg, nox_g, pm25_g, co2_kg_par_tkm, nox_g_par_tkm, pm25_g_par_tkm 
+  FROM aretes_couts_tous
+  WHERE vehicule_id = '{VEHICULE_REFERENCE}'
+  ORDER BY arete_id
+"))
+
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(
+    co2_kg         = aretes_ref_emissions$co2_kg,
+    nox_g          = aretes_ref_emissions$nox_g,
+    pm25_g         = aretes_ref_emissions$pm25_g,
+    co2_kg_par_tkm = aretes_ref_emissions$co2_kg_par_tkm,
+    nox_g_par_tkm  = aretes_ref_emissions$nox_g_par_tkm,
+    pm25_g_par_tkm = aretes_ref_emissions$pm25_g_par_tkm
+  )
+
+cat("✓ Émissions intégrées dans reseau_rwanda (véhicule de référence)\n\n")
 
 # ── Vérification finale des colonnes critiques pour Dijkstra ──────────────────
 # Un NA ou un Inf dans les poids de Dijkstra provoquerait des résultats erronés
@@ -2839,6 +2885,146 @@ if (FALSE) {
   tmap_mode("plot")
 }
 
+# ==============================================================================
+# V.4 : Cartes d'émissions de GES
+# Génère deux cartes pour le véhicule de référence :
+#   - intensité carbone (co2_kg_par_tkm) : routes les plus émettrices
+#   - émissions de NOx (nox_g_par_tkm)   : proxy de pollution locale
+# Et un graphique comparatif des émissions totales par véhicule.
+# ==============================================================================
+
+# ── Palette d'émissions (vert pâle → rouge foncé) ────────────────────────────
+# Rouge = route très émettrice (pente forte + mauvaise surface + véhicule lourd)
+# Vert  = route peu émettrice (plat, bitumée, camion léger)
+PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
+
+# ── Carte : intensité carbone (co2_kg_par_tkm) pour le véhicule de référence ─
+# Cette carte identifie les segments routiers où chaque tonne-kilomètre
+# transportée génère le plus de CO2 : pentes fortes, mauvaise surface,
+# zones de congestion urbaine.
+# Elle répond à la question : "Où décarboner le transport est-il le plus urgent ?"
+carte_co2 <- fond_carte() +
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(
+    col        = "co2_kg_par_tkm",
+    col.scale  = tm_scale_intervals(style = "quantile", n = 5,
+                                    values = PALETTE_EMISSIONS),
+    col.legend = tm_legend(title = "CO₂\n(kg / tonne-km)"),
+    lwd        = 1.5
+  ) +
+  tm_shape(entreposages_sf) + tm_dots(fill = "black", size = 0.2) +
+  tm_title(paste0("Intensité carbone du réseau — ", VEHICULES_IDS$nom[
+    VEHICULES_IDS$vehicule_id == VEHICULE_REFERENCE
+  ])) +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(carte_co2,
+          file.path(DIR_OUTPUT, "carte_emissions_co2_par_tkm.png"),
+          width = 3000, height = 2400, dpi = 300)
+cat("  ✓ carte_emissions_co2_par_tkm.png\n")
+
+# ── Carte : intensité NOx (nox_g_par_tkm) ────────────────────────────────────
+# Le NOx est le principal polluant local du transport routier diesel.
+# Sa distribution spatiale diffère du CO2 : elle dépend davantage
+# des normes Euro des moteurs (plus sévère en ville) et de la congestion
+# (ralentissements → régime moteur sous-optimal → émissions NOx élevées).
+carte_nox <- fond_carte() +
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(
+    col        = "nox_g_par_tkm",
+    col.scale  = tm_scale_intervals(style = "quantile", n = 5,
+                                    values = PALETTE_EMISSIONS),
+    col.legend = tm_legend(title = "NOx\n(g / tonne-km)"),
+    lwd        = 1.5
+  ) +
+  tm_shape(entreposages_sf) + tm_dots(fill = "black", size = 0.2) +
+  tm_title("Intensité NOx du réseau (pollution locale)") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(carte_nox,
+          file.path(DIR_OUTPUT, "carte_emissions_nox_par_tkm.png"),
+          width = 3000, height = 2400, dpi = 300)
+cat("  ✓ carte_emissions_nox_par_tkm.png\n")
+
+# ── Graphique : émissions totales comparées par véhicule ──────────────────────
+# Ce graphique répond à : "Quel véhicule est le plus émetteur sur le réseau ?"
+# en agrégeant les émissions absolues sur l'ensemble du réseau.
+# La décomposition par composante (CO2, NOx, PM2.5) montre que le classement
+# peut différer selon le polluant : un camion lourd émet plus de CO2 mais
+# un camion plus vieux peut émettre disproportionnellement plus de PM2.5.
+emissions_par_vehicule <- duck_query("
+  SELECT
+    vehicule_id,
+    vehicule_nom,
+    -- Émissions totales sur l'ensemble des arêtes du réseau
+    ROUND(SUM(co2_kg)  / 1000, 1)  AS co2_total_t,    -- CO2 en tonnes
+    ROUND(SUM(nox_g)   / 1000, 1)  AS nox_total_kg,   -- NOx en kg
+    ROUND(SUM(pm25_g)  / 1000, 1)  AS pm25_total_kg,  -- PM2.5 en kg
+    -- Intensités moyennes pondérées par la longueur de l'arête
+    ROUND(AVG(co2_kg_par_tkm), 4)  AS co2_intensite_moy,
+    ROUND(AVG(nox_g_par_tkm),  4)  AS nox_intensite_moy
+  FROM aretes_couts_tous
+  GROUP BY vehicule_id, vehicule_nom
+  ORDER BY co2_total_t DESC
+")
+
+cat("\nÉmissions totales par véhicule (réseau complet) :\n")
+print(emissions_par_vehicule)
+
+# Graphique en barres groupées : CO2 / NOx / PM2.5 côte à côte par véhicule.
+# On normalise chaque polluant sur sa propre échelle (valeur relative entre
+# véhicules) car les ordres de grandeur sont très différents (tonnes vs grammes).
+# scale() centre et normalise chaque colonne entre 0 et 1 (min-max scaling).
+emissions_long <- emissions_par_vehicule %>%
+  select(vehicule_nom, co2_total_t, nox_total_kg, pm25_total_kg) %>%
+  pivot_longer(-vehicule_nom,
+               names_to  = "Polluant",
+               values_to = "Valeur") %>%
+  # Renommage pour la légende du graphique
+  mutate(
+    Polluant = recode(Polluant,
+                      "co2_total_t"   = "CO₂ (t)",
+                      "nox_total_kg"  = "NOx (kg)",
+                      "pm25_total_kg" = "PM2.5 (kg)"),
+    # Normalisation min-max par polluant pour rendre les barres comparables
+    # entre polluants qui n'ont pas les mêmes unités.
+    # group_by + mutate permet ici de normaliser chaque polluant séparément.
+    Valeur_norm = Valeur / max(Valeur)
+  ) %>%
+  group_by(Polluant) %>%
+  mutate(Valeur_norm = Valeur / max(Valeur)) %>%
+  ungroup()
+
+g_emissions <- ggplot(emissions_long,
+                      aes(x = vehicule_nom, y = Valeur_norm, fill = Polluant)) +
+  geom_col(position = "dodge", width = 0.65) +
+  scale_fill_manual(values = c("CO₂ (t)"    = "#D73027",
+                               "NOx (kg)"   = "#FC8D59",
+                               "PM2.5 (kg)" = "#4575B4")) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title    = "Émissions relatives par véhicule et par polluant",
+    subtitle = "Normalisé par rapport au véhicule le plus émetteur de chaque polluant (100%)",
+    x        = NULL,
+    y        = "Niveau relatif d'émission",
+    fill     = "Polluant"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title    = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "#666666"),
+    legend.position = "top"
+  )
+
+ggsave(file.path(DIR_OUTPUT, "graphique_emissions_par_vehicule.png"),
+       g_emissions, width = 10, height = 6, dpi = 300)
+cat("  ✓ graphique_emissions_par_vehicule.png\n\n")
+
+
 ################################################################################
 # PARTIE VI — MATRICE ORIGINE-DESTINATION
 # Calcule les coûts de transport optimaux entre toutes les paires d'entrepôts
@@ -2985,6 +3171,14 @@ if (!cache_od_valide) {
       output  = "epath"
     )
     edges_path <- path_obj$epath[[1]]
+    
+    # ── Récupération des émissions cumulées sur le chemin optimal ────────────────
+    # edge_attr() retourne tous les attributs de toutes les arêtes du graphe
+    # multi-modal sous forme de liste de vecteurs.
+    # On accède aux colonnes co2_kg, nox_g, pm25_g qu'on a ajoutées en V.1.
+    # sum(..., na.rm = TRUE) agrège les émissions de toutes les arêtes du chemin.
+    # Note : les arêtes de transbordement ont des émissions = 0 (opération
+    # stationnaire dans un entrepôt, non modélisée ici).
     edge_data  <- igraph::edge_attr(graphe_multimodal)
     
     idx <- idx + 1
@@ -2998,7 +3192,14 @@ if (!cache_od_valide) {
       temps_h           = sum(edge_data$travel_time_h[edges_path], na.rm = TRUE),
       vehicule_depart   = VEHICULES_IDS$vehicule_id[best_idx[1]],
       vehicule_arrivee  = VEHICULES_IDS$vehicule_id[best_idx[2]],
-      n_transbordements = sum(edge_data$type[edges_path] == "transbordement")
+      n_transbordements = sum(edge_data$type[edges_path] == "transbordement"),
+      # ── Émissions cumulées sur le trajet optimal ────────────────────────────
+      # Ces valeurs correspondent aux émissions d'UN trajet chargé à pleine
+      # capacité entre l'origine i et la destination j, en suivant le chemin
+      # de moindre coût dans le graphe multi-modal.
+      co2_kg_trajet     = sum(edge_data$co2_kg[edges_path],   na.rm = TRUE),
+      nox_g_trajet      = sum(edge_data$nox_g[edges_path],    na.rm = TRUE),
+      pm25_g_trajet     = sum(edge_data$pm25_g[edges_path],   na.rm = TRUE)
     )
   }
   if (i %% 3 == 0) cat("  OD multi-modal :", round(i/n_warehouses*100,1), "%\n")
@@ -4319,6 +4520,75 @@ volume_par_secteur <- apply(volume_trafic_mm_s, c(1, 3), sum)
 volume_par_secteur_df <- as.data.frame(volume_par_secteur)
 colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
 
+# ── Calcul des émissions totales affectées sur le réseau ─────────────────────
+# On calcule les émissions absolues (CO2, NOx, PM2.5) générées par l'ensemble
+# des flux de fret modélisés, arête par arête.
+#
+# Principe : pour chaque arête, on multiplie son intensité d'émission
+# par tonne-km par le volume de trafic affecté et par la longueur de l'arête.
+#   Émissions_arête = intensité_par_tkm × volume_tonnes × length_km
+#
+# co2_kg_par_tkm, nox_g_par_tkm et pm25_g_par_tkm sont les intensités
+# unitaires calculées en Partie V.1 et intégrées dans reseau_rwanda.
+# volume_trafic est le vecteur de tonnes affectées par arête (calculé juste
+# au-dessus via rowSums()).
+# length_km est la longueur de chaque arête en kilomètres.
+
+# Récupération des attributs d'émissions et de longueur pour toutes les arêtes.
+# On extrait ces trois colonnes depuis reseau_rwanda en un seul appel pour
+# éviter de réactiver le réseau plusieurs fois.
+aretes_emissions_base <- reseau_rwanda %>%
+  activate("edges") %>%
+  as_tibble() %>%
+  select(length_km, co2_kg_par_tkm, nox_g_par_tkm, pm25_g_par_tkm)
+
+# Calcul vectorisé des émissions totales par arête.
+# replace_na(..., 0) : les arêtes sans données d'émissions (ex : arêtes
+# topologiques créées lors de la subdivision, arêtes de longueur nulle)
+# contribuent 0 au total au lieu de propager des NA dans toute la colonne.
+# Le produit est vectorisé : R multiplie élément par élément les trois
+# vecteurs de même longueur (n_aretes lignes chacun).
+emissions_co2_aretes  <- replace_na(aretes_emissions_base$co2_kg_par_tkm,  0) *
+  volume_trafic *
+  replace_na(aretes_emissions_base$length_km, 0)
+
+emissions_nox_aretes  <- replace_na(aretes_emissions_base$nox_g_par_tkm,   0) *
+  volume_trafic *
+  replace_na(aretes_emissions_base$length_km, 0)
+
+emissions_pm25_aretes <- replace_na(aretes_emissions_base$pm25_g_par_tkm,  0) *
+  volume_trafic *
+  replace_na(aretes_emissions_base$length_km, 0)
+
+# Intégration dans reseau_rwanda comme attributs des arêtes.
+# Les unités sont converties pour rester lisibles dans les exports :
+#   CO2  : kg → tonnes  (÷ 1 000) — ordre de grandeur typique : quelques t/arête
+#   NOx  : g  → kg      (÷ 1 000) — ordre de grandeur typique : quelques kg/arête
+#   PM2.5: g  → kg      (÷ 1 000) — ordre de grandeur typique : < 1 kg/arête
+#     (les PM2.5 sont émises en quantités bien inférieures au NOx,
+#      d'où l'importance de garder la colonne en kg et non en tonnes
+#      pour ne pas afficher des valeurs trop proches de zéro)
+reseau_rwanda <- reseau_rwanda %>%
+  activate("edges") %>%
+  mutate(
+    emissions_co2_t    = emissions_co2_aretes  / 1000,
+    emissions_nox_kg   = emissions_nox_aretes  / 1000,
+    emissions_pm25_kg  = emissions_pm25_aretes / 1000
+  )
+
+# Rapport global d'émissions (pour le log console).
+# Ces totaux agrègent toutes les arêtes du réseau et donc tous les flux OD
+# modélisés. Ils constituent un ordre de grandeur de l'empreinte carbone
+# et polluante du fret routier rwandais dans le modèle.
+co2_total_reseau_t   <- sum(emissions_co2_aretes,  na.rm = TRUE) / 1000
+nox_total_reseau_kg  <- sum(emissions_nox_aretes,  na.rm = TRUE) / 1000
+pm25_total_reseau_kg <- sum(emissions_pm25_aretes, na.rm = TRUE) / 1000
+
+cat("── Émissions totales du fret modélisé ──────────────────────────────\n")
+cat("  CO2   total :", format(round(co2_total_reseau_t),   big.mark = " "), "tonnes\n")
+cat("  NOx   total :", format(round(nox_total_reseau_kg),  big.mark = " "), "kg\n")
+cat("  PM2.5 total :", format(round(pm25_total_reseau_kg), big.mark = " "), "kg\n\n")
+
 # ── Sanity check : le tonnage affecté doit être cohérent ─────────────────────
 # Note : on somme sur toutes les dimensions de volume_trafic_mm_s (tableau 3D).
 # Le tonnage affecté sera plusieurs fois supérieur au tonnage attendu, car
@@ -4779,6 +5049,44 @@ tmap_save(
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ carte_secteur_dominant.png\n\n")
+
+# ── Carte : émissions CO2 affectées sur le réseau ─────────────────────────────
+# Cette carte combine l'information de trafic (volume de fret) et d'émissions
+# unitaires (co2_kg_par_tkm) pour montrer OÙ les émissions se concentrent.
+# Une arête très chargée sur une route plate bien bitumée peut émettre moins
+# qu'une arête peu chargée sur une piste pentue en mauvais état.
+# C'est l'information de politique publique la plus utile : on y voit où une
+# réhabilitation routière (surface → bitumée) aurait le plus grand impact carbone.
+aretes_ges <- reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf() %>%
+  filter(emissions_co2_t > 0)
+
+carte_ges_affecte <- fond_carte() +
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col = "#DDDDDD", lwd = 0.3) +
+  tm_shape(aretes_ges) +
+  tm_lines(
+    col        = "emissions_co2_t",
+    col.scale  = tm_scale_intervals(style = "quantile", n = 5,
+                                    values = PALETTE_EMISSIONS),
+    col.legend = tm_legend(title = "Émissions CO₂\n(tonnes, cumulées)"),
+    lwd        = 1.5
+  ) +
+  tm_shape(coords_zones_sf) +
+  tm_dots(fill = "warehouse_type",
+          fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
+          fill.legend = tm_legend(title = "Type de zone"),
+          size = 0.4) +
+  tm_title("Émissions CO₂ du Fret — Répartition sur le réseau") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(carte_ges_affecte,
+          file.path(DIR_OUTPUT, "carte_emissions_co2_affecte.png"),
+          width = 3000, height = 2400, dpi = 300)
+cat("✓ Carte émissions CO2 affectées sauvegardée\n\n")
 
 
 # ============================================================
@@ -5882,6 +6190,7 @@ cat("── Calcul des surcoûts ───────────────�
 # ── Fusion des deux matrices OD (référence + dégradée) ────────────────────────
 # left_join() : pour chaque paire OD dans la matrice de référence, on récupère
 # le coût dégradé correspondant. Les colonnes by = sont les clés de jointure.
+
 od_compare <- od_long %>%
   left_join(
     od_degrade %>%
@@ -5925,6 +6234,46 @@ od_compare <- od_long %>%
       levels = c("inchange", "faible", "modere", "fort", "tres_fort", "deconnecte")
     )
   )
+
+# ── Enrichissement de od_compare avec les émissions supplémentaires ───────────
+# Pour chaque paire OD affectée par la perturbation, on calcule les émissions
+# de CO2 supplémentaires générées par l'allongement du trajet.
+#
+# Hypothèse simplificatrice : les émissions sont proportionnelles au coût.
+# On utilise le ratio (surcout_relatif_pct / 100) comme proxy d'allongement,
+# appliqué aux émissions de référence stockées dans od_long.
+# Pour un calcul exact, il faudrait recalculer les chemins dégradés complets
+# avec extraction des attributs d'émissions (extension future).
+od_compare <- od_compare %>%
+  left_join(
+    # Émissions de référence (trajet optimal avant perturbation)
+    od_long %>% select(id_origine, id_destination,
+                       co2_kg_trajet, nox_g_trajet, pm25_g_trajet),
+    by = c("id_origine", "id_destination")
+  ) %>%
+  mutate(
+    # Émissions supplémentaires estimées = émissions_ref × surcoût_relatif
+    # Interprétation : si le trajet coûte 30% de plus (allongement de route),
+    # on suppose qu'il émet également ~30% de CO2 de plus.
+    # Pour les paires déconnectées, on suppose un détour de 3× le trajet normal
+    # (hypothèse d'acheminement via itinéraire alternatif très long).
+    co2_surcout_kg = case_when(
+      type_impact == "deconnecte" ~ co2_kg_trajet * 3,
+      type_impact == "inchange"   ~ 0,
+      TRUE                        ~ co2_kg_trajet * (surcout_relatif_pct / 100)
+    ),
+    nox_surcout_g  = case_when(
+      type_impact == "deconnecte" ~ nox_g_trajet * 3,
+      type_impact == "inchange"   ~ 0,
+      TRUE                        ~ nox_g_trajet * (surcout_relatif_pct / 100)
+    )
+  )
+
+# Bilan d'émissions supplémentaires pour le scénario
+co2_surcout_total_kg <- sum(od_compare$co2_surcout_kg, na.rm = TRUE)
+cat("  CO2 supplémentaire estimé (scénario", NOM_SCENARIO, ") :",
+    round(co2_surcout_total_kg / 1000, 1), "tonnes\n")
+cat("  sur", DUREE_JOURS, "jours de perturbation\n\n")
 
 # ── Sauvegarde dans DuckDB ────────────────────────────────────────────────────
 # On stocke la table de comparaison dans DuckDB pour des requêtes SQL ultérieures.
@@ -6096,7 +6445,7 @@ calculer_surcout_total <- function(indices_a_supprimer) {
 
 # ── Calcul de la criticité pour chaque arête candidate ────────────────────────
 cat("  Calcul de la criticité (", length(aretes_candidates),
-    "arêtes × Dijkstra) — peut prendre quelques minutes...\n")
+    "arêtes × Dijkstra) — prend environ 2h...\n")
 
 criticite_df <- tibble(
   arete_idx         = aretes_candidates,
