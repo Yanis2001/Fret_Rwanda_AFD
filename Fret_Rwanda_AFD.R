@@ -2494,7 +2494,7 @@ duck_query("
         WHEN 'gravel'  THEN f.usure_gravel
         WHEN 'unpaved' THEN f.usure_unpaved
         ELSE f.usure_unpaved
-      END AS usure_usd_km
+      END AS usure_usd_km,
       -- ── Facteurs d'émission récupérés depuis params_flotte ──────────────
       -- Ces trois colonnes alimenteront les calculs des étapes suivantes.
       -- Le CO2 est une constante physique (combustion du gazole).
@@ -2594,7 +2594,7 @@ duck_query("
       + cost_wear_usd * facteur_urbain_applique
       + cost_time_usd * facteur_urbain_applique)
       / (NULLIF(length_km, 0)
-      * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm
+      * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm,
     -- ── Émissions absolues par arête (pour un trajet chargé) ─────────────
     fuel_consumption_L * facteur_emission_co2          AS co2_kg,
     fuel_consumption_L * facteur_emission_nox          AS nox_g,
@@ -2606,7 +2606,7 @@ duck_query("
     (fuel_consumption_L * facteur_emission_co2)
       / NULLIF(length_km * capacite_tonnes, 0)         AS co2_kg_par_tkm,
     (fuel_consumption_L * facteur_emission_nox)
-      / NULLIF(length_km * capacite_tonnes, 0)         AS nox_g_par_tkm
+      / NULLIF(length_km * capacite_tonnes, 0)         AS nox_g_par_tkm,
     (fuel_consumption_L * facteur_emission_pm25)
       / NULLIF(length_km * capacite_tonnes, 0)         AS pm25_g_par_tkm
   FROM avec_couts
@@ -3421,22 +3421,82 @@ idx     <- 0
 CACHE_OD <- file.path(DIR_OUTPUT, "od_cache.rds")
 cache_od_valide <- FALSE
 
+# Colonnes attendues dans od_long — à mettre à jour si la structure change
+OD_COLONNES_ATTENDUES <- c(
+  "id_origine", "id_destination", "nom_origine", "nom_destination",
+  "cout_usd", "distance_km", "temps_h",
+  "vehicule_depart", "vehicule_arrivee", "n_transbordements",
+  "co2_kg_trajet", "nox_g_trajet", "pm25_g_trajet"
+)
+
 # file.exists() : vérifie si le fichier cache existe déjà sur le disque.
 if (file.exists(CACHE_OD)) {
   cache_od <- readRDS(CACHE_OD)  # Charge le fichier sauvegardé en mémoire R
   
-  # Double vérification : le cache n'est valide que si le nombre de zones ET
-  # le nombre d'arêtes correspondent exactement à la session actuelle.
-  # Si l'un ou l'autre a changé (ex : nouveau PBF, nouvelles zones ajoutées),
-  # le cache est rejeté et le calcul repart de zéro automatiquement.
-  if (!is.null(cache_od$n_warehouses) && cache_od$n_warehouses == n_warehouses &&
-      !is.null(cache_od$n_aretes)     && cache_od$n_aretes     == n_aretes_physiques) {
+  # ── Vérification 1 : métriques quantitatives ──────────────────────────────
+  metriques_ok <- !is.null(cache_od$n_warehouses) &&
+    cache_od$n_warehouses == n_warehouses &&
+    !is.null(cache_od$n_aretes) &&
+    cache_od$n_aretes == n_aretes_physiques
+  
+  # ── Vérification 2 : structure de od_long (colonnes présentes) ────────────
+  colonnes_ok <- !is.null(cache_od$od_long) &&
+    all(OD_COLONNES_ATTENDUES %in% names(cache_od$od_long))
+  
+  # ── Vérification 3 : empreinte de version du script ───────────────────────
+  # Hash des paramètres structurels qui, s'ils changent, invalident le cache
+  empreinte_params <- digest::digest(
+    list(
+      vehicule_reference = VEHICULE_REFERENCE,
+      n_vehicules        = nrow(VEHICULES_IDS),
+      vehicules_ids      = sort(VEHICULES_IDS$vehicule_id)
+    ),
+    algo = "xxhash64"
+  )
+  version_ok <- !is.null(cache_od$empreinte_params) &&
+    cache_od$empreinte_params == empreinte_params
+  
+  # ── Bilan ─────────────────────────────────────────────────────────────────
+  if (metriques_ok && colonnes_ok && version_ok) {
+    
     od_long         <- cache_od$od_long
     cache_od_valide <- TRUE
-    cat("  ✓ Cache OD valide (", n_warehouses, "zones ×",
-        n_aretes_physiques, "arêtes) — calcul Dijkstra ignoré\n\n")
+    
+    cat("  ✓ Cache OD valide\n")
+    cat("    Zones    :", n_warehouses, "\n")
+    cat("    Arêtes   :", n_aretes_physiques, "\n")
+    cat("    Colonnes :", ncol(od_long), "(", 
+        length(OD_COLONNES_ATTENDUES), "attendues)\n\n")
+    
   } else {
-    cat("  ⚠ Cache OD invalide — recalcul Dijkstra...\n")
+    
+    # Diagnostic précis de la raison d'invalidation
+    cat("  ⚠ Cache OD invalide — recalcul Dijkstra\n")
+    if (!metriques_ok) {
+      cat("    → Raison : métriques réseau modifiées\n")
+      cat("      Cache : n_warehouses =", cache_od$n_warehouses,
+          "| n_aretes =", cache_od$n_aretes, "\n")
+      cat("      Actuel: n_warehouses =", n_warehouses,
+          "| n_aretes =", n_aretes_physiques, "\n")
+    }
+    if (!colonnes_ok) {
+      cat("    → Raison : structure de od_long modifiée\n")
+      colonnes_manquantes <- setdiff(OD_COLONNES_ATTENDUES, 
+                                     names(cache_od$od_long))
+      colonnes_inattendues <- setdiff(names(cache_od$od_long), 
+                                      OD_COLONNES_ATTENDUES)
+      if (length(colonnes_manquantes)  > 0)
+        cat("      Colonnes manquantes :", 
+            paste(colonnes_manquantes, collapse = ", "), "\n")
+      if (length(colonnes_inattendues) > 0)
+        cat("      Colonnes inattendues:", 
+            paste(colonnes_inattendues, collapse = ", "), "\n")
+    }
+    if (!version_ok) {
+      cat("    → Raison : paramètres de flotte modifiés\n")
+      cat("      Relancer la Partie V avant la Partie VI\n")
+    }
+    cat("\n")
   }
 }
 
