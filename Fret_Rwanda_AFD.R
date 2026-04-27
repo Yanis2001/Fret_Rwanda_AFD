@@ -6772,6 +6772,14 @@ cat("  ✓ Carte B sauvegardée\n")
 # ── CARTE C : Vulnérabilité économique des zones ──────────────────────────────
 cat("  Génération Carte C — vulnérabilité des zones...\n")
 
+# Vérification : y a-t-il des surcoûts à représenter ?
+has_surcouts <- any(impact_par_zone_sf$surcout_total_usd > 0, na.rm = TRUE)
+has_deconnex <- any(impact_par_zone_sf$n_deconnexions   > 0, na.rm = TRUE)
+
+if (!has_surcouts) {
+  cat("  ⚠ Aucun surcoût détecté pour ce scénario — carte C simplifiée\n")
+}
+
 carte_vulnerabilite <- fond_carte() +
   
   tm_shape(aretes_reseau_sf) +
@@ -6780,6 +6788,9 @@ carte_vulnerabilite <- fond_carte() +
   # Taille des points proportionnelle au surcoût total (exposition économique)
   # Couleur selon la présence de déconnexions (rouge = zone coupée du réseau)
   tm_shape(impact_par_zone_sf) +
+  {
+    if (has_surcouts) {
+      # Version complète : taille et couleur variables
   tm_dots(
     fill       = "n_deconnexions",
     fill.scale = tm_scale_intervals(
@@ -6790,7 +6801,17 @@ carte_vulnerabilite <- fond_carte() +
     size        = "surcout_total_usd",
     size.scale  = tm_scale(values.range = c(0.3, 2.5)),
     size.legend = tm_legend(title = "Surcoût total\n(USD)")
-  ) +
+  ) 
+    } else {
+      # Version dégradée : taille fixe, couleur selon type de zone
+      tm_dots(
+        fill        = "warehouse_type",
+        fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
+        fill.legend = tm_legend(title = "Type de zone"),
+        size        = 0.6
+      )
+    }
+  } +
   
   # Arêtes perturbées pour référence
   tm_shape(aretes_perturbees_sf) +
