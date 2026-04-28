@@ -354,28 +354,6 @@ PROFILS_DEMANDE <- list(
                Construction=0.15, Commerce=0.08, Transport=0.12, Services=0.05)
 )
 
-# Taille économique relative de chaque zone
-# (détermine le volume absolu des échanges générés)
-# Kigali = 1.0 (référence). Un hub à 0.10 génère 10× moins d'échanges que Kigali.
-TAILLE_ZONE <- c(
-  "Kigali - Hub Central"          = 1.00,  # Référence : hub dominant du pays
-  "Kigali - SEZ Masoro"           = 0.35,  # Zone industrielle intégrée à Kigali
-  "Kigali - Marché Kimisagara"    = 0.18,  # Grand marché de gros populaire
-  "Frontière Gatuna (Ouganda)"    = 0.25,  # Principal corridor Nord (vers Kampala)
-  "Frontière Rusumo (Tanzanie)"   = 0.20,  # Corridor Est (vers Dar es Salaam, mer)
-  "Frontière Rubavu/Goma (RDC)"   = 0.30,  # Corridor Ouest (très actif avec la RDC)
-  "Frontière Kagitumba (Ouganda)" = 0.15,  # Frontière secondaire Nord-Est
-  "Huye (Butare) - Centre Sud"    = 0.18,  # 2e ville : université, industrie
-  "Musanze - Centre Nord"         = 0.15,  # Zone touristique volcanique
-  "Rubavu - Centre Ouest"         = 0.14,  # Ville du lac Kivu
-  "Rusizi - Centre Sud-Ouest"     = 0.12,  # Frontalière RDC/Burundi
-  "Bugesera SEZ (Agro-industrie)" = 0.22,  # SEZ en développement près de l'aéroport
-  "Muhanga"                       = 0.08,  # Carrefour de transit
-  "Nyanza"                        = 0.07,  # Ancienne capitale royale
-  "Rwamagana"                     = 0.09,  # Capitale de la Province de l'Est
-  "Frontière Bugarama (Burundi)"  = 0.12   # Corridor Sud modéré
-)
-
 # Importance relative de la richesse dans la masse économique.
 # K_RWI_TAILLE = 0   → taille déterminée par la population seule
 # K_RWI_TAILLE = 1   → une zone à p_rwi = 1 a 2× le poids par habitant
@@ -3278,50 +3256,6 @@ RWI_DISTANCE_MIN_M <- 50
 # Note : on n'utilise pas une zone plus grande que le buffer landuse pour que
 # les deux scores soient comparables dans l'interpolation convexe de VII.2.
 
-# ── Profils sectoriels modulés par la richesse (NOUVEAUX dans IV.5) ───────────
-# Ces deux profils définissent comment une zone très riche (ou très pauvre)
-# déplace sa structure d'offre et de demande par rapport au profil de base.
-#
-# PROFIL_OFFRE_RICHE :
-#   Une zone riche produit et exporte davantage de Services, Commerce et
-#   Industrie (valeur ajoutée élevée), et moins d'Agriculture brute.
-#   C'est cohérent avec la structure économique de Kigali par rapport aux
-#   zones rurales.
-#
-# PROFIL_DEMANDE_RICHE :
-#   Une zone riche consomme davantage de produits transformés, de biens
-#   manufacturés, de services financiers et de construction (habitat de
-#   qualité) — et moins de produits alimentaires bruts.
-#
-# Ces profils sont définis dans le même espace vectoriel que PROFILS_OFFRE
-# et PROFILS_DEMANDE (8 secteurs, somme = 1) pour entrer directement dans
-# l'interpolation convexe de Partie VII.2.
-PROFIL_OFFRE_RICHE <- c(
-  Agriculture    = 0.03,   # Faible : peu de production agricole brute
-  Mines          = 0.02,   # Faible : secteur extractif peu lié à la richesse
-  Agro_industrie = 0.12,   # Modéré : transformation alimentaire de qualité
-  Industrie      = 0.20,   # Élevé  : manufacturier, technologie
-  Construction   = 0.10,   # Modéré : BTP de qualité
-  Commerce       = 0.25,   # Très élevé : commerce de détail, import/export
-  Transport      = 0.13,   # Élevé  : logistique, fret de valeur ajoutée
-  Services       = 0.15    # Élevé  : finance, conseil, tourisme
-)
-
-PROFIL_DEMANDE_RICHE <- c(
-  Agriculture    = 0.04,   # Faible : substitution vers produits transformés
-  Mines          = 0.02,   # Faible
-  Agro_industrie = 0.18,   # Modéré : alimentation transformée, importée
-  Industrie      = 0.20,   # Élevé  : biens durables (électronique, mobilier)
-  Construction   = 0.12,   # Élevé  : immobilier haut de gamme
-  Commerce       = 0.22,   # Très élevé : consommation marchande élevée
-  Transport      = 0.10,   # Modéré
-  Services       = 0.12    # Élevé  : services aux entreprises et personnes
-)
-
-# Vérification que les profils somment bien à 1 (condition de l'interpolation)
-stopifnot(abs(sum(PROFIL_OFFRE_RICHE)   - 1) < 1e-9)
-stopifnot(abs(sum(PROFIL_DEMANDE_RICHE) - 1) < 1e-9)
-
 cat("✓ Paramètres RWI chargés\n\n")
 
 
@@ -5730,18 +5664,6 @@ if (!cache_landuse_valide) {
 
 cat("✓ Composition landuse calculée\n\n")
 
-tailles_toutes_zones <- sapply(
-  noeuds_entreposage$warehouse_name,
-  function(nom) {
-    t <- TAILLE_ZONE[nom]
-    if (is.na(t)) taille_default else t   
-  }
-)
-somme_tailles <- sum(tailles_toutes_zones)
-
-cat("  Somme des tailles (", n_warehouses, "zones) :", round(somme_tailles, 2), "\n")
-cat("  dont manuelles :", round(sum(TAILLE_ZONE), 2), "\n")
-cat("  dont OSM (défaut) :", round(somme_tailles - sum(TAILLE_ZONE), 2), "\n\n")
 
 # ── Modification des profils selon la composition landuse ─────────────────────
 # Principe : plus une zone est industrielle, plus son profil d'offre favorise
@@ -5752,8 +5674,7 @@ for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
   type_zone <- noeuds_entreposage$warehouse_type[i]
   taille    <- taille_composite[i]
-  if (is.na(taille)) taille <- taille_default    
-  
+
   # ── Récupération du profil de base selon le type de zone ──────────────────
   # C'est l'identité structurelle de la zone : une frontière reste une frontière
   # indépendamment de ce qui l'entoure géographiquement.
