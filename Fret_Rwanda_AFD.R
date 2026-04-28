@@ -376,6 +376,26 @@ TAILLE_ZONE <- c(
   "Frontière Bugarama (Burundi)"  = 0.12   # Corridor Sud modéré
 )
 
+# Importance relative de la richesse dans la masse économique.
+# K_RWI_TAILLE = 0   → taille déterminée par la population seule
+# K_RWI_TAILLE = 1   → une zone à p_rwi = 1 a 2× le poids par habitant
+#                       d'une zone à p_rwi = 0  (rapport 2:1)
+# K_RWI_TAILLE = 2   → rapport 3:1 entre la zone la plus riche et la plus
+#                       pauvre de l'échantillon (plus discriminant)
+# Valeur recommandée : 1.0 (équilibre entre les deux variables)
+K_RWI_TAILLE <- 1.0
+
+# Exposant appliqué au logarithme de la population.
+# La population varie de ~20 000 à ~1 000 000 sur le Rwanda (rapport 50:1).
+# Sans transformation, Kigali écraserait tout le reste.
+# log10(pop) ramène le rapport à ~3.3:6.0 = 1.8:1 — trop peu discriminant.
+# L'exposant ALPHA_LOG_POP étire ou compresse cette échelle log :
+#   ALPHA_LOG_POP = 1.0 → échelle log (peu discriminante)
+#   ALPHA_LOG_POP = 1.5 → intermédiaire (recommandé)
+#   ALPHA_LOG_POP = 2.0 → se rapproche de la population brute
+# Valeur recommandée : 1.5
+ALPHA_LOG_POP <- 1.5
+
 # ==============================================================================
 # P.7 : Paramètres de l'affectation All-or-Nothing
 # ==============================================================================
@@ -3962,6 +3982,178 @@ cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 
 
 ################################################################################
+# TRANSITION IV.5 → V — CALCUL DE LA TAILLE COMPOSITE DES ZONES
+#
+# OBJECTIF : Remplacer le tableau manuel TAILLE_ZONE par une variable
+#            data-driven combinant population et richesse relative (RWI).
+#
+# FORMULE :
+#   taille_composite_i = log10(pop_i + 1)^ALPHA_LOG_POP
+#                        × (1 + K_RWI_TAILLE × p_rwi_i)
+#   taille_i           = taille_composite_i / taille_composite_kigali
+#
+# INTERPRÉTATION :
+#   Le premier terme capture la taille démographique de la zone (en échelle
+#   log pour éviter que Kigali n'écrase les petites villes).
+#   Le second terme amplifie cette taille proportionnellement à la richesse
+#   relative : une zone riche génère plus d'échanges par habitant qu'une
+#   zone pauvre, toutes choses égales par ailleurs.
+#   C'est un proxy de PIB zonal : masse_éco ≈ pop × revenu_par_habitant.
+#   Le ratio final (÷ Kigali) préserve l'interprétation originale :
+#   Kigali = 1.0, les autres zones < 1.0.
+#
+# DÉPENDANCES :
+#   - entreposages_fictifs$population_zone (Partie IV.4)
+#   - entreposages_fictifs$p_rwi           (Partie IV.5)
+#   - n_warehouses, noeuds_entreposage     (Partie IV.3)
+#   - ALPHA_LOG_POP, K_RWI_TAILLE         (Partie P.6)
+################################################################################
+
+cat("── Calcul de la taille composite (population × richesse) ─────────────\n\n")
+
+# ── Récupération des deux variables source ────────────────────────────────────
+# population_zone : nombre d'habitants dans le buffer de l'entrepôt
+#                   (source NISR, WorldPop ou OSM selon disponibilité — IV.4)
+# p_rwi           : score de richesse relative normalisé sur [0, 1]
+#                   (source Meta RWI — IV.5)
+# Les deux variables sont dans entreposages_fictifs, indexées dans le même
+# ordre que noeuds_entreposage (ordre de création en Partie IV.3).
+pop_i   <- entreposages_fictifs$population_zone
+p_rwi_i <- replace_na(entreposages_fictifs$p_rwi, 0.5)
+# Valeur de repli pour p_rwi : 0.5 = niveau médian national
+# (aucun effet directionnel si la donnée est manquante)
+
+# Vérification que les deux vecteurs ont la même longueur que le nombre
+# d'entrepôts modélisés. Un désalignement ici provoquerait une erreur
+# silencieuse dans le modèle gravitaire.
+stopifnot(
+  length(pop_i)   == n_warehouses,
+  length(p_rwi_i) == n_warehouses
+)
+
+# ── Calcul de la masse économique brute (non normalisée) ─────────────────────
+# Décomposition de la formule :
+#
+#   Terme 1 : log10(pop_i + 1)^ALPHA_LOG_POP
+#     log10() comprime les ordres de grandeur de la population.
+#     +1 évite log10(0) = -Inf si une zone a une population nulle.
+#     L'exposant ALPHA_LOG_POP étire ensuite cette échelle log pour
+#     retrouver un niveau de discrimination raisonnable (cf. P.6).
+#
+#   Terme 2 : (1 + K_RWI_TAILLE × p_rwi_i)
+#     Ce terme est toujours strictement positif (K ≥ 0, p_rwi ∈ [0,1]).
+#     Pour K = 1 : varie entre 1.0 (zone la plus pauvre) et 2.0 (la plus riche).
+#     Interprétation : une zone riche génère K_RWI_TAILLE fois plus d'échanges
+#     par habitant qu'une zone à p_rwi = 0, toutes choses égales par ailleurs.
+taille_brute <- log10(pop_i + 1)^ALPHA_LOG_POP * (1 + K_RWI_TAILLE * p_rwi_i)
+
+# ── Normalisation relative à Kigali Hub ──────────────────────────────────────
+# La normalisation permet de conserver l'interprétation historique :
+#   Kigali Hub Central = 1.0 (référence)
+#   Toutes les autres zones < 1.0 (fraction de la masse de Kigali)
+# Cela garantit aussi la comparabilité avec les anciens résultats si on veut
+# faire tourner l'ancien modèle (TAILLE_ZONE) en parallèle pour validation.
+
+# Recherche de l'indice de Kigali Hub Central dans la liste des entrepôts.
+# which() retourne le ou les indices où la condition est vraie.
+# grepl() cherche le motif "Kigali.*Hub" insensible à la casse — robuste
+# aux variations d'orthographe dans les noms OSM.
+idx_kigali <- which(
+  grepl("Kigali.*Hub", noeuds_entreposage$warehouse_name, ignore.case = TRUE)
+)
+
+if (length(idx_kigali) > 0 && !is.na(taille_brute[idx_kigali[1]])) {
+  
+  # Cas normal : Kigali est présent et a une masse non-nulle
+  ref_kigali     <- taille_brute[idx_kigali[1]]
+  taille_composite <- taille_brute / ref_kigali
+  
+  cat("  Référence de normalisation :",
+      noeuds_entreposage$warehouse_name[idx_kigali[1]],
+      "(masse brute =", round(ref_kigali, 3), ")\n")
+  
+} else {
+  
+  # Cas de repli : Kigali absent ou donnée manquante
+  # On normalise par le maximum observé (la zone la plus peuplée et riche)
+  cat("  ⚠ Kigali Hub non trouvé — normalisation par max\n")
+  taille_composite <- taille_brute / max(taille_brute, na.rm = TRUE)
+}
+
+# Protection finale : les tailles infiniment petites ou nulles
+# (zones sans données de population) reçoivent le plancher taille_default
+# défini en Partie IV.3. Sans ce plancher, une taille nulle annulerait
+# l'offre et la demande de la zone dans le modèle gravitaire.
+taille_composite <- pmax(taille_composite, taille_default)
+
+# ── Tableau comparatif ancien vs nouveau ─────────────────────────────────────
+# Ce tableau permet de valider que la taille composite data-driven est
+# cohérente avec les assignations manuelles TAILLE_ZONE d'origine.
+# Des écarts importants signalent des zones mal caractérisées par les données
+# (ex : zone manuelle forte mais population sous-estimée par WorldPop).
+comparaison_tailles <- tibble(
+  Zone          = noeuds_entreposage$warehouse_name,
+  Type          = noeuds_entreposage$warehouse_type,
+  Population    = round(pop_i),
+  p_rwi         = round(p_rwi_i, 3),
+  Taille_manuelle = map_dbl(
+    noeuds_entreposage$warehouse_name,
+    ~ { t <- TAILLE_ZONE[.x]; if (is.na(t)) taille_default else t }
+  ),
+  Taille_composite = round(taille_composite, 3)
+) %>%
+  mutate(
+    Ratio = round(Taille_composite / Taille_manuelle, 2)
+  ) %>%
+  arrange(desc(Taille_composite))
+
+cat("\nComparaison taille manuelle vs composite (top 12) :\n")
+print(
+  comparaison_tailles %>%
+    slice_head(n = 12) %>%
+    select(Zone, Type, Population, p_rwi,
+           Taille_manuelle, Taille_composite, Ratio)
+)
+
+# Diagnostic : les zones dont le ratio s'éloigne le plus de 1.0 sont celles
+# pour lesquelles les données RWI / population divergent le plus des
+# assignations manuelles. Ce n'est pas forcément un problème — les données
+# empiriques peuvent corriger des biais de la calibration manuelle.
+ecart_max <- comparaison_tailles %>%
+  filter(!is.na(Ratio)) %>%
+  slice_max(abs(Ratio - 1), n = 3)
+
+cat("\nZones avec le plus grand écart (ratio le plus éloigné de 1.0) :\n")
+print(ecart_max %>% select(Zone, Taille_manuelle, Taille_composite, Ratio))
+cat("\n")
+
+# ── Stockage dans DuckDB et dans entreposages_fictifs ─────────────────────────
+# On ajoute taille_composite au data.frame de référence et à DuckDB pour que
+# toutes les parties suivantes puissent y accéder directement.
+entreposages_fictifs <- entreposages_fictifs %>%
+  mutate(taille_composite = taille_composite)
+
+duck_write(
+  comparaison_tailles %>%
+    select(Zone, Type, Population, p_rwi,
+           Taille_manuelle, Taille_composite),
+  "tailles_zones_composite"
+)
+
+# ── Mise à jour de somme_tailles ──────────────────────────────────────────────
+# somme_tailles est utilisée dans la boucle de VII.2 pour normaliser l'offre
+# et la demande. Elle doit être recalculée sur la nouvelle variable.
+# L'ancienne valeur (calculée sur TAILLE_ZONE) est maintenant obsolète.
+somme_tailles <- sum(taille_composite)
+
+cat("✓ taille_composite calculée pour", n_warehouses, "zones\n")
+cat("  Somme des tailles (nouvelle)  :", round(somme_tailles, 2), "\n")
+cat("  Taille min / max              :",
+    round(min(taille_composite), 3), "/",
+    round(max(taille_composite), 3), "\n\n")
+
+
+################################################################################
 # PARTIE V — CALCUL DES COÛTS DE TRANSPORT
 # Calcule les coûts généralisés (USD/tkm) pour chaque arête × véhicule via
 # une requête SQL DuckDB, puis assemble le graphe multi-modal à 3 couches
@@ -5559,7 +5751,7 @@ cat("  dont OSM (défaut) :", round(somme_tailles - sum(TAILLE_ZONE), 2), "\n\n"
 for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
   type_zone <- noeuds_entreposage$warehouse_type[i]
-  taille    <- TAILLE_ZONE[nom_zone]
+  taille    <- taille_composite[i]
   if (is.na(taille)) taille <- taille_default    
   
   # ── Récupération du profil de base selon le type de zone ──────────────────
