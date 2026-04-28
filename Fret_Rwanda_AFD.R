@@ -27,7 +27,7 @@
 # Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
 # ==============================================================================
 
-RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
+RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer
 
 if (RESET_CACHES) {
   
@@ -2450,6 +2450,1515 @@ reseau_rwanda <- reseau_rwanda %>%
   )
 
 cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n")
+
+
+################################################################################
+# PARTIE IV.4 — ENRICHISSEMENT DÉMOGRAPHIQUE DES NŒUDS D'ENTREPÔT
+#
+# OBJECTIF : Associer à chaque zone d'entrepôt un indicateur de population
+#            afin d'améliorer le calibrage du modèle gravitaire (Partie VII).
+#            Un hub desservant 800 000 habitants génère plus de demande
+#            qu'une petite ville de 20 000 habitants, indépendamment de son
+#            type de zone (hub, marché, SEZ…).
+#
+# TROIS APPROCHES SONT PROPOSÉES :
+#   A — Tags OSM du fichier PBF (rapide, intégré, mais couverture partielle)
+#   B — Raster WorldPop (haute résolution spatiale, sans requête externe)
+#   C — Données de recensement NISR via CSV (source officielle, la plus fiable)
+#
+# STRATÉGIE DE FUSION :
+#   On calcule une colonne "population_zone" finale en appliquant une
+#   hiérarchie de priorité : C (NISR) > B (WorldPop) > A (OSM) > 0
+#   La colonne est ensuite intégrée dans reseau_rwanda (attribut de nœud)
+#   et dans DuckDB pour être accessible aux requêtes SQL des Parties V à IX.
+#
+# PLACEMENT DANS LE SCRIPT :
+#   Ce bloc dépend de :
+#     - entreposages_avec_snap    (Partie IV.3) — liste des entrepôts snappés
+#     - entreposages_sf           (Partie IV.3) — géométries sf des entrepôts
+#     - reseau_rwanda             (Partie III)  — réseau sfnetworks
+#     - chemin_pbf                (Partie I)    — fichier PBF OSM
+#   Les Parties V à IX peuvent utiliser la colonne "population_zone"
+#   comme variable de pondération dans le modèle gravitaire.
+################################################################################
+
+cat("==========================================================\n")
+cat("  PARTIE IV.4 — ENRICHISSEMENT DÉMOGRAPHIQUE\n")
+cat("==========================================================\n\n")
+
+# ==============================================================================
+# IV.4.0 : Paramètres démographiques centralisés
+# Toutes les constantes de cette partie sont regroupées ici pour faciliter
+# la reconfiguration sans toucher au code de traitement.
+# ==============================================================================
+
+# ── Rayon du buffer pour l'agrégation de population autour d'un entrepôt ──────
+# On calcule la population dans un cercle de ce rayon autour de chaque nœud.
+# 5 km est un compromis raisonnable au Rwanda (densité ~400 hab/km²) :
+# trop petit → manque les zones périurbaines ; trop grand → chevauche les zones.
+BUFFER_DEMO_M <- 5000
+
+# ── Zoom du raster WorldPop pour l'approche B ─────────────────────────────────
+# Résolution disponible sur le portail WorldPop :
+#   z=10 → ~100m/pixel (précis, fichier lourd ~200 Mo)
+#   z=8  → ~400m/pixel (moins précis, fichier léger ~15 Mo)
+# Pour le Rwanda entier, z=9 (~200m) est le meilleur compromis.
+WORLDPOP_ZOOM <- 9
+
+# ── Chemin local du raster WorldPop si déjà téléchargé ───────────────────────
+# Si le fichier existe déjà sur le disque (session précédente), on l'utilise
+# directement sans retélécharger. Mettre NULL pour forcer le retéléchargement.
+WORLDPOP_LOCAL_PATH <- file.path(DIR_OUTPUT, "worldpop_rwanda_100m.tif")
+
+# ── URL et chemin du fichier NISR de référence (approche C) ───────────────────
+# Source : https://prod.open-data.risa.gov.rw/organization/nisr
+# Recensement RPHC-5, 2022. Téléchargez le CSV "Population by District"
+# et déposez-le dans le répertoire de travail.
+NISR_CSV_PATH <- "data/raw/nisr_population_districts_2022.csv"
+
+# Noms attendus des colonnes dans le CSV NISR (à adapter selon le fichier réel)
+# Ces noms correspondent au format typique des exports NISR data.gov.rw.
+NISR_COL_DISTRICT  <- "District"       # Colonne du nom du district
+NISR_COL_PROVINCE  <- "Province"       # Colonne de la province
+NISR_COL_POP_TOTAL <- "Total"          # Colonne de population totale
+
+cat("✓ Paramètres démographiques chargés\n\n")
+
+
+# ==============================================================================
+# IV.4.A : Extraction des tags de population depuis le fichier PBF
+#
+# Dans OpenStreetMap, certains noeuds de type "place" possèdent un tag
+# "population" indiquant le nombre d'habitants. Ce tag est maintenu par la
+# communauté OSM et couvre les grandes villes mais rarement les petites zones.
+#
+# AVANTAGES  : Aucun fichier externe, déjà dans le PBF téléchargé.
+# INCONVÉNIENTS : Couverture très partielle (< 30% des zones au Rwanda),
+#                 données souvent obsolètes ou approximatives.
+# ==============================================================================
+
+cat("── Approche A : tags OSM de population ──────────────────────────────\n")
+
+# Extraction des noeuds de type place avec un tag population depuis le PBF.
+# On réutilise la même syntaxe que pour les villes en Partie II.2.
+# other_tags contient les attributs secondaires au format "clé"=>"valeur".
+# La fonction extraire_tag() est définie en Partie II.2 et réutilisée ici.
+population_osm_raw <- tryCatch({
+  
+  st_read(
+    chemin_pbf,
+    layer = "points",
+    # On charge tous les lieux habités (city, town, village) qui ont potentiellement
+    # un tag population dans other_tags.
+    query = "SELECT name, place, other_tags FROM points
+             WHERE place IN ('city', 'town', 'village', 'suburb')",
+    quiet = TRUE
+  ) %>%
+    rename(geometry = `_ogr_geometry_`) %>%
+    st_as_sf() %>%
+    st_transform(crs = 32735) %>%
+    filter(!is.na(name)) %>%
+    mutate(
+      # Extraction du tag "population" depuis la chaîne other_tags.
+      # extraire_tag() utilise une regex pour trouver "population"=>"<valeur>".
+      # as.numeric() convertit la chaîne "45000" en entier 45000.
+      # suppressWarnings() évite les avertissements sur les valeurs non convertibles
+      # (ex : "45,000" avec virgule → NA, ce qui est le comportement voulu).
+      pop_osm_brute = suppressWarnings(
+        as.numeric(sapply(other_tags, extraire_tag, cle = "population"))
+      )
+    ) %>%
+    filter(!is.na(pop_osm_brute), pop_osm_brute > 0)
+  
+}, error = function(e) {
+  cat("  ⚠ Extraction PBF population échouée :", conditionMessage(e), "\n")
+  # Retourner un sf vide avec la même structure pour ne pas bloquer la suite
+  st_sf(name     = character(0),
+        pop_osm_brute = numeric(0),
+        geometry  = st_sfc(crs = 32735))
+})
+
+cat("  Lieux OSM avec tag population :", nrow(population_osm_raw), "\n")
+
+# ── Association à chaque entrepôt : point OSM le plus proche ──────────────────
+# Pour chaque entrepôt, on cherche le point OSM peuplé dans un rayon de
+# BUFFER_DEMO_M mètres. S'il y en a plusieurs, on prend le plus proche.
+# S'il n'y en a aucun, la population OSM reste NA (sera complétée par B ou C).
+
+if (nrow(population_osm_raw) > 0) {
+  
+  # st_join() avec st_nearest_feature = FALSE, on préfère st_is_within_distance
+  # pour contrôler explicitement la distance maximale d'association.
+  # st_is_within_distance() : matrice booléenne entrepôts × lieux OSM peuplés.
+  # lengths() > 0 : TRUE si au moins un lieu OSM est dans le buffer.
+  within_buffer_A <- st_is_within_distance(
+    entreposages_sf,
+    population_osm_raw,
+    dist = BUFFER_DEMO_M
+  )
+  
+  # Pour chaque entrepôt, on identifie le lieu OSM le plus proche dans le buffer.
+  # st_nearest_feature() renvoie un indice (le plus proche parmi les candidats).
+  pop_osm_par_entrepot <- sapply(seq_len(nrow(entreposages_sf)), function(i) {
+    
+    candidats <- which(within_buffer_A[[i]])  # Indices des lieux OSM dans le buffer
+    
+    if (length(candidats) == 0) return(NA_real_)  # Aucun lieu OSM à proximité
+    
+    if (length(candidats) == 1) {
+      # Un seul candidat : on prend directement sa population
+      return(population_osm_raw$pop_osm_brute[candidats])
+    }
+    
+    # Plusieurs candidats : on prend le plus proche géographiquement.
+    # distances() calcule la distance entre l'entrepôt i et chacun des candidats.
+    dists_candidats <- as.numeric(
+      st_distance(entreposages_sf[i,], population_osm_raw[candidats,])
+    )
+    # which.min() renvoie l'indice du candidat le plus proche.
+    idx_plus_proche <- candidats[which.min(dists_candidats)]
+    return(population_osm_raw$pop_osm_brute[idx_plus_proche])
+  })
+  
+} else {
+  # Aucun tag population dans le PBF : vecteur de NA de la bonne taille
+  pop_osm_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
+}
+
+cat("  Entrepôts avec pop. OSM :",
+    sum(!is.na(pop_osm_par_entrepot)), "/", nrow(entreposages_sf), "\n")
+cat("  Population OSM min :", round(min(pop_osm_par_entrepot, na.rm = TRUE)),
+    "| max :", round(max(pop_osm_par_entrepot, na.rm = TRUE)), "\n\n")
+
+
+# ==============================================================================
+# IV.4.B : Population depuis un raster WorldPop (~100m de résolution)
+#
+# WorldPop produit des rasters de densité de population à haute résolution
+# à partir de recensements, d'images satellites et de modèles statistiques.
+# Pour le Rwanda, les données sont disponibles pour 2020 (100m par pixel).
+#
+# AVANTAGES  : Haute résolution spatiale (100m), couvre tout le territoire,
+#              bien calibré sur les données NISR rwandaises.
+# INCONVÉNIENTS : Fichier lourd (~150 Mo), nécessite un téléchargement externe,
+#                 données 2020 (pas 2022).
+#
+# SOURCE : https://hub.worldpop.org/geodata/summary?id=49723
+#          (Rwanda, Population, 2020, 100m, Unconstrained individual countries)
+# ==============================================================================
+
+cat("── Approche B : raster WorldPop (population ~100m) ──────────────────\n")
+
+pop_worldpop_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
+
+# On tente d'abord de charger le raster depuis le disque (cache local).
+# Si le fichier n'existe pas, on le télécharge depuis le site WorldPop
+# via elevatr (même package que pour le DEM en Partie II.4).
+# La mise en cache évite un retéléchargement à chaque exécution du script.
+
+raster_worldpop <- NULL
+worldpop_ok     <- FALSE
+
+if (!is.null(WORLDPOP_LOCAL_PATH) && file.exists(WORLDPOP_LOCAL_PATH)) {
+  
+  cat("  Chargement du raster WorldPop depuis le cache local...\n")
+  
+  tryCatch({
+    raster_worldpop <- rast(WORLDPOP_LOCAL_PATH)
+    # Vérification : le raster doit avoir au moins un pixel non-NA sur le Rwanda
+    n_valeurs_valides <- global(raster_worldpop, "notNA")[,1]
+    if (n_valeurs_valides > 0) {
+      worldpop_ok <- TRUE
+      cat("  ✓ Raster WorldPop chargé (", n_valeurs_valides, "pixels)\n")
+    } else {
+      cat("  ⚠ Raster WorldPop vide, retéléchargement nécessaire\n")
+    }
+  }, error = function(e) {
+    cat("  ⚠ Chargement raster échoué :", conditionMessage(e), "\n")
+  })
+}
+
+# Si le raster n'est pas disponible localement, on tente le téléchargement.
+# URL directe WorldPop pour le Rwanda 2020 (non constrainted, 100m).
+# Pour d'autres années ou résolutions, consulter :
+# https://hub.worldpop.org/geodata/listing?id=29
+if (!worldpop_ok) {
+  
+  WORLDPOP_URL <- paste0(
+    "https://data.worldpop.org/GIS/Population/Global_2000_2020/",
+    "2020/RWA/rwa_ppp_2020_UNadj_constrained.tif"
+  )
+  
+  cat("  Tentative de téléchargement WorldPop :", WORLDPOP_URL, "\n")
+  cat("  (fichier ~150 Mo, peut prendre plusieurs minutes)\n")
+  
+  tryCatch({
+    
+    # download.file() télécharge un fichier depuis une URL vers un chemin local.
+    # mode = "wb" : write binary — indispensable pour les fichiers non-texte (GeoTIFF).
+    # method = "auto" : R choisit la meilleure méthode selon le système d'exploitation.
+    dir.create(dirname(WORLDPOP_LOCAL_PATH), showWarnings = FALSE, recursive = TRUE)
+    download.file(WORLDPOP_URL, WORLDPOP_LOCAL_PATH, mode = "wb", method = "auto")
+    
+    raster_worldpop <- rast(WORLDPOP_LOCAL_PATH)
+    # Reprojection en UTM 35S pour cohérence avec les couches sf du script
+    raster_worldpop <- project(raster_worldpop, "EPSG:32735", method = "bilinear")
+    worldpop_ok     <- TRUE
+    cat("  ✓ Raster WorldPop téléchargé et reprojeté\n")
+    
+  }, error = function(e) {
+    cat("  ⚠ Téléchargement WorldPop échoué :", conditionMessage(e), "\n")
+    cat("    → Approche B ignorée, on continue avec A et C\n")
+    cat("    → Pour télécharger manuellement :", WORLDPOP_URL, "\n")
+    cat("    → Sauvegarder sous :", WORLDPOP_LOCAL_PATH, "\n")
+  })
+}
+
+# ── Agrégation du raster dans un buffer autour de chaque entrepôt ─────────────
+# Pour chaque entrepôt, on somme les pixels WorldPop dans un cercle de
+# BUFFER_DEMO_M mètres. Chaque pixel représente le nombre d'habitants vivant
+# dans cette cellule de 100m × 100m.
+# exact_extract() du package exactextractr est bien plus précis que
+# terra::extract() pour l'agrégation sur un polygone (prise en compte
+# des pixels partiellement dans le buffer avec pondération fractionnaire).
+if (worldpop_ok) {
+  
+  cat("  Agrégation WorldPop sur les buffers de",
+      BUFFER_DEMO_M / 1000, "km...\n")
+  
+  # Vérification que le package exactextractr est disponible.
+  # C'est une alternative à terra::extract() bien plus précise pour les polygones.
+  # install.packages() ne fait rien si le package est déjà installé.
+  if (!requireNamespace("exactextractr", quietly = TRUE)) {
+    install.packages("exactextractr")
+  }
+  
+  # Création des buffers de chaque entrepôt
+  # entreposages_buffer est déjà défini en Partie IV.3, on le réutilise.
+  
+  tryCatch({
+    
+    # exactextractr::exact_extract() : pour chaque polygone (buffer d'entrepôt),
+    # calcule la somme des valeurs du raster WorldPop à l'intérieur.
+    # fun = "sum" : on veut le nombre TOTAL d'habitants dans le buffer.
+    # Pour obtenir une densité moyenne, utiliser fun = "mean".
+    # progress = FALSE : supprime la barre de progression interne d'exactextractr
+    # (on gère notre propre affichage ci-dessous).
+    resultats_wp <- exactextractr::exact_extract(
+      raster_worldpop,
+      entreposages_buffer %>% st_transform(st_crs(raster_worldpop)),
+      fun      = "sum",
+      progress = FALSE
+    )
+    
+    # exact_extract avec fun="sum" retourne directement un vecteur numérique.
+    # On remplace les éventuels NA par 0 (zones sans données WorldPop).
+    pop_worldpop_par_entrepot <- replace_na(as.numeric(resultats_wp), 0)
+    
+    cat("  ✓ Population WorldPop calculée pour",
+        sum(pop_worldpop_par_entrepot > 0), "/", nrow(entreposages_sf),
+        "entrepôts\n")
+    cat("  Pop. WorldPop min :",
+        round(min(pop_worldpop_par_entrepot[pop_worldpop_par_entrepot > 0])),
+        "| max :", round(max(pop_worldpop_par_entrepot)), "\n\n")
+    
+  }, error = function(e) {
+    cat("  ⚠ Agrégation WorldPop échouée :", conditionMessage(e), "\n")
+    cat("  → Approche B ignorée\n\n")
+    pop_worldpop_par_entrepot <<- rep(NA_real_, nrow(entreposages_sf))
+  })
+}
+
+
+# ==============================================================================
+# IV.4.C : Données de recensement NISR (source officielle, recommandée)
+#
+# L'Institut National de Statistiques du Rwanda (NISR) publie les résultats
+# du recensement RPHC-5 (2022) par district sur :
+#   https://prod.open-data.risa.gov.rw/organization/nisr
+#
+# PROCÉDURE DE TÉLÉCHARGEMENT :
+#   1. Aller sur https://prod.open-data.risa.gov.rw/organization/nisr
+#   2. Chercher "Population by District 2022"
+#   3. Télécharger le CSV (bouton "Explore" → "Download")
+#   4. Placer le fichier dans data/raw/nisr_population_districts_2022.csv
+#
+# Le fichier contient ~30 districts rwandais avec population par sexe.
+# On fait une jointure spatiale : chaque entrepôt est associé au district
+# dans lequel il se trouve, puis on récupère la population de ce district.
+#
+# AVANTAGES  : Données officielles, les plus récentes (2022), gratuites.
+# INCONVÉNIENTS : Résolution district uniquement (pas de granularité plus fine),
+#                 nécessite un téléchargement manuel.
+# ==============================================================================
+
+cat("── Approche C : recensement NISR 2022 (par district) ────────────────\n")
+
+pop_nisr_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
+
+if (file.exists(NISR_CSV_PATH)) {
+  
+  tryCatch({
+    
+    # ── Chargement du CSV NISR ──────────────────────────────────────────────
+    # read_csv() est plus robuste que read.csv() pour les fichiers avec encodage
+    # UTF-8 (noms de districts avec accents) et les colonnes numériques avec
+    # des espaces ou virgules comme séparateurs de milliers.
+    nisr_pop_raw <- read_csv(NISR_CSV_PATH, show_col_types = FALSE)
+    
+    cat("  CSV NISR chargé :", nrow(nisr_pop_raw), "lignes\n")
+    cat("  Colonnes disponibles :", paste(names(nisr_pop_raw), collapse = ", "), "\n")
+    
+    # ── Nettoyage du tableau NISR ────────────────────────────────────────────
+    # On extrait uniquement les colonnes dont on a besoin et on normalise
+    # les noms de districts (suppression des accents, minuscules)
+    # pour faciliter la jointure avec les données OSM/GADM.
+    nisr_pop <- nisr_pop_raw %>%
+      # Renommage des colonnes selon les paramètres définis en IV.4.0
+      rename(
+        district  = any_of(NISR_COL_DISTRICT),
+        province  = any_of(NISR_COL_PROVINCE),
+        pop_total = any_of(NISR_COL_POP_TOTAL)
+      ) %>%
+      # Nettoyage des noms de districts pour les jointures textuelles.
+      # str_to_lower() + str_trim() : minuscules + suppression espaces.
+      # iconv() : translittération des caractères accentués vers ASCII
+      # (ex : "Gasabò" → "Gasabo") pour éviter les problèmes d'encodage.
+      mutate(
+        district_clean = iconv(str_to_lower(str_trim(district)),
+                               from = "UTF-8", to = "ASCII//TRANSLIT"),
+        pop_total      = as.numeric(str_remove_all(
+          as.character(pop_total), "[,\\s]"))  # Supprime "," et espaces dans les nombres
+      ) %>%
+      filter(!is.na(pop_total), pop_total > 0) %>%
+      select(district, district_clean, province, pop_total)
+    
+    cat("  Districts NISR après nettoyage :", nrow(nisr_pop), "\n")
+    
+    # ── Téléchargement des frontières de districts (GADM) ───────────────────
+    # GADM (Global Administrative Areas) fournit les polygones des limites
+    # administratives pour tous les pays du monde.
+    # geodata::gadm() télécharge le niveau 2 (districts) pour le Rwanda.
+    # level = 2 : provinces = 1, districts = 2, secteurs = 3.
+    cat("  Téléchargement des frontières de districts GADM...\n")
+    
+    rwanda_districts_gadm <- tryCatch({
+      
+      geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
+        st_as_sf() %>%
+        st_transform(crs = 32735) %>%
+        # NAME_2 est le champ GADM contenant le nom du district en anglais.
+        # On applique la même normalisation que pour nisr_pop$district_clean.
+        mutate(
+          district_clean = iconv(str_to_lower(str_trim(NAME_2)),
+                                 from = "UTF-8", to = "ASCII//TRANSLIT")
+        ) %>%
+        select(district_gadm = NAME_2, district_clean, geometry)
+      
+    }, error = function(e) {
+      cat("  ⚠ Téléchargement GADM échoué :", conditionMessage(e), "\n")
+      NULL
+    })
+    
+    if (!is.null(rwanda_districts_gadm)) {
+      
+      # ── Jointure GADM × NISR ────────────────────────────────────────────
+      # On fusionne le tableau de population NISR avec les polygones GADM
+      # via le nom de district normalisé.
+      # left_join() conserve tous les polygones GADM même sans correspondance NISR.
+      districts_avec_pop <- rwanda_districts_gadm %>%
+        left_join(
+          nisr_pop %>% select(district_clean, pop_total),
+          by = "district_clean"
+        )
+      
+      # Vérification du taux de couverture de la jointure
+      n_sans_pop <- sum(is.na(districts_avec_pop$pop_total))
+      cat("  Jointure GADM × NISR :", nrow(districts_avec_pop) - n_sans_pop,
+          "/", nrow(districts_avec_pop), "districts appariés\n")
+      
+      # Si des districts restent sans population après la jointure textuelle,
+      # c'est souvent dû à de légères différences d'orthographe
+      # (ex : "Nyarugenge" vs "Nyarugege"). On les signale pour correction manuelle.
+      if (n_sans_pop > 0) {
+        cat("  ⚠ Districts GADM sans correspondance NISR :\n")
+        manquants <- districts_avec_pop %>%
+          filter(is.na(pop_total)) %>%
+          pull(district_gadm)
+        cat("   ", paste(manquants, collapse = ", "), "\n")
+        cat("    → Vérifier l'orthographe dans", NISR_CSV_PATH, "\n")
+      }
+      
+      # ── Jointure spatiale entrepôts × districts ──────────────────────────
+      # Pour chaque entrepôt, on identifie dans quel district il se trouve
+      # (st_within) et on récupère la population du district correspondant.
+      # st_join() avec join = st_within : chaque entrepôt hérite des attributs
+      # du district qui le contient géographiquement.
+      # Une frontière peut poser problème : un entrepôt exactement sur la
+      # limite de deux districts. Dans ce cas, st_within peut retourner
+      # plusieurs résultats ou aucun. On utilise st_nearest_feature comme
+      # fallback pour les entrepôts non couverts.
+      entrepots_join_nisr <- entreposages_sf %>%
+        st_join(
+          districts_avec_pop %>% select(district_gadm, pop_total),
+          join    = st_within,
+          largest = TRUE   # Si plusieurs correspondances, prendre le plus grand polygone
+        )
+      
+      pop_nisr_par_entrepot <- entrepots_join_nisr$pop_total
+      
+      # Fallback pour les entrepôts hors district (frontières, problèmes topo)
+      # st_nearest_feature() : pour les entrepôts sans district (NA), on leur
+      # associe le district le plus proche géographiquement.
+      manquants_idx <- which(is.na(pop_nisr_par_entrepot))
+      if (length(manquants_idx) > 0) {
+        
+        idx_district_proche <- st_nearest_feature(
+          entreposages_sf[manquants_idx, ],
+          districts_avec_pop
+        )
+        pop_nisr_par_entrepot[manquants_idx] <-
+          districts_avec_pop$pop_total[idx_district_proche]
+        
+        cat("  Entrepôts hors district (fallback nearest) :", length(manquants_idx), "\n")
+      }
+      
+      cat("  ✓ Population NISR associée :", sum(!is.na(pop_nisr_par_entrepot)),
+          "/", nrow(entreposages_sf), "entrepôts\n")
+      cat("  Pop. NISR min :", round(min(pop_nisr_par_entrepot, na.rm = TRUE)),
+          "| max :", round(max(pop_nisr_par_entrepot, na.rm = TRUE)), "\n\n")
+      
+    } else {
+      cat("  ⚠ GADM non disponible — approche C abandonnée\n\n")
+    }
+    
+  }, error = function(e) {
+    cat("  ⚠ Approche C échouée :", conditionMessage(e), "\n\n")
+  })
+  
+} else {
+  cat("  Fichier NISR non trouvé :", NISR_CSV_PATH, "\n")
+  cat("  → Télécharger sur https://prod.open-data.risa.gov.rw/organization/nisr\n")
+  cat("  → Approche C ignorée\n\n")
+}
+
+
+# ==============================================================================
+# IV.4.D : Fusion des trois sources et intégration dans le modèle
+#
+# On assemble maintenant les trois vecteurs de population (A, B, C)
+# en une seule colonne "population_zone" par entrepôt selon la hiérarchie :
+#
+#   Priorité 1 : NISR officiel (C)  — disponible et non-NA → utiliser
+#   Priorité 2 : WorldPop (B)       — si C absent ou NA     → utiliser
+#   Priorité 3 : OSM (A)            — si B absent ou NA     → utiliser
+#   Priorité 0 : Population minimale — si tout est NA        → 1 000 hab.
+#                                       (évite les divisions par zéro)
+#
+# La population finale est intégrée :
+#   - dans reseau_rwanda (attribut de nœud sfnetworks)
+#   - dans DuckDB (table "population_entrepots")
+#   - dans entreposages_fictifs (data.frame de référence)
+# ==============================================================================
+
+cat("── Fusion et intégration des données de population ──────────────────\n")
+
+# coalesce() : prend le premier argument non-NA, de gauche à droite.
+# C'est l'opérateur de "hiérarchie de sources" en une seule fonction.
+# remplace if_else(is.na(C), if_else(is.na(B), A, B), C) mais de façon lisible.
+population_zone_finale <- coalesce(
+  replace_na(pop_nisr_par_entrepot,    NA_real_),   # Source C : NISR (priorité max)
+  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
+  replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
+  rep(1000, nrow(entreposages_sf))                  # Fallback : 1 000 hab. minimum
+) %>%
+  round()   # Les populations sont des entiers
+
+# ── Tableau de synthèse des sources utilisées ──────────────────────────────
+# Ce diagnostic permet de vérifier la qualité du remplissage et d'identifier
+# les zones pour lesquelles on a dû utiliser le fallback.
+source_utilisee <- case_when(
+  !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
+  !is.na(pop_worldpop_par_entrepot) ~ "WorldPop_2020",
+  !is.na(pop_osm_par_entrepot)      ~ "OSM",
+  TRUE                              ~ "Fallback_1000"
+)
+
+diag_population <- tibble(
+  nom_zone        = entreposages_avec_snap$nom,
+  type_zone       = entreposages_avec_snap$type,
+  pop_osm         = round(pop_osm_par_entrepot),
+  pop_worldpop    = round(pop_worldpop_par_entrepot),
+  pop_nisr        = round(pop_nisr_par_entrepot),
+  population_zone = population_zone_finale,
+  source          = source_utilisee
+)
+
+cat("\nDiagnostic des sources de population :\n")
+print(
+  diag_population %>%
+    count(source) %>%
+    mutate(pct = round(n / sum(n) * 100, 1)) %>%
+    rename(Source = source, N_zones = n, `Part (%)` = pct)
+)
+
+cat("\nPopulation par zone (top 10 par population) :\n")
+print(
+  diag_population %>%
+    arrange(desc(population_zone)) %>%
+    slice_head(n = 10) %>%
+    select(nom_zone, type_zone, population_zone, source) %>%
+    rename(Zone = nom_zone, Type = type_zone,
+           Population = population_zone, Source = source)
+)
+
+# ── Stockage dans DuckDB ──────────────────────────────────────────────────────
+# On crée une table dédiée "population_entrepots" dans DuckDB pour pouvoir
+# l'utiliser dans toutes les requêtes SQL des Parties V à IX.
+# Exemple d'utilisation en SQL :
+#   SELECT m.*, p.population_zone
+#   FROM matrice_od m
+#   JOIN population_entrepots p ON m.nom_origine = p.nom_zone
+duck_write(
+  diag_population %>%
+    select(nom_zone, type_zone, population_zone, source),
+  "population_entrepots"
+)
+
+# ── Intégration dans reseau_rwanda (attribut de nœud) ─────────────────────────
+# On ajoute la population comme attribut des nœuds d'entrepôt dans le réseau sf.
+# Les nœuds non-entrepôt reçoivent NA (ils ne sont pas des zones économiques).
+# match() : pour chaque nœud, cherche si son warehouse_name est dans notre table.
+reseau_rwanda <- reseau_rwanda %>%
+  activate("nodes") %>%
+  mutate(
+    population_zone = diag_population$population_zone[
+      match(warehouse_name,
+            diag_population$nom_zone)
+    ]
+    # Pour les nœuds non-entrepôt, match() retourne NA → population_zone = NA.
+    # C'est le comportement voulu : seuls les entrepôts ont une population.
+  )
+
+# ── Intégration dans entreposages_fictifs ─────────────────────────────────────
+# On enrichit aussi le data.frame de référence (utilisé en Partie IV.3 et VII).
+entreposages_fictifs <- entreposages_fictifs %>%
+  left_join(
+    diag_population %>% select(nom_zone, population_zone, source_population = source),
+    by = c("nom" = "nom_zone")
+  )
+
+# Mise à jour de la table DuckDB zones_entreposage avec la population
+duck_write(entreposages_fictifs, "zones_entreposage")
+
+cat("\n✓ Population intégrée dans reseau_rwanda et DuckDB\n")
+cat("  Nœuds avec population_zone > 0 :",
+    sum(!is.na(igraph::V(reseau_rwanda %>% as_tbl_graph())$population_zone),
+        na.rm = TRUE), "\n\n")
+
+
+# ==============================================================================
+# IV.4.E : Visualisation démographique (carte + graphique)
+# ==============================================================================
+
+cat("── Visualisation de la distribution démographique ───────────────────\n")
+
+# ── Carte : population par zone sur le réseau ──────────────────────────────────
+# Les entrepôts sont affichés comme des cercles dont le diamètre est
+# proportionnel à la population (échelle log pour gérer les ordres de grandeur).
+# Kigali (~1 M d'habitants) ne doit pas écraser visuellement les petites villes.
+
+entrepots_pop_sf <- reseau_rwanda %>%
+  activate("nodes") %>%
+  filter(is_warehouse, !is.na(population_zone)) %>%
+  st_as_sf() %>%
+  mutate(
+    pop_log       = log10(population_zone + 1),
+    taille_cercle = rescale(pop_log, to = c(0.3, 2.5))
+  )
+
+carte_population <- fond_carte() +
+  
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col = "#DDDDDD", lwd = 0.4) +
+  
+  tm_shape(entrepots_pop_sf) +
+  tm_dots(
+    fill        = "population_zone",
+    fill.scale  = tm_scale_intervals(
+      style  = "quantile",
+      n      = 5,
+      values = "brewer.yl_or_rd"
+    ),
+    fill.legend = tm_legend(title = "Population\n(habitants)"),
+    size        = "taille_cercle",
+    size.scale  = tm_scale(values.range = c(0.3, 2.5)),
+    size.legend = tm_legend(show = FALSE)
+  ) +
+  
+  tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020 / OSM") +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_population,
+  file.path(DIR_OUTPUT, "carte_population_zones.png"),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ carte_population_zones.png\n")
+
+# ── Graphique : population par zone et par type ────────────────────────────────
+g_pop <- diag_population %>%
+  arrange(desc(population_zone)) %>%
+  mutate(
+    Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 25),
+    Zone_court = factor(Zone_court, levels = rev(Zone_court))
+  ) %>%
+  ggplot(aes(x = Zone_court, y = population_zone / 1000,
+             fill = type_zone, alpha = source)) +
+  geom_col(width = 0.75) +
+  coord_flip() +
+  # Transparence selon la fiabilité de la source
+  # NISR = source officielle → pleine opacité
+  # Fallback → semi-transparent pour signaler l'incertitude
+  scale_alpha_manual(
+    values = c("NISR_2022"     = 1.0,
+               "WorldPop_2020" = 0.8,
+               "OSM"           = 0.65,
+               "Fallback_1000" = 0.35),
+    name   = "Source"
+  ) +
+  scale_fill_manual(values = PALETTE_ZONE_TYPE, name = "Type de zone") +
+  scale_y_continuous(labels = scales::label_number(suffix = " k")) +
+  labs(
+    title    = "Population par zone d'entrepôt",
+    subtitle = "Transparence = fiabilité de la source (opaque = NISR officiel)",
+    x        = NULL,
+    y        = "Population (milliers d'habitants)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, "graphique_population_zones.png"),
+  g_pop, width = 12, height = 8, dpi = 300
+)
+cat("  ✓ graphique_population_zones.png\n\n")
+
+cat("✓ Partie IV.4 terminée — population_zone disponible dans :\n")
+cat("  • reseau_rwanda  (attribut de nœud)\n")
+cat("  • DuckDB         (table population_entrepots)\n")
+cat("  • entreposages_fictifs (colonne population_zone)\n\n")
+
+cat("  UTILISATION EN PARTIE VII (modèle gravitaire) :\n")
+cat("  Remplacer 'taille * echelle' par 'taille * log(population_zone) * echelle'\n")
+cat("  dans le calcul de offre_zones[i,] et demande_zones[i,]\n\n")
+
+
+################################################################################
+# PARTIE IV.5 — ENRICHISSEMENT PAR L'INDICE DE RICHESSE RELATIVE (RWI)
+#
+# OBJECTIF : Associer à chaque zone d'entrepôt un score de richesse relative
+#            (Relative Wealth Index, Meta / CIESIN) pour moduler les profils
+#            d'offre et de demande dans le modèle gravitaire (Partie VII).
+#
+# PRINCIPE : Un entrepôt situé dans une zone riche génère une demande plus
+#            forte en biens de valeur élevée (Services, Commerce, Industrie)
+#            et plus faible en biens de base (Agriculture). L'inverse vaut
+#            pour une zone pauvre. Ce mécanisme complète le profil de type de
+#            zone (hub, marché, frontière…) défini en Partie IV.3.
+#
+# MÉTHODE — MÊME LOGIQUE QUE L'USAGE DES SOLS (Partie IV.3) :
+#   ┌──────────────────────────────────────────────────────────────────┐
+#   │  Usage des sols : proportion de surface couverte par un type     │
+#   │   → scalaire p_ind ou p_urb entre 0 et 1                        │
+#   │  RWI           : moyenne pondérée par distance inverse (IDW)     │
+#   │   des scores des cellules RWI dans le buffer de chaque entrepôt  │
+#   │   → scalaire p_rwi entre 0 et 1 (normalisé min-max)             │
+#   │  Dans les deux cas, ce scalaire entre dans la même interpolation │
+#   │  convexe du profil sectoriel en Partie VII.2.                    │
+#   └──────────────────────────────────────────────────────────────────┘
+#
+# SOURCE : Chi, G., Fang, H., Chatterjee, S. & Blumenstock, J.E. (2022).
+#          Microestimates of wealth for all low- and middle-income countries.
+#          PNAS, 119(3), e2113658119. doi:10.1073/pnas.2113658119
+#          Données téléchargeables librement (CC0) sur HDX :
+#          https://data.humdata.org/dataset/relative-wealth-index
+#
+# PLACEMENT DANS LE SCRIPT :
+#   Dépend de :
+#     - entreposages_sf, entreposages_buffer (Partie IV.3)
+#     - reseau_rwanda          (Partie III)
+#     - rwanda_boundary        (Partie II.3)
+#     - duck_write()           (Partie I.2)
+#   Alimente :
+#     - Partie VII.2 (modèle gravitaire) : variable p_rwi dans l'interpolation
+#     - reseau_rwanda (attribut de nœud : rwi_moyen, p_rwi)
+#     - DuckDB (table richesse_entrepots)
+################################################################################
+
+cat("==========================================================\n")
+cat("  PARTIE IV.5 — INDICE DE RICHESSE RELATIVE (RWI)\n")
+cat("==========================================================\n\n")
+
+# ==============================================================================
+# IV.5.0 : Paramètres RWI
+# Tous les réglages spécifiques à cette partie sont centralisés ici.
+# Modifier ce bloc suffit à changer le comportement de toute la partie.
+# ==============================================================================
+
+# ── URL de téléchargement (HDX — Humanitarian Data Exchange) ──────────────────
+# Le ZIP contient les 93 pays en un seul téléchargement (~35 Mo compressé).
+# Chaque pays est un CSV séparé, nommé <ISO3>_relative_wealth_index.csv.
+# Source : https://data.humdata.org/dataset/relative-wealth-index
+RWI_ZIP_URL <- paste0(
+  "https://data.humdata.org/dataset/",
+  "76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/",
+  "de2f953e-940c-43bb-b1f8-4d02d28124b5/download/",
+  "relative-wealth-index-april-2021.zip"
+)
+
+# Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
+RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
+
+# Chemin local pour le cache du ZIP et du CSV extrait
+RWI_ZIP_LOCAL   <- file.path(DIR_OUTPUT, "rwi_all_countries.zip")
+RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
+
+# ── Rayon du buffer pour l'agrégation IDW ─────────────────────────────────────
+# On réutilise BUFFER_ENTREPOT_M = 2000m (défini en Partie IV.3) pour rester
+# cohérent avec le calcul des parts d'usage des sols.
+# Si on veut un rayon différent pour le RWI, le décommenter :
+# BUFFER_RWI_M <- 5000
+
+# Pour l'instant on garde la même valeur que le landuse
+BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
+
+# ── Paramètre de l'interpolation IDW (inverse distance weighting) ────────────
+# La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
+# Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
+# Puissance = 2 : décroissance quadratique (standard en géostatistique)
+# Puissance = 3 : décroissance cubique (très locale, amplifier les pôles proches)
+# On recommande 2 pour être cohérent avec la littérature géostatistique.
+RWI_IDW_PUISSANCE <- 2
+
+# Distance minimale utilisée dans l'IDW pour éviter la division par zéro.
+# Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
+# possible avec les données grillées), on le plafonne à 50m.
+RWI_DISTANCE_MIN_M <- 50
+
+# ── Seuil d'influence : rayon maximal des cellules RWI considérées ───────────
+# Les cellules RWI à plus de BUFFER_RWI_M mètres du centroïde sont ignorées.
+# Ce seuil garantit que le score RWI d'un entrepôt reflète son voisinage
+# immédiat, pas une zone trop large qui diluerait le signal.
+# Note : on n'utilise pas une zone plus grande que le buffer landuse pour que
+# les deux scores soient comparables dans l'interpolation convexe de VII.2.
+
+# ── Profils sectoriels modulés par la richesse (NOUVEAUX dans IV.5) ───────────
+# Ces deux profils définissent comment une zone très riche (ou très pauvre)
+# déplace sa structure d'offre et de demande par rapport au profil de base.
+#
+# PROFIL_OFFRE_RICHE :
+#   Une zone riche produit et exporte davantage de Services, Commerce et
+#   Industrie (valeur ajoutée élevée), et moins d'Agriculture brute.
+#   C'est cohérent avec la structure économique de Kigali par rapport aux
+#   zones rurales.
+#
+# PROFIL_DEMANDE_RICHE :
+#   Une zone riche consomme davantage de produits transformés, de biens
+#   manufacturés, de services financiers et de construction (habitat de
+#   qualité) — et moins de produits alimentaires bruts.
+#
+# Ces profils sont définis dans le même espace vectoriel que PROFILS_OFFRE
+# et PROFILS_DEMANDE (8 secteurs, somme = 1) pour entrer directement dans
+# l'interpolation convexe de Partie VII.2.
+PROFIL_OFFRE_RICHE <- c(
+  Agriculture    = 0.03,   # Faible : peu de production agricole brute
+  Mines          = 0.02,   # Faible : secteur extractif peu lié à la richesse
+  Agro_industrie = 0.12,   # Modéré : transformation alimentaire de qualité
+  Industrie      = 0.20,   # Élevé  : manufacturier, technologie
+  Construction   = 0.10,   # Modéré : BTP de qualité
+  Commerce       = 0.25,   # Très élevé : commerce de détail, import/export
+  Transport      = 0.13,   # Élevé  : logistique, fret de valeur ajoutée
+  Services       = 0.15    # Élevé  : finance, conseil, tourisme
+)
+
+PROFIL_DEMANDE_RICHE <- c(
+  Agriculture    = 0.04,   # Faible : substitution vers produits transformés
+  Mines          = 0.02,   # Faible
+  Agro_industrie = 0.18,   # Modéré : alimentation transformée, importée
+  Industrie      = 0.20,   # Élevé  : biens durables (électronique, mobilier)
+  Construction   = 0.12,   # Élevé  : immobilier haut de gamme
+  Commerce       = 0.22,   # Très élevé : consommation marchande élevée
+  Transport      = 0.10,   # Modéré
+  Services       = 0.12    # Élevé  : services aux entreprises et personnes
+)
+
+# Vérification que les profils somment bien à 1 (condition de l'interpolation)
+stopifnot(abs(sum(PROFIL_OFFRE_RICHE)   - 1) < 1e-9)
+stopifnot(abs(sum(PROFIL_DEMANDE_RICHE) - 1) < 1e-9)
+
+cat("✓ Paramètres RWI chargés\n\n")
+
+
+# ==============================================================================
+# IV.5.1 : Téléchargement et préparation des données RWI
+#
+# Le fichier CSV Rwanda contient une ligne par cellule de ~2,4 km² avec :
+#   - latitude  : latitude WGS84 du centroïde de la cellule
+#   - longitude : longitude WGS84 du centroïde de la cellule
+#   - rwi       : score de richesse relative (centré sur 0, pas d'unité)
+#   - error     : incertitude du modèle (écart-type de la prédiction)
+#
+# On convertit ce tableau en objet sf, on reprojette en UTM 35S, puis on
+# met en cache pour éviter le retéléchargement aux prochaines sessions.
+# ==============================================================================
+
+cat("── Chargement des données RWI ────────────────────────────────────────\n")
+
+rwi_sf   <- NULL
+rwi_ok   <- FALSE
+
+# ── Tentative 1 : chargement depuis le cache local ────────────────────────────
+# Si le CSV Rwanda a déjà été extrait lors d'une session précédente, on
+# l'utilise directement sans retélécharger le ZIP.
+if (file.exists(RWI_CSV_LOCAL)) {
+  
+  cat("  CSV RWI trouvé en cache local :", RWI_CSV_LOCAL, "\n")
+  
+  tryCatch({
+    
+    rwi_raw <- read_csv(RWI_CSV_LOCAL, show_col_types = FALSE)
+    
+    # Vérification des colonnes attendues
+    cols_attendues <- c("latitude", "longitude", "rwi", "error")
+    if (!all(cols_attendues %in% names(rwi_raw))) {
+      stop("Colonnes manquantes : ",
+           paste(setdiff(cols_attendues, names(rwi_raw)), collapse = ", "))
+    }
+    
+    # Conversion en objet sf : chaque ligne devient un point géospatial.
+    # CRS 4326 = WGS84 (système GPS, coordonnées en degrés décimaux).
+    # CRS 32735 = UTM Zone 35S (mètres, cohérent avec le réseau routier).
+    rwi_sf <- rwi_raw %>%
+      filter(!is.na(rwi), !is.na(latitude), !is.na(longitude)) %>%
+      st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
+      st_transform(crs = 32735) %>%
+      # On conserve uniquement les colonnes utiles pour alléger l'objet
+      select(rwi, error)
+    
+    rwi_ok <- TRUE
+    cat("  ✓ RWI chargé depuis cache :", nrow(rwi_sf), "cellules\n")
+    
+  }, error = function(e) {
+    cat("  ⚠ Lecture CSV échouée :", conditionMessage(e), "\n")
+    cat("    → Retéléchargement du ZIP\n")
+  })
+}
+
+# ── Tentative 2 : téléchargement du ZIP et extraction ─────────────────────────
+# Le ZIP contient les 93 pays. On le télécharge une fois (~35 Mo), on extrait
+# uniquement le fichier Rwanda, et on supprime le ZIP pour libérer l'espace.
+if (!rwi_ok) {
+  
+  cat("  Téléchargement du ZIP RWI (~35 Mo)...\n")
+  cat("  Source :", RWI_ZIP_URL, "\n")
+  
+  tryCatch({
+    
+    # download.file() : télécharge un fichier depuis une URL.
+    # mode = "wb" (write binary) est indispensable pour les archives ZIP.
+    # quiet = FALSE : afficher la progression du téléchargement.
+    download.file(RWI_ZIP_URL, destfile = RWI_ZIP_LOCAL,
+                  mode = "wb", quiet = FALSE)
+    
+    # Liste des fichiers dans le ZIP pour vérifier que Rwanda est présent.
+    # unzip(list = TRUE) ne décompresse pas — il liste uniquement le contenu.
+    contenu_zip <- unzip(RWI_ZIP_LOCAL, list = TRUE)
+    cat("  Fichiers dans le ZIP :", nrow(contenu_zip), "\n")
+    
+    # Vérification que le fichier Rwanda est dans le ZIP.
+    # La casse peut varier selon la version du ZIP (RWA_ ou rwa_).
+    # grepl() + ignore.case = TRUE gère les deux cas.
+    idx_rwanda <- grep(
+      pattern     = "rwa.*relative.*wealth",
+      x           = contenu_zip$Name,
+      ignore.case = TRUE
+    )
+    
+    if (length(idx_rwanda) == 0) {
+      stop("Fichier Rwanda introuvable dans le ZIP.\n",
+           "Fichiers disponibles : ",
+           paste(head(contenu_zip$Name, 10), collapse = ", "))
+    }
+    
+    nom_fichier_zip <- contenu_zip$Name[idx_rwanda[1]]
+    cat("  Fichier Rwanda dans le ZIP :", nom_fichier_zip, "\n")
+    
+    # Extraction du seul fichier Rwanda (évite de décompresser 93 pays).
+    # exdir = dirname(RWI_CSV_LOCAL) : répertoire de destination.
+    unzip(
+      zipfile = RWI_ZIP_LOCAL,
+      files   = nom_fichier_zip,
+      exdir   = dirname(RWI_CSV_LOCAL)
+    )
+    
+    # Renommage si nécessaire (normalisation vers RWI_CSV_LOCAL)
+    chemin_extrait <- file.path(dirname(RWI_CSV_LOCAL), nom_fichier_zip)
+    if (chemin_extrait != RWI_CSV_LOCAL && file.exists(chemin_extrait)) {
+      file.rename(chemin_extrait, RWI_CSV_LOCAL)
+    }
+    
+    # Suppression du ZIP pour libérer l'espace (~35 Mo)
+    # (le CSV extrait fait ~500 Ko et est conservé comme cache)
+    file.remove(RWI_ZIP_LOCAL)
+    cat("  ZIP supprimé après extraction\n")
+    
+    # ── Chargement du CSV extrait ──────────────────────────────────────────
+    rwi_raw <- read_csv(RWI_CSV_LOCAL, show_col_types = FALSE)
+    
+    rwi_sf <- rwi_raw %>%
+      filter(!is.na(rwi), !is.na(latitude), !is.na(longitude)) %>%
+      st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
+      st_transform(crs = 32735) %>%
+      select(rwi, error)
+    
+    rwi_ok <- TRUE
+    cat("  ✓ RWI téléchargé et chargé :", nrow(rwi_sf), "cellules\n")
+    
+  }, error = function(e) {
+    cat("  ⚠ Téléchargement RWI échoué :", conditionMessage(e), "\n")
+    cat("    → Téléchargement manuel : ", RWI_ZIP_URL, "\n")
+    cat("    → Extraire", RWI_FICHIER_RWANDA, "vers", RWI_CSV_LOCAL, "\n")
+    cat("    → Partie IV.5 ignorée, le modèle continue sans RWI\n\n")
+  })
+}
+
+# ── Statistiques descriptives du RWI Rwanda ───────────────────────────────────
+if (rwi_ok) {
+  
+  rwi_stats <- tibble(
+    n_cellules   = nrow(rwi_sf),
+    rwi_min      = round(min(rwi_sf$rwi),  3),
+    rwi_max      = round(max(rwi_sf$rwi),  3),
+    rwi_median   = round(median(rwi_sf$rwi), 3),
+    rwi_mean     = round(mean(rwi_sf$rwi),  3),
+    erreur_moy   = round(mean(rwi_sf$error, na.rm = TRUE), 3)
+  )
+  
+  cat("\n  Distribution du RWI Rwanda :\n")
+  cat("  Cellules     :", rwi_stats$n_cellules, "\n")
+  cat("  Min / Max    :", rwi_stats$rwi_min, "/", rwi_stats$rwi_max, "\n")
+  cat("  Médiane / Moy:", rwi_stats$rwi_median, "/", rwi_stats$rwi_mean, "\n")
+  cat("  Erreur moy.  :", rwi_stats$erreur_moy, "\n\n")
+  
+  # ── Rognage aux limites du Rwanda ─────────────────────────────────────────
+  # On s'assure que les cellules RWI sont bien dans le territoire rwandais
+  # (le ZIP peut contenir des cellules légèrement hors frontière).
+  # st_filter() avec st_intersects : conserve les points dans le polygone.
+  rwi_sf <- rwi_sf %>%
+    st_filter(rwanda_boundary %>%
+                st_buffer(dist = 1000) %>%  # 1km de marge pour les frontières
+                st_union())
+  
+  cat("  Cellules après rognage Rwanda :", nrow(rwi_sf), "\n\n")
+}
+
+
+# ==============================================================================
+# IV.5.2 : Calcul du score RWI moyen par entrepôt (IDW dans buffer)
+#
+# MÉTHODE — ANALOGIE AVEC L'USAGE DES SOLS :
+#
+#   Usage des sols (IV.3) :
+#     Pour chaque buffer d'entrepôt, on calcule la PROPORTION DE SURFACE
+#     couverte par les zones industrielles ou urbaines.
+#     → scalaire p_ind ou p_urb ∈ [0, 1]
+#
+#   RWI (IV.5) :
+#     Pour chaque buffer d'entrepôt, on calcule la MOYENNE PONDÉRÉE
+#     par distance inverse (IDW) des scores RWI des cellules dans le buffer.
+#     → scalaire rwi_brut (valeur centrée sur 0, typiquement [-3, +3])
+#     → normalisé en p_rwi ∈ [0, 1] en fin de cette section
+#
+# POURQUOI IDW ET PAS UNE SIMPLE MOYENNE ?
+#   Les cellules RWI les plus proches du centroïde de l'entrepôt sont plus
+#   représentatives de son environnement immédiat que celles en périphérie.
+#   L'IDW (Inverse Distance Weighting) pondère chaque cellule par 1/d²,
+#   ce qui donne plus de poids aux cellules proches sans exclure les autres.
+#   C'est la méthode standard en géostatistique pour l'interpolation spatiale.
+#   Elle est cohérente avec l'esprit du calcul de landuse (calc_part_landuse),
+#   qui tient implicitement compte de la distance via l'intersection des buffers.
+# ==============================================================================
+
+cat("── Calcul IDW du RWI par entrepôt ────────────────────────────────────\n")
+
+# ── Mise en cache ─────────────────────────────────────────────────────────────
+# Même logique que le cache landuse : invalider si le nombre d'entrepôts change.
+CACHE_RWI <- file.path(DIR_OUTPUT, "rwi_cache.rds")
+cache_rwi_valide <- FALSE
+
+if (file.exists(CACHE_RWI) && rwi_ok) {
+  
+  cache_rwi_data <- readRDS(CACHE_RWI)
+  
+  if (!is.null(cache_rwi_data$n_warehouses) &&
+      cache_rwi_data$n_warehouses == n_warehouses &&
+      !is.null(cache_rwi_data$buffer_m) &&
+      cache_rwi_data$buffer_m == BUFFER_RWI_M) {
+    
+    rwi_brut_par_entrepot <- cache_rwi_data$rwi_brut_par_entrepot
+    cache_rwi_valide      <- TRUE
+    cat("  ✓ Cache RWI valide (", n_warehouses, "zones,",
+        BUFFER_RWI_M, "m buffer) — calcul IDW ignoré\n\n")
+  } else {
+    cat("  ⚠ Cache RWI invalide — recalcul IDW\n")
+  }
+}
+
+# ── Fonction de calcul IDW : RWI moyen pondéré dans un buffer ─────────────────
+#
+# calc_rwi_idw() est l'équivalent de calc_part_landuse() pour le RWI.
+#
+#   calc_part_landuse(buffer_geom, zones_sf) :
+#     → proportion d'aire du buffer couverte par des polygones de landuse
+#     → scalaire ∈ [0, 1]
+#
+#   calc_rwi_idw(centroide_geom, rwi_sf, rayon_m, puissance) :
+#     → moyenne IDW des scores RWI dans le buffer
+#     → scalaire réel (centré sur 0 avant normalisation)
+#
+# Les deux fonctions :
+#   - prennent une géométrie sf représentant la zone d'entrepôt en entrée
+#   - retournent un scalaire représentant l'influence de l'environnement
+#   - utilisent le même rayon de buffer (BUFFER_ENTREPOT_M)
+#
+# Paramètres :
+#   centroide_geom — géométrie sf du point-centroïde de l'entrepôt (POINT)
+#   rwi_sf         — objet sf des cellules RWI (POINT, déjà filtré sur Rwanda)
+#   rayon_m        — rayon en mètres du buffer de recherche
+#   puissance      — exposant de l'IDW (2 = standard, voir paramètres IV.5.0)
+
+calc_rwi_idw <- function(centroide_geom, rwi_sf, rayon_m, puissance) {
+  
+  # Encapsulation de la géométrie brute en objet sf complet avec CRS.
+  # Sans st_sfc(crs = 32735), st_is_within_distance() ne peut pas comparer
+  # les systèmes de coordonnées et lèverait une erreur.
+  centre_sf <- st_as_sf(st_sfc(centroide_geom, crs = 32735))
+  
+  # Identification des cellules RWI dans le buffer circulaire.
+  # st_is_within_distance() retourne une liste : l'élément [[1]] donne les
+  # indices des cellules de rwi_sf qui se trouvent à ≤ rayon_m du centroïde.
+  # C'est l'équivalent de "quelles zones de landuse chevauchent le buffer ?"
+  idx_candidats <- st_is_within_distance(
+    centre_sf, rwi_sf, dist = rayon_m
+  )[[1]]
+  
+  # Cas sans cellules RWI dans le buffer (zone sans données, frontière…).
+  # On retourne NA — ce cas sera géré en IV.5.3 par le fallback médiane.
+  if (length(idx_candidats) == 0) return(NA_real_)
+  
+  # Extraction des cellules candidates et calcul des distances au centroïde.
+  cellules_buf <- rwi_sf[idx_candidats, ]
+  distances_m  <- as.numeric(
+    st_distance(centre_sf, cellules_buf)
+  )
+  
+  # Plafonnement de la distance minimale pour éviter 1/0^2 = Inf.
+  # Si une cellule est exactement sur le centroïde (distance = 0), on lui
+  # donne une distance fictive de RWI_DISTANCE_MIN_M = 50m.
+  # En pratique ce cas est extrêmement rare avec des données grillées à 2,4 km.
+  distances_m <- pmax(distances_m, RWI_DISTANCE_MIN_M)
+  
+  # Calcul des poids IDW : w_i = 1 / d_i^puissance
+  # Plus une cellule est proche (d petit), plus son poids est élevé.
+  # Avec puissance = 2 :
+  #   une cellule à 100m a un poids (1/100²) = 10 000× plus élevé
+  #   qu'une cellule à 1 000m (1/1000²).
+  poids <- 1 / (distances_m ^ puissance)
+  
+  # Moyenne pondérée IDW :
+  #   rwi_idw = Σ(rwi_i × w_i) / Σ(w_i)
+  # C'est la formule standard de Shepard (1968) pour l'interpolation spatiale.
+  # Elle garantit que le résultat est dans [min(rwi_i), max(rwi_i)].
+  sum(cellules_buf$rwi * poids) / sum(poids)
+}
+
+# ── Calcul pour tous les entrepôts ────────────────────────────────────────────
+if (!cache_rwi_valide && rwi_ok) {
+  
+  cat("  Calcul IDW pour", n_warehouses, "entrepôts...\n")
+  
+  # Initialisation du vecteur de résultats
+  rwi_brut_par_entrepot <- numeric(n_warehouses)
+  
+  for (i in seq_len(n_warehouses)) {
+    
+    # On passe la géométrie brute (pas l'objet sf entier) pour correspondre
+    # au contrat de calc_rwi_idw(), comme on le faisait avec calc_part_landuse()
+    # dans la boucle de Partie IV.3.
+    rwi_brut_par_entrepot[i] <- calc_rwi_idw(
+      centroide_geom = entreposages_sf$geometry[i],
+      rwi_sf         = rwi_sf,
+      rayon_m        = BUFFER_RWI_M,
+      puissance      = RWI_IDW_PUISSANCE
+    )
+    
+    if (i %% 10 == 0 || i == n_warehouses) {
+      cat("  IDW RWI :", round(i / n_warehouses * 100), "%\n")
+    }
+  }
+  
+  # ── Sauvegarde du cache ──────────────────────────────────────────────────
+  saveRDS(
+    list(
+      rwi_brut_par_entrepot = rwi_brut_par_entrepot,
+      n_warehouses          = n_warehouses,
+      buffer_m              = BUFFER_RWI_M,
+      puissance             = RWI_IDW_PUISSANCE,
+      date_creation         = Sys.time()
+    ),
+    CACHE_RWI
+  )
+  cat("  ✓ Cache RWI sauvegardé :", CACHE_RWI, "\n\n")
+  
+} else if (!rwi_ok) {
+  
+  # Si le téléchargement a échoué, on remplace par la valeur neutre 0
+  # (correspond à la richesse médiane du Rwanda — ni riche ni pauvre).
+  # Le modèle gravitaire peut tourner sans RWI, juste avec moins de précision.
+  cat("  ⚠ RWI indisponible — valeurs neutres (0) utilisées pour tous les entrepôts\n\n")
+  rwi_brut_par_entrepot <- rep(0, n_warehouses)
+}
+
+
+# ==============================================================================
+# IV.5.3 : Normalisation et intégration dans le modèle
+#
+# Le score IDW brut est centré sur 0 et peut être négatif (zones pauvres).
+# Pour l'utiliser dans l'interpolation convexe de Partie VII.2 (même logique
+# que p_ind et p_urb qui sont des proportions entre 0 et 1), on normalise
+# avec une transformation min-max sur l'ensemble des scores Rwanda.
+#
+# FORMULE :
+#   p_rwi = (rwi_brut - min_rwanda) / (max_rwanda - min_rwanda)
+#
+# Avec cette normalisation :
+#   p_rwi = 0 → zone la plus pauvre de l'échantillon Rwanda
+#   p_rwi = 1 → zone la plus riche de l'échantillon Rwanda
+#   p_rwi = 0.5 → niveau médian national
+#
+# IMPORTANTE PRÉCAUTION — ÉCHELLE RELATIVE :
+#   Le RWI est relatif au Rwanda (pas une richesse absolue mondiale).
+#   Un p_rwi = 0.9 au Rwanda ne correspond pas à p_rwi = 0.9 en France.
+#   Ce score ne dit rien sur la richesse absolue, uniquement sur le
+#   positionnement d'une zone dans la distribution nationale.
+# ==============================================================================
+
+cat("── Normalisation et intégration des scores RWI ───────────────────────\n")
+
+# ── Imputation des NA (entrepôts sans cellule RWI dans le buffer) ─────────────
+# Si un entrepôt n'a aucune cellule RWI dans son buffer (rare : frontière,
+# zone très isolée), on lui affecte la médiane nationale comme valeur neutre.
+# C'est l'équivalent de calc_part_landuse() qui retourne 0 quand il n'y a
+# pas de zones de landuse dans le buffer — une valeur "sans effet".
+n_na_rwi <- sum(is.na(rwi_brut_par_entrepot))
+if (n_na_rwi > 0) {
+  mediane_rwi <- median(rwi_brut_par_entrepot, na.rm = TRUE)
+  cat("  Entrepôts sans cellule RWI :", n_na_rwi,
+      "→ imputation médiane (", round(mediane_rwi, 3), ")\n")
+  rwi_brut_par_entrepot[is.na(rwi_brut_par_entrepot)] <- mediane_rwi
+}
+
+# ── Normalisation min-max ─────────────────────────────────────────────────────
+# rescale() du package scales effectue la transformation min-max en une ligne.
+# to = c(0, 1) : borne inférieure et supérieure de l'intervalle cible.
+# La normalisation est calculée sur les scores ENTREPÔTS (pas sur le Rwanda
+# entier) pour que les extrêmes correspondent aux zones réellement modélisées.
+rwi_min_entrepots <- min(rwi_brut_par_entrepot)
+rwi_max_entrepots <- max(rwi_brut_par_entrepot)
+
+p_rwi <- if (rwi_max_entrepots > rwi_min_entrepots) {
+  # Cas normal : il y a de la variabilité entre entrepôts
+  rescale(rwi_brut_par_entrepot, to = c(0, 1))
+} else {
+  # Cas dégénéré : tous les entrepôts ont le même score (données manquantes…)
+  # → valeur neutre 0.5 pour tous (pas d'effet sur les profils)
+  rep(0.5, n_warehouses)
+}
+
+cat("  Score p_rwi après normalisation :\n")
+cat("  Min :", round(min(p_rwi), 3), "| Max :", round(max(p_rwi), 3),
+    "| Médiane :", round(median(p_rwi), 3), "\n\n")
+
+# ── Tableau de synthèse ───────────────────────────────────────────────────────
+diag_rwi <- tibble(
+  nom_zone      = entreposages_avec_snap$nom,
+  type_zone     = entreposages_avec_snap$type,
+  rwi_brut      = round(rwi_brut_par_entrepot, 3),
+  p_rwi         = round(p_rwi, 3),
+  # Classe de richesse relative pour lecture rapide
+  classe_rwi    = case_when(
+    p_rwi >= 0.75 ~ "Très riche",
+    p_rwi >= 0.50 ~ "Riche",
+    p_rwi >= 0.25 ~ "Pauvre",
+    TRUE          ~ "Très pauvre"
+  )
+)
+
+cat("Scores RWI par zone (classement décroissant) :\n")
+print(
+  diag_rwi %>%
+    arrange(desc(p_rwi)) %>%
+    select(nom_zone, type_zone, rwi_brut, p_rwi, classe_rwi) %>%
+    rename(Zone = nom_zone, Type = type_zone,
+           RWI_brut = rwi_brut, p_rwi = p_rwi, Classe = classe_rwi)
+)
+cat("\n")
+
+# ── Stockage dans DuckDB ──────────────────────────────────────────────────────
+# La table "richesse_entrepots" est utilisable dans toutes les requêtes
+# SQL des Parties V à IX, par exemple pour pondérer la demande par le niveau
+# de richesse dans les exports ou analyses de vulnérabilité.
+duck_write(
+  diag_rwi %>%
+    select(nom_zone, type_zone, rwi_brut, p_rwi, classe_rwi),
+  "richesse_entrepots"
+)
+cat("✓ Table richesse_entrepots créée dans DuckDB\n")
+
+# ── Intégration dans reseau_rwanda (attribut de nœud sfnetworks) ──────────────
+# On ajoute rwi_brut et p_rwi comme attributs des nœuds d'entrepôt.
+# Les nœuds non-entrepôt reçoivent NA (même logique que population_zone).
+# match() : pour chaque nœud, trouve si son warehouse_name est dans diag_rwi.
+reseau_rwanda <- reseau_rwanda %>%
+  activate("nodes") %>%
+  mutate(
+    rwi_brut = diag_rwi$rwi_brut[
+      match(warehouse_name, diag_rwi$nom_zone)
+    ],
+    p_rwi    = diag_rwi$p_rwi[
+      match(warehouse_name, diag_rwi$nom_zone)
+    ]
+  )
+
+# ── Intégration dans entreposages_fictifs ─────────────────────────────────────
+# Mise à jour du data.frame de référence pour le modèle gravitaire (VII.2)
+# et les exports CSV finaux (VIII.3).
+entreposages_fictifs <- entreposages_fictifs %>%
+  left_join(
+    diag_rwi %>% select(nom_zone, rwi_brut, p_rwi, classe_rwi),
+    by = c("nom" = "nom_zone")
+  )
+
+# Mise à jour de la table DuckDB
+duck_write(entreposages_fictifs, "zones_entreposage")
+
+cat("✓ rwi_brut et p_rwi intégrés dans reseau_rwanda et DuckDB\n\n")
+
+
+# ==============================================================================
+# IV.5.4 : Visualisations
+#
+# Deux sorties graphiques :
+#   Carte  — score p_rwi par zone d'entrepôt sur le réseau routier
+#   Graphique — corrélation RWI × population (les deux enrichissements)
+# ==============================================================================
+
+cat("── Visualisations RWI ────────────────────────────────────────────────\n")
+
+# ── Préparation de la couche sf pour les entrepôts enrichis RWI ──────────────
+entrepots_rwi_sf <- reseau_rwanda %>%
+  activate("nodes") %>%
+  filter(is_warehouse, !is.na(p_rwi)) %>%
+  st_as_sf() %>%
+  mutate(
+    taille_cercle = rescale(p_rwi, to = c(0.3, 2.5)),
+    classe_rwi    = case_when(
+      p_rwi >= 0.75 ~ "Très riche",
+      p_rwi >= 0.50 ~ "Riche",
+      p_rwi >= 0.25 ~ "Pauvre",
+      TRUE          ~ "Très pauvre"
+    ),
+    classe_rwi = factor(
+      classe_rwi,
+      levels = c("Très pauvre", "Pauvre", "Riche", "Très riche")
+    )
+  )
+
+# ── Carte : score p_rwi sur le réseau ─────────────────────────────────────────
+# Le dégradé de couleur va du bleu foncé (zones pauvres) au rouge foncé (zones
+# riches), ce qui est la convention cartographique habituelle pour les indices
+# de richesse. La taille des points est proportionnelle au score p_rwi.
+PALETTE_RWI <- c(
+  "#08519C",   # Bleu foncé  — très pauvre (p_rwi < 0.25)
+  "#6BAED6",   # Bleu clair  — pauvre      (p_rwi 0.25–0.50)
+  "#FD8D3C",   # Orange      — riche       (p_rwi 0.50–0.75)
+  "#A50026"    # Rouge foncé — très riche  (p_rwi > 0.75)
+)
+
+carte_rwi <- fond_carte() +
+  
+  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_lines(col = "#DDDDDD", lwd = 0.4) +
+  
+  tm_shape(entrepots_rwi_sf) +
+  tm_dots(
+    fill        = "p_rwi",
+    fill.scale  = tm_scale_intervals(
+      style  = "fixed",
+      breaks = c(0, 0.25, 0.50, 0.75, 1.00),
+      values = PALETTE_RWI
+    ),
+    fill.legend = tm_legend(title = "Richesse relative\n(p_rwi normalisé)"),
+    size        = "taille_cercle",
+    size.scale  = tm_scale(values.range = c(0.3, 2.5)),
+    size.legend = tm_legend(show = FALSE)
+  ) +
+  
+  tm_title(paste0(
+    "Richesse relative des zones d'entrepôt\n",
+    "Relative Wealth Index — Meta / CIESIN (IDW dans buffer ",
+    BUFFER_RWI_M / 1000, " km)"
+  )) +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_rwi,
+  file.path(DIR_OUTPUT, "carte_rwi_zones.png"),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ carte_rwi_zones.png\n")
+
+# ── Carte : raster RWI Rwanda (vue d'ensemble des données brutes) ──────────────
+# Cette carte montre les données RWI pour TOUT le Rwanda (pas seulement les
+# entrepôts), ce qui permet de visualiser les gradients spatiaux de richesse
+# et de vérifier que les entrepôts sont bien positionnés dans leur contexte.
+if (rwi_ok && nrow(rwi_sf) > 0) {
+  
+  carte_rwi_raster <- fond_carte() +
+    
+    tm_shape(rwi_sf) +
+    tm_dots(
+      fill        = "rwi",
+      fill.scale  = tm_scale_intervals(
+        style  = "quantile",
+        n      = 5,
+        values = c("#08519C", "#6BAED6", "#F7F7F7", "#FD8D3C", "#A50026")
+      ),
+      fill.legend = tm_legend(title = "Score RWI\n(brut, centré 0)"),
+      size        = 0.05,    # Petite taille : beaucoup de points (~1700 cellules)
+      fill_alpha  = 0.7
+    ) +
+    
+    # Superposition des entrepôts pour le repérage
+    tm_shape(entrepots_rwi_sf) +
+    tm_dots(
+      fill        = "warehouse_type",
+      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
+      fill.legend = tm_legend(title = "Type d'entrepôt"),
+      size        = 0.5,
+      col         = "white",
+      lwd         = 1
+    ) +
+    
+    tm_title("Données RWI brutes — Rwanda\n(chaque point = cellule de ~2,4 km²)") +
+    tm_layout(legend.outside = TRUE, frame = TRUE) +
+    tm_scalebar(position = c("left", "bottom")) +
+    tm_compass(position  = c("right", "top"))
+  
+  tmap_save(
+    carte_rwi_raster,
+    file.path(DIR_OUTPUT, "carte_rwi_rwanda_brut.png"),
+    width = 3000, height = 2400, dpi = 300
+  )
+  cat("  ✓ carte_rwi_rwanda_brut.png\n")
+}
+
+# ── Graphique : corrélation RWI × population ──────────────────────────────────
+# Ce graphique met en relation les deux enrichissements (IV.4 et IV.5) pour
+# vérifier leur cohérence : on s'attend à ce que les zones à forte population
+# (Kigali, Musanze…) aient aussi des scores RWI élevés — mais pas toujours,
+# car les zones frontalières peuvent avoir une population élevée et un RWI faible.
+if ("population_zone" %in% names(entreposages_fictifs)) {
+  
+  g_rwi_pop <- diag_rwi %>%
+    left_join(
+      entreposages_fictifs %>%
+        select(nom, population_zone),
+      by = c("nom_zone" = "nom")
+    ) %>%
+    filter(!is.na(population_zone), population_zone > 0) %>%
+    mutate(
+      Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 22),
+      pop_log    = log10(population_zone)
+    ) %>%
+    ggplot(aes(x = pop_log, y = p_rwi,
+               color = type_zone, label = Zone_court)) +
+    
+    geom_point(size = 4, alpha = 0.85) +
+    ggrepel::geom_text_repel(
+      size = 3, max.overlaps = 12,
+      segment.color = "#AAAAAA"
+    ) +
+    
+    # Droite de régression pour visualiser la tendance générale
+    geom_smooth(
+      method  = "lm",
+      se      = TRUE,
+      color   = "#333333",
+      linetype = "dashed",
+      alpha   = 0.15
+    ) +
+    
+    scale_color_manual(values = PALETTE_ZONE_TYPE, name = "Type de zone") +
+    scale_x_continuous(
+      labels = function(x) format(10^x, big.mark = " ", scientific = FALSE),
+      name   = "Population (échelle log₁₀)"
+    ) +
+    scale_y_continuous(
+      limits = c(0, 1),
+      name   = "Score de richesse relative (p_rwi)"
+    ) +
+    
+    labs(
+      title    = "Richesse relative (RWI) × Population par zone d'entrepôt",
+      subtitle = paste0(
+        "Les zones en haut à droite (riches ET peuplées) génèrent la plus forte demande\n",
+        "Sources : Meta RWI (2021), NISR RPHC-5 (2022)"
+      )
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      plot.title    = element_text(face = "bold"),
+      plot.subtitle = element_text(color = "#555555", size = 10),
+      legend.position = "right"
+    )
+  
+  # ggrepel est nécessaire pour éviter les chevauchements de labels.
+  # S'il n'est pas installé, on produit le graphique sans labels.
+  if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    install.packages("ggrepel")
+    library(ggrepel)
+  }
+  
+  ggsave(
+    file.path(DIR_OUTPUT, "graphique_rwi_vs_population.png"),
+    g_rwi_pop, width = 12, height = 7, dpi = 300
+  )
+  cat("  ✓ graphique_rwi_vs_population.png\n\n")
+}
+
+cat("✓ Partie IV.5 terminée — p_rwi disponible dans :\n")
+cat("  • reseau_rwanda  (attribut de nœud : rwi_brut, p_rwi)\n")
+cat("  • DuckDB         (table richesse_entrepots)\n")
+cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 
 
 ################################################################################
