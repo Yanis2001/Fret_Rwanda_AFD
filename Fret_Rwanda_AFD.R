@@ -2543,7 +2543,7 @@ cat("── Approche A : tags OSM de population ──────────�
 # La fonction extraire_tag() est définie en Partie II.2 et réutilisée ici.
 population_osm_raw <- tryCatch({
   
-  st_read(
+  result <- st_read(
     chemin_pbf,
     layer = "points",
     # On charge tous les lieux habités (city, town, village) qui ont potentiellement
@@ -2551,8 +2551,16 @@ population_osm_raw <- tryCatch({
     query = "SELECT name, place, other_tags FROM points
              WHERE place IN ('city', 'town', 'village', 'suburb')",
     quiet = TRUE
-  ) %>%
-    rename(geometry = `_ogr_geometry_`) %>%
+  ) 
+  
+  # Normalisation robuste du nom de la colonne géométrie.
+  # Quand query= est spécifié, st_read retourne un sf dont la colonne
+  # géométrie peut s'appeler "geom", "geometry", "wkb_geometry", etc.
+  # st_geometry(x) <- "geometry" renomme la colonne active quelle que soit
+  # son appellation d'origine, sans erreur si elle s'appelle déjà "geometry".
+  st_geometry(result) <- "geometry"
+  
+  result %>%
     st_as_sf() %>%
     st_transform(crs = 32735) %>%
     filter(!is.na(name)) %>%
@@ -2571,9 +2579,9 @@ population_osm_raw <- tryCatch({
 }, error = function(e) {
   cat("  ⚠ Extraction PBF population échouée :", conditionMessage(e), "\n")
   # Retourner un sf vide avec la même structure pour ne pas bloquer la suite
-  st_sf(name     = character(0),
+  st_sf(name          = character(0),
         pop_osm_brute = numeric(0),
-        geometry  = st_sfc(crs = 32735))
+        geometry      = st_sfc(crs = 32735))
 })
 
 cat("  Lieux OSM avec tag population :", nrow(population_osm_raw), "\n")
@@ -2599,7 +2607,7 @@ if (nrow(population_osm_raw) > 0) {
   # st_nearest_feature() renvoie un indice (le plus proche parmi les candidats).
   pop_osm_par_entrepot <- sapply(seq_len(nrow(entreposages_sf)), function(i) {
     
-    candidats <- which(within_buffer_A[[i]])  # Indices des lieux OSM dans le buffer
+    candidats <- within_buffer_A[[i]]  # Indices des lieux OSM dans le buffer
     
     if (length(candidats) == 0) return(NA_real_)  # Aucun lieu OSM à proximité
     
@@ -2680,36 +2688,62 @@ if (!is.null(WORLDPOP_LOCAL_PATH) && file.exists(WORLDPOP_LOCAL_PATH)) {
 # URL directe WorldPop pour le Rwanda 2020 (non constrainted, 100m).
 # Pour d'autres années ou résolutions, consulter :
 # https://hub.worldpop.org/geodata/listing?id=29
+# ── REMPLACER le bloc de téléchargement WorldPop ──────────────────────────────
 if (!worldpop_ok) {
   
-  WORLDPOP_URL <- paste0(
-    "https://data.worldpop.org/GIS/Population/Global_2000_2020/",
-    "2020/RWA/rwa_ppp_2020_UNadj_constrained.tif"
+  # WorldPop a réorganisé plusieurs fois son arborescence.
+  # On teste les URLs candidates dans l'ordre jusqu'à en trouver une valide.
+  # La première URL est la structure actuelle (2024) ; les suivantes sont des
+  # fallbacks vers les structures antérieures.
+  WORLDPOP_URLS_CANDIDATES <- c(
+    # Structure actuelle — constrained, ajusté UN, 100m
+    paste0("https://data.worldpop.org/GIS/Population/",
+           "Global_2000_2020_Constrained/2020/BSGM/RWA/",
+           "rwa_ppp_2020_UNadj_constrained.tif"),
+    # Structure alternative — unconstrained
+    paste0("https://data.worldpop.org/GIS/Population/",
+           "Global_2000_2020/2020/RWA/rwa_ppp_2020_UNadj.tif"),
+    # Structure via wopr (WorldPop Open Population Repository)
+    paste0("https://wopr.worldpop.org/data/",
+           "RWA/population/v1.0/",
+           "RWA_population_v1_0_gridded.tif")
   )
   
-  cat("  Tentative de téléchargement WorldPop :", WORLDPOP_URL, "\n")
-  cat("  (fichier ~150 Mo, peut prendre plusieurs minutes)\n")
+  for (url_tentative in WORLDPOP_URLS_CANDIDATES) {
+    
+    cat("  Tentative :", url_tentative, "\n")
+    
+    tryCatch({
+      
+      dir.create(dirname(WORLDPOP_LOCAL_PATH),
+                 showWarnings = FALSE, recursive = TRUE)
+      
+      download.file(url_tentative, WORLDPOP_LOCAL_PATH,
+                    mode = "wb", method = "auto", quiet = FALSE)
+      
+      # Vérification que le fichier téléchargé est un raster valide
+      # (un fichier HTML d'erreur serait téléchargé sans exception)
+      test_rast <- rast(WORLDPOP_LOCAL_PATH)
+      if (ncell(test_rast) > 0) {
+        raster_worldpop <- project(test_rast, "EPSG:32735", method = "bilinear")
+        worldpop_ok     <- TRUE
+        cat("  ✓ WorldPop téléchargé depuis :", url_tentative, "\n")
+        break   # Sortir de la boucle dès qu'une URL fonctionne
+      }
+      
+    }, error = function(e) {
+      cat("  ✗ Échec :", conditionMessage(e), "\n")
+      # Supprimer le fichier partiel éventuel avant de tenter la prochaine URL
+      if (file.exists(WORLDPOP_LOCAL_PATH)) file.remove(WORLDPOP_LOCAL_PATH)
+    })
+  }
   
-  tryCatch({
-    
-    # download.file() télécharge un fichier depuis une URL vers un chemin local.
-    # mode = "wb" : write binary — indispensable pour les fichiers non-texte (GeoTIFF).
-    # method = "auto" : R choisit la meilleure méthode selon le système d'exploitation.
-    dir.create(dirname(WORLDPOP_LOCAL_PATH), showWarnings = FALSE, recursive = TRUE)
-    download.file(WORLDPOP_URL, WORLDPOP_LOCAL_PATH, mode = "wb", method = "auto")
-    
-    raster_worldpop <- rast(WORLDPOP_LOCAL_PATH)
-    # Reprojection en UTM 35S pour cohérence avec les couches sf du script
-    raster_worldpop <- project(raster_worldpop, "EPSG:32735", method = "bilinear")
-    worldpop_ok     <- TRUE
-    cat("  ✓ Raster WorldPop téléchargé et reprojeté\n")
-    
-  }, error = function(e) {
-    cat("  ⚠ Téléchargement WorldPop échoué :", conditionMessage(e), "\n")
-    cat("    → Approche B ignorée, on continue avec A et C\n")
-    cat("    → Pour télécharger manuellement :", WORLDPOP_URL, "\n")
-    cat("    → Sauvegarder sous :", WORLDPOP_LOCAL_PATH, "\n")
-  })
+  if (!worldpop_ok) {
+    cat("  ⚠ Toutes les URLs WorldPop ont échoué\n")
+    cat("    → Téléchargement manuel sur https://hub.worldpop.org\n")
+    cat("    → Chercher : Rwanda > Population > 2020 > 100m\n")
+    cat("    → Sauvegarder sous :", WORLDPOP_LOCAL_PATH, "\n\n")
+  }
 }
 
 # ── Agrégation du raster dans un buffer autour de chaque entrepôt ─────────────
@@ -2947,10 +2981,10 @@ if (file.exists(NISR_CSV_PATH)) {
 # On assemble maintenant les trois vecteurs de population (A, B, C)
 # en une seule colonne "population_zone" par entrepôt selon la hiérarchie :
 #
-#   Priorité 1 : NISR officiel (C)  — disponible et non-NA → utiliser
+#   Priorité 1 : NISR officiel (C)  — disponible et non-NA  → utiliser
 #   Priorité 2 : WorldPop (B)       — si C absent ou NA     → utiliser
 #   Priorité 3 : OSM (A)            — si B absent ou NA     → utiliser
-#   Priorité 0 : Population minimale — si tout est NA        → 1 000 hab.
+#   Priorité 0 : Population minimale — si tout est NA       → 1 000 hab.
 #                                       (évite les divisions par zéro)
 #
 # La population finale est intégrée :
@@ -2960,6 +2994,14 @@ if (file.exists(NISR_CSV_PATH)) {
 # ==============================================================================
 
 cat("── Fusion et intégration des données de population ──────────────────\n")
+
+# ── Remise à l'état original d'entreposages_fictifs ──────────────────────────
+# Si le bloc IV.4 est re-exécuté, entreposages_fictifs peut avoir été gonflé
+# par des left_join() d'une exécution précédente. On le remet à ses 123
+# colonnes d'origine avant d'y ajouter les nouvelles variables.
+entreposages_fictifs <- entreposages_fictifs %>%
+  select(nom, type, pays, lon, lat, source) %>%
+  distinct(lon, lat, .keep_all = TRUE)
 
 # coalesce() : prend le premier argument non-NA, de gauche à droite.
 # C'est l'opérateur de "hiérarchie de sources" en une seule fonction.
@@ -2982,9 +3024,21 @@ source_utilisee <- case_when(
   TRUE                              ~ "Fallback_1000"
 )
 
+# Vérification de cohérence avant construction du tableau.
+# Les trois vecteurs de population doivent avoir exactement autant de lignes
+# que entreposages_sf (la référence des 123 zones économiques).
+stopifnot(
+  length(pop_osm_par_entrepot)      == nrow(entreposages_sf),
+  length(pop_worldpop_par_entrepot) == nrow(entreposages_sf),
+  length(pop_nisr_par_entrepot)     == nrow(entreposages_sf)
+)
+
 diag_population <- tibble(
-  nom_zone        = entreposages_avec_snap$nom,
-  type_zone       = entreposages_avec_snap$type,
+  # On utilise entreposages_fictifs (123 lignes) et non entreposages_avec_snap
+  # (120 lignes après distinct). La population est une propriété économique
+  # de chaque zone, pas une propriété du nœud du graphe.
+  nom_zone        = entreposages_fictifs$nom,
+  type_zone       = entreposages_fictifs$type,
   pop_osm         = round(pop_osm_par_entrepot),
   pop_worldpop    = round(pop_worldpop_par_entrepot),
   pop_nisr        = round(pop_nisr_par_entrepot),
@@ -3042,7 +3096,9 @@ reseau_rwanda <- reseau_rwanda %>%
 # On enrichit aussi le data.frame de référence (utilisé en Partie IV.3 et VII).
 entreposages_fictifs <- entreposages_fictifs %>%
   left_join(
-    diag_population %>% select(nom_zone, population_zone, source_population = source),
+    diag_population %>%
+      select(nom_zone, population_zone, source_population = source) %>%
+      distinct(nom_zone, .keep_all = TRUE),   # supprime les doublons avant jointure
     by = c("nom" = "nom_zone")
   )
 
@@ -3111,6 +3167,7 @@ g_pop <- diag_population %>%
   arrange(desc(population_zone)) %>%
   mutate(
     Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 25),
+    Zone_court = make.unique(Zone_court, sep = " #"),   # rend les labels uniques
     Zone_court = factor(Zone_court, levels = rev(Zone_court))
   ) %>%
   ggplot(aes(x = Zone_court, y = population_zone / 1000,
@@ -3705,7 +3762,9 @@ reseau_rwanda <- reseau_rwanda %>%
 # et les exports CSV finaux (VIII.3).
 entreposages_fictifs <- entreposages_fictifs %>%
   left_join(
-    diag_rwi %>% select(nom_zone, rwi_brut, p_rwi, classe_rwi),
+    diag_rwi %>%
+      select(nom_zone, rwi_brut, p_rwi, classe_rwi) %>%
+      distinct(nom_zone, .keep_all = TRUE),   # supprime les doublons avant jointure
     by = c("nom" = "nom_zone")
   )
 
@@ -3952,8 +4011,15 @@ cat("── Calcul de la taille composite (population × richesse) ────�
 #                   (source Meta RWI — IV.5)
 # Les deux variables sont dans entreposages_fictifs, indexées dans le même
 # ordre que noeuds_entreposage (ordre de création en Partie IV.3).
-pop_i   <- entreposages_fictifs$population_zone
-p_rwi_i <- replace_na(entreposages_fictifs$p_rwi, 0.5)
+pop_i <- diag_population$population_zone[
+  match(noeuds_entreposage$warehouse_name, diag_population$nom_zone)
+]
+pop_i <- replace_na(pop_i, 1000)
+
+p_rwi_i <- diag_rwi$p_rwi[
+  match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
+]
+p_rwi_i <- replace_na(p_rwi_i, 0.5)
 # Valeur de repli pour p_rwi : 0.5 = niveau médian national
 # (aucun effet directionnel si la donnée est manquante)
 
@@ -4064,8 +4130,14 @@ cat("\n")
 # ── Stockage dans DuckDB et dans entreposages_fictifs ─────────────────────────
 # On ajoute taille_composite au data.frame de référence et à DuckDB pour que
 # toutes les parties suivantes puissent y accéder directement.
+taille_lookup <- tibble(
+  nom              = noeuds_entreposage$warehouse_name,
+  taille_composite = taille_composite
+) %>% distinct(nom, .keep_all = TRUE)
+
 entreposages_fictifs <- entreposages_fictifs %>%
-  mutate(taille_composite = taille_composite)
+  left_join(taille_lookup, by = "nom") %>%
+  mutate(taille_composite = replace_na(taille_composite, taille_default))
 
 duck_write(
   comparaison_tailles %>%
