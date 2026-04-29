@@ -3787,7 +3787,7 @@ reseau_rwanda <- reseau_rwanda %>%
 stopifnot(nrow(entreposages_fictifs) == nrow(diag_rwi))
 
 entreposages_fictifs <- entreposages_fictifs %>%
-  select(-any_of(c("rwi_brut", "p_rwi", "classe_rwi")))
+  select(-any_of(c("rwi_brut", "p_rwi", "classe_rwi"))) %>%
   bind_cols(
     diag_rwi %>% select(rwi_brut, p_rwi, classe_rwi)
   )
@@ -4104,8 +4104,6 @@ taille_brute <- log10(pop_i + 1)^ALPHA_LOG_POP * (1 + K_RWI_TAILLE * p_rwi_i)
 # La normalisation permet de conserver l'interprétation historique :
 #   Kigali Hub Central = 1.0 (référence)
 #   Toutes les autres zones < 1.0 (fraction de la masse de Kigali)
-# Cela garantit aussi la comparabilité avec les anciens résultats si on veut
-# faire tourner l'ancien modèle (TAILLE_ZONE) en parallèle pour validation.
 
 # Recherche de l'indice de Kigali Hub Central dans la liste des entrepôts.
 # which() retourne le ou les indices où la condition est vraie.
@@ -4139,34 +4137,6 @@ if (length(idx_kigali) > 0 && !is.na(taille_brute[idx_kigali[1]])) {
 # l'offre et la demande de la zone dans le modèle gravitaire.
 taille_composite <- pmax(taille_composite, taille_default)
 
-# ── Tableau comparatif ancien vs nouveau ─────────────────────────────────────
-# Ce tableau permet de valider que la taille composite data-driven est
-# cohérente avec les assignations manuelles TAILLE_ZONE d'origine.
-# Des écarts importants signalent des zones mal caractérisées par les données
-# (ex : zone manuelle forte mais population sous-estimée par WorldPop).
-comparaison_tailles <- tibble(
-  Zone          = noeuds_entreposage$warehouse_name,
-  Type          = noeuds_entreposage$warehouse_type,
-  Population    = round(pop_i),
-  p_rwi         = round(p_rwi_i, 3),
-  Taille_manuelle = map_dbl(
-    noeuds_entreposage$warehouse_name,
-    ~ { t <- TAILLE_ZONE[.x]; if (is.na(t)) taille_default else t }
-  ),
-  Taille_composite = round(taille_composite, 3)
-) %>%
-  mutate(
-    Ratio = round(Taille_composite / Taille_manuelle, 2)
-  ) %>%
-  arrange(desc(Taille_composite))
-
-cat("\nComparaison taille manuelle vs composite (top 12) :\n")
-print(
-  comparaison_tailles %>%
-    slice_head(n = 12) %>%
-    select(Zone, Type, Population, p_rwi,
-           Taille_manuelle, Taille_composite, Ratio)
-)
 
 # Diagnostic : les zones dont le ratio s'éloigne le plus de 1.0 sont celles
 # pour lesquelles les données RWI / population divergent le plus des
@@ -4189,6 +4159,7 @@ taille_lookup <- tibble(
 ) %>% distinct(nom, .keep_all = TRUE)
 
 entreposages_fictifs <- entreposages_fictifs %>%
+  select(-any_of("taille_composite")) %>%
   left_join(taille_lookup, by = "nom") %>%
   mutate(taille_composite = replace_na(taille_composite, taille_default))
 
@@ -4199,14 +4170,11 @@ duck_write(
   "tailles_zones_composite"
 )
 
-# ── Mise à jour de somme_tailles ──────────────────────────────────────────────
-# somme_tailles est utilisée dans la boucle de VII.2 pour normaliser l'offre
-# et la demande. Elle doit être recalculée sur la nouvelle variable.
-# L'ancienne valeur (calculée sur TAILLE_ZONE) est maintenant obsolète.
+
 somme_tailles <- sum(taille_composite)
 
 cat("✓ taille_composite calculée pour", n_warehouses, "zones\n")
-cat("  Somme des tailles (nouvelle)  :", round(somme_tailles, 2), "\n")
+cat("  Somme des tailles  :", round(somme_tailles, 2), "\n")
 cat("  Taille min / max              :",
     round(min(taille_composite), 3), "/",
     round(max(taille_composite), 3), "\n\n")
@@ -6204,7 +6172,7 @@ if (file.exists(CACHE_AFFECTATION)) {
   
   # Le cache est valide SEULEMENT si :
   #   1. l'empreinte correspond (entrées inchangées)
-  #   2. le tableau 3D est présent (ancien format sans volume_trafic_mm_s rejeté)
+  #   2. le tableau 3D est présent 
   # Cette deuxième condition évite de charger un cache produit par une version
   # antérieure du script qui ne sauvegardait pas la dimension sectorielle.
   if (!is.null(cache_aff$empreinte) &&
