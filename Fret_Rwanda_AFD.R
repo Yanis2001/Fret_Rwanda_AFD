@@ -27,7 +27,7 @@
 # Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
 # ==============================================================================
 
-RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer
+RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
 
 if (RESET_CACHES) {
   
@@ -223,6 +223,40 @@ SEUIL_LONGUEUR_ARETE_M <- 0.5
 
 # Véhicule utilisé par défaut pour la matrice OD et le modèle gravitaire
 VEHICULE_REFERENCE <- "camion_moyen"
+
+# ==============================================================================
+# P.6 : Paramètres démographiques 
+# ==============================================================================
+
+# ── Rayon du buffer pour l'agrégation de population autour d'un entrepôt ──────
+# On calcule la population dans un cercle de ce rayon autour de chaque nœud.
+# 5 km est un compromis raisonnable au Rwanda (densité ~400 hab/km²) :
+# trop petit → manque les zones périurbaines ; trop grand → chevauche les zones.
+BUFFER_DEMO_M <- 5000
+
+# ── Zoom du raster WorldPop pour l'approche B ─────────────────────────────────
+# Résolution disponible sur le portail WorldPop :
+#   z=10 → ~100m/pixel (précis, fichier lourd ~200 Mo)
+#   z=8  → ~400m/pixel (moins précis, fichier léger ~15 Mo)
+# Pour le Rwanda entier, z=9 (~200m) est le meilleur compromis.
+WORLDPOP_ZOOM <- 9
+
+# ── Chemin local du raster WorldPop si déjà téléchargé ───────────────────────
+# Si le fichier existe déjà sur le disque (session précédente), on l'utilise
+# directement sans retélécharger. Mettre NULL pour forcer le retéléchargement.
+WORLDPOP_LOCAL_PATH <- file.path(DIR_OUTPUT, "worldpop_rwanda_100m.tif")
+
+# ── URL et chemin du fichier NISR de référence (approche C) ───────────────────
+# Source : https://prod.open-data.risa.gov.rw/organization/nisr
+# Recensement RPHC-5, 2022. Téléchargez le CSV "Population by District"
+# et déposez-le dans le répertoire de travail.
+NISR_CSV_PATH <- "data/raw/rwa_admpop_adm2_2023.csv"
+
+# Noms attendus des colonnes dans le CSV NISR (à adapter selon le fichier réel)
+# Ces noms correspondent au format typique des exports NISR data.gov.rw.
+NISR_COL_DISTRICT  <- "District"       # Colonne du nom du district
+NISR_COL_PROVINCE  <- "Province"       # Colonne de la province
+NISR_COL_POP_TOTAL <- "Total"          # Colonne de population totale
 
 # ==============================================================================
 # P.6 : Paramètres du modèle économique
@@ -2491,7 +2525,7 @@ cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n
 #
 # STRATÉGIE DE FUSION :
 #   On calcule une colonne "population_zone" finale en appliquant une
-#   hiérarchie de priorité : C (NISR) > B (WorldPop) > A (OSM) > 0
+#   hiérarchie de priorité : B (WorldPop) > C (NISR) > A (OSM) > 0
 #   La colonne est ensuite intégrée dans reseau_rwanda (attribut de nœud)
 #   et dans DuckDB pour être accessible aux requêtes SQL des Parties V à IX.
 #
@@ -2508,45 +2542,6 @@ cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n
 cat("==========================================================\n")
 cat("  PARTIE IV.4 — ENRICHISSEMENT DÉMOGRAPHIQUE\n")
 cat("==========================================================\n\n")
-
-# ==============================================================================
-# IV.4.0 : Paramètres démographiques centralisés
-# Toutes les constantes de cette partie sont regroupées ici pour faciliter
-# la reconfiguration sans toucher au code de traitement.
-# ==============================================================================
-
-# ── Rayon du buffer pour l'agrégation de population autour d'un entrepôt ──────
-# On calcule la population dans un cercle de ce rayon autour de chaque nœud.
-# 5 km est un compromis raisonnable au Rwanda (densité ~400 hab/km²) :
-# trop petit → manque les zones périurbaines ; trop grand → chevauche les zones.
-BUFFER_DEMO_M <- 5000
-
-# ── Zoom du raster WorldPop pour l'approche B ─────────────────────────────────
-# Résolution disponible sur le portail WorldPop :
-#   z=10 → ~100m/pixel (précis, fichier lourd ~200 Mo)
-#   z=8  → ~400m/pixel (moins précis, fichier léger ~15 Mo)
-# Pour le Rwanda entier, z=9 (~200m) est le meilleur compromis.
-WORLDPOP_ZOOM <- 9
-
-# ── Chemin local du raster WorldPop si déjà téléchargé ───────────────────────
-# Si le fichier existe déjà sur le disque (session précédente), on l'utilise
-# directement sans retélécharger. Mettre NULL pour forcer le retéléchargement.
-WORLDPOP_LOCAL_PATH <- file.path(DIR_OUTPUT, "worldpop_rwanda_100m.tif")
-
-# ── URL et chemin du fichier NISR de référence (approche C) ───────────────────
-# Source : https://prod.open-data.risa.gov.rw/organization/nisr
-# Recensement RPHC-5, 2022. Téléchargez le CSV "Population by District"
-# et déposez-le dans le répertoire de travail.
-NISR_CSV_PATH <- "data/raw/nisr_population_districts_2022.csv"
-
-# Noms attendus des colonnes dans le CSV NISR (à adapter selon le fichier réel)
-# Ces noms correspondent au format typique des exports NISR data.gov.rw.
-NISR_COL_DISTRICT  <- "District"       # Colonne du nom du district
-NISR_COL_PROVINCE  <- "Province"       # Colonne de la province
-NISR_COL_POP_TOTAL <- "Total"          # Colonne de population totale
-
-cat("✓ Paramètres démographiques chargés\n\n")
-
 
 # ==============================================================================
 # IV.4.A : Extraction des tags de population depuis le fichier PBF
@@ -2673,9 +2668,6 @@ cat("  Population OSM min :", round(min(pop_osm_par_entrepot, na.rm = TRUE)),
 #              bien calibré sur les données NISR rwandaises.
 # INCONVÉNIENTS : Fichier lourd (~150 Mo), nécessite un téléchargement externe,
 #                 données 2020 (pas 2022).
-#
-# SOURCE : https://hub.worldpop.org/geodata/summary?id=49723
-#          (Rwanda, Population, 2020, 100m, Unconstrained individual countries)
 # ==============================================================================
 
 cat("── Approche B : raster WorldPop (population ~100m) ──────────────────\n")
@@ -2831,20 +2823,18 @@ if (worldpop_ok) {
 # IV.4.C : Données de recensement NISR (source officielle, recommandée)
 #
 # L'Institut National de Statistiques du Rwanda (NISR) publie les résultats
-# du recensement RPHC-5 (2022) par district sur :
-#   https://prod.open-data.risa.gov.rw/organization/nisr
+# du recensement RPHC-5 (2022) par district disponible sur HDX (Humanitarian Data Exchange)
 #
 # PROCÉDURE DE TÉLÉCHARGEMENT :
-#   1. Aller sur https://prod.open-data.risa.gov.rw/organization/nisr
-#   2. Chercher "Population by District 2022"
-#   3. Télécharger le CSV (bouton "Explore" → "Download")
-#   4. Placer le fichier dans data/raw/nisr_population_districts_2022.csv
+#   1. Aller sur  https://data.humdata.org/dataset/cod-ps-rwa
+#   2. Chercher "rwa_admpop_adm2_2023.csv" (niveau district)
+#   3. Télécharger le CSV (bouton "Download")
+#   4. Placer le fichier dans data/raw/rwa_admpop_adm2_2023.csv
 #
 # Le fichier contient ~30 districts rwandais avec population par sexe.
 # On fait une jointure spatiale : chaque entrepôt est associé au district
 # dans lequel il se trouve, puis on récupère la population de ce district.
 #
-# AVANTAGES  : Données officielles, les plus récentes (2022), gratuites.
 # INCONVÉNIENTS : Résolution district uniquement (pas de granularité plus fine),
 #                 nécessite un téléchargement manuel.
 # ==============================================================================
@@ -3006,11 +2996,10 @@ if (file.exists(NISR_CSV_PATH)) {
 # On assemble maintenant les trois vecteurs de population (A, B, C)
 # en une seule colonne "population_zone" par entrepôt selon la hiérarchie :
 #
-#   Priorité 1 : NISR officiel (C)  — disponible et non-NA  → utiliser
-#   Priorité 2 : WorldPop (B)       — si C absent ou NA     → utiliser
-#   Priorité 3 : OSM (A)            — si B absent ou NA     → utiliser
-#   Priorité 0 : Population minimale — si tout est NA       → 1 000 hab.
-#                                       (évite les divisions par zéro)
+#   Priorité 1 : WorldPop (B)        — disponible et non-NA  → utiliser
+#   Priorité 2 : NISR officiel (C)   — si C absent ou NA     → utiliser
+#   Priorité 3 : OSM (A)             — si B absent ou NA     → utiliser
+#   Priorité 0 : Population minimale — si tout est NA        → 1 000 hab (évite les divisions par zéro)
 #
 # La population finale est intégrée :
 #   - dans reseau_rwanda (attribut de nœud sfnetworks)
@@ -3030,12 +3019,11 @@ entreposages_fictifs <- entreposages_fictifs %>%
 
 # coalesce() : prend le premier argument non-NA, de gauche à droite.
 # C'est l'opérateur de "hiérarchie de sources" en une seule fonction.
-# remplace if_else(is.na(C), if_else(is.na(B), A, B), C) mais de façon lisible.
 population_zone_finale <- coalesce(
-  replace_na(pop_nisr_par_entrepot,    NA_real_),   # Source C : NISR (priorité max)
-  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
-  replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
-  rep(1000, nrow(entreposages_sf))                  # Fallback : 1 000 hab. minimum
+  replace_na(pop_worldpop_par_entrepot,    NA_real_),   # Source B : WorldPop
+  replace_na(pop_nisr_par_entrepot, NA_real_),          # Source C : NISR 
+  replace_na(pop_osm_par_entrepot,      NA_real_),      # Source A : OSM
+  rep(1000, nrow(entreposages_sf))                      # Fallback : 1 000 hab. minimum
 ) %>%
   round()   # Les populations sont des entiers
 
@@ -4035,7 +4023,7 @@ cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 #   - entreposages_fictifs$population_zone (Partie IV.4)
 #   - entreposages_fictifs$p_rwi           (Partie IV.5)
 #   - n_warehouses, noeuds_entreposage     (Partie IV.3)
-#   - ALPHA_LOG_POP, K_RWI_TAILLE         (Partie P.6)
+#   - ALPHA_LOG_POP, K_RWI_TAILLE          (Partie P.6)
 ################################################################################
 
 cat("── Calcul de la taille composite (population × richesse) ─────────────\n\n")
