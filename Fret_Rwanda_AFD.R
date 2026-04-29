@@ -374,6 +374,11 @@ K_RWI_TAILLE <- 1.0
 # Valeur recommandée : 1.5
 ALPHA_LOG_POP <- 1.5
 
+# Plafond de population pour les zones de type "industrie".
+# Voir justification détaillée dans la transition IV.5 → V.
+# Mettre Inf pour désactiver le cap.
+CAP_POP_INDUSTRIE <- 30000
+
 # ==============================================================================
 # P.7 : Paramètres de l'affectation All-or-Nothing
 # ==============================================================================
@@ -2447,6 +2452,26 @@ reseau_rwanda <- reseau_rwanda %>%
     )
   )
 
+# ── Définition de noeuds_entreposage ──────────────────────────────────────────
+# noeuds_entreposage est la liste des nœuds du réseau identifiés comme entrepôts,
+# après le snapping et la déduplication par nœud (cf. entreposages_avec_snap).
+#
+# IMPORTANT : ne pas confondre les deux entités manipulées dans ce script :
+#   • entreposages_fictifs / entreposages_sf : 123 zones économiques modélisées
+#   • noeuds_entreposage                     : 120 nœuds du graphe (après dédup.)
+# Les enrichissements (population, RWI) portent sur les 123 zones.
+# Les calculs sur le graphe (Dijkstra, OD, modèle gravitaire) portent sur les 120 nœuds.
+noeuds_entreposage <- reseau_rwanda %>%
+  activate("nodes") %>%
+  filter(is_warehouse) %>%
+  as_tibble() %>%
+  mutate(warehouse_id = row_number())
+
+n_warehouses <- nrow(noeuds_entreposage)
+
+cat("✓ noeuds_entreposage défini :", n_warehouses, "nœuds-entrepôts\n")
+cat("  (à comparer avec", nrow(entreposages_fictifs), "zones économiques)\n\n")
+
 cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n")
 
 
@@ -3094,12 +3119,13 @@ reseau_rwanda <- reseau_rwanda %>%
 
 # ── Intégration dans entreposages_fictifs ─────────────────────────────────────
 # On enrichit aussi le data.frame de référence (utilisé en Partie IV.3 et VII).
+stopifnot(nrow(entreposages_fictifs) == nrow(diag_population))
+
 entreposages_fictifs <- entreposages_fictifs %>%
-  left_join(
-    diag_population %>%
-      select(nom_zone, population_zone, source_population = source) %>%
-      distinct(nom_zone, .keep_all = TRUE),   # supprime les doublons avant jointure
-    by = c("nom" = "nom_zone")
+  select(-any_of(c("population_zone", "source_population"))) %>%   # idempotence
+  bind_cols(
+    diag_population %>% 
+      select(population_zone, source_population = source)
   )
 
 # Mise à jour de la table DuckDB zones_entreposage avec la population
@@ -3515,19 +3541,19 @@ cache_rwi_valide <- FALSE
 
 if (file.exists(CACHE_RWI) && rwi_ok) {
   
-  cache_rwi_data <- readRDS(CACHE_RWI)
+  n_zones_actuel <- nrow(entreposages_sf)
   
-  if (!is.null(cache_rwi_data$n_warehouses) &&
-      cache_rwi_data$n_warehouses == n_warehouses &&
+  if (!is.null(cache_rwi_data$n_zones) &&
+      cache_rwi_data$n_zones == n_zones_actuel &&
       !is.null(cache_rwi_data$buffer_m) &&
       cache_rwi_data$buffer_m == BUFFER_RWI_M) {
     
     rwi_brut_par_entrepot <- cache_rwi_data$rwi_brut_par_entrepot
     cache_rwi_valide      <- TRUE
-    cat("  ✓ Cache RWI valide (", n_warehouses, "zones,",
+    cat("  ✓ Cache RWI valide (", n_zones_actuel, "zones,",
         BUFFER_RWI_M, "m buffer) — calcul IDW ignoré\n\n")
   } else {
-    cat("  ⚠ Cache RWI invalide — recalcul IDW\n")
+    cat("  ⚠ Cache RWI invalide (changement de nombre de zones ou buffer) — recalcul IDW\n")
   }
 }
 
@@ -3601,13 +3627,14 @@ calc_rwi_idw <- function(centroide_geom, rwi_sf, rayon_m, puissance) {
 
 # ── Calcul pour tous les entrepôts ────────────────────────────────────────────
 if (!cache_rwi_valide && rwi_ok) {
-  
-  cat("  Calcul IDW pour", n_warehouses, "entrepôts...\n")
+
+  n_zones <- nrow(entreposages_sf)
+  cat("  Calcul IDW pour", n_zones, "zones économiques...\n")
   
   # Initialisation du vecteur de résultats
-  rwi_brut_par_entrepot <- numeric(n_warehouses)
+  rwi_brut_par_entrepot <- numeric(n_zones)
   
-  for (i in seq_len(n_warehouses)) {
+  for (i in seq_len(n_zones)) {
     
     # On passe la géométrie brute (pas l'objet sf entier) pour correspondre
     # au contrat de calc_rwi_idw(), comme on le faisait avec calc_part_landuse()
@@ -3619,8 +3646,8 @@ if (!cache_rwi_valide && rwi_ok) {
       puissance      = RWI_IDW_PUISSANCE
     )
     
-    if (i %% 10 == 0 || i == n_warehouses) {
-      cat("  IDW RWI :", round(i / n_warehouses * 100), "%\n")
+    if (i %% 10 == 0 || i == n_zones) {
+      cat("  IDW RWI :", round(i / n_zones * 100), "%\n")
     }
   }
   
@@ -3628,7 +3655,7 @@ if (!cache_rwi_valide && rwi_ok) {
   saveRDS(
     list(
       rwi_brut_par_entrepot = rwi_brut_par_entrepot,
-      n_warehouses          = n_warehouses,
+      n_zones               = nrow(entreposages_sf),  
       buffer_m              = BUFFER_RWI_M,
       puissance             = RWI_IDW_PUISSANCE,
       date_creation         = Sys.time()
@@ -3643,7 +3670,7 @@ if (!cache_rwi_valide && rwi_ok) {
   # (correspond à la richesse médiane du Rwanda — ni riche ni pauvre).
   # Le modèle gravitaire peut tourner sans RWI, juste avec moins de précision.
   cat("  ⚠ RWI indisponible — valeurs neutres (0) utilisées pour tous les entrepôts\n\n")
-  rwi_brut_par_entrepot <- rep(0, n_warehouses)
+  rwi_brut_par_entrepot <- rep(0, nrow(entreposages_sf))
 }
 
 
@@ -3706,14 +3733,23 @@ cat("  Score p_rwi après normalisation :\n")
 cat("  Min :", round(min(p_rwi), 3), "| Max :", round(max(p_rwi), 3),
     "| Médiane :", round(median(p_rwi), 3), "\n\n")
 
+# ── Vérification d'alignement avant construction du tableau ────────────────
+# rwi_brut_par_entrepot doit avoir exactement autant d'éléments que entreposages_sf
+# (la référence des 123 zones économiques). Un désalignement ici provoquerait
+# une attribution erronée des scores RWI à des zones qui ne sont pas les leurs.
+# C'est le même contrat que celui utilisé en IV.4.D pour les vecteurs population.
+stopifnot(
+  length(rwi_brut_par_entrepot) == nrow(entreposages_sf),
+  length(p_rwi)                 == nrow(entreposages_sf)
+)
+
 # ── Tableau de synthèse ───────────────────────────────────────────────────────
 diag_rwi <- tibble(
-  nom_zone      = entreposages_avec_snap$nom,
-  type_zone     = entreposages_avec_snap$type,
-  rwi_brut      = round(rwi_brut_par_entrepot, 3),
-  p_rwi         = round(p_rwi, 3),
-  # Classe de richesse relative pour lecture rapide
-  classe_rwi    = case_when(
+  nom_zone   = entreposages_fictifs$nom,
+  type_zone  = entreposages_fictifs$type,
+  rwi_brut   = round(rwi_brut_par_entrepot, 3),
+  p_rwi      = round(p_rwi, 3),
+  classe_rwi = case_when(
     p_rwi >= 0.75 ~ "Très riche",
     p_rwi >= 0.50 ~ "Riche",
     p_rwi >= 0.25 ~ "Pauvre",
@@ -3760,12 +3796,12 @@ reseau_rwanda <- reseau_rwanda %>%
 # ── Intégration dans entreposages_fictifs ─────────────────────────────────────
 # Mise à jour du data.frame de référence pour le modèle gravitaire (VII.2)
 # et les exports CSV finaux (VIII.3).
+stopifnot(nrow(entreposages_fictifs) == nrow(diag_rwi))
+
 entreposages_fictifs <- entreposages_fictifs %>%
-  left_join(
-    diag_rwi %>%
-      select(nom_zone, rwi_brut, p_rwi, classe_rwi) %>%
-      distinct(nom_zone, .keep_all = TRUE),   # supprime les doublons avant jointure
-    by = c("nom" = "nom_zone")
+  select(-any_of(c("rwi_brut", "p_rwi", "classe_rwi")))
+  bind_cols(
+    diag_rwi %>% select(rwi_brut, p_rwi, classe_rwi)
   )
 
 # Mise à jour de la table DuckDB
@@ -4019,9 +4055,38 @@ pop_i <- replace_na(pop_i, 1000)
 p_rwi_i <- diag_rwi$p_rwi[
   match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
 ]
-p_rwi_i <- replace_na(p_rwi_i, 0.5)
+
 # Valeur de repli pour p_rwi : 0.5 = niveau médian national
 # (aucun effet directionnel si la donnée est manquante)
+p_rwi_i <- replace_na(p_rwi_i, 0.5)
+
+
+# ── Cap de population pour les zones industrielles ────────────────────────────
+# Les zones industrielles dont le centroïde tombe dans Kigali (5 km de buffer)
+# captent artificiellement la population résidentielle de la capitale, ce qui
+# leur attribue une masse économique disproportionnée (jusqu'à 100k+ habitants
+# pour de simples polygones industriels OSM).
+# 
+# Justification : une zone industrielle GÉNÈRE du fret par sa production, pas
+# par la population qui y vit. Sa "population pertinente" pour le modèle
+# gravitaire est plutôt sa main-d'œuvre, qu'on ne peut pas mesurer directement.
+# Le cap CAP_POP_INDUSTRIE évite que le buffer démographique ne sur-pondère
+# ces zones par rapport aux hubs et marchés réels.
+
+types_warehouse <- noeuds_entreposage$warehouse_type
+n_capees <- sum(types_warehouse == "industrie" & pop_i > CAP_POP_INDUSTRIE,
+                na.rm = TRUE)
+
+if (n_capees > 0) {
+  cat("  Plafonnement de la population pour", n_capees,
+      "zones industrielles (cap =", CAP_POP_INDUSTRIE, "hab.)\n")
+  pop_i <- ifelse(
+    types_warehouse == "industrie" & pop_i > CAP_POP_INDUSTRIE,
+    CAP_POP_INDUSTRIE,
+    pop_i
+  )
+}
+
 
 # Vérification que les deux vecteurs ont la même longueur que le nombre
 # d'entrepôts modélisés. Un désalignement ici provoquerait une erreur
@@ -5119,16 +5184,6 @@ cat("  ✓ graphique_emissions_par_vehicule.png\n\n")
 # minimise le coût total, potentiellement en changeant de véhicule.
 # La "matrice OD" (Origine-Destination) est le tableau carré n×n qui contient
 # le coût optimal pour aller de chaque entrepôt vers chaque autre entrepôt.
-
-# Extraction des nœuds identifiés comme entrepôts dans le réseau
-noeuds_entreposage <- reseau_rwanda %>%
-  activate("nodes") %>%
-  filter(is_warehouse) %>%
-  as_tibble() %>%
-  mutate(warehouse_id = row_number()) # Donne un identifiant unique
-
-n_warehouses <- nrow(noeuds_entreposage)
-cat("Entreposages :", n_warehouses, "\n")
 
 # ── Préparation du graphe igraph pour Dijkstra ────────────────────────────────
 # as_tbl_graph() convertit sfnetworks en tidygraph/igraph tout en conservant
