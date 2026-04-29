@@ -22,42 +22,6 @@
 ################################################################################
 
 # ==============================================================================
-# RESET COMPLET — Suppression de tous les caches
-# Mettre RESET_CACHES <- TRUE pour forcer un recalcul complet depuis zéro.
-# Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
-# ==============================================================================
-
-RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
-
-if (RESET_CACHES) {
-  
-  caches <- c(
-    file.path(DIR_OUTPUT, "reseau_corrige_cache.rds"),
-    file.path(DIR_OUTPUT, "pentes_cache.rds"),
-    file.path(DIR_OUTPUT, "landuse_cache.rds"),
-    file.path(DIR_OUTPUT, "od_cache.rds"),
-    file.path(DIR_OUTPUT, "affectation_cache.rds")
-  )
-  
-  cat("=== RESET COMPLET DES CACHES ===\n")
-  
-  for (f in caches) {
-    if (file.exists(f)) {
-      file.remove(f)
-      cat("  ✓ Supprimé :", basename(f), "\n")
-    } else {
-      cat("  — Absent  :", basename(f), "\n")
-    }
-  }
-  
-  cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
-  cat("  Temps de recalcul estimé : 3-5h selon la machine\n\n")
-  
-} else {
-  cat("  Caches conservés (RESET_CACHES = FALSE)\n\n")
-}
-
-# ==============================================================================
 # CONNEXION GIT
 # ==============================================================================
 
@@ -265,6 +229,8 @@ NISR_COL_POP_TOTAL <- "Total"          # Colonne de population totale
 # Secteurs économiques modélisés (ordre fixe — ne pas modifier sans recalculer A)
 SECTEURS <- c("Agriculture", "Mines", "Agro_industrie", "Industrie",
               "Construction", "Commerce", "Transport", "Services")
+
+N_SECTEURS <- length(SECTEURS)
 
 # Part du PIB considérée comme échangeable entre zones
 # (le reste est consommé localement et ne génère pas de fret interzonal)
@@ -516,6 +482,43 @@ PROPORTION_MIN_EXPOSEE      <- 0.3
 MULTIPLICATEUR_DECONNEXION <- 3
 
 cat("✓ Paramètres globaux chargés\n\n")
+
+# ==============================================================================
+# RESET COMPLET — Suppression de tous les caches
+# Mettre RESET_CACHES <- TRUE pour forcer un recalcul complet depuis zéro.
+# Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
+# ==============================================================================
+
+RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
+
+if (RESET_CACHES) {
+  
+  caches <- c(
+    file.path(DIR_OUTPUT, "reseau_corrige_cache.rds"),
+    file.path(DIR_OUTPUT, "pentes_cache.rds"),
+    file.path(DIR_OUTPUT, "landuse_cache.rds"),
+    file.path(DIR_OUTPUT, "od_cache.rds"),
+    file.path(DIR_OUTPUT, "affectation_cache.rds")
+  )
+  
+  cat("=== RESET COMPLET DES CACHES ===\n")
+  
+  for (f in caches) {
+    if (file.exists(f)) {
+      file.remove(f)
+      cat("  ✓ Supprimé :", basename(f), "\n")
+    } else {
+      cat("  — Absent  :", basename(f), "\n")
+    }
+  }
+  
+  cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
+  cat("  Temps de recalcul estimé : 3-5h selon la machine\n\n")
+  
+} else {
+  cat("  Caches conservés (RESET_CACHES = FALSE)\n\n")
+}
+
 
 # ==============================================================================
 # I.2 : Connexion DuckDB et fonctions utilitaires
@@ -2676,8 +2679,6 @@ pop_worldpop_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
 
 # On tente d'abord de charger le raster depuis le disque (cache local).
 # Si le fichier n'existe pas, on le télécharge depuis le site WorldPop
-# via elevatr (même package que pour le DEM en Partie II.4).
-# La mise en cache évite un retéléchargement à chaque exécution du script.
 
 raster_worldpop <- NULL
 worldpop_ok     <- FALSE
@@ -4138,18 +4139,6 @@ if (length(idx_kigali) > 0 && !is.na(taille_brute[idx_kigali[1]])) {
 taille_composite <- pmax(taille_composite, taille_default)
 
 
-# Diagnostic : les zones dont le ratio s'éloigne le plus de 1.0 sont celles
-# pour lesquelles les données RWI / population divergent le plus des
-# assignations manuelles. Ce n'est pas forcément un problème — les données
-# empiriques peuvent corriger des biais de la calibration manuelle.
-ecart_max <- comparaison_tailles %>%
-  filter(!is.na(Ratio)) %>%
-  slice_max(abs(Ratio - 1), n = 3)
-
-cat("\nZones avec le plus grand écart (ratio le plus éloigné de 1.0) :\n")
-print(ecart_max %>% select(Zone, Taille_manuelle, Taille_composite, Ratio))
-cat("\n")
-
 # ── Stockage dans DuckDB et dans entreposages_fictifs ─────────────────────────
 # On ajoute taille_composite au data.frame de référence et à DuckDB pour que
 # toutes les parties suivantes puissent y accéder directement.
@@ -4162,13 +4151,6 @@ entreposages_fictifs <- entreposages_fictifs %>%
   select(-any_of("taille_composite")) %>%
   left_join(taille_lookup, by = "nom") %>%
   mutate(taille_composite = replace_na(taille_composite, taille_default))
-
-duck_write(
-  comparaison_tailles %>%
-    select(Zone, Type, Population, p_rwi,
-           Taille_manuelle, Taille_composite),
-  "tailles_zones_composite"
-)
 
 
 somme_tailles <- sum(taille_composite)
@@ -5183,6 +5165,17 @@ OD_COLONNES_ATTENDUES <- c(
   "co2_kg_trajet", "nox_g_trajet", "pm25_g_trajet"
 )
 
+# ── Empreinte de version du script ────────────────────────────────────────────
+# Hash des paramètres structurels qui, s'ils changent, invalident le cache
+empreinte_params <- digest::digest(
+  list(
+    vehicule_reference = VEHICULE_REFERENCE,
+    n_vehicules        = nrow(VEHICULES_IDS),
+    vehicules_ids      = sort(VEHICULES_IDS$vehicule_id)
+  ),
+  algo = "xxhash64"
+)
+
 # file.exists() : vérifie si le fichier cache existe déjà sur le disque.
 if (file.exists(CACHE_OD)) {
   cache_od <- readRDS(CACHE_OD)  # Charge le fichier sauvegardé en mémoire R
@@ -5197,16 +5190,7 @@ if (file.exists(CACHE_OD)) {
   colonnes_ok <- !is.null(cache_od$od_long) &&
     all(OD_COLONNES_ATTENDUES %in% names(cache_od$od_long))
   
-  # ── Vérification 3 : empreinte de version du script ───────────────────────
-  # Hash des paramètres structurels qui, s'ils changent, invalident le cache
-  empreinte_params <- digest::digest(
-    list(
-      vehicule_reference = VEHICULE_REFERENCE,
-      n_vehicules        = nrow(VEHICULES_IDS),
-      vehicules_ids      = sort(VEHICULES_IDS$vehicule_id)
-    ),
-    algo = "xxhash64"
-  )
+
   version_ok <- !is.null(cache_od$empreinte_params) &&
     cache_od$empreinte_params == empreinte_params
   
@@ -5390,6 +5374,7 @@ cat("  Coût moyen                   :", od_stats$cout_moyen_usd, "USD\n")
 cat("  Paires avec transbordement   :", od_stats$paires_avec_transbordement, "\n")
 cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
+}
 
 # ==============================================================================
 # VI.2 : Exports du réseau (GeoPackage, CSV, Parquet)
@@ -5517,8 +5502,6 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # produits alimentaires (Agro_industrie), combien cela génère-t-il de production
 # supplémentaire dans l'Agriculture (pour fournir les matières premières) ?
 # C'est ce que calcule la matrice de Leontief.
-
-N_SECTEURS <- length(SECTEURS)
 
 # ── Grandeurs dérivées de la table IO ─────────────────────────────────────────
 # %*% : produit matriciel en R (différent de * qui est une multiplication élément par élément).
