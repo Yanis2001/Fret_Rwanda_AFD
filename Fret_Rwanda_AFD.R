@@ -2317,7 +2317,8 @@ villes_nouvelles <- villes_osm[lengths(idx_proches) == 0, ] %>%
     source = "osm_place"
   ) %>%
   st_drop_geometry() %>%
-  select(nom, type, lon, lat, source)
+  select(nom, type, lon, lat, source) %>%
+  distinct(nom, .keep_all = TRUE)  # garde le premier point par nom
 
 cat("  Villes OSM city/town nouvelles (non dupliquées) :",
     nrow(villes_nouvelles), "\n")
@@ -2528,6 +2529,60 @@ cat("  (à comparer avec", nrow(entreposages_fictifs), "zones économiques)\n\n"
 
 cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n")
 
+# ── Diagnostic : entrepôts snappés sur le même nœud ──────────────────────────
+# On identifie les nœuds partagés par plusieurs entrepôts AVANT déduplication
+# pour comprendre si les fusions concernent des zones de même type ou non.
+# Un nœud partagé par des types différents (ex : "ville" + "industrie") signale
+# une fusion potentiellement problématique pour le modèle gravitaire.
+
+# Calcul du nombre d'entrepôts par nœud (avant distinct())
+# On repart de entreposages_sf avant la déduplication par noeud_proche_id
+doublons_noeuds <- entreposages_sf %>%
+  mutate(
+    noeud_proche_id = st_nearest_feature(geometry, noeuds_reseau)
+  ) %>%
+  st_drop_geometry() %>%
+  group_by(noeud_proche_id) %>%
+  # On ne garde que les nœuds avec au moins 2 entrepôts
+  filter(n() > 1) %>%
+  summarise(
+    n_entrepots      = n(),
+    noms             = paste(nom,  collapse = " | "),
+    types            = paste(type, collapse = " | "),
+    sources          = paste(source, collapse = " | "),
+    # TRUE si tous les entrepôts sur ce nœud sont du même type
+    meme_type        = n_distinct(type) == 1,
+    .groups          = "drop"
+  ) %>%
+  arrange(desc(n_entrepots))
+
+cat("=== Diagnostic des entrepôts sur le même nœud ===\n\n")
+cat("Nœuds partagés :", nrow(doublons_noeuds), "\n")
+cat("dont même type :", sum(doublons_noeuds$meme_type), "\n")
+cat("dont types mixtes :", sum(!doublons_noeuds$meme_type), "\n\n")
+
+if (nrow(doublons_noeuds) > 0) {
+  cat("Détail des nœuds partagés :\n")
+  print(
+    doublons_noeuds %>%
+      select(noeud_proche_id, n_entrepots, types, meme_type, noms) %>%
+      rename(
+        Noeud       = noeud_proche_id,
+        N           = n_entrepots,
+        Types       = types,
+        MemeType    = meme_type,
+        Zones       = noms
+      )
+  )
+}
+cat("\n")
+# Alerte si des fusions de types différents sont détectées
+if (any(!doublons_noeuds$meme_type)) {
+  cat("⚠ Fusions de types différents détectées — la population sera\n")
+  cat("  recalculée sur l'union des buffers pour ces nœuds (voir IV.4.B)\n\n")
+} else {
+  cat("✓ Toutes les fusions concernent des zones de même type\n\n")
+}
 
 ################################################################################
 # PARTIE IV.4 — ENRICHISSEMENT DÉMOGRAPHIQUE DES NŒUDS D'ENTREPÔT
@@ -2811,7 +2866,7 @@ if (worldpop_ok) {
     
     # exact_extract avec fun="sum" retourne directement un vecteur numérique.
     # On remplace les éventuels NA par 0 (zones sans données WorldPop).
-    pop_worldpop_par_entrepot <- replace_na(as.numeric(resultats_wp), 0)
+    pop_worldpop_par_entrepot <- as.numeric(resultats_wp)
     
     cat("  ✓ Population WorldPop calculée pour",
         sum(pop_worldpop_par_entrepot > 0), "/", nrow(entreposages_sf),
@@ -2852,6 +2907,20 @@ if (worldpop_ok) {
 cat("── Approche C : recensement NISR 2022 (par district) ────────────────\n")
 
 pop_nisr_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
+
+# ── Téléchargement du CSV NISR depuis MinIO si pas déjà présent ───────────────
+if (!file.exists(NISR_CSV_PATH)) {
+  dir.create(dirname(NISR_CSV_PATH), showWarnings = FALSE, recursive = TRUE)
+  save_object(
+    object    = "data/raw/rwa_admpop_adm2_2023.csv",
+    bucket    = MINIO_BUCKET,
+    file      = NISR_CSV_PATH,
+    region    = "",
+    use_https = TRUE,
+    base_url  = MINIO_BASE_URL
+  )
+  cat("  ✓ CSV NISR téléchargé depuis MinIO\n")
+}
 
 if (file.exists(NISR_CSV_PATH)) {
   
@@ -2995,7 +3064,7 @@ if (file.exists(NISR_CSV_PATH)) {
   
 } else {
   cat("  Fichier NISR non trouvé :", NISR_CSV_PATH, "\n")
-  cat("  → Télécharger sur https://prod.open-data.risa.gov.rw/organization/nisr\n")
+  cat("  → Télécharger sur https://data.humdata.org/dataset/cod-ps-rwa\n")
   cat("  → Approche C ignorée\n\n")
 }
 
@@ -3224,11 +3293,6 @@ cat("  • reseau_rwanda  (attribut de nœud)\n")
 cat("  • DuckDB         (table population_entrepots)\n")
 cat("  • entreposages_fictifs (colonne population_zone)\n\n")
 
-cat("  UTILISATION EN PARTIE VII (modèle gravitaire) :\n")
-cat("  Remplacer 'taille * echelle' par 'taille * log(population_zone) * echelle'\n")
-cat("  dans le calcul de offre_zones[i,] et demande_zones[i,]\n\n")
-
-
 ################################################################################
 # PARTIE IV.5 — ENRICHISSEMENT PAR L'INDICE DE RICHESSE RELATIVE (RWI)
 #
@@ -3439,7 +3503,7 @@ if (rwi_ok) {
 #   RWI (IV.5) :
 #     Pour chaque buffer d'entrepôt, on calcule la MOYENNE PONDÉRÉE
 #     par distance inverse (IDW) des scores RWI des cellules dans le buffer.
-#     → scalaire rwi_brut (valeur centrée sur 0, typiquement [-3, +3])
+#     → scalaire rwi_brut (valeur centrée proche de 0, typiquement [-3, +3])
 #     → normalisé en p_rwi ∈ [0, 1] en fin de cette section
 #
 # POURQUOI IDW ET PAS UNE SIMPLE MOYENNE ?
@@ -3566,7 +3630,7 @@ if (!cache_rwi_valide && rwi_ok) {
     }
   }
   
-  # ── Sauvegarde du cache ──────────────────────────────────────────────────
+  # ── Sauvegarde du cache ─────────────────────────────────────────────────────
   saveRDS(
     list(
       rwi_brut_par_entrepot = rwi_brut_par_entrepot,
@@ -3592,17 +3656,15 @@ if (!cache_rwi_valide && rwi_ok) {
 # ==============================================================================
 # IV.5.3 : Normalisation et intégration dans le modèle
 #
-# Le score IDW brut est centré sur 0 et peut être négatif (zones pauvres).
-# Pour l'utiliser dans l'interpolation convexe de Partie VII.2 (même logique
-# que p_ind et p_urb qui sont des proportions entre 0 et 1), on normalise
-# avec une transformation min-max sur l'ensemble des scores Rwanda.
+# Le score IDW brut est centré sur 0 à l'échelle international et peut être négatif (zones pauvres).
+# Pour l'utiliser on normalise avec une transformation min-max sur l'ensemble des scores Rwanda.
 #
 # FORMULE :
-#   p_rwi = (rwi_brut - min_rwanda) / (max_rwanda - min_rwanda)
+#   p_rwi = (rwi_brut - min_entrepôt) / (max_entrepôt - min_entrepôt)
 #
 # Avec cette normalisation :
-#   p_rwi = 0 → zone la plus pauvre de l'échantillon Rwanda
-#   p_rwi = 1 → zone la plus riche de l'échantillon Rwanda
+#   p_rwi = 0 → zone la plus pauvre de l'échantillon 
+#   p_rwi = 1 → zone la plus riche de l'échantillon 
 #   p_rwi = 0.5 → niveau médian national
 #
 # IMPORTANTE PRÉCAUTION — ÉCHELLE RELATIVE :
@@ -3617,8 +3679,6 @@ cat("── Normalisation et intégration des scores RWI ───────�
 # ── Imputation des NA (entrepôts sans cellule RWI dans le buffer) ─────────────
 # Si un entrepôt n'a aucune cellule RWI dans son buffer (rare : frontière,
 # zone très isolée), on lui affecte la médiane nationale comme valeur neutre.
-# C'est l'équivalent de calc_part_landuse() qui retourne 0 quand il n'y a
-# pas de zones de landuse dans le buffer — une valeur "sans effet".
 n_na_rwi <- sum(is.na(rwi_brut_par_entrepot))
 if (n_na_rwi > 0) {
   mediane_rwi <- median(rwi_brut_par_entrepot, na.rm = TRUE)
@@ -3965,6 +4025,71 @@ cat("── Calcul de la taille composite (population × richesse) ────�
 pop_i <- diag_population$population_zone[
   match(noeuds_entreposage$warehouse_name, diag_population$nom_zone)
 ]
+
+# ── Correction du double comptage pour les entrepôts sur le même nœud ────
+# Si plusieurs entrepôts sont snappés sur le même nœud, leurs buffers de
+# 5km se chevauchent fortement. Sommer leurs populations individuel-
+# les compterait les mêmes habitants plusieurs fois.
+# On recalcule donc la population sur l'UNION géométrique des buffers
+# pour chaque groupe de nœud partagé, puis on affecte cette valeur
+# corrigée à tous les entrepôts du groupe.
+
+# Récupération des groupes de nœuds partagés (construits juste avant en IV.3)
+if (nrow(doublons_noeuds) > 0) {
+  
+  cat("  Correction du double comptage sur", nrow(doublons_noeuds),
+      "nœuds partagés...\n")
+  
+  # Pour chaque nœud partagé, on recalcule la population sur l'union
+  for (k in seq_len(nrow(doublons_noeuds))) {
+    
+    noeud_k <- doublons_noeuds$noeud_proche_id[k]
+    
+    # Indices des entrepôts dans entreposages_sf snappés sur ce nœud
+    # On recalcule le snapping localement pour être sûr des indices
+    idx_groupe <- which(
+      st_nearest_feature(entreposages_sf$geometry, noeuds_reseau) == noeud_k
+    )
+    
+    if (length(idx_groupe) < 2) next  # Sécurité : ne rien faire si groupe vide
+    
+    # Union géométrique des buffers du groupe
+    # st_union() fusionne les polygones en évitant le double comptage
+    # des zones de chevauchement
+    buffer_union_k <- entreposages_buffer[idx_groupe, ] %>%
+      st_union() %>%
+      st_as_sf()
+    
+    # Recalcul de la population sur l'union
+    # exact_extract() tient compte des pixels partiellement dans le polygone
+    tryCatch({
+      pop_union_k <- exactextractr::exact_extract(
+        raster_worldpop,
+        buffer_union_k %>% st_transform(st_crs(raster_worldpop)),
+        fun      = "sum",
+        progress = FALSE
+      )
+      pop_union_k <- replace_na(as.numeric(pop_union_k), 0)
+      
+      # Affectation de la population corrigée à tous les entrepôts du groupe
+      # Tous reçoivent la même valeur : c'est la population de la zone fusionnée
+      pop_worldpop_par_entrepot[idx_groupe] <- pop_union_k
+      
+      cat("    Nœud", noeud_k, "(",
+          doublons_noeuds$types[k], ") :",
+          length(idx_groupe), "entrepôts →",
+          round(pop_union_k), "hab. (union)\n")
+      
+    }, error = function(e) {
+      cat("    ⚠ Nœud", noeud_k, ": recalcul union échoué —",
+          conditionMessage(e), "\n")
+      # On conserve les valeurs individuelles en cas d'échec
+    })
+  }
+  
+  cat("  ✓ Correction double comptage terminée\n\n")
+}
+
 pop_i <- replace_na(pop_i, 1000)
 
 p_rwi_i <- diag_rwi$p_rwi[
