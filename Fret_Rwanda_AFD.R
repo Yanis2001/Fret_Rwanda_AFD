@@ -5338,8 +5338,8 @@ saveRDS(
     od_long            = od_long,
     n_warehouses       = n_warehouses,
     n_aretes           = n_aretes_physiques,
-    empreinte_params   = empreinte_params,      # ← ajout
-    colonnes_od        = names(od_long),        # ← ajout
+    empreinte_params   = empreinte_params,       
+    colonnes_od        = names(od_long),         
     date_creation      = Sys.time()
   ),
   CACHE_OD
@@ -8028,7 +8028,21 @@ cat("  Recalcul des distances OD sur le réseau dégradé...\n")
 od_rows_degrade <- list()
 idx_deg         <- 0
 
+# ── Chargement du checkpoint si disponible ────────────────────────────────────   
+CHECKPOINT_OD_DEG <- file.path(DIR_OUTPUT, "od_degrade_checkpoint.rds")     
+origines_deja_traitees <- c()                                                
+if (file.exists(CHECKPOINT_OD_DEG)) {                                        
+  checkpoint <- readRDS(CHECKPOINT_OD_DEG)                                   
+  od_rows_degrade        <- checkpoint$od_rows_degrade                       
+  idx_deg                <- checkpoint$idx_deg                               
+  origines_deja_traitees <- checkpoint$origines_deja_traitees                
+  cat("  ✓ Checkpoint chargé — reprise depuis l'origine",                    
+      max(origines_deja_traitees), "\n")                                     
+}   
+
 for (i in seq_along(warehouse_nodes_base)) {
+  
+  if (i %in% origines_deja_traitees) next
   
   sources_i <- sapply(seq_len(n_vehicules),
                       function(v) node_multi(v, warehouse_nodes_base[i]))
@@ -8065,9 +8079,24 @@ for (i in seq_along(warehouse_nodes_base)) {
     )
   }
   
+  rm(dists_deg)                                                              
+  origines_deja_traitees <- c(origines_deja_traitees, i)                    
+  if (i %% 5 == 0) {                                                         
+    invisible(gc(verbose = FALSE))                                           
+    saveRDS(                                                                 
+      list(od_rows_degrade        = od_rows_degrade,                        
+           idx_deg                = idx_deg,                                
+           origines_deja_traitees = origines_deja_traitees),                
+      CHECKPOINT_OD_DEG                                                     
+    )                                                                       
+  }                                                                         
+  
   if (i %% 5 == 0 || i == length(warehouse_nodes_base))
     cat("  OD dégradé :", round(i / length(warehouse_nodes_base) * 100, 1), "%\n")
 }
+
+# Suppression du checkpoint une fois la boucle terminée avec succès         
+if (file.exists(CHECKPOINT_OD_DEG)) file.remove(CHECKPOINT_OD_DEG)         
 
 od_degrade <- bind_rows(od_rows_degrade)
 
