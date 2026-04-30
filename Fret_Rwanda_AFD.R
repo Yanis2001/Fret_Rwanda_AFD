@@ -7979,12 +7979,6 @@ od_compare <- od_long %>%
 # Pour un calcul exact, il faudrait recalculer les chemins dégradés complets
 # avec extraction des attributs d'émissions (extension future).
 od_compare <- od_compare %>%
-  left_join(
-    # Émissions de référence (trajet optimal avant perturbation)
-    od_long %>% select(id_origine, id_destination,
-                       co2_kg_trajet, nox_g_trajet, pm25_g_trajet),
-    by = c("id_origine", "id_destination")
-  ) %>%
   mutate(
     # Émissions supplémentaires estimées = émissions_ref × surcoût_relatif
     # Interprétation : si le trajet coûte 30% de plus (allongement de route),
