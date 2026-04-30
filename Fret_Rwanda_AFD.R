@@ -71,7 +71,8 @@ packages_requis <- c(
   "duckdb",        # Base analytique embarquée — moteur SQL sans serveur
   "DBI",           # Interface R standard pour les bases de données (pilote DuckDB)
   "scales",        # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
-  "progress"       # Barre de progression
+  "progress",      # Barre de progression
+  "exactextractr"  # Agrégation précise de rasters sur des polygones
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
@@ -2675,6 +2676,7 @@ cat("  Population OSM min :", round(min(pop_osm_par_entrepot, na.rm = TRUE)),
 
 cat("── Approche B : raster WorldPop (population ~100m) ──────────────────\n")
 
+#Création d'un vecteur avec que des NA
 pop_worldpop_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
 
 # On tente d'abord de charger le raster depuis le disque (cache local).
@@ -2711,7 +2713,7 @@ if (!worldpop_ok) {
   
   # WorldPop a réorganisé plusieurs fois son arborescence.
   # On teste les URLs candidates dans l'ordre jusqu'à en trouver une valide.
-  # La première URL est la structure actuelle (2024) ; les suivantes sont des
+  # La première URL est la structure 2024 ; les suivantes sont des
   # fallbacks vers les structures antérieures.
   WORLDPOP_URLS_CANDIDATES <- c(
     # Structure actuelle — constrained, ajusté UN, 100m
@@ -2768,20 +2770,10 @@ if (!worldpop_ok) {
 # Pour chaque entrepôt, on somme les pixels WorldPop dans un cercle de
 # BUFFER_DEMO_M mètres. Chaque pixel représente le nombre d'habitants vivant
 # dans cette cellule de 100m × 100m.
-# exact_extract() du package exactextractr est bien plus précis que
-# terra::extract() pour l'agrégation sur un polygone (prise en compte
-# des pixels partiellement dans le buffer avec pondération fractionnaire).
 if (worldpop_ok) {
   
   cat("  Agrégation WorldPop sur les buffers de",
       BUFFER_DEMO_M / 1000, "km...\n")
-  
-  # Vérification que le package exactextractr est disponible.
-  # C'est une alternative à terra::extract() bien plus précise pour les polygones.
-  # install.packages() ne fait rien si le package est déjà installé.
-  if (!requireNamespace("exactextractr", quietly = TRUE)) {
-    install.packages("exactextractr")
-  }
   
   # Création des buffers de chaque entrepôt
   # entreposages_buffer est déjà défini en Partie IV.3, on le réutilise.
@@ -2824,7 +2816,8 @@ if (worldpop_ok) {
 # IV.4.C : Données de recensement NISR (source officielle, recommandée)
 #
 # L'Institut National de Statistiques du Rwanda (NISR) publie les résultats
-# du recensement RPHC-5 (2022) par district disponible sur HDX (Humanitarian Data Exchange)
+# du recensement RPHC-5 (2022) par district. Les données sont disponibles sur HDX 
+# (Humanitarian Data Exchange)
 #
 # PROCÉDURE DE TÉLÉCHARGEMENT :
 #   1. Aller sur  https://data.humdata.org/dataset/cod-ps-rwa
@@ -2883,7 +2876,7 @@ if (file.exists(NISR_CSV_PATH)) {
     
     cat("  Districts NISR après nettoyage :", nrow(nisr_pop), "\n")
     
-    # ── Téléchargement des frontières de districts (GADM) ───────────────────
+    # ── Téléchargement des frontières de districts (GADM) ─────────────────────
     # GADM (Global Administrative Areas) fournit les polygones des limites
     # administratives pour tous les pays du monde.
     # geodata::gadm() télécharge le niveau 2 (districts) pour le Rwanda.
@@ -2910,7 +2903,7 @@ if (file.exists(NISR_CSV_PATH)) {
     
     if (!is.null(rwanda_districts_gadm)) {
       
-      # ── Jointure GADM × NISR ────────────────────────────────────────────
+      # ── Jointure GADM × NISR ────────────────────────────────────────────────
       # On fusionne le tableau de population NISR avec les polygones GADM
       # via le nom de district normalisé.
       # left_join() conserve tous les polygones GADM même sans correspondance NISR.
@@ -2937,7 +2930,7 @@ if (file.exists(NISR_CSV_PATH)) {
         cat("    → Vérifier l'orthographe dans", NISR_CSV_PATH, "\n")
       }
       
-      # ── Jointure spatiale entrepôts × districts ──────────────────────────
+      # ── Jointure spatiale entrepôts × districts ─────────────────────────────
       # Pour chaque entrepôt, on identifie dans quel district il se trouve
       # (st_within) et on récupère la population du district correspondant.
       # st_join() avec join = st_within : chaque entrepôt hérite des attributs
@@ -3530,6 +3523,7 @@ cache_rwi_valide <- FALSE
 
 if (file.exists(CACHE_RWI) && rwi_ok) {
   
+  cache_rwi_data <- readRDS(CACHE_RWI)
   n_zones_actuel <- nrow(entreposages_sf)
   
   if (!is.null(cache_rwi_data$n_zones) &&
