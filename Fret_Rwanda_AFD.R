@@ -3242,7 +3242,7 @@ cat("  dans le calcul de offre_zones[i,] et demande_zones[i,]\n\n")
 #   │   → scalaire p_ind ou p_urb entre 0 et 1                         │
 #   │  RWI           : moyenne pondérée par distance inverse (IDW)     │
 #   │   des scores des cellules RWI dans le buffer de chaque entrepôt  │
-#   │   → scalaire p_rwi entre 0 et 1 (normalisé min-max)              │                │
+#   │   → scalaire p_rwi entre 0 et 1 (normalisé min-max)              │                
 #   └──────────────────────────────────────────────────────────────────┘
 #
 # SOURCE : Chi, G., Fang, H., Chatterjee, S. & Blumenstock, J.E. (2022).
@@ -3344,7 +3344,7 @@ if (!rwi_ok) {
     cat("  Fichiers dans le ZIP :", nrow(contenu_zip), "\n")
     
     # Vérification que le fichier Rwanda est dans le ZIP.
-    # La casse peut varier selon la version du ZIP (RWA_ ou rwa_).
+    # La présence de majuscules/minuscules peut varier selon la version du ZIP (RWA_ ou rwa_).
     # grepl() + ignore.case = TRUE gère les deux cas.
     idx_rwanda <- grep(
       pattern     = "rwa.*relative.*wealth",
@@ -3480,12 +3480,6 @@ if (file.exists(CACHE_RWI) && rwi_ok) {
 
 # ── Fonction de calcul IDW : RWI moyen pondéré dans un buffer ─────────────────
 #
-# calc_rwi_idw() est l'équivalent de calc_part_landuse() pour le RWI.
-#
-#   calc_part_landuse(buffer_geom, zones_sf) :
-#     → proportion d'aire du buffer couverte par des polygones de landuse
-#     → scalaire ∈ [0, 1]
-#
 #   calc_rwi_idw(centroide_geom, rwi_sf, rayon_m, puissance) :
 #     → moyenne IDW des scores RWI dans le buffer
 #     → scalaire réel (centré sur 0 avant normalisation)
@@ -3499,7 +3493,7 @@ if (file.exists(CACHE_RWI) && rwi_ok) {
 #   centroide_geom — géométrie sf du point-centroïde de l'entrepôt (POINT)
 #   rwi_sf         — objet sf des cellules RWI (POINT, déjà filtré sur Rwanda)
 #   rayon_m        — rayon en mètres du buffer de recherche
-#   puissance      — exposant de l'IDW (2 = standard, voir paramètres IV.5.0)
+#   puissance      — exposant de l'IDW (voir paramètres)
 
 calc_rwi_idw <- function(centroide_geom, rwi_sf, rayon_m, puissance) {
   
