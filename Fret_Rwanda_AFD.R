@@ -3436,11 +3436,6 @@ if (rwi_ok) {
 #
 # MÉTHODE — ANALOGIE AVEC L'USAGE DES SOLS :
 #
-#   Usage des sols (IV.3) :
-#     Pour chaque buffer d'entrepôt, on calcule la PROPORTION DE SURFACE
-#     couverte par les zones industrielles ou urbaines.
-#     → scalaire p_ind ou p_urb ∈ [0, 1]
-#
 #   RWI (IV.5) :
 #     Pour chaque buffer d'entrepôt, on calcule la MOYENNE PONDÉRÉE
 #     par distance inverse (IDW) des scores RWI des cellules dans le buffer.
