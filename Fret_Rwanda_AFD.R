@@ -114,7 +114,7 @@ cat("✓ Tous les packages sont chargés\n\n")
 ################################################################################
 
 # ==============================================================================
-# P.1 : Chemins et fichiers
+# Chemins et fichiers
 # ==============================================================================
 
 DB_PATH        <- "reseau_rwanda.duckdb"   # Fichier DuckDB persistant
@@ -126,8 +126,38 @@ MINIO_BUCKET   <- "yanisdumas"
 MINIO_PBF_PATH <- "data/raw/rwanda-260315.osm.pbf"
 MINIO_BASE_URL <- "minio.lab.sspcloud.fr"
 
+# Chemin local du raster WorldPop si déjà téléchargé 
+WORLDPOP_LOCAL_PATH <- file.path(DIR_OUTPUT, "worldpop_rwanda_100m.tif")
+
+# Chemin du fichier NISR
+NISR_CSV_PATH <- "data/raw/rwa_admpop_adm2_2023.csv"
+
+
+# URL fichier RWI
+RWI_ZIP_URL <- paste0(
+  "https://data.humdata.org/dataset/",
+  "76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/",
+  "de2f953e-940c-43bb-b1f8-4d02d28124b5/download/",
+  "relative-wealth-index-april-2021.zip"
+)
+
+# Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
+RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
+
+# Chemin local pour le cache du ZIP et du CSV extrait
+RWI_ZIP_LOCAL   <- file.path(DIR_OUTPUT, "rwi_all_countries.zip")
+RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
+
+# Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
+# Exemples de sources de données :
+#   - JRC Global Surface Water  : https://global-surface-water.appspot.com/
+#   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
+#   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
+#   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
+CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables_rwanda.tif"  # À modifier
+
 # ==============================================================================
-# P.2 : Paramètres DEM (Modèle Numérique de Terrain)
+# Paramètres DEM (Modèle Numérique de Terrain)
 # ==============================================================================
 
 DEM_ZOOM          <- 9      # Niveau de zoom elevatr (~300 m/pixel) 
@@ -142,7 +172,7 @@ DEM_FICTIF_BRUIT_SD     <- 150    # Écart-type du bruit gaussien simulant les c
 DEM_FICTIF_RESOLUTION_M <- 90     # Résolution du raster fictif (~comparable SRTM niveau 3)
 
 # ==============================================================================
-# P.3 : Zones urbaines et entrepôts
+# Zones urbaines et entrepôts
 # ==============================================================================
 
 # Types de landuse OSM considérés comme zones urbaines
@@ -175,7 +205,7 @@ taille_default <- 0.10
 BUFFER_FRONTIERE_VILLES_M <- 5000
 
 # ==============================================================================
-# P.4 : Paramètres du graphe et de Dijkstra
+# Paramètres du graphe et de Dijkstra
 # ==============================================================================
 
 # Seuil de longueur minimale d'une arête pour ne pas être considérée dégénérée (m)
@@ -183,14 +213,14 @@ BUFFER_FRONTIERE_VILLES_M <- 5000
 SEUIL_LONGUEUR_ARETE_M <- 0.5
 
 # ==============================================================================
-# P.5 : Véhicule de référence et paramètres multi-modal
+# Véhicule de référence et paramètres multi-modal
 # ==============================================================================
 
 # Véhicule utilisé par défaut pour la matrice OD et le modèle gravitaire
 VEHICULE_REFERENCE <- "camion_moyen"
 
 # ==============================================================================
-# P.6 : Paramètres démographiques 
+# Paramètres démographiques 
 # ==============================================================================
 
 # ── Rayon du buffer pour l'agrégation de population autour d'un entrepôt ──────
@@ -206,17 +236,6 @@ BUFFER_DEMO_M <- 5000
 # Pour le Rwanda entier, z=9 (~200m) est le meilleur compromis.
 WORLDPOP_ZOOM <- 9
 
-# ── Chemin local du raster WorldPop si déjà téléchargé ───────────────────────
-# Si le fichier existe déjà sur le disque (session précédente), on l'utilise
-# directement sans retélécharger. Mettre NULL pour forcer le retéléchargement.
-WORLDPOP_LOCAL_PATH <- file.path(DIR_OUTPUT, "worldpop_rwanda_100m.tif")
-
-# ── URL et chemin du fichier NISR de référence (approche C) ───────────────────
-# Source : https://prod.open-data.risa.gov.rw/organization/nisr
-# Recensement RPHC-5, 2022. Téléchargez le CSV "Population by District"
-# et déposez-le dans le répertoire de travail.
-NISR_CSV_PATH <- "data/raw/rwa_admpop_adm2_2023.csv"
-
 # Noms attendus des colonnes dans le CSV NISR (à adapter selon le fichier réel)
 # Ces noms correspondent au format typique des exports NISR data.gov.rw.
 NISR_COL_DISTRICT  <- "District"       # Colonne du nom du district
@@ -224,7 +243,34 @@ NISR_COL_PROVINCE  <- "Province"       # Colonne de la province
 NISR_COL_POP_TOTAL <- "Total"          # Colonne de population totale
 
 # ==============================================================================
-# P.6 : Paramètres du modèle économique
+# Paramètres RWI
+# ==============================================================================
+
+# ── Rayon du buffer pour l'agrégation IDW ─────────────────────────────────────
+# On réutilise BUFFER_ENTREPOT_M = 2000m (défini en Partie IV.3) pour rester
+# cohérent avec le calcul des parts d'usage des sols.
+# Si on veut un rayon différent pour le RWI, le décommenter :
+# BUFFER_RWI_M <- 5000
+
+# Pour l'instant on garde la même valeur que le landuse
+BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
+
+# ── Paramètre de l'interpolation IDW (inverse distance weighting) ─────────────
+# La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
+# Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
+# Puissance = 2 : décroissance quadratique (standard en géostatistique)
+# Puissance = 3 : décroissance cubique (très locale, amplifier les pôles proches)
+# On recommande 2 pour être cohérent avec la littérature géostatistique.
+RWI_IDW_PUISSANCE <- 2
+
+# Distance minimale utilisée dans l'IDW pour éviter la division par zéro.
+# Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
+# possible avec les données grillées), on le plafonne à 50m.
+RWI_DISTANCE_MIN_M <- 50
+
+
+# ==============================================================================
+# Paramètres du modèle économique
 # ==============================================================================
 
 # Secteurs économiques modélisés (ordre fixe — ne pas modifier sans recalculer A)
@@ -254,7 +300,7 @@ BETA_SECTEUR <- c(
   Services       = 0.9
 )
 
-# ── Matrice des coefficients techniques A ─────────────────────────────────────
+# Matrice des coefficients techniques A 
 # a[i,j] = proportion de la production du secteur j (colonne)
 # consommée comme intrant par le secteur i (ligne)
 #
@@ -278,7 +324,7 @@ A <- matrix(c(
 ), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
 dimnames = list(SECTEURS, SECTEURS))
 
-# ── Production totale par secteur (millions USD, Rwanda 2022) ─────────────────
+# Production totale par secteur (millions USD, Rwanda 2022)
 # Calibrées sur Banque Mondiale : PIB Rwanda ~13 Md USD en 2022
 production_totale <- c(
   Agriculture    = 2100,  # Café, thé, pyrèthre, cultures vivrières (principal secteur)
@@ -291,11 +337,7 @@ production_totale <- c(
   Services       = 2200   # Finance, tourisme, services publics, éducation, santé
 )
 
-# ── Facteurs de conversion valeur → masse (tonnes par million USD) ────────────
-# Ces facteurs permettent de convertir les flux monétaires (M USD) en tonnes physiques.
-# Un secteur à ratio élevé (Construction) génère beaucoup de tonnes par USD
-# (ciment, gravier = produits lourds et peu chers).
-# À l'inverse, les Services génèrent très peu de fret physique.
+# Facteurs de conversion valeur → masse (tonnes par million USD) 
 TONNES_PAR_musd <- c(
   Agriculture    = 8000,   # Produits bruts : lourds, faible valeur (bananes, céréales)
   Mines          = 3000,   # Minerais : denses, valeur croissante avec la transformation
@@ -381,59 +423,16 @@ ALPHA_LOG_POP <- 1.5
 CAP_POP_INDUSTRIE <- 30000
 
 # ==============================================================================
-# P.7 : Paramètres de l'affectation All-or-Nothing
+# Paramètres de l'affectation All-or-Nothing
 # ==============================================================================
 
 # Flux minimum (en tonnes) pour qu'une paire OD soit affectée au réseau
 # Les paires en dessous de ce seuil sont ignorées (flux négligeable)
 SEUIL_FLUX_TONNES <- 50
 
-# ==============================================================================
-# P.8 : Paramètres RWI
-# ==============================================================================
-
-# ── URL de téléchargement (HDX — Humanitarian Data Exchange) ──────────────────
-# Le ZIP contient les 93 pays en un seul téléchargement (~35 Mo compressé).
-# Chaque pays est un CSV séparé, nommé <ISO3>_relative_wealth_index.csv.
-# Source : https://data.humdata.org/dataset/relative-wealth-index
-RWI_ZIP_URL <- paste0(
-  "https://data.humdata.org/dataset/",
-  "76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/",
-  "de2f953e-940c-43bb-b1f8-4d02d28124b5/download/",
-  "relative-wealth-index-april-2021.zip"
-)
-
-# Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
-RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
-
-# Chemin local pour le cache du ZIP et du CSV extrait
-RWI_ZIP_LOCAL   <- file.path(DIR_OUTPUT, "rwi_all_countries.zip")
-RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
-
-# ── Rayon du buffer pour l'agrégation IDW ─────────────────────────────────────
-# On réutilise BUFFER_ENTREPOT_M = 2000m (défini en Partie IV.3) pour rester
-# cohérent avec le calcul des parts d'usage des sols.
-# Si on veut un rayon différent pour le RWI, le décommenter :
-# BUFFER_RWI_M <- 5000
-
-# Pour l'instant on garde la même valeur que le landuse
-BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
-
-# ── Paramètre de l'interpolation IDW (inverse distance weighting) ─────────────
-# La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
-# Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
-# Puissance = 2 : décroissance quadratique (standard en géostatistique)
-# Puissance = 3 : décroissance cubique (très locale, amplifier les pôles proches)
-# On recommande 2 pour être cohérent avec la littérature géostatistique.
-RWI_IDW_PUISSANCE <- 2
-
-# Distance minimale utilisée dans l'IDW pour éviter la division par zéro.
-# Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
-# possible avec les données grillées), on le plafonne à 50m.
-RWI_DISTANCE_MIN_M <- 50
 
 # ==============================================================================
-# P.9 : Paramètres de l'analyse de vulnérabilité (Partie IX)
+# Paramètres de l'analyse de vulnérabilité (Partie IX)
 # ==============================================================================
 
 # Nombre d'arêtes candidates testées pour l'analyse de criticité
@@ -478,19 +477,10 @@ RAYON_PERTURBATION_M        <- 5000
 TYPES_ROUTES_PERTURBES  <- NULL  
 
 # Paramètres du mode raster (prêt à brancher)
-
 # Activez ce mode en passant UTILISER_MODE_RASTER à TRUE.
 # ATTENTION : si Mode Buffer ET Mode Raster sont tous les deux TRUE,
 # les deux sources sont combinées (union des routes perturbées).
 UTILISER_MODE_RASTER        <- FALSE
-
-# Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
-# Exemples de sources de données :
-#   - JRC Global Surface Water  : https://global-surface-water.appspot.com/
-#   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
-#   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
-#   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
-CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables_rwanda.tif"  # À modifier
 
 # Seuil au-dessus duquel une route est considérée comme perturbée.
 # Si le raster contient des probabilités (0-1) : un seuil de 0.5 signifie
@@ -3276,55 +3266,6 @@ cat("  dans le calcul de offre_zones[i,] et demande_zones[i,]\n\n")
 cat("==========================================================\n")
 cat("  PARTIE IV.5 — INDICE DE RICHESSE RELATIVE (RWI)\n")
 cat("==========================================================\n\n")
-
-# ==============================================================================
-# IV.5.0 : Paramètres RWI
-# Tous les réglages spécifiques à cette partie sont centralisés ici.
-# Modifier ce bloc suffit à changer le comportement de toute la partie.
-# ==============================================================================
-
-# ── URL de téléchargement (HDX — Humanitarian Data Exchange) ──────────────────
-# Le ZIP contient les 93 pays en un seul téléchargement (~35 Mo compressé).
-# Chaque pays est un CSV séparé, nommé <ISO3>_relative_wealth_index.csv.
-# Source : https://data.humdata.org/dataset/relative-wealth-index
-RWI_ZIP_URL <- paste0(
-  "https://data.humdata.org/dataset/",
-  "76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/",
-  "de2f953e-940c-43bb-b1f8-4d02d28124b5/download/",
-  "relative-wealth-index-april-2021.zip"
-)
-
-# Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
-RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
-
-# Chemin local pour le cache du ZIP et du CSV extrait
-RWI_ZIP_LOCAL   <- file.path(DIR_OUTPUT, "rwi_all_countries.zip")
-RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
-
-# ── Rayon du buffer pour l'agrégation IDW ─────────────────────────────────────
-# On réutilise BUFFER_ENTREPOT_M = 2000m (défini en Partie IV.3) pour rester
-# cohérent avec le calcul des parts d'usage des sols.
-# Si on veut un rayon différent pour le RWI, le décommenter :
-# BUFFER_RWI_M <- 5000
-
-# Pour l'instant on garde la même valeur que le landuse
-BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
-
-# ── Paramètre de l'interpolation IDW (inverse distance weighting) ─────────────
-# La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
-# Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
-# Puissance = 2 : décroissance quadratique (standard en géostatistique)
-# Puissance = 3 : décroissance cubique (très locale, amplifier les pôles proches)
-# On recommande 2 pour être cohérent avec la littérature géostatistique.
-RWI_IDW_PUISSANCE <- 2
-
-# Distance minimale utilisée dans l'IDW pour éviter la division par zéro.
-# Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
-# possible avec les données grillées), on le plafonne à 50m.
-RWI_DISTANCE_MIN_M <- 50
-
-cat("✓ Paramètres RWI chargés\n\n")
-
 
 # ==============================================================================
 # IV.5.1 : Téléchargement et préparation des données RWI
@@ -6722,7 +6663,7 @@ cat("\n✓ Transition VIII.1 → VIII.2 terminée\n\n")
 # ==============================================================================
 # VIII.2 : Visualisations
 # Génère 5 sorties graphiques : carte du trafic fret, carte de répartition
-# modale, desire lines OD, graphiques sectoriels et heatmap de la matrice OD.
+# modale, graphiques sectoriels et heatmap de la matrice OD.
 # ==============================================================================
 
 # --- Préparation des couches spatiales ---
