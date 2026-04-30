@@ -4010,16 +4010,14 @@ cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 #   - entreposages_fictifs$population_zone (Partie IV.4)
 #   - entreposages_fictifs$p_rwi           (Partie IV.5)
 #   - n_warehouses, noeuds_entreposage     (Partie IV.3)
-#   - ALPHA_LOG_POP, K_RWI_TAILLE          (Partie P.6)
+#   - ALPHA_LOG_POP, K_RWI_TAILLE          (Partie Paramètres)
 ################################################################################
 
 cat("── Calcul de la taille composite (population × richesse) ─────────────\n\n")
 
 # ── Récupération des deux variables source ────────────────────────────────────
 # population_zone : nombre d'habitants dans le buffer de l'entrepôt
-#                   (source NISR, WorldPop ou OSM selon disponibilité — IV.4)
 # p_rwi           : score de richesse relative normalisé sur [0, 1]
-#                   (source Meta RWI — IV.5)
 # Les deux variables sont dans entreposages_fictifs, indexées dans le même
 # ordre que noeuds_entreposage (ordre de création en Partie IV.3).
 pop_i <- diag_population$population_zone[
@@ -4069,7 +4067,10 @@ if (nrow(doublons_noeuds) > 0) {
         fun      = "sum",
         progress = FALSE
       )
-      pop_union_k <- replace_na(as.numeric(pop_union_k), 0)
+      pop_union_k <- replace_na(
+        as.numeric(pop_union_k), 
+        median(pop_worldpop_par_entrepot, na.rm = TRUE)
+      )
       
       # Affectation de la population corrigée à tous les entrepôts du groupe
       # Tous reçoivent la même valeur : c'est la population de la zone fusionnée
@@ -4090,15 +4091,15 @@ if (nrow(doublons_noeuds) > 0) {
   cat("  ✓ Correction double comptage terminée\n\n")
 }
 
-pop_i <- replace_na(pop_i, 1000)
+pop_i <- replace_na(pop_i, median(pop_i, na.rm = TRUE))
 
 p_rwi_i <- diag_rwi$p_rwi[
   match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
 ]
 
-# Valeur de repli pour p_rwi : 0.5 = niveau médian national
+# Valeur de repli pour p_rwi : médian national
 # (aucun effet directionnel si la donnée est manquante)
-p_rwi_i <- replace_na(p_rwi_i, 0.5)
+p_rwi_i <- replace_na(p_rwi_i, median(p_rwi_i, na.rm = TRUE))
 
 
 # ── Cap de population pour les zones industrielles ────────────────────────────
