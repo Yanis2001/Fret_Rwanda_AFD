@@ -389,22 +389,48 @@ CAP_POP_INDUSTRIE <- 30000
 SEUIL_FLUX_TONNES <- 50
 
 # ==============================================================================
-# P.8 : Paramètres de la carte (visualisation)
+# P.8 : Paramètres RWI
 # ==============================================================================
 
-# Dimensions et résolution des exports PNG
-CARTE_LARGEUR_PX  <- 3000
-CARTE_HAUTEUR_PX  <- 2400
-CARTE_DPI         <- 300
+# ── URL de téléchargement (HDX — Humanitarian Data Exchange) ──────────────────
+# Le ZIP contient les 93 pays en un seul téléchargement (~35 Mo compressé).
+# Chaque pays est un CSV séparé, nommé <ISO3>_relative_wealth_index.csv.
+# Source : https://data.humdata.org/dataset/relative-wealth-index
+RWI_ZIP_URL <- paste0(
+  "https://data.humdata.org/dataset/",
+  "76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/",
+  "de2f953e-940c-43bb-b1f8-4d02d28124b5/download/",
+  "relative-wealth-index-april-2021.zip"
+)
 
-# Dimensions réduites pour les cartes lourdes (ex : desire lines)
-CARTE_LARGEUR_PX_REDUIT  <- 2000
-CARTE_HAUTEUR_PX_REDUIT  <- 1600
-CARTE_DPI_REDUIT         <- 200
+# Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
+RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
 
-# Seuil de flux (percentile) en dessous duquel une paire OD
-# n'est pas représentée sur la carte des desire lines
-SEUIL_DESIRE_PERCENTILE <- 0.40
+# Chemin local pour le cache du ZIP et du CSV extrait
+RWI_ZIP_LOCAL   <- file.path(DIR_OUTPUT, "rwi_all_countries.zip")
+RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
+
+# ── Rayon du buffer pour l'agrégation IDW ─────────────────────────────────────
+# On réutilise BUFFER_ENTREPOT_M = 2000m (défini en Partie IV.3) pour rester
+# cohérent avec le calcul des parts d'usage des sols.
+# Si on veut un rayon différent pour le RWI, le décommenter :
+# BUFFER_RWI_M <- 5000
+
+# Pour l'instant on garde la même valeur que le landuse
+BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
+
+# ── Paramètre de l'interpolation IDW (inverse distance weighting) ─────────────
+# La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
+# Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
+# Puissance = 2 : décroissance quadratique (standard en géostatistique)
+# Puissance = 3 : décroissance cubique (très locale, amplifier les pôles proches)
+# On recommande 2 pour être cohérent avec la littérature géostatistique.
+RWI_IDW_PUISSANCE <- 2
+
+# Distance minimale utilisée dans l'IDW pour éviter la division par zéro.
+# Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
+# possible avec les données grillées), on le plafonne à 50m.
+RWI_DISTANCE_MIN_M <- 50
 
 # ==============================================================================
 # P.9 : Paramètres de l'analyse de vulnérabilité (Partie IX)
@@ -3003,7 +3029,7 @@ if (file.exists(NISR_CSV_PATH)) {
 
 cat("── Fusion et intégration des données de population ──────────────────\n")
 
-# ── Remise à l'état original d'entreposages_fictifs ──────────────────────────
+# ── Remise à l'état original d'entreposages_fictifs ───────────────────────────
 # Si le bloc IV.4 est re-exécuté, entreposages_fictifs peut avoir été gonflé
 # par des left_join() d'une exécution précédente. On le remet à ses 123
 # colonnes d'origine avant d'y ajouter les nouvelles variables.
@@ -3014,19 +3040,19 @@ entreposages_fictifs <- entreposages_fictifs %>%
 # coalesce() : prend le premier argument non-NA, de gauche à droite.
 # C'est l'opérateur de "hiérarchie de sources" en une seule fonction.
 population_zone_finale <- coalesce(
-  replace_na(pop_worldpop_par_entrepot,    NA_real_),   # Source B : WorldPop
-  replace_na(pop_nisr_par_entrepot, NA_real_),          # Source C : NISR 
-  replace_na(pop_osm_par_entrepot,      NA_real_),      # Source A : OSM
-  rep(1000, nrow(entreposages_sf))                      # Fallback : 1 000 hab. minimum
+  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
+  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR 
+  replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
+  rep(1000, nrow(entreposages_sf))                  # Fallback : 1 000 hab. minimum
 ) %>%
   round()   # Les populations sont des entiers
 
-# ── Tableau de synthèse des sources utilisées ──────────────────────────────
+# ── Tableau de synthèse des sources utilisées ─────────────────────────────────
 # Ce diagnostic permet de vérifier la qualité du remplissage et d'identifier
 # les zones pour lesquelles on a dû utiliser le fallback.
 source_utilisee <- case_when(
-  !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
   !is.na(pop_worldpop_par_entrepot) ~ "WorldPop_2020",
+  !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
   !is.na(pop_osm_par_entrepot)      ~ "OSM",
   TRUE                              ~ "Fallback_1000"
 )
@@ -3041,9 +3067,6 @@ stopifnot(
 )
 
 diag_population <- tibble(
-  # On utilise entreposages_fictifs (123 lignes) et non entreposages_avec_snap
-  # (120 lignes après distinct). La population est une propriété économique
-  # de chaque zone, pas une propriété du nœud du graphe.
   nom_zone        = entreposages_fictifs$nom,
   type_zone       = entreposages_fictifs$type,
   pop_osm         = round(pop_osm_par_entrepot),
@@ -3125,7 +3148,7 @@ cat("  Nœuds avec population_zone > 0 :",
 
 cat("── Visualisation de la distribution démographique ───────────────────\n")
 
-# ── Carte : population par zone sur le réseau ──────────────────────────────────
+# ── Carte : population par zone sur le réseau ─────────────────────────────────
 # Les entrepôts sont affichés comme des cercles dont le diamètre est
 # proportionnel à la population (échelle log pour gérer les ordres de grandeur).
 # Kigali (~1 M d'habitants) ne doit pas écraser visuellement les petites villes.
@@ -3133,11 +3156,7 @@ cat("── Visualisation de la distribution démographique ──────�
 entrepots_pop_sf <- reseau_rwanda %>%
   activate("nodes") %>%
   filter(is_warehouse, !is.na(population_zone)) %>%
-  st_as_sf() %>%
-  mutate(
-    pop_log       = log10(population_zone + 1),
-    taille_cercle = rescale(pop_log, to = c(0.3, 2.5))
-  )
+  st_as_sf() 
 
 carte_population <- fond_carte() +
   
@@ -3153,9 +3172,7 @@ carte_population <- fond_carte() +
       values = "brewer.yl_or_rd"
     ),
     fill.legend = tm_legend(title = "Population\n(habitants)"),
-    size        = "taille_cercle",
-    size.scale  = tm_scale(values.range = c(0.3, 2.5)),
-    size.legend = tm_legend(show = FALSE)
+    size        = 0.3
   ) +
   
   tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020 / OSM") +
@@ -3226,24 +3243,16 @@ cat("  dans le calcul de offre_zones[i,] et demande_zones[i,]\n\n")
 # PARTIE IV.5 — ENRICHISSEMENT PAR L'INDICE DE RICHESSE RELATIVE (RWI)
 #
 # OBJECTIF : Associer à chaque zone d'entrepôt un score de richesse relative
-#            (Relative Wealth Index, Meta / CIESIN) pour moduler les profils
-#            d'offre et de demande dans le modèle gravitaire (Partie VII).
-#
-# PRINCIPE : Un entrepôt situé dans une zone riche génère une demande plus
-#            forte en biens de valeur élevée (Services, Commerce, Industrie)
-#            et plus faible en biens de base (Agriculture). L'inverse vaut
-#            pour une zone pauvre. Ce mécanisme complète le profil de type de
-#            zone (hub, marché, frontière…) défini en Partie IV.3.
+#            (Relative Wealth Index, Meta / CIESIN) pour moduler la taille
+#            économique des entrepôts dans le modèle gravitaire (Partie VII).
 #
 # MÉTHODE — MÊME LOGIQUE QUE L'USAGE DES SOLS (Partie IV.3) :
 #   ┌──────────────────────────────────────────────────────────────────┐
 #   │  Usage des sols : proportion de surface couverte par un type     │
-#   │   → scalaire p_ind ou p_urb entre 0 et 1                        │
+#   │   → scalaire p_ind ou p_urb entre 0 et 1                         │
 #   │  RWI           : moyenne pondérée par distance inverse (IDW)     │
 #   │   des scores des cellules RWI dans le buffer de chaque entrepôt  │
-#   │   → scalaire p_rwi entre 0 et 1 (normalisé min-max)             │
-#   │  Dans les deux cas, ce scalaire entre dans la même interpolation │
-#   │  convexe du profil sectoriel en Partie VII.2.                    │
+#   │   → scalaire p_rwi entre 0 et 1 (normalisé min-max)              │                │
 #   └──────────────────────────────────────────────────────────────────┘
 #
 # SOURCE : Chi, G., Fang, H., Chatterjee, S. & Blumenstock, J.E. (2022).
@@ -3259,7 +3268,7 @@ cat("  dans le calcul de offre_zones[i,] et demande_zones[i,]\n\n")
 #     - rwanda_boundary        (Partie II.3)
 #     - duck_write()           (Partie I.2)
 #   Alimente :
-#     - Partie VII.2 (modèle gravitaire) : variable p_rwi dans l'interpolation
+#     - Transition IV.5 → V : variable p_rwi dans le calcul de taille_composite
 #     - reseau_rwanda (attribut de nœud : rwi_moyen, p_rwi)
 #     - DuckDB (table richesse_entrepots)
 ################################################################################
@@ -3301,7 +3310,7 @@ RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
 # Pour l'instant on garde la même valeur que le landuse
 BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
 
-# ── Paramètre de l'interpolation IDW (inverse distance weighting) ────────────
+# ── Paramètre de l'interpolation IDW (inverse distance weighting) ─────────────
 # La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
 # Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
 # Puissance = 2 : décroissance quadratique (standard en géostatistique)
@@ -3313,13 +3322,6 @@ RWI_IDW_PUISSANCE <- 2
 # Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
 # possible avec les données grillées), on le plafonne à 50m.
 RWI_DISTANCE_MIN_M <- 50
-
-# ── Seuil d'influence : rayon maximal des cellules RWI considérées ───────────
-# Les cellules RWI à plus de BUFFER_RWI_M mètres du centroïde sont ignorées.
-# Ce seuil garantit que le score RWI d'un entrepôt reflète son voisinage
-# immédiat, pas une zone trop large qui diluerait le signal.
-# Note : on n'utilise pas une zone plus grande que le buffer landuse pour que
-# les deux scores soient comparables dans l'interpolation convexe de VII.2.
 
 cat("✓ Paramètres RWI chargés\n\n")
 
@@ -7331,143 +7333,6 @@ tmap_save(carte_modal,
           width = 3000, height = 2400, dpi = 300)
 cat("✓ Carte répartition modale sauvegardée\n")
 
-
-# ============================================================
-# CARTE 5 : Flux OD (desire lines)
-# ============================================================
-
-cat("Génération de la carte des flux OD (desire lines)...\n")
-
-SEUIL_DESIRE <- quantile(flux_total[flux_total > 0], SEUIL_DESIRE_PERCENTILE)
-
-# ── Pré-calcul des coordonnées (hors boucle) ──────────────────────────────────
-# Évite les which() répétés dans la double boucle
-coords_lookup <- coords_zones_sf %>%
-  st_drop_geometry() %>%
-  mutate(
-    X = st_coordinates(coords_zones_sf)[, "X"],
-    Y = st_coordinates(coords_zones_sf)[, "Y"]
-  ) %>%
-  select(warehouse_name, X, Y)
-
-# Index nommé pour accès O(1) au lieu de which() O(n)
-coords_X <- setNames(coords_lookup$X, coords_lookup$warehouse_name)
-coords_Y <- setNames(coords_lookup$Y, coords_lookup$warehouse_name)
-
-# ── Passage de la matrice de flux au format long (1 ligne = 1 paire OD) ───────
-# La matrice flux_total est en format "large" : N_zones lignes × N_zones
-# colonnes. pivot_longer() la transforme en format "long" : 1 ligne par paire
-# (Origine, Destination), ce qui est bien plus facile à filtrer et à joindre.
-# On filtre dès ici pour ne conserver que les flux significatifs
-# (>= SEUIL_DESIRE, calculé comme le 40e percentile des flux non nuls) afin de
-# ne pas surcharger la carte avec des milliers de lignes quasi invisibles.
-flux_long <- flux_total %>%
-  as.data.frame() %>%
-  rownames_to_column("Origine") %>%        # Les noms de lignes deviennent une colonne
-  pivot_longer(-Origine, names_to = "Destination", values_to = "flux_musd") %>%
-  filter(
-    Origine != Destination,                # Exclure les flux intrazone (diagonale)
-    !is.na(flux_musd),                     # Supprimer les paires sans données
-    flux_musd >= SEUIL_DESIRE              # Ne garder que les flux suffisamment importants
-  ) %>%
-  # Ajout des tonnes correspondantes depuis flux_tonnes_total.
-  # On fait une jointure sur les deux clés (Origine, Destination) pour récupérer
-  # le volume physique (tonnes) associé au flux monétaire (M USD) de chaque paire.
-  left_join(
-    flux_tonnes_total %>%
-      as.data.frame() %>%
-      rownames_to_column("Origine") %>%
-      pivot_longer(-Origine, names_to = "Destination", values_to = "flux_tonnes"),
-    by = c("Origine", "Destination")
-  ) %>%
-  mutate(flux_kt = flux_tonnes / 1000) %>% # Conversion tonnes → milliers de tonnes (kt)
-  # Sécurité finale : ne garder que les paires dont les deux zones ont des
-  # coordonnées connues dans coords_X/Y. Sans ce filtre, la boucle de création
-  # des géométries produirait des points NA qui feraient planter st_sfc().
-  filter(
-    Origine     %in% names(coords_X),
-    Destination %in% names(coords_X)
-  )
-
-cat("  Paires OD à représenter :", nrow(flux_long), "\n")
-
-# ── Création des géométries de desire lines (une par paire OD) ────────────────
-# Une "desire line" est un segment rectiligne reliant le centroïde de la zone
-# d'origine au centroïde de la zone de destination. Elle représente visuellement
-# l'intensité du flux commercial entre deux zones, indépendamment du chemin
-# réellement emprunté sur le réseau routier.
-# On utilise une boucle for plutôt que mapply() (version précédente) car mapply()
-# allouait toutes les géométries simultanément en RAM, ce qui provoquait un crash
-# de RStudio sur les sessions avec peu de mémoire disponible. La boucle for crée
-# les géométries une par une : l'empreinte mémoire instantanée reste constante
-# quelle que soit la taille de flux_long.
-# vector("list", n) : initialise une liste vide de n éléments. C'est plus
-# efficace que de faire grandir la liste dynamiquement avec c() à chaque tour
-# de boucle, car R n'a pas besoin de réallouer la mémoire à chaque itération.
-if (nrow(flux_long) > 0) {
-  
-  geoms <- vector("list", nrow(flux_long))
-  
-  for (k in seq_len(nrow(flux_long))) {
-    ori <- flux_long$Origine[k]       # Identifiant de la zone d'origine
-    dst <- flux_long$Destination[k]   # Identifiant de la zone de destination
-    # st_linestring() crée un segment géométrique à partir de deux points.
-    # rbind() empile les coordonnées [X_origine, Y_origine] et [X_dest, Y_dest]
-    # en une matrice 2×2 que st_linestring() interprète comme début et fin du segment.
-    geoms[[k]] <- st_linestring(rbind(
-      c(coords_X[ori], coords_Y[ori]),   # Point de départ : centroïde de l'origine
-      c(coords_X[dst], coords_Y[dst])    # Point d'arrivée : centroïde de la destination
-    ))
-  }
-  
-  desire_sf <- st_sf(
-    Origine     = flux_long$Origine,
-    Destination = flux_long$Destination,
-    flux_musd   = as.numeric(flux_long$flux_musd),
-    flux_kt     = as.numeric(flux_long$flux_kt),
-    geometry    = st_sfc(geoms, crs = 32735)
-  ) %>%
-    mutate(flux_log = as.numeric(log10(flux_musd + 0.01)))
-  
-  cat("  Desire lines créées :", nrow(desire_sf), "\n")
-  cat("  flux_musd range :", round(min(desire_sf$flux_musd), 3),
-      "-", round(max(desire_sf$flux_musd), 3), "\n")
-  
-  # ── Carte (résolution réduite si trop lente) ──────────────────────────────
-  carte_od <- fond_carte() +
-    tm_shape(desire_sf) +
-    tm_lines(
-      col        = "flux_musd",
-      col.scale  = tm_scale_intervals(style = "quantile", n = 5,
-                                      values = PALETTE_FLUX_OD),
-      col.legend = tm_legend(title = "Flux commercial\n(M USD)"),
-      lwd        = "flux_log",
-      lwd.scale  = tm_scale(values.range = c(0.5, 5)),
-      lwd.legend = tm_legend(show = FALSE),
-      col_alpha  = 0.65
-    ) +
-    tm_shape(coords_zones_sf) +
-    tm_dots(
-      fill        = "warehouse_type",
-      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-      fill.legend = tm_legend(title = "Type de zone"),
-      size        = 0.45
-    ) +
-    tm_title("Flux Commerciaux Interzonaux\nModèle gravitaire - Rwanda") +
-    tm_layout(legend.outside = TRUE, frame = TRUE) +
-    tm_scalebar(position = c("left", "bottom")) +
-    tm_compass(position  = c("right", "top"))
-  
-  tmap_save(carte_od,
-            file.path(DIR_OUTPUT, "carte_flux_od.png"),
-            width = 2000, height = 1600, dpi = 200)  # Résolution réduite
-  cat("✓ Carte flux OD sauvegardée\n")
-  
-} else {
-  cat("⚠ Aucune desire line à représenter\n")
-}
-
-
 # ============================================================
 # GRAPHIQUE 1 : Flux par secteur économique
 # ============================================================
@@ -8781,7 +8646,6 @@ cat("    • matrice_flux_fret_tonnes.csv       - Flux OD en tonnes\n")
 cat("    • reseau_rwanda_avec_fret.gpkg       - Réseau + volumes fret\n")
 cat("\n  Cartes:\n")
 cat("    • carte_trafic_fret.png              - Intensité fret sur réseau\n")
-cat("    • carte_flux_od.png                  - Desire lines OD\n")
 cat("\n  Graphiques:\n")
 cat("    • graphique_flux_secteurs.png        - Flux par secteur\n")
 cat("    • graphique_offre_demande.png        - Offre vs Demande par zone\n")
