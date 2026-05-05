@@ -6909,7 +6909,10 @@ invisible(gc(full = TRUE))
 cat("✓ Partie VIII.1 terminée\n\n")
 
 # Identification des arêtes les plus empruntées
-aretes_reseau_sf %>%
+reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf() %>%
+  mutate(arete_idx = row_number()) %>%
   st_drop_geometry() %>%
   select(osm_id, name, road_type, surface, longueur_m, volume_tonnes) %>%
   filter(!is.na(volume_tonnes), volume_tonnes > 0) %>%
