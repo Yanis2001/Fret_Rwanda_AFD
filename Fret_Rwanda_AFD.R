@@ -933,6 +933,212 @@ place_test <- st_read(
 cat("\nZones par place :\n")
 print(table(place_test$place))
 
+################################################################################
+# DIAGNOSTIC — EXPLORATION DES TAGS OSM DISPONIBLES DANS LE PBF
+# À insérer après le chargement du PBF (Section II.1)
+# Objectif : inventaire complet des tags directs ET des clés cachées dans
+# other_tags, sur toutes les couches (lines, points, multipolygons)
+################################################################################
+
+cat("==========================================================\n")
+cat("  DIAGNOSTIC — TAGS OSM DISPONIBLES DANS LE PBF\n")
+cat("==========================================================\n\n")
+
+# ==============================================================================
+# 1. COLONNES DIRECTES PAR COUCHE
+# Ces colonnes sont promues au rang de champs SQL par le driver GDAL/OGR
+# car elles apparaissent très fréquemment dans le PBF (highway, name, etc.)
+# ==============================================================================
+
+cat("── 1. Colonnes directes disponibles par couche ───────────────────────\n\n")
+
+couches_a_explorer <- c("lines", "points", "multipolygons")
+
+for (couche in couches_a_explorer) {
+  
+  tryCatch({
+    # On charge juste 1 ligne pour obtenir la structure sans charger le fichier entier
+    echantillon <- st_read(chemin_pbf, layer = couche, query = paste0(
+      "SELECT * FROM ", couche, " LIMIT 1"
+    ), quiet = TRUE)
+    
+    cat("  Couche [", couche, "] — ", ncol(echantillon), "colonnes :\n")
+    cat("  ", paste(names(echantillon), collapse = ", "), "\n\n")
+    
+  }, error = function(e) {
+    cat("  ⚠ Couche [", couche, "] inaccessible :", conditionMessage(e), "\n\n")
+  })
+}
+
+# ==============================================================================
+# 2. CLÉS CACHÉES DANS other_tags PAR COUCHE
+# other_tags stocke tous les attributs secondaires au format :
+#   "clé1"=>"valeur1","clé2"=>"valeur2",...
+# On extrait toutes les clés uniques présentes dans le fichier.
+# ==============================================================================
+
+cat("── 2. Clés cachées dans other_tags par couche ────────────────────────\n\n")
+
+# Taille de l'échantillon pour l'analyse de other_tags
+# Augmenter N_LIGNES_SAMPLE pour une analyse plus exhaustive (mais plus lente)
+N_LIGNES_SAMPLE <- 5000
+
+# Fonction d'extraction de TOUTES les clés depuis une colonne other_tags
+extraire_toutes_cles <- function(vecteur_other_tags) {
+  # gregexpr() : trouve toutes les occurrences d'un pattern dans chaque chaîne
+  # Pattern : capture le texte entre guillemets AVANT "=>"
+  # Exemple : '"surface"=>"asphalt"' → extrait "surface"
+  matches <- regmatches(
+    vecteur_other_tags,
+    gregexpr('"([^"]+)"=>', vecteur_other_tags)
+  )
+  # unlist() aplatit la liste de résultats en un vecteur
+  cles_brutes <- unlist(matches)
+  # Nettoyage : supprime les guillemets et "=>"
+  cles <- gsub('"([^"]+)"=>', "\\1", cles_brutes)
+  sort(unique(cles[cles != ""]))
+}
+
+for (couche in couches_a_explorer) {
+  
+  tryCatch({
+    # Chargement d'un échantillon avec uniquement other_tags
+    sample_df <- st_read(
+      chemin_pbf, layer = couche,
+      query = paste0("SELECT other_tags FROM ", couche,
+                     " LIMIT ", N_LIGNES_SAMPLE),
+      quiet = TRUE
+    ) %>% st_drop_geometry()
+    
+    if (!"other_tags" %in% names(sample_df)) {
+      cat("  Couche [", couche, "] : pas de colonne other_tags\n\n")
+      next
+    }
+    
+    # Suppression des lignes sans other_tags
+    other_tags_valides <- sample_df$other_tags[!is.na(sample_df$other_tags)]
+    
+    cles_trouvees <- extraire_toutes_cles(other_tags_valides)
+    
+    cat("  Couche [", couche, "] — ", length(cles_trouvees),
+        "clés uniques trouvées sur", length(other_tags_valides),
+        "lignes non-NA (sample =", N_LIGNES_SAMPLE, ") :\n")
+    
+    # Affichage par blocs de 8 clés par ligne pour lisibilité
+    chunks <- split(cles_trouvees, ceiling(seq_along(cles_trouvees) / 8))
+    for (chunk in chunks) {
+      cat("    ", paste(chunk, collapse = " | "), "\n")
+    }
+    cat("\n")
+    
+  }, error = function(e) {
+    cat("  ⚠ Couche [", couche, "] other_tags inaccessible :",
+        conditionMessage(e), "\n\n")
+  })
+}
+
+# ==============================================================================
+# 3. FOCUS : clés les plus fréquentes dans other_tags (top 30)
+# Avec leur nombre d'occurrences — utile pour prioriser ce qu'il vaut la
+# peine d'extraire dans la suite du script.
+# ==============================================================================
+
+cat("── 3. Top 30 des clés les plus fréquentes (couche lines) ────────────\n\n")
+
+tryCatch({
+  
+  sample_lines <- st_read(
+    chemin_pbf, layer = "lines",
+    query = paste0("SELECT other_tags FROM lines LIMIT ", N_LIGNES_SAMPLE),
+    quiet = TRUE
+  ) %>%
+    st_drop_geometry() %>%
+    filter(!is.na(other_tags))
+  
+  # Pour chaque ligne, extraire toutes les clés individuellement
+  toutes_cles_lines <- unlist(lapply(
+    sample_lines$other_tags,
+    function(ot) {
+      m <- regmatches(ot, gregexpr('"([^"]+)"=>', ot))[[1]]
+      gsub('"([^"]+)"=>', "\\1", m)
+    }
+  ))
+  
+  freq_cles <- sort(table(toutes_cles_lines), decreasing = TRUE)
+  
+  top30 <- head(freq_cles, 30)
+  
+  freq_df <- tibble(
+    Cle         = names(top30),
+    Occurrences = as.integer(top30),
+    Pct_lignes  = round(as.integer(top30) / nrow(sample_lines) * 100, 1)
+  )
+  
+  print(freq_df, n = 30)
+  cat("\n  (sur un sample de", nrow(sample_lines), "lignes avec other_tags)\n\n")
+  
+}, error = function(e) {
+  cat("  ⚠ Analyse fréquences échouée :", conditionMessage(e), "\n\n")
+})
+
+# ==============================================================================
+# 4. APERÇU DES VALEURS pour les clés routières importantes
+# Pour chaque clé fréquente, on liste les valeurs distinctes trouvées
+# dans le sample — utile pour concevoir les CASE WHEN de nettoyage.
+# ==============================================================================
+
+cat("── 4. Valeurs distinctes pour les clés fréquentes (lines) ──────────\n\n")
+
+CLES_A_INSPECTER <- c(
+  "surface", "maxspeed", "lanes", "oneway", "lit",
+  "bridge", "tunnel", "layer", "access", "vehicle",
+  "smoothness", "tracktype", "width", "toll", "junction"
+)
+
+tryCatch({
+  
+  sample_inspect <- st_read(
+    chemin_pbf, layer = "lines",
+    query = paste0("SELECT other_tags FROM lines LIMIT ", N_LIGNES_SAMPLE),
+    quiet = TRUE
+  ) %>%
+    st_drop_geometry() %>%
+    filter(!is.na(other_tags))
+  
+  for (cle in CLES_A_INSPECTER) {
+    
+    # Extraction de la valeur de cette clé pour chaque ligne
+    valeurs <- sapply(sample_inspect$other_tags, function(ot) {
+      pattern <- paste0('"', cle, '"=>"([^"]*)"')
+      m <- regmatches(ot, regexec(pattern, ot))[[1]]
+      if (length(m) > 1) m[2] else NA_character_
+    })
+    
+    valeurs_non_na <- valeurs[!is.na(valeurs)]
+    
+    if (length(valeurs_non_na) == 0) {
+      cat("  [", cle, "] : absent du sample\n")
+      next
+    }
+    
+    freq_val <- sort(table(valeurs_non_na), decreasing = TRUE)
+    top_vals <- head(freq_val, 10)
+    
+    cat("  [", cle, "] —", length(valeurs_non_na),
+        "occurrences — valeurs distinctes (top 10) :\n")
+    cat("    ",
+        paste(paste0(names(top_vals), " (", top_vals, ")"), collapse = ", "),
+        "\n")
+  }
+  
+}, error = function(e) {
+  cat("  ⚠ Inspection valeurs échouée :", conditionMessage(e), "\n\n")
+})
+
+cat("\n✓ Diagnostic des tags OSM terminé\n")
+cat("  → Modifier CLES_A_INSPECTER pour explorer d'autres clés\n")
+cat("  → Augmenter N_LIGNES_SAMPLE pour un inventaire plus complet\n\n")
+
 # ==============================================================================
 # II.2 : Nettoyage des attributs routiers
 # Extrait les tags OSM (surface, vitesse, sens unique) via regex, puis
@@ -3654,7 +3860,7 @@ if (!cache_rwi_valide && rwi_ok) {
 
 
 # ==============================================================================
-# IV.5.3 : Normalisation et intégration dans le modèle
+# IV.5.3 : Normalisation 
 #
 # Le score IDW brut est centré sur 0 à l'échelle international et peut être négatif (zones pauvres).
 # Pour l'utiliser on normalise avec une transformation min-max sur l'ensemble des scores Rwanda.
