@@ -435,6 +435,28 @@ SEUIL_FLUX_TONNES <- 50
 # Paramètres de l'analyse de vulnérabilité (Partie IX)
 # ==============================================================================
 
+# Paramètres du scénario de perturbation 
+NOM_SCENARIO          <- "Inondation_RN1_Kigali_Huye"
+DESCRIPTION_SCENARIO  <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
+DUREE_JOURS           <- 14
+TYPE_EVENEMENT        <- "inondation"
+
+# Choix du mode de création de scénario :
+#     Mode A — Manuel       : liste d'osm_id ou de coordonnées GPS fournie à la main
+#     Mode B — Buffer zone  : toutes les routes dans un rayon autour d'un point
+#     Mode C — Raster risque: intersection avec un raster (grille) externe
+# Si plusieurs méthodes sont choisies, les routes affectées seront celles de l'union des méthodes
+
+# Mettre l'identifiant OSM de la ou des routes affectées
+OSM_IDS_PERTURBES_MANUEL <- c()
+# Pour les activer : mettre TRUE, sinon : mettre FALSE
+UTILISER_MODE_BUFFER        <- FALSE  
+UTILISER_MODE_RASTER        <- FALSE
+
+# Coordonnées du centre de la zone perturbée du mode buffer 
+CENTRE_PERTURBATION_LON <- 29.950   # Est-Ouest
+CENTRE_PERTURBATION_LAT <- -2.150   # Nord-Sud
+
 # Nombre d'arêtes candidates testées pour l'analyse de criticité
 N_TOP_ARETES_CRITIQUES <- 50
 
@@ -445,54 +467,36 @@ SEUIL_PAIRES_CRITICITE <- 100
 # Nombre d'arêtes critiques affichées sur la carte de criticité
 N_ARETES_AFFICHEES_CRITICITE <- 20
 
-# Paramètres du scénario de perturbation par défaut
-NOM_SCENARIO          <- "Inondation_RN1_Kigali_Huye"
-DESCRIPTION_SCENARIO  <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
-DUREE_JOURS           <- 14
-TYPE_EVENEMENT        <- "inondation"
-
-# Identifiants OSM manuels (vide = aucun) : noter à l'intérieur les identifiants OSM des routes que l'on veut casser
-# Pour trouver un osm_id : allez sur openstreetmap.org, cliquez sur une route,
-# cliquez sur "Plus de détails" → l'identifiant apparaît dans l'URL.
-OSM_IDS_PERTURBES_MANUEL <- c()  # Exemple : c("12345678", "87654321") : ici, deux routes sont affectées
-
-# Paramètres du mode buffer
-
-# Activez ce mode en passant UTILISER_MODE_BUFFER à TRUE.
-# Les coordonnées sont en degrés décimaux (système GPS standard).
-UTILISER_MODE_BUFFER        <- TRUE       # TRUE = activer ce mode, FALSE = désactiver
-
-# Centre de la zone perturbée (longitude, latitude en WGS84)
-CENTRE_PERTURBATION_LON <- 29.950   # Longitude du centre (Est-Ouest)
-CENTRE_PERTURBATION_LAT <- -2.150   # Latitude du centre (Nord-Sud, négatif = Sud)
-
 # Rayon de la zone perturbée en mètres.
-RAYON_PERTURBATION_M        <- 5000
+RAYON_PERTURBATION_M    <- 5000
 
 # Types de routes inclus dans la perturbation (NULL = tous les types).
-# Utile pour simuler une inondation qui ne touche que les routes en fond de vallée
-# (souvent des routes secondaires et tertiaires) mais pas les routes en hauteur.
-# NULL signifie "toutes les routes" ; pour restreindre, utilisez par exemple :
-# c("primary", "secondary") pour ne perturber que les routes primaires et secondaires.
+# Pour restreindre, utilisez par exemple : c("primary", "secondary") pour 
+# ne perturber que les routes primaires et secondaires.
 TYPES_ROUTES_PERTURBES  <- NULL  
-
-# Paramètres du mode raster (prêt à brancher)
-# Activez ce mode en passant UTILISER_MODE_RASTER à TRUE.
-# ATTENTION : si Mode Buffer ET Mode Raster sont tous les deux TRUE,
-# les deux sources sont combinées (union des routes perturbées).
-UTILISER_MODE_RASTER        <- FALSE
 
 # Seuil au-dessus duquel une route est considérée comme perturbée.
 # Si le raster contient des probabilités (0-1) : un seuil de 0.5 signifie
-# "routes dont plus de 50% de leur longueur est dans une zone à risque > 50%".
+# "routes dont plus de 50% de leur longueur est considérée comme à risque".
 # Si le raster contient des profondeurs (cm) : un seuil de 30 signifie
-# "routes submergées sous plus de 30cm d'eau" (seuil de praticabilité standard).
+# "routes à risque sont sous plus de 30cm d'eau" 
 SEUIL_RISQUE_RASTER         <- 0.5
 
 # Proportion minimale de la longueur d'une arête qui doit être en zone à risque
 # pour que l'arête soit considérée comme perturbée.
-# 0.3 = au moins 30% de la route doit être en zone inondable.
+# 0.3 = au moins 30% de la route doit être en zone à risque
 PROPORTION_MIN_EXPOSEE      <- 0.3
+
+# Proportion des routes exposées (dépassant les seuils) effectivement inondées.
+# 1.0 = toutes les routes exposées sont coupées 
+# 0.6 = 60% des routes exposées sont aléatoirement coupées
+PROP_ROUTES_INONDEES_BUFFER <- 1
+PROP_ROUTES_INONDEES_RASTER <- 0.7
+
+# Graine aléatoire pour la sélection des routes inondées.
+# Fixer cette valeur garantit la reproductibilité du scénario.
+# Changer la graine = simuler un autre tirage du même événement.
+SEED_INONDATION <- 42
 
 # Multiplicateur de coût appliqué aux paires déconnectées
 # pour estimer leurs émissions supplémentaires (hypothèse d'itinéraire très long)
@@ -6904,6 +6908,20 @@ reseau_rwanda <- reseau_rwanda %>%
 invisible(gc(full = TRUE))
 cat("✓ Partie VIII.1 terminée\n\n")
 
+# Identification des arêtes les plus empruntées
+aretes_reseau_sf %>%
+  st_drop_geometry() %>%
+  select(osm_id, name, road_type, surface, longueur_m, volume_tonnes) %>%
+  filter(!is.na(volume_tonnes), volume_tonnes > 0) %>%
+  arrange(desc(volume_tonnes)) %>%
+  slice_head(n = 20) %>%
+  mutate(
+    longueur_km   = round(longueur_m / 1000, 2),
+    volume_tonnes = round(volume_tonnes)
+  ) %>%
+  select(osm_id, name, road_type, surface, longueur_km, volume_tonnes) %>%
+  print(n = 20)
+
 # ==============================================================================
 # TRANSITION VIII.1 → VIII.2
 # Recrée les objets de statistiques (volumes_par_zone, stats_trafic) qui
@@ -7787,7 +7805,7 @@ write.csv(recap_zones,
           file.path(DIR_OUTPUT,"offre_demande_zones.csv"),
           row.names = FALSE)
 
-# ── Export complémentaire : réseau avec volumes fret ─────────────────────────
+# ── Export complémentaire : réseau avec volumes fret ──────────────────────────
 aretes_fret_export <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
@@ -7853,44 +7871,9 @@ cat("✓ Export sectoriel par arête sauvegardé\n")
 
 
 ################################################################################
-# PARTIE IX.1 — DÉFINITION DE LA PERTURBATION
-#
-# Cette section centralise TOUT ce que l'utilisateur doit modifier pour
-# changer de scénario. Il ne devrait pas avoir besoin de toucher au reste
-# du code pour tester un nouvel événement climatique.
-#
-# TROIS MODES sont disponibles. Activez-en UN SEUL à la fois en mettant
-# les deux autres en commentaire (en ajoutant # au début de chaque ligne).
-################################################################################
-
-cat("==========================================================\n")
-cat("  PARTIE IX — ANALYSE DE VULNÉRABILITÉ ET CONTOURNEMENT\n")
-cat("==========================================================\n\n")
-
-# ==============================================================================
-# IX.1.C : Mode Raster — intersection avec un raster de risque externe
-# PRÊT À BRANCHER : cette section est préparée pour accueillir un raster
-# de zones inondables (GeoTIFF) dès que vous en disposez.
-# Le raster doit contenir des valeurs de risque (ex : profondeur d'eau en cm,
-# probabilité d'inondation ou de glissement de terrain en %).
-# ==============================================================================
-
-
-cat("✓ Paramètres du scénario chargés :\n")
-cat("  Nom          :", NOM_SCENARIO, "\n")
-cat("  Description  :", DESCRIPTION_SCENARIO, "\n")
-cat("  Durée        :", DUREE_JOURS, "jours\n")
-cat("  Type         :", TYPE_EVENEMENT, "\n")
-cat("  Mode buffer  :", UTILISER_MODE_BUFFER, "\n")
-cat("  Mode raster  :", UTILISER_MODE_RASTER, "\n\n")
-
-
-################################################################################
 # PARTIE IX.2 — IDENTIFICATION DES ARÊTES PERTURBÉES
 #
-# Cette section traduit les paramètres de IX.1 en une liste concrète
-# d'identifiants d'arêtes dans le graphe igraph/sfnetworks.
-# C'est ici que les trois modes sont fusionnés en un seul ensemble d'arêtes.
+# Les trois modes sont fusionnés en un seul ensemble d'arêtes.
 ################################################################################
 
 cat("── Identification des arêtes perturbées ──────────────────────────────\n\n")
@@ -7902,7 +7885,7 @@ osm_ids_perturbes <- character(0)
 # ── Mode A : identifiants manuels ─────────────────────────────────────────────
 if (length(OSM_IDS_PERTURBES_MANUEL) > 0) {
   # as.character() : s'assure que les identifiants sont des chaînes de texte
-  # (les osm_id peuvent parfois être chargés comme des entiers numériques)
+  # (les osm_id peuvent parfois être chargés comme des entiers numériques et arrondir)
   osm_ids_perturbes <- union(osm_ids_perturbes,
                              as.character(OSM_IDS_PERTURBES_MANUEL))
   cat("  Mode A (manuel) :", length(OSM_IDS_PERTURBES_MANUEL),
@@ -7941,6 +7924,7 @@ if (UTILISER_MODE_BUFFER) {
   # lengths() > 0 : TRUE si l'arête intersecte au moins partiellement la zone.
   # On utilise l'intersection (et non l'inclusion totale) car une route peut
   # n'être que partiellement dans la zone inondée mais quand même bloquée.
+  # Création d'un vecteur logique (valeur TRUE ou FALSE) d'une taille N_totale_arêtes
   dans_buffer <- lengths(st_intersects(aretes_sf_mode_b,
                                        zone_perturbation_buffer)) > 0
   
@@ -7949,21 +7933,25 @@ if (UTILISER_MODE_BUFFER) {
   ids_mode_b <- as.character(aretes_sf_mode_b$osm_id[dans_buffer])
   ids_mode_b <- ids_mode_b[!is.na(ids_mode_b)]  # Supprimer les NA éventuels
   
+  # Tirage aléatoire : seule une proportion PROP_ROUTES_INONDEES des routes
+  # dans le buffer est effectivement considérée comme inondée.
+  if (PROP_ROUTES_INONDEES_BUFFER < 1.0 && length(ids_mode_b) > 0) {
+    set.seed(SEED_INONDATION)
+    n_inondees <- max(1, round(length(ids_mode_b) * PROP_ROUTES_INONDEES_BUFFER))
+    ids_mode_b <- sample(ids_mode_b, size = n_inondees, replace = FALSE)
+    cat("  → Après tirage aléatoire (seed =", SEED_INONDATION,
+        ", prop =", PROP_ROUTES_INONDEES_BUFFER, ") :",
+        length(ids_mode_b), "routes effectivement inondées\n")
+  }
+
   # union() fusionne deux vecteurs sans doublons
   osm_ids_perturbes <- union(osm_ids_perturbes, ids_mode_b)
   
   cat("  Mode B (buffer", RAYON_PERTURBATION_M / 1000, "km) :",
-      length(ids_mode_b), "arêtes dans la zone\n")
-  cat("    Centre :", CENTRE_PERTURBATION_LON, "E /",
-      abs(CENTRE_PERTURBATION_LAT), "S\n")
+      length(ids_mode_b), "arêtes inondées\n")
 }
 
-# ── Mode C : raster de risque (PRÊT À BRANCHER) ───────────────────────────────
-# Ce bloc est entièrement préparé mais ne s'exécutera que si :
-#   1. UTILISER_MODE_RASTER == TRUE
-#   2. Le fichier CHEMIN_RASTER_RISQUE existe sur le disque
-# Pour l'activer : mettre UTILISER_MODE_RASTER <- TRUE en IX.1.C
-# et fournir un fichier GeoTIFF valide.
+# ── Mode C : raster de risque ─────────────────────────────────────────────────.
 if (UTILISER_MODE_RASTER) {
   
   if (!file.exists(CHEMIN_RASTER_RISQUE)) {
@@ -8042,10 +8030,21 @@ if (UTILISER_MODE_RASTER) {
     )
     ids_mode_c <- ids_mode_c[!is.na(ids_mode_c)]
     
+    # Tirage aléatoire : seule une proportion PROP_ROUTES_INONDEES des routes
+    # exposées est effectivement considérée comme inondée.
+    if (PROP_ROUTES_INONDEES_RASTER < 1.0 && length(ids_mode_c) > 0) {
+      set.seed(SEED_INONDATION)
+      n_inondees <- max(1, round(length(ids_mode_c) * PROP_ROUTES_INONDEES_RASTER))
+      ids_mode_c <- sample(ids_mode_c, size = n_inondees, replace = FALSE)
+      cat("  → Après tirage aléatoire (seed =", SEED_INONDATION,
+          ", prop =", PROP_ROUTES_INONDEES_RASTER, ") :",
+          length(ids_mode_c), "routes effectivement inondées\n")
+    }
+    
     osm_ids_perturbes <- union(osm_ids_perturbes, ids_mode_c)
     
     cat("  Mode C (raster, seuil", SEUIL_RISQUE_RASTER, ") :",
-        length(ids_mode_c), "arêtes exposées\n")
+        length(ids_mode_c), "arêtes inondées\n")
   }
 }
 
@@ -8345,7 +8344,7 @@ stats_impact <- od_compare %>%
 cat("Distribution des impacts par type :\n")
 print(stats_impact)
 
-# ── Zones les plus touchées ────────────────────────────────────────────────────
+# ── Zones les plus touchées ───────────────────────────────────────────────────
 # Pour chaque zone, on cumule les surcoûts sur tous ses trajets (comme origine
 # ET comme destination) pour mesurer son exposition totale à la perturbation.
 surcouts_par_zone <- od_compare %>%
