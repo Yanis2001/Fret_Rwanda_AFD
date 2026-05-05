@@ -8182,7 +8182,7 @@ for (i in seq_along(warehouse_nodes_base)) {
   # dans le graphe DÉGRADÉ (routes bloquées = poids infini).
   # La syntaxe est identique au Dijkstra de la Partie VI, seul le graphe change.
   dists_deg <- igraph::distances(
-    graphe_degrade,             # ← graphe dégradé au lieu de graphe_multimodal
+    graphe_degrade,             
     v       = sources_i,
     to      = targets_all,
     weights = igraph::E(graphe_degrade)$weight
@@ -8194,6 +8194,33 @@ for (i in seq_along(warehouse_nodes_base)) {
     cols_j      <- j + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
     min_cout_deg <- min(dists_deg[, cols_j], na.rm = TRUE)
     
+    # ── Reconstruction du chemin dégradé pour mesurer la distance réelle ─────
+    distance_km_degrade <- NA_real_
+    
+    if (!is.infinite(min_cout_deg)) {
+      best_idx_mat <- which(dists_deg[, cols_j] == min_cout_deg, arr.ind = TRUE)
+      if (!is.matrix(best_idx_mat)) best_idx_mat <- matrix(best_idx_mat, nrow = 1)
+      best_from_deg <- sources_i[best_idx_mat[1, 1]]
+      best_to_deg   <- targets_all[cols_j[best_idx_mat[1, 2]]]
+      
+      path_deg <- igraph::shortest_paths(
+        graphe_degrade,
+        from    = best_from_deg,
+        to      = best_to_deg,
+        weights = igraph::E(graphe_degrade)$weight,
+        output  = "epath"
+      )
+      edges_path_deg <- as.integer(path_deg$epath[[1]])
+      rm(path_deg)
+      
+      if (length(edges_path_deg) > 0) {
+        edge_data_deg   <- igraph::edge_attr(graphe_degrade)
+        distance_km_degrade <- sum(
+          edge_data_deg$length_km[edges_path_deg], na.rm = TRUE
+        )
+      }
+    }
+    
     idx_deg <- idx_deg + 1
     od_rows_degrade[[idx_deg]] <- list(
       id_origine      = i,
@@ -8201,6 +8228,7 @@ for (i in seq_along(warehouse_nodes_base)) {
       nom_origine     = noeuds_entreposage$warehouse_name[i],
       nom_destination = noeuds_entreposage$warehouse_name[j],
       cout_degrade    = min_cout_deg,   # Inf si plus de chemin possible
+      distance_km_degrade = distance_km_degrade,      
       connecte        = !is.infinite(min_cout_deg)  # FALSE = zones déconnectées
     )
   }
@@ -8292,37 +8320,87 @@ od_compare <- od_long %>%
 # ── Enrichissement de od_compare avec les émissions supplémentaires ───────────
 # Pour chaque paire OD affectée par la perturbation, on calcule les émissions
 # de CO2 supplémentaires générées par l'allongement du trajet.
-#
-# Hypothèse simplificatrice : les émissions sont proportionnelles au coût.
-# On utilise le ratio (surcout_relatif_pct / 100) comme proxy d'allongement,
-# appliqué aux émissions de référence stockées dans od_long.
-# Pour un calcul exact, il faudrait recalculer les chemins dégradés complets
-# avec extraction des attributs d'émissions (extension future).
 od_compare <- od_compare %>%
   mutate(
-    # Émissions supplémentaires estimées = émissions_ref × surcoût_relatif
-    # Interprétation : si le trajet coûte 30% de plus (allongement de route),
-    # on suppose qu'il émet également ~30% de CO2 de plus.
-    # Pour les paires déconnectées, on suppose un détour de 3× le trajet normal
-    # (hypothèse d'acheminement via itinéraire alternatif très long).
-    co2_surcout_kg = case_when(
-      type_impact == "deconnecte" ~ co2_kg_trajet * 3,
+    
+    # ── Distance réelle du détour (km supplémentaires) ─────────────────────
+    # Positive si le chemin dégradé est plus long, nulle si inchangé,
+    # NA si la zone est déconnectée.
+    delta_distance_km = case_when(
+      type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      TRUE                        ~ co2_kg_trajet * (surcout_relatif_pct / 100)
+      TRUE                        ~ distance_km_degrade - distance_km
     ),
-    nox_surcout_g  = case_when(
-      type_impact == "deconnecte" ~ nox_g_trajet * 3,
+    
+    # ── Intensité d'émission du trajet de référence (kg CO2 / km) ─────────
+    # co2_kg_trajet / distance_km = émissions unitaires sur le chemin normal.
+    # Si distance_km = 0 (transbordement pur, rare), on impute 0.
+    co2_intensite_ref_par_km = if_else(
+      distance_km > 0,
+      co2_kg_trajet / distance_km,
+      0
+    ),
+    nox_intensite_ref_par_km = if_else(
+      distance_km > 0,
+      nox_g_trajet  / distance_km,
+      0
+    ),
+    pm25_intensite_ref_par_km = if_else(
+      distance_km > 0,
+      pm25_g_trajet / distance_km,
+      0
+    ),
+    
+    # ── Émissions supplémentaires basées sur la distance réelle ───────────
+    # Pour les détours : intensité_ref × km_supplémentaires
+    #   (on suppose que les véhicules et les types de route du détour sont
+    #    similaires au trajet de référence — approximation raisonnable
+    #    car le graphe multi-modal optimise le même type de coût)
+    #
+    # Pour les déconnexions : on utilise MULTIPLICATEUR_DECONNEXION × distance_ref
+    #   comme proxy d'un acheminement alternatif très indirect
+    co2_surcout_kg = case_when(
+      type_impact == "deconnecte" ~
+        co2_intensite_ref_par_km * distance_km * MULTIPLICATEUR_DECONNEXION,
       type_impact == "inchange"   ~ 0,
-      TRUE                        ~ nox_g_trajet * (surcout_relatif_pct / 100)
+      !is.na(delta_distance_km) & delta_distance_km > 0 ~
+        co2_intensite_ref_par_km * delta_distance_km,
+      TRUE ~ 0
+    ),
+    nox_surcout_g = case_when(
+      type_impact == "deconnecte" ~
+        nox_intensite_ref_par_km * distance_km * MULTIPLICATEUR_DECONNEXION,
+      type_impact == "inchange"   ~ 0,
+      !is.na(delta_distance_km) & delta_distance_km > 0 ~
+        nox_intensite_ref_par_km * delta_distance_km,
+      TRUE ~ 0
+    ),
+    pm25_surcout_g = case_when(
+      type_impact == "deconnecte" ~
+        pm25_intensite_ref_par_km * distance_km * MULTIPLICATEUR_DECONNEXION,
+      type_impact == "inchange"   ~ 0,
+      !is.na(delta_distance_km) & delta_distance_km > 0 ~
+        pm25_intensite_ref_par_km * delta_distance_km,
+      TRUE ~ 0
     )
   )
 
-# Bilan d'émissions supplémentaires pour le scénario
-co2_surcout_total_kg <- sum(od_compare$co2_surcout_kg, na.rm = TRUE)
-cat("  CO2 supplémentaire estimé (scénario", NOM_SCENARIO, ") :",
-    round(co2_surcout_total_kg / 1000, 1), "tonnes\n")
-cat("  sur", DUREE_JOURS, "jours de perturbation\n\n")
+# Rapport global enrichi
+co2_surcout_total_kg  <- sum(od_compare$co2_surcout_kg,  na.rm = TRUE)
+nox_surcout_total_g   <- sum(od_compare$nox_surcout_g,   na.rm = TRUE)
+pm25_surcout_total_g  <- sum(od_compare$pm25_surcout_g,  na.rm = TRUE)
+dist_surcout_total_km <- sum(od_compare$delta_distance_km, na.rm = TRUE)
 
+cat("── Émissions supplémentaires (calcul par distance réelle) ────────────\n")
+cat("  Km supplémentaires total :",
+    format(round(dist_surcout_total_km), big.mark = " "), "km\n")
+cat("  CO2  supplémentaire      :",
+    round(co2_surcout_total_kg  / 1000, 1), "tonnes\n")
+cat("  NOx  supplémentaire      :",
+    round(nox_surcout_total_g   / 1000, 1), "kg\n")
+cat("  PM2.5 supplémentaire     :",
+    round(pm25_surcout_total_g  / 1000, 1), "kg\n")
+cat("  sur", DUREE_JOURS, "jours de perturbation\n\n")
 # ── Sauvegarde dans DuckDB ────────────────────────────────────────────────────
 # On stocke la table de comparaison dans DuckDB pour des requêtes SQL ultérieures.
 # Le nom de la table inclut le nom du scénario pour permettre de stocker
