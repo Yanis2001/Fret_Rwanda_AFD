@@ -5502,100 +5502,251 @@ if (file.exists(CACHE_OD)) {
 
 # Si pas de cache valide, on lance le calcul complet puis on sauvegarde.
 if (!cache_od_valide) {
-  od_rows <- list()
-  idx     <- 0
-
-  for (i in seq_along(warehouse_nodes_base)) {
+  
+  # ── Extraction unique des attributs d'arêtes du graphe multi-modal ──────────
+  # Dans l'ancienne version, igraph::edge_attr(graphe_multimodal) était appelé
+  # à chaque itération de la boucle (14 000+ fois). Cette fonction copie TOUS
+  # les attributs des arêtes en mémoire à chaque appel — soit 8 vecteurs de
+  # ~1.8 million d'éléments, environ 50 Mo recopiés à chaque paire OD.
+  # En extrayant ces vecteurs UNE SEULE FOIS hors de la boucle, on évite
+  # ces copies répétées. C'est l'optimisation la plus impactante en mémoire.
+  # igraph::E(g)$attr lit directement le vecteur d'attributs sans copier
+  # les autres attributs, contrairement à edge_attr() qui copie tout.
+  e_length_km     <- igraph::E(graphe_multimodal)$length_km
+  e_travel_time_h <- igraph::E(graphe_multimodal)$travel_time_h
+  e_co2_kg        <- igraph::E(graphe_multimodal)$co2_kg
+  e_nox_g         <- igraph::E(graphe_multimodal)$nox_g
+  e_pm25_g        <- igraph::E(graphe_multimodal)$pm25_g
+  e_type          <- igraph::E(graphe_multimodal)$type
+  e_weight        <- igraph::E(graphe_multimodal)$weight
+  
+  cat("✓ Attributs d'arêtes extraits une seule fois (économie mémoire)\n\n")
+  
+  # ── Pré-allocation du data.frame de résultats ───────────────────────────────
+  # L'ancienne version utilisait une list() qu'on remplissait progressivement,
+  # puis bind_rows() à la fin convertissait toute la liste en data.frame.
+  # Cette conversion finale double temporairement la mémoire utilisée
+  # (la liste ET le data.frame coexistent pendant la conversion).
+  # Pré-allouer le data.frame à sa taille maximale évite cette double mémoire :
+  # on écrit directement dans la ligne idx du data.frame déjà construit.
+  # n_paires_max = nombre maximal de paires OD possibles (sans la diagonale i=j)
+  n_paires_max <- n_warehouses * (n_warehouses - 1)
+  
+  # data.frame() avec des vecteurs de la bonne taille et du bon type :
+  # integer(n)   crée un vecteur d'entiers initialisé à 0
+  # numeric(n)   crée un vecteur de doubles  initialisé à 0
+  # character(n) crée un vecteur de chaînes  initialisé à ""
+  # stringsAsFactors = FALSE évite la conversion automatique en facteurs
+  # (comportement par défaut depuis R 4.0 mais on l'explicite par sécurité)
+  od_long <- data.frame(
+    id_origine        = integer(n_paires_max),
+    id_destination    = integer(n_paires_max),
+    nom_origine       = character(n_paires_max),
+    nom_destination   = character(n_paires_max),
+    cout_usd          = numeric(n_paires_max),
+    distance_km       = numeric(n_paires_max),
+    temps_h           = numeric(n_paires_max),
+    vehicule_depart   = character(n_paires_max),
+    vehicule_arrivee  = character(n_paires_max),
+    n_transbordements = integer(n_paires_max),
+    co2_kg_trajet     = numeric(n_paires_max),
+    nox_g_trajet      = numeric(n_paires_max),
+    pm25_g_trajet     = numeric(n_paires_max),
+    stringsAsFactors  = FALSE
+  )
+  
+  # idx : compteur de la ligne courante dans od_long.
+  # 0L au lieu de 0 pour forcer le type entier (économie mémoire marginale
+  # mais cohérence avec les compteurs entiers de la boucle).
+  idx <- 0L
+  
+  # ── Système de checkpoint pour reprise après crash ──────────────────────────
+  # Le calcul OD prend 30+ minutes sur le graphe multi-modal. Si la session
+  # crash à 87% du calcul, l'ancienne version perdait tout le travail.
+  # Avec un checkpoint sauvegardé tous les 10 origines, on peut reprendre
+  # là où on s'est arrêté — utile sur SSP Cloud où les crashs sont fréquents.
+  # Le checkpoint est différent du cache final : il sert UNIQUEMENT à reprendre
+  # un calcul interrompu. Il sera supprimé automatiquement à la fin du calcul.
+  CHECKPOINT_OD <- file.path(DIR_OUTPUT, "od_checkpoint.rds")
+  i_start <- 1L  # Origine de départ par défaut
+  
+  if (file.exists(CHECKPOINT_OD)) {
     
-    # Nettoyage mémoire périodique : libère les objets R inutilisés tous les
-    # 10 passages. Sans cela, les matrices de distances accumulées en mémoire
-    # au fil des itérations peuvent saturer la RAM et provoquer un crash.
-    if (i %% 10 == 0) gc()
+    cat("=== Checkpoint OD trouvé — reprise du calcul ===\n")
+    cp <- readRDS(CHECKPOINT_OD)
+    
+    # Vérification que le checkpoint correspond à la session actuelle.
+    # Si le réseau a changé (n_warehouses différent), on ignore le checkpoint
+    # car les indices d'origine ne correspondraient plus.
+    if (!is.null(cp$n_warehouses) && cp$n_warehouses == n_warehouses) {
+      od_long <- cp$od_long
+      idx     <- cp$idx
+      i_start <- cp$i_next
+      cat("  ✓ Reprise depuis l'origine", i_start, 
+          "(", idx, "paires déjà calculées)\n\n")
+    } else {
+      cat("  ⚠ Checkpoint incompatible avec la session — calcul depuis 0\n\n")
+      file.remove(CHECKPOINT_OD)
+    }
+  }
+  
+  # ── Boucle principale : Dijkstra multi-modal pour chaque origine ────────────
+  # La logique algorithmique est strictement identique à l'ancienne version.
+  # Seules changent : la source des attributs (vecteurs pré-extraits) et le
+  # mode de stockage (data.frame indexé au lieu de list).
+  
+  cat("=== Calcul de la matrice OD multi-modale ===\n")
+  cat("  Origines à traiter :", length(warehouse_nodes_base) - i_start + 1, "\n")
+  cat("  Paires totales     :", n_paires_max, "\n\n")
+  
+  for (i in i_start:length(warehouse_nodes_base)) {
     
     # sources_i : indices des nœuds dans le graphe multi-modal correspondant
     # à l'entrepôt i dans chacune des 3 couches véhicule.
-    sources_i <- sapply(seq_len(n_vehicules),
-                        function(v) node_multi(v, warehouse_nodes_base[i]))
-  
-  # Tous les nœuds destination (toutes couches × tous entrepôts) en une seule passe
-  targets_all <- as.vector(sapply(
-    seq_len(n_vehicules),
-    function(v) node_multi(v, warehouse_nodes_base)
-  ))
-  
-  # igraph::distances() : calcule les distances de Dijkstra depuis plusieurs
-  # sources vers plusieurs cibles en une seule passe.
-  # weights = E(graphe)$weight : utilise la colonne "weight" comme poids des arêtes.
-  # Résultat : matrice n_sources × n_targets de coûts optimaux.
-  # Inf dans la matrice = impossible d'atteindre la cible depuis la source.
-  dists_all <- igraph::distances(
-    graphe_multimodal,
-    v       = sources_i,
-    to      = targets_all,
-    weights = igraph::E(graphe_multimodal)$weight
-  )
-  
-  for (j in seq_along(warehouse_nodes_base)) {
-    if (i == j) next
+    # as.integer() force le type entier (igraph::distances exige des entiers)
+    sources_i <- as.integer(sapply(seq_len(n_vehicules),
+                                   function(v) node_multi(v, warehouse_nodes_base[i])))
     
-    # cols_j : colonnes de la matrice dists_all correspondant à l'entrepôt j
-    # dans toutes les couches véhicule.
-    cols_j   <- j + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
-    min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
-    if (is.infinite(min_cout)) next  # Entrepôts non connectés → pas de flux
+    # Tous les nœuds destination (toutes couches × tous entrepôts) en une passe
+    # as.vector() aplatit la matrice retournée par sapply en vecteur 1D
+    targets_all <- as.integer(as.vector(sapply(
+      seq_len(n_vehicules),
+      function(v) node_multi(v, warehouse_nodes_base)
+    )))
     
-    # Identifier la meilleure combinaison de véhicules
-    # which(... arr.ind = TRUE) : renvoie les indices ligne ET colonne du minimum.
-    best_idx  <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)[1, ]
-    best_from <- sources_i[best_idx[1]]
-    best_to   <- targets_all[cols_j[best_idx[2]]]
-    
-    # igraph::shortest_paths() : récupère le chemin lui-même (pas seulement le coût).
-    # output = "epath" : retourne les indices des arêtes empruntées (edge path).
-    # C'est différent de "vpath" qui retourne les nœuds.
-    path_obj  <- igraph::shortest_paths(
+    # igraph::distances() : calcule les distances de Dijkstra depuis plusieurs
+    # sources vers plusieurs cibles en une seule passe.
+    # weights = e_weight : on utilise le vecteur d'attributs pré-extrait
+    # plutôt que de relire E(graphe)$weight à chaque appel.
+    # Résultat : matrice n_sources × n_targets de coûts optimaux.
+    # Inf dans la matrice = impossible d'atteindre la cible depuis la source.
+    dists_all <- igraph::distances(
       graphe_multimodal,
-      from    = best_from,
-      to      = best_to,
-      weights = igraph::E(graphe_multimodal)$weight,
-      output  = "epath"
+      v       = sources_i,
+      to      = targets_all,
+      weights = e_weight
     )
-    edges_path <- path_obj$epath[[1]]
     
-    # ── Récupération des émissions cumulées sur le chemin optimal ────────────────
-    # edge_attr() retourne tous les attributs de toutes les arêtes du graphe
-    # multi-modal sous forme de liste de vecteurs.
-    # On accède aux colonnes co2_kg, nox_g, pm25_g qu'on a ajoutées en V.1.
-    # sum(..., na.rm = TRUE) agrège les émissions de toutes les arêtes du chemin.
-    # Note : les arêtes de transbordement ont des émissions = 0 (opération
-    # stationnaire dans un entrepôt, non modélisée ici).
-    edge_data  <- igraph::edge_attr(graphe_multimodal)
+    for (j in seq_along(warehouse_nodes_base)) {
+      if (i == j) next  # Pas de paire (i,i)
+      
+      # cols_j : colonnes de dists_all correspondant à l'entrepôt j
+      # dans toutes les couches véhicule.
+      cols_j   <- j + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
+      
+      # drop = FALSE : conserve la structure matricielle même si un seul
+      # élément est extrait (évite que R "dégrade" en vecteur 1D)
+      sub_dists <- dists_all[, cols_j, drop = FALSE]
+      min_cout  <- min(sub_dists, na.rm = TRUE)
+      if (is.infinite(min_cout)) next  # Entrepôts non connectés → pas de flux
+      
+      # Identifier la meilleure combinaison (couche départ, couche arrivée)
+      # which(... arr.ind = TRUE) renvoie les indices ligne ET colonne.
+      # [1, ] : on prend la première solution si plusieurs ont le même coût min.
+      best_idx  <- which(sub_dists == min_cout, arr.ind = TRUE)[1, ]
+      best_from <- sources_i[best_idx[1]]
+      best_to   <- targets_all[cols_j[best_idx[2]]]
+      
+      # igraph::shortest_paths() : récupère le chemin lui-même (pas seulement
+      # le coût). output = "epath" → retourne les indices des arêtes empruntées.
+      path_obj  <- igraph::shortest_paths(
+        graphe_multimodal,
+        from    = best_from,
+        to      = best_to,
+        weights = e_weight,
+        output  = "epath"
+      )
+      edges_path <- as.integer(path_obj$epath[[1]])
+      
+      # rm(path_obj) : libère immédiatement l'objet path_obj.
+      # Sur 14 000 itérations, ces petits objets s'accumulent dans la RAM
+      # entre les passages du garbage collector. Les supprimer explicitement
+      # aide à maintenir la RAM stable.
+      rm(path_obj)
+      
+      # Incrémentation du compteur et écriture directe dans le data.frame.
+      # idx + 1L : 1L force l'addition en entier (sinon R promeut en double).
+      # od_long$colonne[idx] <- valeur : écriture en place, pas de copie.
+      idx <- idx + 1L
+      
+      od_long$id_origine[idx]        <- i
+      od_long$id_destination[idx]    <- j
+      od_long$nom_origine[idx]       <- noeuds_entreposage$warehouse_name[i]
+      od_long$nom_destination[idx]   <- noeuds_entreposage$warehouse_name[j]
+      od_long$cout_usd[idx]          <- min_cout
+      
+      # Distance, temps et émissions cumulées sur le chemin optimal.
+      # On utilise les vecteurs pré-extraits (e_length_km, etc.) au lieu
+      # de edge_data$length_km recalculé à chaque itération.
+      # sum(..., na.rm = TRUE) agrège sur toutes les arêtes du chemin.
+      od_long$distance_km[idx]       <- sum(e_length_km[edges_path],     na.rm = TRUE)
+      od_long$temps_h[idx]           <- sum(e_travel_time_h[edges_path], na.rm = TRUE)
+      od_long$vehicule_depart[idx]   <- VEHICULES_IDS$vehicule_id[best_idx[1]]
+      od_long$vehicule_arrivee[idx]  <- VEHICULES_IDS$vehicule_id[best_idx[2]]
+      
+      # Comptage des transbordements : arêtes de type "transbordement"
+      # sur le chemin (changements de véhicule dans un entrepôt intermédiaire).
+      od_long$n_transbordements[idx] <- sum(e_type[edges_path] == "transbordement")
+      
+      # Émissions cumulées sur le trajet optimal (un trajet chargé à pleine
+      # capacité entre i et j, en suivant le chemin de moindre coût).
+      # Les arêtes de transbordement ont des émissions = 0 (opération
+      # stationnaire dans un entrepôt, non modélisée ici).
+      od_long$co2_kg_trajet[idx]     <- sum(e_co2_kg[edges_path],  na.rm = TRUE)
+      od_long$nox_g_trajet[idx]      <- sum(e_nox_g[edges_path],   na.rm = TRUE)
+      od_long$pm25_g_trajet[idx]     <- sum(e_pm25_g[edges_path],  na.rm = TRUE)
+    }
     
-    idx <- idx + 1
-    od_rows[[idx]] <- list(
-      id_origine        = i,
-      id_destination    = j,
-      nom_origine       = noeuds_entreposage$warehouse_name[i],
-      nom_destination   = noeuds_entreposage$warehouse_name[j],
-      cout_usd          = min_cout,
-      distance_km       = sum(edge_data$length_km[edges_path],     na.rm = TRUE),
-      temps_h           = sum(edge_data$travel_time_h[edges_path], na.rm = TRUE),
-      vehicule_depart   = VEHICULES_IDS$vehicule_id[best_idx[1]],
-      vehicule_arrivee  = VEHICULES_IDS$vehicule_id[best_idx[2]],
-      n_transbordements = sum(edge_data$type[edges_path] == "transbordement"),
-      # ── Émissions cumulées sur le trajet optimal ────────────────────────────
-      # Ces valeurs correspondent aux émissions d'UN trajet chargé à pleine
-      # capacité entre l'origine i et la destination j, en suivant le chemin
-      # de moindre coût dans le graphe multi-modal.
-      co2_kg_trajet     = sum(edge_data$co2_kg[edges_path],   na.rm = TRUE),
-      nox_g_trajet      = sum(edge_data$nox_g[edges_path],    na.rm = TRUE),
-      pm25_g_trajet     = sum(edge_data$pm25_g[edges_path],   na.rm = TRUE)
-    )
+    # Nettoyage de la matrice de distances avant l'itération suivante.
+    # dists_all peut faire 50-100 Mo selon la taille du graphe.
+    rm(dists_all)
+    
+    # Checkpoint et garbage collection tous les 10 origines.
+    # Ce rythme est un compromis : trop fréquent → ralentit le calcul,
+    # trop espacé → on perd plus de travail en cas de crash.
+    if (i %% 10 == 0 || i == length(warehouse_nodes_base)) {
+      
+      # gc() force la libération mémoire. verbose = FALSE supprime l'affichage.
+      invisible(gc(verbose = FALSE))
+      
+      # Sauvegarde du checkpoint : on stocke od_long, idx, i_next (pour reprise)
+      # et n_warehouses (pour validation au rechargement).
+      saveRDS(
+        list(
+          od_long      = od_long,
+          idx          = idx,
+          i_next       = i + 1L,
+          n_warehouses = n_warehouses
+        ),
+        CHECKPOINT_OD
+      )
+      
+      # Affichage de la progression et du suivi RAM.
+      # sum(gc()[, 2]) somme les colonnes "used (MB)" du tableau gc()
+      # pour donner la RAM totale utilisée par R à ce moment.
+      ram_mb <- round(sum(gc()[, 2]), 0)
+      cat("  OD multi-modal :",
+          round(i / length(warehouse_nodes_base) * 100, 1), "% —",
+          "RAM :", ram_mb, "MB —",
+          "paires :", idx, "\n")
+    }
   }
-  if (i %% 3 == 0) cat("  OD multi-modal :", round(i/n_warehouses*100,1), "%\n")
-}
-
-od_long <- bind_rows(od_rows)
+  
+  # ── Finalisation : tronquer le data.frame à sa taille réelle ────────────────
+  # On a pré-alloué n_paires_max lignes mais certaines paires peuvent ne pas
+  # être connectées (cout = Inf, on les a "next" dans la boucle).
+  # Les lignes correspondantes restent à leurs valeurs initiales (0, "").
+  # On ne garde donc que les idx premières lignes effectivement remplies.
+  od_long <- od_long[seq_len(idx), ]
+  
+  # Suppression du checkpoint maintenant que le calcul est terminé avec succès.
+  # Le cache final (CACHE_OD) prend le relais pour les prochaines sessions.
+  if (file.exists(CHECKPOINT_OD)) {
+    file.remove(CHECKPOINT_OD)
+    cat("  ✓ Checkpoint supprimé (calcul terminé avec succès)\n")
+  }
+  
+  cat("\n✓ Matrice OD calculée :", nrow(od_long), "paires connectées\n\n")
 
 # saveRDS() : sauvegarde l'objet R dans un fichier binaire sur le disque.
 # On sauvegarde à la fois les résultats (od_long) et les paramètres de
