@@ -5061,30 +5061,17 @@ vertices_mm <- tibble(
 # tableau d'arêtes (colonnes "from" et "to" obligatoires) et d'un tableau
 # de nœuds (colonne "name" obligatoire).
 # directed = FALSE : graphe non orienté (on peut aller dans les deux sens).
-recuperer_lourd("graphe_multimodal") <- igraph::graph_from_data_frame(
+stocker_lourd("graphe_multimodal", igraph::graph_from_data_frame(
   all_edges_mm,
   directed = FALSE,
   vertices = vertices_mm
-)
+))
 
 cat("✓ Graphe multi-modal construit\n")
-cat("  Nœuds  :", igraph::vcount(graphe_multimodal),
+cat("  Nœuds  :", igraph::vcount(recuperer_lourd("graphe_multimodal")),
     "(", n_noeuds, "×", n_vehicules, "couches)\n")
-cat("  Arêtes :", igraph::ecount(graphe_multimodal),
+cat("  Arêtes :", igraph::ecount(recuperer_lourd("graphe_multimodal")),
     "dont", k, "transbordements\n\n")
-
-# ── Déplacement du graphe multi-modal vers env_lourds ─────────────────────────
-# Le graphe multi-modal contient ~1.8 million d'arêtes (3 couches × 600 000
-# arêtes physiques) plus les arêtes de transbordement. Sa taille en mémoire
-# atteint typiquement 200-500 MB. Quand RStudio Server tente de l'indexer
-# pour le panneau Environment, il fige la session pendant plusieurs minutes.
-# On le déplace donc dans env_lourds, où il reste utilisable mais invisible.
-stocker_lourd("graphe_multimodal", graphe_multimodal)
-
-# rm() supprime l'objet de .GlobalEnv. Comme une copie a été placée dans
-# env_lourds juste avant, on ne perd pas l'information.
-# RStudio met à jour le panneau Environment et l'objet disparaît de l'aperçu.
-rm(graphe_multimodal)
 
 # gc() force le garbage collector à libérer la mémoire physique.
 # Sans gc(), R peut conserver l'objet en mémoire même après rm() jusqu'au
@@ -8064,7 +8051,6 @@ cat("✓ Export sectoriel par arête sauvegardé\n")
 #            l'impact sur les coûts de transport entre toutes les paires OD.
 #
 # STRUCTURE :
-#   IX.1 — Chargement des perturbations (manuel ou raster de risque)
 #   IX.2 — Identification des arêtes perturbées
 #   IX.3 — Recalcul de la matrice OD sur le réseau dégradé
 #   IX.4 — Calcul des surcoûts et classification des impacts
@@ -8491,7 +8477,7 @@ cat("✓ Matrice OD dégradée calculée\n\n")
 #   - Les zones les plus touchées en cumulant leurs surcoûts
 ################################################################################
 
-cat("── Calcul des surcoûts ────────────────────────────────────────────────\n\n")
+cat("── Calcul des surcoûts ──────────────────────────────────────────────\n\n")
 
 # ── Fusion des deux matrices OD (référence + dégradée) ────────────────────────
 # left_join() : pour chaque paire OD dans la matrice de référence, on récupère
