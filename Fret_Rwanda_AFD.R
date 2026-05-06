@@ -540,6 +540,75 @@ if (RESET_CACHES) {
   cat("  Caches conservés (RESET_CACHES = FALSE)\n\n")
 }
 
+# ==============================================================================
+# I.2 bis : Environnement séparé pour les gros objets
+# Crée un environnement R distinct de .GlobalEnv qui n'est PAS indexé par
+# RStudio Server. Les gros objets (graphes, réseaux, rasters) y sont stockés
+# pour éviter que RStudio ne fige la session en tentant d'afficher leur
+# aperçu dans le panneau Environment.
+# ==============================================================================
+
+# Un "environnement" en R est un conteneur de variables, comme une boîte
+# qui peut contenir des objets. .GlobalEnv est l'environnement par défaut,
+# celui qu'on voit dans le panneau Environment de RStudio.
+# new.env() crée un environnement séparé, parallèle à .GlobalEnv.
+# RStudio n'indexe que .GlobalEnv automatiquement, donc les objets stockés
+# dans env_lourds restent invisibles dans le panneau Environment.
+# parent = emptyenv() : on isole complètement env_lourds (pas de chaîne de
+# parents qui remonterait à .GlobalEnv). Ce n'est pas strictement nécessaire
+# mais c'est plus propre et évite des résolutions de noms inattendues.
+env_lourds <- new.env(parent = emptyenv())
+
+# ── Fonctions utilitaires d'accès à env_lourds ────────────────────────────────
+# Ces deux fonctions raccourcissent l'écriture pour stocker et récupérer
+# des objets dans env_lourds. Sans elles, il faudrait à chaque fois écrire
+# env_lourds$nom_objet, ce qui devient verbeux dans le code.
+
+# stocker_lourd() : déplace un objet de .GlobalEnv vers env_lourds.
+# Le paramètre nom est passé en chaîne pour permettre d'utiliser deparse(substitute())
+# si on voulait passer l'objet directement, mais ici on reste explicite.
+# La fonction supprime ensuite l'objet du global pour libérer la mémoire
+# affichée par RStudio (l'objet n'apparaît plus dans le panneau Environment).
+stocker_lourd <- function(nom, obj) {
+  # assign() : place un objet dans un environnement spécifique sous un nom donné.
+  # C'est l'équivalent fonctionnel de env_lourds[[nom]] <- obj.
+  assign(nom, obj, envir = env_lourds)
+  
+  # On retourne invisible(NULL) pour que la fonction ne pollue pas la console
+  # quand on l'appelle (ex : on ne veut pas voir le contenu s'afficher).
+  invisible(NULL)
+}
+
+# recuperer_lourd() : récupère un objet depuis env_lourds.
+# Plus court à écrire que env_lourds[[nom]] et plus explicite dans le code.
+recuperer_lourd <- function(nom) {
+  # get() : lit un objet depuis un environnement spécifique.
+  # inherits = FALSE : ne cherche pas dans les environnements parents
+  # (cohérent avec parent = emptyenv() utilisé plus haut).
+  get(nom, envir = env_lourds, inherits = FALSE)
+}
+
+# lister_lourds() : affiche le contenu de env_lourds (pour diagnostic).
+# Utile quand on veut vérifier quels objets ont été déplacés sans
+# avoir à inspecter env_lourds dans le panneau Environment.
+lister_lourds <- function() {
+  noms <- ls(envir = env_lourds)
+  if (length(noms) == 0) {
+    cat("env_lourds est vide\n")
+    return(invisible(NULL))
+  }
+  
+  # Pour chaque objet, on affiche son nom et sa taille.
+  # format() avec units = "auto" choisit l'unité la plus lisible (KB, MB, GB).
+  for (n in noms) {
+    obj  <- get(n, envir = env_lourds)
+    taille <- format(object.size(obj), units = "auto")
+    cat("  ", n, " : ", taille, "\n", sep = "")
+  }
+  invisible(noms)
+}
+
+cat("✓ Environnement env_lourds créé (objets non visibles dans RStudio)\n\n")
 
 # ==============================================================================
 # I.2 : Connexion DuckDB et fonctions utilitaires
@@ -4992,7 +5061,7 @@ vertices_mm <- tibble(
 # tableau d'arêtes (colonnes "from" et "to" obligatoires) et d'un tableau
 # de nœuds (colonne "name" obligatoire).
 # directed = FALSE : graphe non orienté (on peut aller dans les deux sens).
-graphe_multimodal <- igraph::graph_from_data_frame(
+recuperer_lourd("graphe_multimodal") <- igraph::graph_from_data_frame(
   all_edges_mm,
   directed = FALSE,
   vertices = vertices_mm
@@ -5004,6 +5073,25 @@ cat("  Nœuds  :", igraph::vcount(graphe_multimodal),
 cat("  Arêtes :", igraph::ecount(graphe_multimodal),
     "dont", k, "transbordements\n\n")
 
+# ── Déplacement du graphe multi-modal vers env_lourds ─────────────────────────
+# Le graphe multi-modal contient ~1.8 million d'arêtes (3 couches × 600 000
+# arêtes physiques) plus les arêtes de transbordement. Sa taille en mémoire
+# atteint typiquement 200-500 MB. Quand RStudio Server tente de l'indexer
+# pour le panneau Environment, il fige la session pendant plusieurs minutes.
+# On le déplace donc dans env_lourds, où il reste utilisable mais invisible.
+stocker_lourd("graphe_multimodal", graphe_multimodal)
+
+# rm() supprime l'objet de .GlobalEnv. Comme une copie a été placée dans
+# env_lourds juste avant, on ne perd pas l'information.
+# RStudio met à jour le panneau Environment et l'objet disparaît de l'aperçu.
+rm(graphe_multimodal)
+
+# gc() force le garbage collector à libérer la mémoire physique.
+# Sans gc(), R peut conserver l'objet en mémoire même après rm() jusqu'au
+# prochain cycle automatique du collecteur.
+invisible(gc(verbose = FALSE))
+
+cat("✓ graphe_multimodal déplacé vers env_lourds (invisible dans RStudio)\n\n")
 
 # ==============================================================================
 # V.3 : Cartes de coûts et de pentes
@@ -5504,31 +5592,17 @@ if (file.exists(CACHE_OD)) {
 if (!cache_od_valide) {
   
   # ── Extraction unique des attributs d'arêtes du graphe multi-modal ──────────
-  # Dans l'ancienne version, igraph::edge_attr(graphe_multimodal) était appelé
-  # à chaque itération de la boucle (14 000+ fois). Cette fonction copie TOUS
-  # les attributs des arêtes en mémoire à chaque appel — soit 8 vecteurs de
-  # ~1.8 million d'éléments, environ 50 Mo recopiés à chaque paire OD.
-  # En extrayant ces vecteurs UNE SEULE FOIS hors de la boucle, on évite
-  # ces copies répétées. C'est l'optimisation la plus impactante en mémoire.
-  # igraph::E(g)$attr lit directement le vecteur d'attributs sans copier
-  # les autres attributs, contrairement à edge_attr() qui copie tout.
-  e_length_km     <- igraph::E(graphe_multimodal)$length_km
-  e_travel_time_h <- igraph::E(graphe_multimodal)$travel_time_h
-  e_co2_kg        <- igraph::E(graphe_multimodal)$co2_kg
-  e_nox_g         <- igraph::E(graphe_multimodal)$nox_g
-  e_pm25_g        <- igraph::E(graphe_multimodal)$pm25_g
-  e_type          <- igraph::E(graphe_multimodal)$type
-  e_weight        <- igraph::E(graphe_multimodal)$weight
+  e_length_km     <- igraph::E(recuperer_lourd("graphe_multimodal"))$length_km
+  e_travel_time_h <- igraph::E(recuperer_lourd("graphe_multimodal"))$travel_time_h
+  e_co2_kg        <- igraph::E(recuperer_lourd("graphe_multimodal"))$co2_kg
+  e_nox_g         <- igraph::E(recuperer_lourd("graphe_multimodal"))$nox_g
+  e_pm25_g        <- igraph::E(recuperer_lourd("graphe_multimodal"))$pm25_g
+  e_type          <- igraph::E(recuperer_lourd("graphe_multimodal"))$type
+  e_weight        <- igraph::E(recuperer_lourd("graphe_multimodal"))$weight
   
   cat("✓ Attributs d'arêtes extraits une seule fois (économie mémoire)\n\n")
   
   # ── Pré-allocation du data.frame de résultats ───────────────────────────────
-  # L'ancienne version utilisait une list() qu'on remplissait progressivement,
-  # puis bind_rows() à la fin convertissait toute la liste en data.frame.
-  # Cette conversion finale double temporairement la mémoire utilisée
-  # (la liste ET le data.frame coexistent pendant la conversion).
-  # Pré-allouer le data.frame à sa taille maximale évite cette double mémoire :
-  # on écrit directement dans la ligne idx du data.frame déjà construit.
   # n_paires_max = nombre maximal de paires OD possibles (sans la diagonale i=j)
   n_paires_max <- n_warehouses * (n_warehouses - 1)
   
@@ -5561,8 +5635,7 @@ if (!cache_od_valide) {
   idx <- 0L
   
   # ── Système de checkpoint pour reprise après crash ──────────────────────────
-  # Le calcul OD prend 30+ minutes sur le graphe multi-modal. Si la session
-  # crash à 87% du calcul, l'ancienne version perdait tout le travail.
+  # Le calcul OD prend 30+ minutes sur le graphe multi-modal. 
   # Avec un checkpoint sauvegardé tous les 10 origines, on peut reprendre
   # là où on s'est arrêté — utile sur SSP Cloud où les crashs sont fréquents.
   # Le checkpoint est différent du cache final : il sert UNIQUEMENT à reprendre
@@ -5591,9 +5664,6 @@ if (!cache_od_valide) {
   }
   
   # ── Boucle principale : Dijkstra multi-modal pour chaque origine ────────────
-  # La logique algorithmique est strictement identique à l'ancienne version.
-  # Seules changent : la source des attributs (vecteurs pré-extraits) et le
-  # mode de stockage (data.frame indexé au lieu de list).
   
   cat("=== Calcul de la matrice OD multi-modale ===\n")
   cat("  Origines à traiter :", length(warehouse_nodes_base) - i_start + 1, "\n")
@@ -5621,7 +5691,7 @@ if (!cache_od_valide) {
     # Résultat : matrice n_sources × n_targets de coûts optimaux.
     # Inf dans la matrice = impossible d'atteindre la cible depuis la source.
     dists_all <- igraph::distances(
-      graphe_multimodal,
+      recuperer_lourd("graphe_multimodal"),
       v       = sources_i,
       to      = targets_all,
       weights = e_weight
@@ -5650,7 +5720,7 @@ if (!cache_od_valide) {
       # igraph::shortest_paths() : récupère le chemin lui-même (pas seulement
       # le coût). output = "epath" → retourne les indices des arêtes empruntées.
       path_obj  <- igraph::shortest_paths(
-        graphe_multimodal,
+        recuperer_lourd("graphe_multimodal"),
         from    = best_from,
         to      = best_to,
         weights = e_weight,
@@ -6556,7 +6626,7 @@ empreinte_entrees <- digest::digest(
     n_aretes          = n_aretes_physiques,
     n_warehouses      = n_warehouses,
     n_vehicules       = n_vehicules,
-    n_aretes_mm       = igraph::ecount(graphe_multimodal)
+    n_aretes_mm       = igraph::ecount(recuperer_lourd("graphe_multimodal"))
   ),
   algo = "xxhash64"
 )
@@ -6650,8 +6720,8 @@ paires_traitees       <- 0
 paires_non_connectees <- 0
 
 # Récupération du vecteur de poids une seule fois hors boucle
-# (évite l'accès répété à E(graphe_multimodal)$weight qui est coûteux)
-poids_mm <- igraph::E(graphe_multimodal)$weight
+# (évite l'accès répété à E(recuperer_lourd("graphe_multimodal"))$weight qui est coûteux)
+poids_mm <- igraph::E(recuperer_lourd("graphe_multimodal"))$weight
 
 # ── ÉTAPE 5 : Boucle principale par zone origine ──────────────────────────────
 # On parcourt les zones origine une par une. Pour chaque origine i, on calcule
@@ -6709,7 +6779,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
   # Dijkstra en une passe : depuis les n_vehicules sources vers toutes les destinations.
   # Résultat : matrice n_vehicules × (n_warehouses × n_vehicules)
   dists_all <- igraph::distances(
-    graphe_multimodal,
+    recuperer_lourd("graphe_multimodal"),
     v       = sources_i,
     to      = targets_all_global,
     weights = poids_mm
@@ -6747,7 +6817,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
     
     # Reconstruction du chemin optimal (liste des arêtes empruntées)
     path_obj <- igraph::shortest_paths(
-      graphe_multimodal,
+      recuperer_lourd("graphe_multimodal"),
       from    = best_from,
       to      = best_to,
       weights = poids_mm,
@@ -8269,11 +8339,11 @@ cat("── Reconstruction du graphe dégradé ───────────
 # ── Récupération des poids originaux du graphe multi-modal ────────────────────
 # igraph::E() : accède aux arêtes (edges) du graphe.
 # $weight : attribut "weight" de chaque arête (coût de transport en USD).
-poids_originaux <- igraph::E(graphe_multimodal)$weight
+poids_originaux <- igraph::E(recuperer_lourd("graphe_multimodal"))$weight
 
 # On travaille sur une COPIE du graphe multi-modal pour ne pas altérer l'original.
 # Le graphe original (graphe_multimodal) reste intact et servira de référence.
-graphe_degrade <- graphe_multimodal
+graphe_degrade <- recuperer_lourd("graphe_multimodal")
 
 # ── Mise à l'infini des arêtes perturbées dans TOUTES les couches véhicule ────
 # Dans le graphe multi-modal, chaque arête physique existe en N_vehicules
@@ -8670,7 +8740,7 @@ SEUIL_PAIRES_CRITICITE <- 100   # tonnes — ignorer les paires < 100t pour la c
 calculer_surcout_total <- function(indices_a_supprimer) {
   
   # Construction du graphe temporaire
-  graphe_temp <- graphe_multimodal
+  graphe_temp <- recuperer_lourd("graphe_multimodal")
   
   # Indices multi-modaux à bloquer (toutes couches véhicule)
   idx_mm_temp <- which(
