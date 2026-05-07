@@ -279,7 +279,6 @@ RWI_DISTANCE_MIN_M <- 50
 #   3. Exporter en CSV avec une ligne par district, une colonne par secteur
 #   4. Sauvegarder sous le chemin ci-dessous
 RPHC5_EMPLOI_CSV_PATH   <- "data/raw/rwa_emploi_district_secteur_2022.csv"
-MINIO_RPHC5_EMPLOI_PATH <- "data/raw/rwa_emploi_district_secteur_2022.csv"
 
 # Nom de la colonne "district" dans le fichier d'emploi (à adapter si besoin)
 RPHC5_COL_DISTRICT_EMPLOI <- "District"
@@ -4383,7 +4382,7 @@ if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
   dir.create(dirname(RPHC5_EMPLOI_CSV_PATH), showWarnings = FALSE, recursive = TRUE)
   tryCatch({
     save_object(
-      object    = MINIO_RPHC5_EMPLOI_PATH,
+      object    = RPHC5_EMPLOI_CSV_PATH,
       bucket    = MINIO_BUCKET,
       file      = RPHC5_EMPLOI_CSV_PATH,
       region    = "",
