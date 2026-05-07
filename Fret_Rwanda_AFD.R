@@ -448,7 +448,7 @@ TYPE_EVENEMENT        <- "inondation"
 # Si plusieurs méthodes sont choisies, les routes affectées seront celles de l'union des méthodes
 
 # Mettre l'identifiant OSM de la ou des routes affectées
-OSM_IDS_PERTURBES_MANUEL <- c()
+OSM_IDS_PERTURBES_MANUEL <- c(479687569 )
 # Pour les activer : mettre TRUE, sinon : mettre FALSE
 UTILISER_MODE_BUFFER        <- FALSE  
 UTILISER_MODE_RASTER        <- FALSE
@@ -502,6 +502,16 @@ SEED_INONDATION <- 42
 # pour estimer leurs émissions supplémentaires (hypothèse d'itinéraire très long)
 MULTIPLICATEUR_DECONNEXION <- 3
 
+# Nombre d'arêtes à tester pour la criticité.
+# 50 = bon compromis rapidité / exhaustivité pour un premier diagnostic.
+# Pour une analyse complète, augmenter à 200 ou 500 (plusieurs heures).
+N_TOP_ARETES_CRITIQUES <- 50
+
+# Pour accélérer le calcul de criticité, on ne recalcule que les paires OD avec un volume de fret
+# supérieur à un seuil (SEUIL_PAIRES_CRITICITE), ce qui exclut les paires
+# marginales qui ne changent pas le classement de criticité.
+SEUIL_PAIRES_CRITICITE <- 100   # tonnes 
+
 cat("✓ Paramètres globaux chargés\n\n")
 
 # ==============================================================================
@@ -510,7 +520,7 @@ cat("✓ Paramètres globaux chargés\n\n")
 # Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
 # ==============================================================================
 
-RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
+RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer
 
 if (RESET_CACHES) {
   
@@ -8533,7 +8543,7 @@ od_compare <- od_long %>%
 od_compare <- od_compare %>%
   mutate(
     
-    # ── Distance réelle du détour (km supplémentaires) ─────────────────────
+    # ── Distance réelle du détour (km supplémentaires) ────────────────────────
     # Positive si le chemin dégradé est plus long, nulle si inchangé,
     # NA si la zone est déconnectée.
     delta_distance_km = case_when(
@@ -8542,7 +8552,7 @@ od_compare <- od_compare %>%
       TRUE                        ~ distance_km_degrade - distance_km
     ),
     
-    # ── Intensité d'émission du trajet de référence (kg CO2 / km) ─────────
+    # ── Intensité d'émission du trajet de référence (kg CO2 / km) ─────────────
     # co2_kg_trajet / distance_km = émissions unitaires sur le chemin normal.
     # Si distance_km = 0 (transbordement pur, rare), on impute 0.
     co2_intensite_ref_par_km = if_else(
@@ -8690,12 +8700,7 @@ cat("\n")
 #   Augmenter ce nombre = analyse plus complète mais plus lente.
 ################################################################################
 
-cat("── Analyse de criticité des arêtes ───────────────────────────────────\n\n")
-
-# Nombre d'arêtes à tester pour la criticité.
-# 50 = bon compromis rapidité / exhaustivité pour un premier diagnostic.
-# Pour une analyse complète, augmenter à 200 ou 500 (plusieurs heures).
-N_TOP_ARETES_CRITIQUES <- 50
+cat("── Analyse de criticité des arêtes ──────────────────────────────────\n\n")
 
 # ── Sélection des arêtes candidates ───────────────────────────────────────────
 # On prend les N arêtes avec le plus gros volume de trafic fret,
@@ -8710,18 +8715,12 @@ aretes_candidates <- aretes_reseau_sf %>%
 cat("  Arêtes candidates :", length(aretes_candidates),
     "(top", N_TOP_ARETES_CRITIQUES, "par volume de trafic)\n")
 
-# ── Fonction de calcul du surcoût total pour une suppression individuelle ──────
+# ── Fonction de calcul du surcoût total pour une suppression individuelle ─────
 # calculer_surcout_total() :
 #   - Prend un vecteur d'indices d'arêtes physiques à supprimer
 #   - Construit un graphe temporaire avec ces arêtes bloquées (poids = Inf)
 #   - Recalcule les distances OD pour les paires les plus importantes
 #   - Retourne le surcoût total agrégé (en USD)
-#
-# Pour accélérer, on ne recalcule que les paires OD avec un volume de fret
-# supérieur à un seuil (SEUIL_PAIRES_CRITICITE), ce qui exclut les paires
-# marginales qui ne changent pas le classement de criticité.
-
-SEUIL_PAIRES_CRITICITE <- 100   # tonnes — ignorer les paires < 100t pour la criticité
 
 calculer_surcout_total <- function(indices_a_supprimer) {
   
