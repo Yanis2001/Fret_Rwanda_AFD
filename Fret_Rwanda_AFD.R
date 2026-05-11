@@ -9091,6 +9091,7 @@ calculer_surcout_total <- function(indices_a_supprimer) {
                               arr.ind = TRUE)
   
   surcout_cumule <- 0
+  n_deconnexions <- 0L
   
   for (k in seq_len(nrow(paires_importantes))) {
     i_k <- paires_importantes[k, 1]
@@ -9112,21 +9113,26 @@ calculer_surcout_total <- function(indices_a_supprimer) {
     
     cout_degrade_k <- min(dists_k, na.rm = TRUE)
     
+    # Décompte des arêtes déconnectées du réseau
+    if (is.infinite(cout_degrade_k)) {
+      n_deconnexions <- n_deconnexions + 1L
+      next
+    }
+    
     # Coût de référence pour cette paire (depuis od_long)
     ref_k <- od_long %>%
       filter(id_origine == i_k, id_destination == j_k) %>%
       pull(cout_usd)
     if (length(ref_k) == 0 || is.na(ref_k)) next
     
-    delta_k <- if (is.infinite(cout_degrade_k)) ref_k * 10 else
-      max(0, cout_degrade_k - ref_k)
+    delta_k <- max(0, cout_degrade_k - ref_k)
     # Pondération par le volume de fret : une arête qui détourne 10 000 tonnes
     # est plus critique qu'une arête qui détourne 10 tonnes au même surcoût.
     surcout_cumule <- surcout_cumule +
       delta_k * flux_tonnes_total[i_k, j_k]
   }
   
-  surcout_cumule
+  list(surcout = surcout_cumule, n_deconnexions = n_deconnexions)
 }
 
 # ── Calcul de la criticité pour chaque arête candidate ────────────────────────
@@ -9135,7 +9141,8 @@ cat("  Calcul de la criticité (", length(aretes_candidates),
 
 criticite_df <- tibble(
   arete_idx         = aretes_candidates,
-  surcout_pondere   = NA_real_
+  surcout_pondere   = NA_real_,
+  n_deconnexions_caus = NA_integer_
 )
 
 pb_crit <- progress_bar$new(
@@ -9146,7 +9153,9 @@ pb_crit <- progress_bar$new(
 )
 
 for (k in seq_along(aretes_candidates)) {
-  criticite_df$surcout_pondere[k] <- calculer_surcout_total(aretes_candidates[k])
+  resultat_k <- calculer_surcout_total(aretes_candidates[k])
+  criticite_df$surcout_pondere[k]     <- resultat_k$surcout
+  criticite_df$n_deconnexions_caus[k] <- resultat_k$n_deconnexions
   pb_crit$tick()
 }
 
@@ -9176,16 +9185,16 @@ print(
   criticite_df %>%
     slice_head(n = 10) %>%
     select(rang, osm_id, name, road_type, longueur_km,
-           volume_tonnes, surcout_pondere_k) %>%
-    rename(
-      Rang        = rang,
-      OSM_ID      = osm_id,
-      Nom         = name,
-      Type        = road_type,
-      Long_km     = longueur_km,
-      Vol_t       = volume_tonnes,
-      Criticite_k = surcout_pondere_k
-    )
+           volume_tonnes, surcout_pondere_k, n_deconnexions_caus) %>%
+    rename(Rang        = rang,
+           OSM_ID      = osm_id,
+           Nom         = name,
+           Type        = road_type,
+           Long_km     = longueur_km,
+           Vol_t       = volume_tonnes,
+           Criticite_k = surcout_pondere_k,
+           Deconnex    = n_deconnexions_caus
+           )
 )
 cat("\n")
 
