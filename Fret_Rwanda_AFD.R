@@ -552,10 +552,6 @@ PROP_ROUTES_INONDEES_RASTER <- 0.7
 # Changer la graine = simuler un autre tirage du même événement.
 SEED_INONDATION <- 42
 
-# Multiplicateur de coût appliqué aux paires déconnectées
-# pour estimer leurs émissions supplémentaires (hypothèse d'itinéraire très long)
-MULTIPLICATEUR_DECONNEXION <- 3
-
 # Nombre d'arêtes à tester pour la criticité.
 # 50 = bon compromis rapidité / exhaustivité pour un premier diagnostic.
 # Pour une analyse complète, augmenter à 200 ou 500 (plusieurs heures).
@@ -8779,6 +8775,38 @@ for (i in seq_along(warehouse_nodes_base)) {
         output  = "epath"
       )
       edges_path_deg <- as.integer(path_deg$epath[[1]])
+      
+      # Calcul des émissions réelles sur le chemin de contournement
+      co2_kg_degrade  <- NA_real_
+      nox_g_degrade   <- NA_real_
+      pm25_g_degrade  <- NA_real_
+      
+      if (length(edges_path_deg) > 0) {
+        
+        # Filtrer les arêtes "route" (pas les transbordements)
+        edges_routes_deg <- edges_path_deg[lookup_type[edges_path_deg] == "route"]
+        
+        if (length(edges_routes_deg) > 0) {
+          
+          # Remontée vers les arêtes physiques et véhicules
+          idx_phys_deg <- lookup_physique[edges_routes_deg]
+          veh_id_deg   <- lookup_vehicule[edges_routes_deg]
+          
+          # Requête DuckDB : émissions réelles arête × véhicule
+          paires_sql <- paste0(
+            "SELECT co2_kg, nox_g, pm25_g FROM aretes_couts_tous ",
+            "WHERE (arete_id, vehicule_id) IN (",
+            paste(sprintf("(%d,'%s')", idx_phys_deg, veh_id_deg), collapse = ","),
+            ")"
+          )
+          ems_deg <- duck_query(paires_sql)
+          
+          co2_kg_degrade <- sum(ems_deg$co2_kg,  na.rm = TRUE)
+          nox_g_degrade  <- sum(ems_deg$nox_g,   na.rm = TRUE)
+          pm25_g_degrade <- sum(ems_deg$pm25_g,  na.rm = TRUE)
+        }
+      }
+      
       rm(path_deg)
       
       if (length(edges_path_deg) > 0) {
@@ -8844,7 +8872,9 @@ cat("── Calcul des surcoûts ───────────────�
 od_compare <- od_long %>%
   left_join(
     od_degrade %>%
-      select(id_origine, id_destination, cout_degrade, connecte),
+      select(id_origine, id_destination, cout_degrade, connecte,
+             distance_km_degrade,
+             co2_kg_degrade, nox_g_degrade, pm25_g_degrade),
     by = c("id_origine", "id_destination")
   ) %>%
   mutate(
@@ -8900,56 +8930,24 @@ od_compare <- od_compare %>%
       TRUE                        ~ distance_km_degrade - distance_km
     ),
     
-    # ── Intensité d'émission du trajet de référence (kg CO2 / km) ─────────────
-    # co2_kg_trajet / distance_km = émissions unitaires sur le chemin normal.
-    # Si distance_km = 0 (transbordement pur, rare), on impute 0.
-    co2_intensite_ref_par_km = if_else(
-      distance_km > 0,
-      co2_kg_trajet / distance_km,
-      0
-    ),
-    nox_intensite_ref_par_km = if_else(
-      distance_km > 0,
-      nox_g_trajet  / distance_km,
-      0
-    ),
-    pm25_intensite_ref_par_km = if_else(
-      distance_km > 0,
-      pm25_g_trajet / distance_km,
-      0
-    ),
-    
-    # ── Émissions supplémentaires basées sur la distance réelle ───────────
-    # Pour les détours : intensité_ref × km_supplémentaires
-    #   (on suppose que les véhicules et les types de route du détour sont
-    #    similaires au trajet de référence — approximation raisonnable
-    #    car le graphe multi-modal optimise le même type de coût)
-    #
-    # Pour les déconnexions : on utilise MULTIPLICATEUR_DECONNEXION × distance_ref
-    #   comme proxy d'un acheminement alternatif très indirect
-    co2_surcout_kg = case_when(
-      type_impact == "deconnecte" ~
-        co2_intensite_ref_par_km * distance_km * MULTIPLICATEUR_DECONNEXION,
+    # ── Émissions supplémentaires ─────────────────────────────────────────────
+       co2_surcout_kg = case_when(
+      type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      !is.na(delta_distance_km) & delta_distance_km > 0 ~
-        co2_intensite_ref_par_km * delta_distance_km,
-      TRUE ~ 0
+      !is.na(co2_kg_degrade)      ~ pmax(0, co2_kg_degrade - co2_kg_trajet),
+      TRUE                        ~ 0
     ),
     nox_surcout_g = case_when(
-      type_impact == "deconnecte" ~
-        nox_intensite_ref_par_km * distance_km * MULTIPLICATEUR_DECONNEXION,
+      type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      !is.na(delta_distance_km) & delta_distance_km > 0 ~
-        nox_intensite_ref_par_km * delta_distance_km,
-      TRUE ~ 0
+      !is.na(nox_g_degrade)      ~ pmax(0, nox_g_degrade - nox_g_trajet),
+      TRUE                        ~ 0
     ),
     pm25_surcout_g = case_when(
-      type_impact == "deconnecte" ~
-        pm25_intensite_ref_par_km * distance_km * MULTIPLICATEUR_DECONNEXION,
+      type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      !is.na(delta_distance_km) & delta_distance_km > 0 ~
-        pm25_intensite_ref_par_km * delta_distance_km,
-      TRUE ~ 0
+      !is.na(pm25_g_degrade)      ~ pmax(0, pm25_g_degrade - pm25_g_trajet),
+      TRUE                        ~ 0
     )
   )
 
@@ -8959,7 +8957,9 @@ nox_surcout_total_g   <- sum(od_compare$nox_surcout_g,   na.rm = TRUE)
 pm25_surcout_total_g  <- sum(od_compare$pm25_surcout_g,  na.rm = TRUE)
 dist_surcout_total_km <- sum(od_compare$delta_distance_km, na.rm = TRUE)
 
-cat("── Émissions supplémentaires (calcul par distance réelle) ────────────\n")
+n_paires_na <- sum(is.na(od_compare$co2_surcout_kg))
+
+cat("── Émissions supplémentaires (émissions réelles des arêtes) ───\n")
 cat("  Km supplémentaires total :",
     format(round(dist_surcout_total_km), big.mark = " "), "km\n")
 cat("  CO2  supplémentaire      :",
@@ -8968,7 +8968,10 @@ cat("  NOx  supplémentaire      :",
     round(nox_surcout_total_g   / 1000, 1), "kg\n")
 cat("  PM2.5 supplémentaire     :",
     round(pm25_surcout_total_g  / 1000, 1), "kg\n")
+cat("  ⚠ Paires déconnectées (émissions non calculables) :",
+    n_paires_na, "\n")
 cat("  sur", DUREE_JOURS, "jours de perturbation\n\n")
+
 # ── Sauvegarde dans DuckDB ────────────────────────────────────────────────────
 # On stocke la table de comparaison dans DuckDB pour des requêtes SQL ultérieures.
 # Le nom de la table inclut le nom du scénario pour permettre de stocker
