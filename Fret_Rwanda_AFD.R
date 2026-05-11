@@ -17,7 +17,7 @@
 #  Les opérations spatiales (géométries, Dijkstra) restent dans sf/igraph
 #  car DuckDB spatial n'est pas encore intégré avec sfnetworks.
 #
-# ── POUR RETROUVER LE DÉPÔT GITHUB ───────────────────────────────────────────
+# ── POUR RETROUVER LE DÉPÔT GITHUB ────────────────────────────────────────────
 #  system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
 ################################################################################
 
@@ -563,7 +563,7 @@ SEUIL_PAIRES_CRITICITE <- 100   # tonnes
 # Paramètres du modèle ARIO-inventory
 # ==============================================================================
 
-# ── Paramètres de surproduction ──────────────────────────────────────────────
+# ── Paramètres de surproduction ───────────────────────────────────────────────
 # α_base : surproduction initiale à l'équilibre (1.0 = pas de surproduction).
 # α_max  : plafond de surproduction. Hallegatte 2014 utilise 1.25 (+25%).
 # τ_α    : temps caractéristique d'ajustement de α (en jours).
@@ -838,22 +838,22 @@ PALETTE_ZONE_TYPE <- c(
   industrie = "#FF6600"    # Orange foncé— zone industrielle
 )
 
-# ── Coûts généralisés (gradient jaune pâle → bordeaux) ───────────────────────
+# ── Coûts généralisés (gradient jaune pâle → bordeaux) ────────────────────────
 PALETTE_COUTS <- c("#FFF7BC", "#FEC44F", "#D94701", "#7F0000")
 # Lecture : faible coût = jaune pâle, coût élevé = bordeaux
 
-# ── Ratio de coût entre véhicules (gradient rouge → jaune → vert) ────────────
+# ── Ratio de coût entre véhicules (gradient rouge → jaune → vert) ─────────────
 # Rouge = coût du véhicule au numérateur élevé relativement à celui au dénominateur ; vert = inverse
 PALETTE_RATIO <- c("#D73027", "#FC8D59", "#FEE090", "#91CF60", "#1A9850")
 
-# ── Volume de trafic fret (gradient bleu clair → violet) ─────────────────────
+# ── Volume de trafic fret (gradient bleu clair → violet) ──────────────────────
 PALETTE_FRET <- c("#CCE5FF", "#6BAED6", "#2171B5", "#6A0DAD")
 # Lecture : faible trafic = bleu clair, trafic intense = violet
 
-# ── Flux commerciaux OD (gradient bleu) ──────────────────────────────────────
+# ── Flux commerciaux OD (gradient bleu) ───────────────────────────────────────
 PALETTE_FLUX_OD <- c("#EFF3FF", "#BDD7E7", "#6BAED6", "#2171B5", "#084594")
 
-# ── Catégories de trafic (pour légendes textuelles) ──────────────────────────
+# ── Catégories de trafic (pour légendes textuelles) ───────────────────────────
 PALETTE_CLASSE_TRAFIC <- c(
   "Aucun"       = "#F0F0F0",   # Gris très clair
   "Très faible" = "#CCE5FF",   # Bleu très clair
@@ -878,7 +878,7 @@ cat("✓ Palettes de couleurs définies\n\n")
 # façon pratique de saisir un tableau ligne par ligne —, puis envoyé dans
 # DuckDB avec duck_write() pour pouvoir être interrogé en SQL plus tard.
 
-# ── Table 1 : paramètres scalaires par véhicule ──────────────────────────────
+# ── Table 1 : paramètres scalaires par véhicule ───────────────────────────────
 # Ce tableau contient les caractéristiques physiques et économiques de chaque
 # type de véhicule : consommation de carburant, prix du carburant, valeur
 # du temps du chauffeur, coûts d'usure selon le type de route, capacité de
@@ -891,7 +891,7 @@ params_flotte_df <- tribble(
 )
 duck_write(params_flotte_df, "params_flotte")
 
-# ── Table 2 : vitesses par véhicule × type de route × surface ────────────────
+# ── Table 2 : vitesses par véhicule × type de route × surface ─────────────────
 # Chaque véhicule a ses propres vitesses de référence sur chaque combinaison.
 # L'ajout d'un véhicule = ajouter 11 lignes avec son vehicule_id.
 # Les vitesses sont en km/h et varient selon :
@@ -939,7 +939,7 @@ vitesses_flotte_df <- tribble(
 )
 duck_write(vitesses_flotte_df, "vitesses_flotte")
 
-# ── Table 3 : facteurs de pente par véhicule × catégorie ─────────────────────
+# ── Table 3 : facteurs de pente par véhicule × catégorie ──────────────────────
 # Un camion chargé en côte monte beaucoup plus lentement qu'en terrain plat.
 # Ces facteurs multiplicatifs réduisent la vitesse de référence en fonction
 # de l'inclinaison de la route et du type de véhicule.
@@ -962,7 +962,7 @@ facteurs_pente_df <- tribble(
 )
 duck_write(facteurs_pente_df, "facteurs_pente_flotte")
 
-# ── Table 4 : coûts de transbordement entre véhicules ────────────────────────
+# ── Table 4 : coûts de transbordement entre véhicules ─────────────────────────
 # Coût fixe en USD pour transférer la cargaison d'un type de véhicule à un autre
 # dans un entrepôt (manutention, attente, administration).
 # Pour ajouter une combinaison : ajouter une ligne dans ce tribble.
@@ -993,7 +993,7 @@ duck_write(couts_transbordement_df, "couts_transbordement")
 
 couts_prebordure_df <- tribble(
   ~pays,       ~secteur,         ~cout_usd_tonne,
-  # ── Ouganda (corridors Nord : Kampala → Gatuna/Kagitumba) ─────────────────
+  # ── Ouganda (corridors Nord : Kampala → Gatuna/Kagitumba) ───────────────────
   # Distance moyenne Kampala-frontière Rwanda : ~500km, routes bitumées
   "Ouganda",   "Agriculture",     35.0,   
   "Ouganda",   "Mines",           25.0,
@@ -1003,7 +1003,7 @@ couts_prebordure_df <- tribble(
   "Ouganda",   "Commerce",        26.0,
   "Ouganda",   "Transport",       18.0,
   "Ouganda",   "Services",         8.0,
-  # ── Tanzanie (corridor Est : Dar es Salaam → Rusumo) ─────────────────────
+  # ── Tanzanie (corridor Est : Dar es Salaam → Rusumo) ────────────────────────
   # Distance moyenne port Dar-frontière Rwanda : ~1300km
   # Coûts plus élevés car corridor plus long et qualité route variable
   "Tanzanie",  "Agriculture",     90.0,  
@@ -1014,7 +1014,7 @@ couts_prebordure_df <- tribble(
   "Tanzanie",  "Commerce",        65.0,
   "Tanzanie",  "Transport",       45.0,
   "Tanzanie",  "Services",        12.0,
-  # ── RDC (corridor Ouest : Goma → Rubavu) ─────────────────────────────────
+  # ── RDC (corridor Ouest : Goma → Rubavu) ────────────────────────────────────
   # Distance courte mais infrastructure très dégradée
   # Coûts élevés malgré la proximité géographique
   "RDC",       "Agriculture",     28.0,
@@ -1025,7 +1025,7 @@ couts_prebordure_df <- tribble(
   "RDC",       "Commerce",        22.0,
   "RDC",       "Transport",       14.0,
   "RDC",       "Services",         5.0,
-  # ── Burundi (corridor Sud : Bujumbura → Bugarama/Rusizi) ─────────────────
+  # ── Burundi (corridor Sud : Bujumbura → Bugarama/Rusizi) ────────────────────
   # Distance moyenne Bujumbura-frontière Rwanda : ~150km
   # Infrastructure correcte sur axe principal
   "Burundi",   "Agriculture",     12.0,
@@ -1092,7 +1092,7 @@ save_object(
 # stop() interrompt le script avec un message d'erreur explicite.
 if (!file.exists(chemin_pbf)) stop("Fichier PBF introuvable.")
 
-# ── Lecture sélective du fichier PBF ─────────────────────────────────────────
+# ── Lecture sélective du fichier PBF ──────────────────────────────────────────
 # st_read() peut lire directement un fichier PBF via le driver GDAL/OGR.
 # On ne charge que la couche "lines" (routes linéaires) et uniquement
 # les types de routes utiles pour le fret (pas les chemins piétons, pistes cyclables…).
@@ -1669,7 +1669,7 @@ fond_carte <- function() {
     tm_shape(rwanda_national) +
     tm_borders(col = "#222222", lwd = 2.5)
   
-  # ── Parcs naturels (sous les lacs pour ne pas les masquer) ────────────────
+  # ── Parcs naturels (sous les lacs pour ne pas les masquer) ──────────────────
   # fill_alpha = 0.45 : transparence à 45%, pour voir les routes par-dessous.
   if (parcs_ok) carte <- carte +
       tm_shape(parcs_raw) +
@@ -1681,7 +1681,7 @@ fond_carte <- function() {
         fill.legend = tm_legend(show = FALSE)
       )
   
-  # ── Lacs ──────────────────────────────────────────────────────────────────
+  # ── Lacs ────────────────────────────────────────────────────────────────────
   if (lacs_ok) carte <- carte +
       tm_shape(lacs_raw) +
       tm_polygons(
@@ -1694,7 +1694,7 @@ fond_carte <- function() {
   carte
 }
 
-# ── Carte 1 : vérification post-nettoyage ──────────────────────────────────────
+# ── Carte 1 : vérification post-nettoyage ─────────────────────────────────────
 # Cette carte est générée pour vérifier visuellement que le réseau routier
 # a été correctement chargé et nettoyé. Chaque type de route apparaît dans
 # une couleur différente (définie dans PALETTE_ROAD_TYPE).
@@ -1838,7 +1838,7 @@ plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 # cohérent, puis extrait la composante géante (réseau principal connecté).
 # Toute modification ici invalide le cache des pentes.
 #
-# ── MISE EN CACHE ────────────────────────────────────────────────────────────
+# ── MISE EN CACHE ─────────────────────────────────────────────────────────────
 # Les corrections topologiques (subdivision aux intersections, suppression
 # des pseudo-nœuds, extraction de la composante géante) prennent ~3-5 min.
 # Le résultat est mis en cache dans outputs/reseau_corrige_cache.rds.
@@ -1905,7 +1905,7 @@ if (!cache_reseau_valide) {
 #   - les ARÊTES sont les segments de route entre deux nœuds
 # Ce graphe servira ensuite à igraph pour le calcul de plus courts chemins.
 
-# ── Homogénéisation des types de géométrie ───────────────────────────────────
+# ── Homogénéisation des types de géométrie ────────────────────────────────────
 # Le fichier PBF peut contenir des MULTILINESTRING (plusieurs lignes groupées)
 # que sfnetworks ne sait pas gérer. st_cast() les éclate en LINESTRING simples.
 # Un LINESTRING est une séquence de points formant une ligne.
@@ -1970,7 +1970,7 @@ cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissag
 
 # Remplacer FALSE par TRUE si on veut activer cette partie du code : ⚠ ~1 jour de calcul
 if(FALSE) {
-  # ── Étape 3 : snapping ciblé post-topologie ───────────────────────────────────
+  # ── Étape 3 : snapping ciblé post-topologie ─────────────────────────────────
   # Maintenant que la topologie est propre, un snapping léger (5m seulement)
   # connecte les extrémités quasi-jointives.
   # Les gaps < 5m sont rarissimes dans les PBF OSM Rwanda bien maintenus.
@@ -2083,7 +2083,7 @@ cat("  Composante géante :", length(noeuds_geante), "nœuds (", pct_noeuds, "% 
 cat("Colonnes de rwanda_provinces :\n")
 print(names(rwanda_provinces))
 
-# ── Récupérer les arêtes du réseau AVANT filtrage (reseau_lisse) ─────────────
+# ── Récupérer les arêtes du réseau AVANT filtrage (reseau_lisse) ──────────────
 # activate("edges") : dans sfnetworks, le réseau a deux "tables" — une pour les
 # nœuds et une pour les arêtes. activate() bascule entre les deux.
 aretes_lisse <- reseau_lisse %>% activate("edges") %>% st_as_sf() %>%
@@ -2102,7 +2102,7 @@ id_geante_lisse    <- which.max(comp_lisse$csize)
 noeuds_hors_geante <- noeuds_lisse %>%
   filter(composante != id_geante_lisse)
 
-# ── Joindre l'info composante aux arêtes via leurs nœuds extrémité ───────────
+# ── Joindre l'info composante aux arêtes via leurs nœuds extrémité ────────────
 # Une arête est "hors géante" si au moins un de ses nœuds l'est.
 # from et to sont les indices des nœuds aux extrémités de chaque arête.
 # comp_lisse$membership[from] : numéro de composante du nœud de départ.
@@ -2318,7 +2318,7 @@ cat("✓ Réseau corrigé —",
     igraph::ecount(reseau_rwanda), "arêtes\n\n")
 
 
-# ── Diagnostic complet de la fragmentation ───────────────────────────────────
+# ── Diagnostic complet de la fragmentation ────────────────────────────────────
 # On recalcule les composantes connexes sur le réseau final pour vérifier
 # qu'il est bien dominé par une seule grande composante.
 
@@ -2363,7 +2363,7 @@ cat("  → Au prochain lancement, la Partie III s'exécutera en <1s\n\n")
 }  # fin du if (!cache_reseau_valide)
 
 
-# ── Vérifications communes (toujours exécutées, qu'on ait un cache ou non) ──
+# ── Vérifications communes (toujours exécutées, qu'on ait un cache ou non) ────
 # Ces vérifications sont rapides et permettent de détecter tôt un problème
 # de cohérence avec le reste du script (ex : composante non connectée).
 cat("=== Vérifications post-Partie III ===\n")
@@ -2605,7 +2605,7 @@ if (!cache_valide) {
   # Chaque élément de la liste devient une ligne du tableau.
   pentes_df <- bind_rows(resultats_pentes)
   
-  # ── Sauvegarde du cache ──────────────────────────────────────────────────────
+  # ── Sauvegarde du cache ─────────────────────────────────────────────────────
   # On sauvegarde pentes_df + le nombre d'arêtes pour validation future
   # saveRDS() : sauvegarde un objet R arbitraire dans un fichier binaire.
   # On sauvegarde une liste avec deux éléments : le tableau des pentes
@@ -2701,7 +2701,7 @@ manuels_sf <- entreposages_manuels %>%
   st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
   st_transform(crs = 32735)
 
-# ── Entrepôts depuis city/town OSM ───────────────────────────────────────────
+# ── Entrepôts depuis city/town OSM ────────────────────────────────────────────
 # Filtrer uniquement les villes dans le territoire rwandais
 # Évite que les villes des pays voisins se snappent toutes sur les mêmes nœuds frontières
 # st_filter() : ne garde que les géométries qui intersectent le polygone donné.
@@ -2732,7 +2732,7 @@ villes_nouvelles <- villes_osm[lengths(idx_proches) == 0, ] %>%
 cat("  Villes OSM city/town nouvelles (non dupliquées) :",
     nrow(villes_nouvelles), "\n")
 
-# ── Entrepôts depuis zones industrielles (origines de fret) ──────────────────
+# ── Entrepôts depuis zones industrielles (origines de fret) ───────────────────
 # Les grandes zones industrielles sont d'importants générateurs de fret.
 # On calcule leur centroïde et on les ajoute comme entrepôts potentiels,
 # en excluant celles qui sont déjà trop proches des entrepôts existants.
@@ -2860,7 +2860,7 @@ entreposages_sf <- entreposages_fictifs %>%
 entreposages_buffer <- entreposages_sf %>%
   st_buffer(dist = BUFFER_ENTREPOT_M)
 
-# ── Accrochage (snapping) des entrepôts au réseau ────────────────────────────
+# ── Accrochage (snapping) des entrepôts au réseau ─────────────────────────────
 # Les coordonnées des entrepôts ne tombent pas exactement sur le réseau routier.
 # st_nearest_feature() trouve pour chaque entrepôt le nœud du réseau le plus proche.
 # C'est le "snapping" : on "accroche" chaque entrepôt au nœud routier le plus proche.
@@ -2938,7 +2938,7 @@ cat("  (à comparer avec", nrow(entreposages_fictifs), "zones économiques)\n\n"
 
 cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n")
 
-# ── Diagnostic : entrepôts snappés sur le même nœud ──────────────────────────
+# ── Diagnostic : entrepôts snappés sur le même nœud ───────────────────────────
 # On identifie les nœuds partagés par plusieurs entrepôts AVANT déduplication
 # pour comprendre si les fusions concernent des zones de même type ou non.
 # Un nœud partagé par des types différents (ex : "ville" + "industrie") signale
@@ -3335,7 +3335,7 @@ if (file.exists(NISR_CSV_PATH)) {
   
   tryCatch({
     
-    # ── Chargement du CSV NISR ──────────────────────────────────────────────
+    # ── Chargement du CSV NISR ────────────────────────────────────────────────
     # read_csv() est plus robuste que read.csv() pour les fichiers avec encodage
     # UTF-8 (noms de districts avec accents) et les colonnes numériques avec
     # des espaces ou virgules comme séparateurs de milliers.
@@ -3344,7 +3344,7 @@ if (file.exists(NISR_CSV_PATH)) {
     cat("  CSV NISR chargé :", nrow(nisr_pop_raw), "lignes\n")
     cat("  Colonnes disponibles :", paste(names(nisr_pop_raw), collapse = ", "), "\n")
     
-    # ── Nettoyage du tableau NISR ────────────────────────────────────────────
+    # ── Nettoyage du tableau NISR ─────────────────────────────────────────────
     # On extrait uniquement les colonnes dont on a besoin et on normalise
     # les noms de districts (suppression des accents, minuscules)
     # pour faciliter la jointure avec les données OSM/GADM.
@@ -3655,7 +3655,7 @@ tmap_save(
 )
 cat("  ✓ carte_population_zones.png\n")
 
-# ── Graphique : population par zone et par type ────────────────────────────────
+# ── Graphique : population par zone et par type ───────────────────────────────
 g_pop <- diag_population %>%
   arrange(desc(population_zone)) %>%
   mutate(
@@ -3853,7 +3853,7 @@ if (!rwi_ok) {
     file.remove(RWI_ZIP_LOCAL)
     cat("  ZIP supprimé après extraction\n")
     
-    # ── Chargement du CSV extrait ──────────────────────────────────────────
+    # ── Chargement du CSV extrait ─────────────────────────────────────────────
     rwi_raw <- read_csv(RWI_CSV_LOCAL, show_col_types = FALSE)
     
     rwi_sf <- rwi_raw %>%
@@ -3891,7 +3891,7 @@ if (rwi_ok) {
   cat("  Médiane / Moy:", rwi_stats$rwi_median, "/", rwi_stats$rwi_mean, "\n")
   cat("  Erreur moy.  :", rwi_stats$erreur_moy, "\n\n")
   
-  # ── Rognage aux limites du Rwanda ─────────────────────────────────────────
+  # ── Rognage aux limites du Rwanda ───────────────────────────────────────────
   # On s'assure que les cellules RWI sont bien dans le territoire rwandais
   # (le ZIP peut contenir des cellules légèrement hors frontière).
   # st_filter() avec st_intersects : conserve les points dans le polygone.
@@ -4117,7 +4117,7 @@ cat("  Score p_rwi après normalisation :\n")
 cat("  Min :", round(min(p_rwi), 3), "| Max :", round(max(p_rwi), 3),
     "| Médiane :", round(median(p_rwi), 3), "\n\n")
 
-# ── Vérification d'alignement avant construction du tableau ────────────────
+# ── Vérification d'alignement avant construction du tableau ───────────────────
 # rwi_brut_par_entrepot doit avoir exactement autant d'éléments que entreposages_sf
 # (la référence des 123 zones économiques). Un désalignement ici provoquerait
 # une attribution erronée des scores RWI à des zones qui ne sont pas les leurs.
@@ -4204,7 +4204,7 @@ cat("✓ rwi_brut et p_rwi intégrés dans reseau_rwanda et DuckDB\n\n")
 
 cat("── Visualisations RWI ────────────────────────────────────────────────\n")
 
-# ── Préparation de la couche sf pour les entrepôts enrichis RWI ──────────────
+# ── Préparation de la couche sf pour les entrepôts enrichis RWI ───────────────
 entrepots_rwi_sf <- reseau_rwanda %>%
   activate("nodes") %>%
   filter(is_warehouse, !is.na(p_rwi)) %>%
@@ -4269,7 +4269,7 @@ tmap_save(
 )
 cat("  ✓ carte_rwi_zones.png\n")
 
-# ── Carte : raster RWI Rwanda (vue d'ensemble des données brutes) ──────────────
+# ── Carte : raster RWI Rwanda (vue d'ensemble des données brutes) ─────────────
 # Cette carte montre les données RWI pour TOUT le Rwanda (pas seulement les
 # entrepôts), ce qui permet de visualiser les gradients spatiaux de richesse
 # et de vérifier que les entrepôts sont bien positionnés dans leur contexte.
@@ -4480,7 +4480,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
               "\n  Adapter RPHC5_CORRESPONDANCE_SECTEURS dans les paramètres.")
     }
     
-    # ── Nettoyage (même normalisation des noms de district que IV.4.C) ──────────
+    # ── Nettoyage (même normalisation des noms de district que IV.4.C) ────────
     rphc5_emploi <- rphc5_emploi_raw %>%
       rename(district = any_of(RPHC5_COL_DISTRICT_EMPLOI)) %>%
       mutate(
@@ -4501,7 +4501,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
     
     cat("  Districts après nettoyage :", nrow(rphc5_emploi), "\n")
     
-    # ── Rechargement de GADM si absent de l'environnement ───────────────────────
+    # ── Rechargement de GADM si absent de l'environnement ─────────────────────
     # rwanda_districts_gadm a été construit en IV.4.C. Si la session a été
     # interrompue entre IV.4.C et IV.4.F, on le retélécharge ici.
     if (!exists("rwanda_districts_gadm") || is.null(rwanda_districts_gadm)) {
@@ -4520,7 +4520,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
     
     if (!is.null(rwanda_districts_gadm)) {
       
-      # ── Jointure GADM × emploi RPHC5 ──────────────────────────────────────
+      # ── Jointure GADM × emploi RPHC5 ────────────────────────────────────────
       cols_emploi_disponibles <- intersect(
         c(cols_attendues, "emploi_total"),
         names(rphc5_emploi)
@@ -4543,7 +4543,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
         cat("  → Vérifier l'orthographe dans", RPHC5_EMPLOI_CSV_PATH, "\n")
       }
       
-      # ── Jointure spatiale entrepôts × districts ────────────────────────────
+      # ── Jointure spatiale entrepôts × districts ─────────────────────────────
       # Même logique qu'en IV.4.C pour la population :
       # chaque entrepôt hérite des données du district qui le contient.
       entrepots_join_emploi <- entreposages_sf %>%
@@ -4567,7 +4567,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
             length(manquants_idx_e), "\n")
       }
       
-      # ── Stockage de l'emploi total (vecteur nrow(entreposages_sf)) ────────────
+      # ── Stockage de l'emploi total (vecteur nrow(entreposages_sf)) ──────────
       emploi_total_par_entrepot <- as.numeric(entrepots_join_emploi$emploi_total)
       emploi_total_par_entrepot[is.na(emploi_total_par_entrepot)] <-
         median(emploi_total_par_entrepot, na.rm = TRUE)
@@ -4575,7 +4575,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
       cat("  Emploi total : min =", round(min(emploi_total_par_entrepot)),
           "| max =", round(max(emploi_total_par_entrepot)), "\n\n")
       
-      # ── Construction des profils d'offre empiriques ────────────────────────
+      # ── Construction des profils d'offre empiriques ─────────────────────────
       # Pour chaque zone i, le profil empirique est la part de l'emploi de
       # chaque secteur du modèle dans l'emploi total du district.
       # Il est ensuite fusionné avec le profil qualitatif de base via une
@@ -4645,7 +4645,7 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
   cat("  → Partie IV.4.F ignorée — profils qualitatifs conservés\n\n")
 }
 
-# ── Imputation des zones sans profil empirique (NA restants) ─────────────────
+# ── Imputation des zones sans profil empirique (NA restants) ──────────────────
 # Garantit que profil_offre_empirique_all ne contient jamais de NA en VII.2.
 # Les zones non couvertes par le RPHC5 reçoivent leur profil qualitatif de base.
 for (i in seq_len(nrow(entreposages_sf))) {
@@ -4690,7 +4690,7 @@ cat("  • emploi_total_par_entrepot   [", nrow(entreposages_sf), "]\n\n")
 #                      basée sur la population et le RWI.
 #   Nouvelle version : deux tailles composites distinctes.
 #
-# ── TAILLE COMPOSITE OFFRE (taille_composite_offre) ──────────────────────────
+# ── TAILLE COMPOSITE OFFRE (taille_composite_offre) ───────────────────────────
 #   Capte la CAPACITÉ PRODUCTIVE d'une zone.
 #   Basée sur l'emploi total du district (RPHC5 2022) si disponible,
 #   sinon repli sur la population (comportement identique à l'ancienne version).
@@ -4700,7 +4700,7 @@ cat("  • emploi_total_par_entrepot   [", nrow(entreposages_sf), "]\n\n")
 #                            × (1 + K_RWI_OFFRE × p_rwi_i)
 #     taille_composite_offre_i = taille_brute_offre_i / ref_kigali_offre
 #
-# ── TAILLE COMPOSITE DEMANDE (taille_composite_demande) ──────────────────────
+# ── TAILLE COMPOSITE DEMANDE (taille_composite_demande) ───────────────────────
 #   Capte la CAPACITÉ DE CONSOMMATION d'une zone.
 #   Basée sur la population résidentielle et le RWI — INCHANGÉ.
 #
@@ -4730,7 +4730,7 @@ pop_i <- diag_population$population_zone[
 ]
 pop_i <- replace_na(pop_i, median(pop_i, na.rm = TRUE))
 
-# ── Correction du double comptage pour les entrepôts sur le même nœud ────────
+# ── Correction du double comptage pour les entrepôts sur le même nœud ─────────
 # [CONSERVER LE BLOC EXISTANT TEL QUEL — il corrige uniquement pop_i]
 # Le bloc de correction (if (nrow(doublons_noeuds) > 0) { ... }) reste ici.
 # Il n'a pas d'équivalent côté emploi (données districtuelles, pas raster).
@@ -4993,7 +4993,7 @@ duck_query("
         WHEN 'unpaved' THEN f.usure_unpaved
         ELSE f.usure_unpaved
       END AS usure_usd_km,
-      -- ── Facteurs d'émission récupérés depuis params_flotte ──────────────
+      -- ── Facteurs d'émission récupérés depuis params_flotte ─────────────────
       -- Ces trois colonnes alimenteront les calculs des étapes suivantes.
       -- Le CO2 est une constante physique (combustion du gazole).
       -- Le NOx et les PM2.5 varient selon la norme Euro du moteur.
@@ -5093,7 +5093,7 @@ duck_query("
       + cost_time_usd * facteur_urbain_applique)
       / (NULLIF(length_km, 0)
       * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm,
-    -- ── Émissions absolues par arête (pour un trajet chargé) ─────────────
+    -- ── Émissions absolues par arête (pour un trajet chargé) ─────────────────
     fuel_consumption_L * facteur_emission_co2          AS co2_kg,
     fuel_consumption_L * facteur_emission_nox          AS nox_g,
     fuel_consumption_L * facteur_emission_pm25         AS pm25_g,
@@ -5727,12 +5727,12 @@ if (FALSE) {
 # Et un graphique comparatif des émissions totales par véhicule.
 # ==============================================================================
 
-# ── Palette d'émissions (vert pâle → rouge foncé) ────────────────────────────
+# ── Palette d'émissions (vert pâle → rouge foncé) ─────────────────────────────
 # Rouge = route très émettrice (pente forte + mauvaise surface + véhicule lourd)
 # Vert  = route peu émettrice (plat, bitumée, camion léger)
 PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 
-# ── Carte : intensité carbone (co2_kg_par_tkm) pour le véhicule de référence ─
+# ── Carte : intensité carbone (co2_kg_par_tkm) pour le véhicule de référence ──
 # Cette carte identifie les segments routiers où chaque tonne-kilomètre
 # transportée génère le plus de CO2 : pentes fortes, mauvaise surface,
 # zones de congestion urbaine.
@@ -5759,7 +5759,7 @@ tmap_save(carte_co2,
           width = 3000, height = 2400, dpi = 300)
 cat("  ✓ carte_emissions_co2_par_tkm.png\n")
 
-# ── Carte : intensité NOx (nox_g_par_tkm) ────────────────────────────────────
+# ── Carte : intensité NOx (nox_g_par_tkm) ─────────────────────────────────────
 # Le NOx est le principal polluant local du transport routier diesel.
 # Sa distribution spatiale diffère du CO2 : elle dépend davantage
 # des normes Euro des moteurs (plus sévère en ville) et de la congestion
@@ -5938,13 +5938,13 @@ empreinte_params <- digest::digest(
 if (file.exists(CACHE_OD)) {
   cache_od <- readRDS(CACHE_OD)  # Charge le fichier sauvegardé en mémoire R
   
-  # ── Vérification 1 : métriques quantitatives ──────────────────────────────
+  # ── Vérification 1 : métriques quantitatives ────────────────────────────────
   metriques_ok <- !is.null(cache_od$n_warehouses) &&
     cache_od$n_warehouses == n_warehouses &&
     !is.null(cache_od$n_aretes) &&
     cache_od$n_aretes == n_aretes_physiques
   
-  # ── Vérification 2 : structure de od_long (colonnes présentes) ────────────
+  # ── Vérification 2 : structure de od_long (colonnes présentes) ──────────────
   colonnes_ok <- !is.null(cache_od$od_long) &&
     all(OD_COLONNES_ATTENDUES %in% names(cache_od$od_long))
   
@@ -5952,7 +5952,7 @@ if (file.exists(CACHE_OD)) {
   version_ok <- !is.null(cache_od$empreinte_params) &&
     cache_od$empreinte_params == empreinte_params
   
-  # ── Bilan ─────────────────────────────────────────────────────────────────
+  # ── Bilan ───────────────────────────────────────────────────────────────────
   if (metriques_ok && colonnes_ok && version_ok) {
     
     od_long         <- cache_od$od_long
@@ -6297,7 +6297,7 @@ couts_wide <- duck_query("
   ORDER BY arete_id
 ")
 
-# ── Construction de la table des arêtes finales enrichie ─────────────────────
+# ── Construction de la table des arêtes finales enrichie ──────────────────────
 aretes_finales <- reseau_rwanda %>%
   activate("edges") %>%
   st_as_sf() %>%
@@ -6470,7 +6470,7 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 #   4. Pas besoin de pmax(), renormalisation, plafonds ou bruit aléatoire
 # ==============================================================================
 
-# ── Correspondance entre types de landuse et profils de zone ─────────────────
+# ── Correspondance entre types de landuse et profils de zone ──────────────────
 # Les zones industrielles dans le buffer sont représentées par le profil
 # "industrie" déjà défini dans PROFILS_OFFRE/DEMANDE.
 # Les zones urbaines sont représentées par le profil "hub" — le type de zone
@@ -6631,27 +6631,27 @@ for (i in 1:n_warehouses) {
   nom_zone  <- noeuds_entreposage$warehouse_name[i]
   type_zone <- noeuds_entreposage$warehouse_type[i]
   
-  # ── Tailles composites distinctes pour l'offre et la demande ──────────────
+  # ── Tailles composites distinctes pour l'offre et la demande ────────────────
   # taille_composite_offre   : basée sur l'emploi RPHC5 — capacité productive
   # taille_composite_demande : basée sur la population  — capacité d'absorption
   # Les deux ont été calculées dans la Transition IV.5→V.
   taille_offre   <- taille_composite_offre[i]
   taille_demande <- taille_composite_demande[i]
   
-  # ── Profil d'offre : données empiriques RPHC5 (remplace PROFILS_OFFRE) ─────
+  # ── Profil d'offre : données empiriques RPHC5 (remplace PROFILS_OFFRE) ──────
   # profil_offre_empirique[i, ] est la fusion (POIDS_PROFIL_EMPLOI_RPHC5)
   # entre les parts d'emploi sectoriel RPHC5 et le profil qualitatif de base.
   # Si RPHC5 était indisponible, il a été initialisé sur PROFILS_OFFRE en IV.4.F
   # → ce code fonctionne identiquement dans les deux cas.
   profil_o_base <- profil_offre_empirique[i, ]
   
-  # ── Profil de demande : qualitatif par type de zone (inchangé) ────────────
+  # ── Profil de demande : qualitatif par type de zone (inchangé) ──────────────
   profil_d_base <- PROFILS_DEMANDE[[type_zone]]
   
   p_ind <- part_industriel[i]
   p_urb <- part_urbain[i]
   
-  # ── Modulation par les usages du sol ──────────────────────────────────────
+  # ── Modulation par les usages du sol ────────────────────────────────────────
   # Côté OFFRE : l'influence du landuse est réduite proportionnellement au poids
   # accordé aux données RPHC5 (POIDS_PROFIL_EMPLOI_RPHC5). En effet, le profil
   # empirique RPHC5 capture déjà la structure sectorielle au niveau du district ;
@@ -6672,7 +6672,7 @@ for (i in 1:n_warehouses) {
                        PROFIL_DEMANDE_LANDUSE_INDUSTRIEL * p_ind +
                        PROFIL_DEMANDE_LANDUSE_URBAIN     * p_urb) / denominateur_d
   
-  # ── Volumes finaux avec tailles composites et sommes de normalisation ──────
+  # ── Volumes finaux avec tailles composites et sommes de normalisation ───────
   # Côté offre : taille_offre (emploi) / somme_tailles_offre
   # Côté demande : taille_demande (population) / somme_tailles_demande
   # La distinction garantit que l'offre et la demande nationales sont
@@ -6743,7 +6743,7 @@ for (s in SECTEURS) {
 }
 cat("\n")
 
-# ── Reconstruction de la matrice coûts en R carrée ──────────────────────────
+# ── Reconstruction de la matrice coûts en R carrée ────────────────────────────
 # On passe de la matrice OD format long (DuckDB, 1 ligne = 1 paire OD)
 # au format matriciel carré (R, n_zones × n_zones) pour le calcul gravitaire.
 matrice_couts     <- matrix(0, n_warehouses, n_warehouses,
@@ -6930,7 +6930,7 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 #   5. Monitoring de la RAM pour détecter les problèmes en amont
 # ==============================================================================
 
-# ── ÉTAPE 0 : Nettoyage agressif de la mémoire avant de commencer ────────────
+# ── ÉTAPE 0 : Nettoyage agressif de la mémoire avant de commencer ─────────────
 # On supprime tous les objets intermédiaires qui ne serviront plus.
 
 cat("── Nettoyage mémoire avant Partie VIII.1 ──────────────────────────────\n")
@@ -6993,7 +6993,7 @@ invisible(gc(full = TRUE))
 invisible(gc(full = TRUE))
 afficher_ram("après nettoyage")
 
-# ── ÉTAPE 1 : Conversion des flux monétaires en tonnes ───────────────────────
+# ── ÉTAPE 1 : Conversion des flux monétaires en tonnes ────────────────────────
 cat("\nConversion des flux en tonnes...\n")
 
 flux_tonnes_total <- matrix(
@@ -7078,7 +7078,7 @@ if (!cache_affectation_valide) {
 
 # ── ÉTAPE 3 : Pré-filtrage des paires OD à traiter ────────────────────────────
 
-# ── Diagnostic du filtre par seuil ───────────────────────────────────────
+# ── Diagnostic du filtre par seuil ────────────────────────────────────────────
 # On calcule le nombre de paires exclues par le seuil SEUIL_FLUX_TONNES
 # pour vérifier que le filtre n'élimine pas trop de flux économiquement
 # significatifs. Une paire exclue = flux trop faible pour être affecté
@@ -7116,7 +7116,7 @@ cat("  Paires OD à traiter :", format(n_paires, big.mark = " "),
     "possibles)\n\n")
 flush.console()
 
-# ── ÉTAPE 4 : Préparation des matrices de résultats ──────────────────────────
+# ── ÉTAPE 4 : Préparation des matrices de résultats ───────────────────────────
 # Tableau 3D (arêtes × véhicules × secteurs) pour conserver l'information sectorielle.
 # Chaque "tranche" du tableau correspond à un secteur économique.
 # Exemple de lecture : volume_trafic_mm_s[500, "camion_moyen", "Agriculture"]
@@ -7278,7 +7278,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
     # de Mines, d'Industrie, etc. y transitent — sans recalculer Dijkstra.
     for (s in SECTEURS) {
       
-      # ── Indice numérique du secteur dans la 3e dimension du tableau ────────
+      # ── Indice numérique du secteur dans la 3e dimension du tableau ─────────
       # Le tableau volume_trafic_mm_s a pour dimensions :
       #   [arête physique, véhicule, secteur]
       # Pour l'indexer efficacement, on a besoin de l'indice ENTIER du secteur
@@ -7296,7 +7296,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
       # pour ne pas alourdir inutilement les calculs
       if (is.na(flux_ij_s) || flux_ij_s < 1) next
       
-      # ── Affectation vectorisée sur un tableau 3D ───────────────────────────
+      # ── Affectation vectorisée sur un tableau 3D ────────────────────────────
       # On veut ajouter flux_ij_s à TOUTES les cellules (a, v, s) où :
       #   - a parcourt les arêtes physiques du chemin (idx_phys_vec)
       #   - v parcourt les véhicules correspondants (col_veh_vec)
@@ -7340,7 +7340,7 @@ for (idx_i in seq_along(origines_a_traiter)) {
 }
 
 
-# ── SAUVEGARDE DU CACHE ────────────────────────────────────────────────────
+# ── SAUVEGARDE DU CACHE ───────────────────────────────────────────────────────
 cat("=== Sauvegarde du cache d'affectation ===\n")
 
 saveRDS(
@@ -7389,7 +7389,7 @@ volume_par_secteur <- apply(volume_trafic_mm_s, c(1, 3), sum)
 volume_par_secteur_df <- as.data.frame(volume_par_secteur)
 colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
 
-# ── Calcul des émissions totales affectées sur le réseau ─────────────────────
+# ── Calcul des émissions totales affectées sur le réseau ──────────────────────
 # On calcule les émissions absolues (CO2, NOx, PM2.5) générées par l'ensemble
 # des flux de fret modélisés, arête par arête.
 #
@@ -7458,7 +7458,7 @@ cat("  CO2   total :", format(round(co2_total_reseau_t),   big.mark = " "), "ton
 cat("  NOx   total :", format(round(nox_total_reseau_kg),  big.mark = " "), "kg\n")
 cat("  PM2.5 total :", format(round(pm25_total_reseau_kg), big.mark = " "), "kg\n\n")
 
-# ── Sanity check : le tonnage affecté doit être cohérent ─────────────────────
+# ── Sanity check : le tonnage affecté doit être cohérent ──────────────────────
 # Note : on somme sur toutes les dimensions de volume_trafic_mm_s (tableau 3D).
 # Le tonnage affecté sera plusieurs fois supérieur au tonnage attendu, car
 # chaque flux OD est compté sur TOUTES les arêtes de son chemin (un flux
@@ -7491,7 +7491,7 @@ cat("  Ratio affecté/attendu :",
 # SUITE : calculs rapides toujours exécutés (qu'on ait un cache ou non)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Statistiques de répartition modale ───────────────────────────────────────
+# ── Statistiques de répartition modale ────────────────────────────────────────
 cat("Répartition modale du trafic (tonnes × km) :\n")
 
 longueurs_km <- reseau_rwanda %>%
@@ -7510,7 +7510,7 @@ for (v in seq_len(n_vehicules)) {
 }
 cat("\n")
 
-# ── Étape 6 : Intégration des volumes au réseau ──────────────────────────────
+# ── Étape 6 : Intégration des volumes au réseau ───────────────────────────────
 reseau_rwanda <- reseau_rwanda %>%
   activate("edges") %>%
   mutate(
@@ -7563,7 +7563,7 @@ reseau_rwanda %>%
 # avaient été supprimés du patch de VIII.1 et qui sont requis en VIII.2.
 # ==============================================================================
 
-# ── Statistiques de trafic sur le réseau ─────────────────────────────────────
+# ── Statistiques de trafic sur le réseau ──────────────────────────────────────
 stats_trafic <- reseau_rwanda %>%
   activate("edges") %>%
   as_tibble() %>%
@@ -7583,7 +7583,7 @@ cat("  Volume max (arête)  :",
 cat("  Volume moyen (actif):",
     format(round(stats_trafic$volume_moyen_t), big.mark = " "), "tonnes\n\n")
 
-# ── Zones les plus actives (origines + destinations cumulées) ────────────────
+# ── Zones les plus actives (origines + destinations cumulées) ─────────────────
 # volumes_par_zone est nécessaire en VIII.2 pour dimensionner les points
 # des zones sur les cartes (taille_point ∝ log10(offre + demande)).
 cat("Activité fret par zone (origines + destinations):\n")
@@ -7600,7 +7600,7 @@ volumes_par_zone <- tibble(
 print(head(volumes_par_zone, 15))
 cat("\n")
 
-# ── Diagnostic de connectivité (optionnel mais utile pour debug) ─────────────
+# ── Diagnostic de connectivité (optionnel mais utile pour debug) ──────────────
 # Ce diagnostic reconstruit brièvement graphe_igraph pour vérifier la 
 # connectivité des entrepôts. 
 
@@ -8526,7 +8526,7 @@ if (length(OSM_IDS_PERTURBES_MANUEL) > 0) {
       "osm_id fournis\n")
 }
 
-# ── Mode B : buffer géographique ─────────────────────────────────────────────
+# ── Mode B : buffer géographique ──────────────────────────────────────────────
 if (UTILISER_MODE_BUFFER) {
   
   # Création du point central de la perturbation en WGS84 (GPS)
@@ -8585,7 +8585,7 @@ if (UTILISER_MODE_BUFFER) {
       length(ids_mode_b), "arêtes inondées\n")
 }
 
-# ── Mode C : raster de risque ─────────────────────────────────────────────────.
+# ── Mode C : raster de risque ─────────────────────────────────────────────────
 if (UTILISER_MODE_RASTER) {
   
   if (!file.exists(CHEMIN_RASTER_RISQUE)) {
@@ -8682,7 +8682,7 @@ if (UTILISER_MODE_RASTER) {
   }
 }
 
-# ── Bilan : arêtes effectivement perturbées ────────────────────────────────────
+# ── Bilan : arêtes effectivement perturbées ───────────────────────────────────
 # On traduit maintenant les osm_id en indices d'arêtes dans le graphe igraph.
 # Ce sont ces indices qui seront utilisés pour supprimer les arêtes.
 aretes_reseau_sf <- reseau_rwanda %>%
@@ -8828,7 +8828,7 @@ for (i in seq_along(warehouse_nodes_base)) {
     cols_j      <- j + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
     min_cout_deg <- min(dists_deg[, cols_j], na.rm = TRUE)
     
-    # ── Reconstruction du chemin dégradé pour mesurer la distance réelle ─────
+    # ── Reconstruction du chemin dégradé pour mesurer la distance réelle ──────
     distance_km_degrade <- NA_real_
     
     if (!is.infinite(min_cout_deg)) {
@@ -9518,7 +9518,7 @@ ggsave(
 )
 cat("  ✓ Graphique sauvegardé\n\n")
 
-# ── EXPORTS CSV et Parquet ─────────────────────────────────────────────────────
+# ── EXPORTS CSV et Parquet ────────────────────────────────────────────────────
 # Export de la table de comparaison OD (avant / après)
 dbExecute(con, paste0(
   "COPY (SELECT * FROM ", nom_table_impact, ") TO '",
@@ -9535,7 +9535,7 @@ dbExecute(con, paste0(
 
 cat("✓ Exports CSV terminés\n\n")
 
-# ── RAPPORT FINAL DE LA PARTIE IX ────────────────────────────────────────────
+# ── RAPPORT FINAL DE LA PARTIE IX ─────────────────────────────────────────────
 
 cat("==========================================================\n")
 cat("  RAPPORT — ANALYSE DE VULNÉRABILITÉ\n")
@@ -9602,7 +9602,7 @@ cat("  • criticite_aretes_",       NOM_SCENARIO, ".csv\n", sep = "")
 #             https://documents1.worldbank.org/curated/en/410441468142479058/
 #             pdf/WPS6047.pdf
 #
-# ── PRINCIPE DU MODÈLE ARIO ──────────────────────────────────────────────────
+# ── PRINCIPE DU MODÈLE ARIO ───────────────────────────────────────────────────
 # Le modèle ARIO étend la table Input-Output classique avec trois mécanismes
 # qui captent les rigidités économiques de court terme et permettent ainsi
 # d'aller plus loin que la simple analyse statique de Leontief :
@@ -9628,7 +9628,7 @@ cat("  • criticite_aretes_",       NOM_SCENARIO, ".csv\n", sep = "")
 #      exceptionnelles) jusqu'à un plafond α_max = 1.25 (+25% au-dessus
 #      de la normale). C'est ce qui modélise la "résilience" de l'économie.
 #
-# ── INTERPRÉTATION DU CHOC DE TRANSPORT ──────────────────────────────────────
+# ── INTERPRÉTATION DU CHOC DE TRANSPORT ───────────────────────────────────────
 # Une rupture de route ne détruit pas de capital productif comme un ouragan,
 # mais elle a deux effets équivalents (CHOC COMBINÉ, fidèle à Hallegatte) :
 #
@@ -9643,7 +9643,7 @@ cat("  • criticite_aretes_",       NOM_SCENARIO, ".csv\n", sep = "")
 #      de marchandises qui n'arrive jamais à destination. On l'impute comme
 #      une déduction directe sur les stocks de l'industrie destinataire.
 #
-# ── GRANULARITÉ SPATIALE ─────────────────────────────────────────────────────
+# ── GRANULARITÉ SPATIALE ──────────────────────────────────────────────────────
 # Le modèle est agrégé au niveau des PROVINCES (5 au Rwanda) plutôt qu'au
 # niveau des zones d'entrepôt. Choix motivé par :
 #   - cohérence avec les statistiques officielles (NISR diffuse par province) ;
@@ -9655,7 +9655,7 @@ cat("  • criticite_aretes_",       NOM_SCENARIO, ".csv\n", sep = "")
 # Les flux gravitaires zone × zone sont agrégés en flux province × province
 # via une matrice d'agrégation M.
 #
-# ── DÉPENDANCES ──────────────────────────────────────────────────────────────
+# ── DÉPENDANCES ───────────────────────────────────────────────────────────────
 #   Partie II.3  → rwanda_provinces, rwanda_boundary (polygones administratifs)
 #   Partie IV.3  → noeuds_entreposage, entreposages_sf (positions des zones)
 #   Partie VII.1 → A (matrice IO nationale), production_totale, demande_finale
@@ -9825,7 +9825,7 @@ cat("  Matrice d'agrégation construite (", n_provinces, "×", n_warehouses, ")\
 
 cat("── X.2 : Construction de l'état initial ──────────────────────────────\n\n")
 
-# ── Index des industries ─────────────────────────────────────────────────────
+# ── Index des industries ──────────────────────────────────────────────────────
 # expand.grid() : toutes les combinaisons province × secteur.
 # Avec n_provinces = 5 et N_SECTEURS = 8, on obtient p = 40 industries.
 industries_idx <- expand.grid(
@@ -9857,7 +9857,7 @@ for (k in seq_len(p)) {
 }
 
 
-# ── Agrégation des matrices offre/demande zone → province ────────────────────
+# ── Agrégation des matrices offre/demande zone → province ─────────────────────
 # offre_zones est une matrice n_warehouses × N_SECTEURS (M USD/an).
 # On agrège vers le niveau province : offre_prov[P, s] = somme des zones de P.
 # La multiplication matricielle M_agg %*% offre_zones réalise cette agrégation.
@@ -9870,7 +9870,7 @@ cat("  Demande nationale agrégée :",
     round(sum(demande_prov), 1), "M USD/an\n")
 
 
-# ── Vecteur de production initiale x_0 (M USD/jour) ──────────────────────────
+# ── Vecteur de production initiale x_0 (M USD/jour) ───────────────────────────
 # Pour chaque industrie f = (P, s), la production initiale est l'offre de
 # la province P dans le secteur s, divisée par 365 pour passer en flux journalier.
 # ARIO travaille en flux journaliers (δt = 1 jour).
@@ -9886,7 +9886,7 @@ cat("  Production initiale totale:",
     round(sum(x_0) * 365, 1), "M USD/an\n")
 
 
-# ── Agrégation des flux gravitaires zone × zone → province × province ────────
+# ── Agrégation des flux gravitaires zone × zone → province × province ─────────
 # Pour chaque secteur s, flux_gravitaire[[s]] est une matrice n × n des flux
 # annuels en M USD entre paires de zones. On les agrège au niveau provincial
 # via la formule : flux_prov = M %*% flux %*% t(M).
@@ -9912,7 +9912,7 @@ cat("  Flux total inter-provinces :",
     round(sum(flux_prov_total), 1), "M USD/an\n")
 
 
-# ── Matrice des flux interindustriels Z (M USD/jour) ─────────────────────────
+# ── Matrice des flux interindustriels Z (M USD/jour) ──────────────────────────
 # Z[f, f'] = montant que l'industrie f' achète à l'industrie f.
 # 
 # Construction : pour chaque flux gravitaire de s entre P et Q, on répartit
@@ -9950,7 +9950,7 @@ cat("  Matrice Z construite (", sum(Z > 0), "cellules non-nulles sur",
     p^2, ")\n")
 
 
-# ── Matrice des coefficients techniques A_full (p × p) ───────────────────────
+# ── Matrice des coefficients techniques A_full (p × p) ────────────────────────
 # A_full[f, f'] = Z[f, f'] / x_0[f'] = quantité produite par f nécessaire
 # pour produire 1 unité par f'.
 # Si x_0[f'] = 0, l'industrie f' est inactive et on met le coefficient à 0.
@@ -9976,7 +9976,7 @@ cat("  Demande finale totale Y    :",
     round(sum(Y) / sum(x_0) * 100, 1), "% de la production)\n")
 
 
-# ── Matrice de coefficients techniques agrégés par secteur fournisseur ───────
+# ── Matrice de coefficients techniques agrégés par secteur fournisseur ────────
 # A_sectoriel[s, f] = somme des A[s_input, f] pour s_input = s.
 # Comme A est indexée par secteur (pas par couple région × secteur), et que
 # tous les couples industriels ont la même structure technique sectorielle :
@@ -9991,7 +9991,7 @@ for (f in seq_len(p)) {
 }
 
 
-# ── Matrice d'inventaires initiaux S_0 (N_SECTEURS × p) ──────────────────────
+# ── Matrice d'inventaires initiaux S_0 (N_SECTEURS × p) ───────────────────────
 # S_0[s_input, f] = stock du bien produit par s_input détenu par l'industrie f
 #                 = n_j × A_sectoriel[s_input, f] × x_0[f]
 # Interprétation : f détient n_j[s_input] jours de stock de produits du
@@ -10055,7 +10055,7 @@ od_lookup <- od_compare %>%
     )
   )
 
-# ── Matrice fraction perdue par paire de zones (n × n) ───────────────────────
+# ── Matrice fraction perdue par paire de zones (n × n) ────────────────────────
 # fraction_perdue_zone[i, j] = fraction du flux entre zone i et zone j perdue
 # pendant la perturbation. Sert ensuite à agréger au niveau provincial.
 fraction_perdue_zone <- matrix(0, nrow = n_warehouses, ncol = n_warehouses)
@@ -10066,7 +10066,7 @@ for (k in seq_len(nrow(od_lookup))) {
 }
 
 
-# ── (A) Calcul du choc de capacité Δ_P par province ──────────────────────────
+# ── (A) Calcul du choc de capacité Δ_P par province ───────────────────────────
 # Pour chaque province Q, on calcule Δ_Q comme la moyenne des fractions
 # perdues sur ses flux entrants, pondérée par le volume des flux.
 #
@@ -10118,7 +10118,7 @@ print(round(Delta_P * 100, 2))
 cat("\n")
 
 
-# ── (B) Calcul du choc d'inventaire ──────────────────────────────────────────
+# ── (B) Calcul du choc d'inventaire ───────────────────────────────────────────
 # Pour chaque flux gravitaire de s entre P et Q :
 #   volume_bloque_PQs = flux_prov_par_secteur[s][P, Q] × (DUREE_JOURS / 365)
 #                       × fraction_perdue_moyenne_PQ
@@ -10211,7 +10211,7 @@ cat("  Part des inventaires détruits  :",
 
 cat("── X.4 : Simulation dynamique ARIO ──────────────────────────────────\n\n")
 
-# ── État initial des variables dynamiques ────────────────────────────────────
+# ── État initial des variables dynamiques ─────────────────────────────────────
 x_t     <- x_0                     # Production actuelle (init = équilibre)
 alpha_t <- rep(ARIO_ALPHA_BASE, p) # Surproduction (init = 1.0)
 Delta_t <- Delta_f                  # Choc capacité (init = valeur calculée en X.3)
@@ -10219,7 +10219,7 @@ S_t     <- S_choque                 # Inventaires (init = après choc inv.)
 O_t     <- Z                        # Commandes (init = flux interindustriels)
 
 
-# ── Allocation des matrices de trajectoire ───────────────────────────────────
+# ── Allocation des matrices de trajectoire ────────────────────────────────────
 # On stocke les trajectoires agrégées par secteur ET par province pour les
 # visualisations, plus la matrice complète des productions pour les exports.
 production_par_jour_secteur  <- matrix(0, nrow = ARIO_HORIZON_JOURS, ncol = N_SECTEURS,
@@ -10256,18 +10256,18 @@ eps <- 1e-12
 
 for (t in seq_len(ARIO_HORIZON_JOURS)) {
   
-  # ── Étape 1 : Capacité de production ──────────────────────────────────────
+  # ── Étape 1 : Capacité de production ────────────────────────────────────────
   x_cap <- alpha_t * (1 - Delta_t) * x_0
   
-  # ── Étape 2 : Demande totale dirigée vers chaque industrie ────────────────
+  # ── Étape 2 : Demande totale dirigée vers chaque industrie ──────────────────
   # D[f] = Σ_f' O[f, f'] + Y[f]
   # rowSums() : pour chaque f, somme sur tous les clients f'
   D_t <- rowSums(O_t) + Y
   
-  # ── Étape 3 : Production optimale (sans contrainte inventaire) ────────────
+  # ── Étape 3 : Production optimale (sans contrainte inventaire) ──────────────
   x_opt <- pmin(D_t, x_cap)
   
-  # ── Étape 4 : Contraintes d'inventaire (Eq. 9-10 de Hallegatte 2014) ──────
+  # ── Étape 4 : Contraintes d'inventaire (Eq. 9-10 de Hallegatte 2014) ────────
   # S_required[s, f] = n_j[s] × A_sectoriel[s, f] × x_opt[f]
   # Quand le stock S[s, f] < ψ × S_required[s, f], la production est limitée :
   #   x_a[f] = x_opt[f] × min_s(S[s, f] / (ψ × S_required[s, f]))
@@ -10283,7 +10283,7 @@ for (t in seq_len(ARIO_HORIZON_JOURS)) {
   facteur_inv <- apply(ratio_inv, 2, min)
   x_a <- x_opt * facteur_inv
   
-  # ── Étape 5 : Distribution proportionnelle (rationing) ────────────────────
+  # ── Étape 5 : Distribution proportionnelle (rationing) ──────────────────────
   # Si la production effective ne suffit pas à satisfaire toute la demande,
   # chaque client reçoit une fraction proportionnelle x_a/D de sa commande.
   ratio_rationing <- ifelse(D_t > 0, x_a / D_t, 1)
@@ -10297,7 +10297,7 @@ for (t in seq_len(ARIO_HORIZON_JOURS)) {
   Y_received <- Y * ratio_rationing
   Y_loss     <- Y - Y_received
   
-  # ── Étape 6 : Mise à jour des inventaires ─────────────────────────────────
+  # ── Étape 6 : Mise à jour des inventaires ───────────────────────────────────
   # S(t+1) = S(t) + livraisons_reçues - inputs_consommés
   # Livraisons par secteur fournisseur (agrégation des colonnes de O_received)
   livraisons <- matrix(0, nrow = N_SECTEURS, ncol = p,
@@ -10313,7 +10313,7 @@ for (t in seq_len(ARIO_HORIZON_JOURS)) {
   
   S_t <- pmax(0, S_t + livraisons - consommation)
   
-  # ── Étape 7 : Mise à jour des commandes O(t+1) ────────────────────────────
+  # ── Étape 7 : Mise à jour des commandes O(t+1) ──────────────────────────────
   # Cible d'inventaire : n_j × A_sect × x_opt (Hallegatte Eq. 3)
   S_target <- n_j_matrix * A_sectoriel *
     matrix(x_opt, nrow = N_SECTEURS, ncol = p, byrow = TRUE)
@@ -10351,7 +10351,7 @@ for (t in seq_len(ARIO_HORIZON_JOURS)) {
     O_t[idx_prod_s, ] <- sweep(parts_block, 2, O_total_sect[s, ], FUN = "*")
   }
   
-  # ── Étape 8 : Mise à jour de α (surproduction, Eq. 12 de Hallegatte) ──────
+  # ── Étape 8 : Mise à jour de α (surproduction, Eq. 12 de Hallegatte) ────────
   # Indicateur de rareté : ζ = (D - x_a) / D
   zeta_t <- ifelse(D_t > 0, pmax(0, (D_t - x_a) / D_t), 0)
   
@@ -10363,14 +10363,14 @@ for (t in seq_len(ARIO_HORIZON_JOURS)) {
     alpha_t + (ARIO_ALPHA_BASE - alpha_t)          * (ARIO_DT / ARIO_TAU_ALPHA)
   )
   
-  # ── Étape 9 : Récupération exponentielle de Δ ─────────────────────────────
+  # ── Étape 9 : Récupération exponentielle de Δ ───────────────────────────────
   # Pendant la perturbation (t ≤ DUREE_JOURS) : Δ constant.
   # Après : décroissance exponentielle vers 0 avec τ_recup.
   if (t > DUREE_JOURS) {
     Delta_t <- Delta_f * exp(-(t - DUREE_JOURS) / ARIO_TAU_RECUP)
   }
   
-  # ── Enregistrement de la trajectoire ──────────────────────────────────────
+  # ── Enregistrement de la trajectoire ────────────────────────────────────────
   for (s in seq_len(N_SECTEURS)) {
     production_par_jour_secteur[t, s] <- sum(x_a[idx_par_secteur[[s]]])
     demande_non_satisfaite[t, s]      <- sum(Y_loss[idx_par_secteur[[s]]])
@@ -10393,7 +10393,7 @@ cat("✓ Simulation terminée\n\n")
 
 cat("── X.5 : Calcul des pertes indirectes ────────────────────────────────\n\n")
 
-# ── Production de référence (équilibre constant sur l'horizon) ───────────────
+# ── Production de référence (équilibre constant sur l'horizon) ────────────────
 # Au jour t = 0, chaque industrie produit x_0[f]. Sur l'horizon complet,
 # la production cumulée de référence est ARIO_HORIZON_JOURS × x_0.
 prod_ref_secteur <- numeric(N_SECTEURS)
@@ -10415,7 +10415,7 @@ prod_ref_province_tot <- prod_ref_province * ARIO_HORIZON_JOURS
 prod_eff_secteur_tot  <- colSums(production_par_jour_secteur)
 prod_eff_province_tot <- colSums(production_par_jour_province)
 
-# ── Pertes indirectes par secteur ────────────────────────────────────────────
+# ── Pertes indirectes par secteur ─────────────────────────────────────────────
 pertes_secteur <- prod_ref_secteur_tot - prod_eff_secteur_tot
 pertes_pct_secteur <- ifelse(prod_ref_secteur_tot > 0,
                              pertes_secteur / prod_ref_secteur_tot * 100, 0)
@@ -10433,7 +10433,7 @@ cat("Pertes indirectes par secteur :\n")
 print(tableau_pertes_secteur)
 cat("\n")
 
-# ── Pertes indirectes par province ───────────────────────────────────────────
+# ── Pertes indirectes par province ────────────────────────────────────────────
 pertes_province <- prod_ref_province_tot - prod_eff_province_tot
 pertes_pct_province <- ifelse(prod_ref_province_tot > 0,
                               pertes_province / prod_ref_province_tot * 100, 0)
@@ -10452,7 +10452,7 @@ cat("Pertes indirectes par province :\n")
 print(tableau_pertes_province)
 cat("\n")
 
-# ── Synthèse globale ─────────────────────────────────────────────────────────
+# ── Synthèse globale ──────────────────────────────────────────────────────────
 perte_indirecte_totale <- sum(pertes_secteur)
 demande_perdue_totale  <- sum(demande_non_satisfaite)
 surcouts_directs_usd   <- sum(od_compare$surcout_absolu_usd, na.rm = TRUE)
@@ -10492,7 +10492,7 @@ cat("\n")
 
 cat("── X.6 : Visualisations et exports ──────────────────────────────────\n\n")
 
-# ── Graphique 1 : trajectoire de la production par secteur ───────────────────
+# ── Graphique 1 : trajectoire de la production par secteur ────────────────────
 # Production journalière agrégée par secteur, en écart % par rapport à
 # l'équilibre pré-choc. Une ligne verticale rouge marque la fin de la
 # perturbation (rétablissement des routes).
@@ -10541,7 +10541,7 @@ ggsave(
 cat("  ✓ ario_trajectoire_secteurs_", NOM_SCENARIO, ".png\n", sep = "")
 
 
-# ── Graphique 2 : trajectoire de la production par province ──────────────────
+# ── Graphique 2 : trajectoire de la production par province ───────────────────
 traj_provinces <- production_par_jour_province %>%
   as.data.frame() %>%
   mutate(jour = seq_len(ARIO_HORIZON_JOURS)) %>%
@@ -10582,7 +10582,7 @@ ggsave(
 cat("  ✓ ario_trajectoire_provinces_", NOM_SCENARIO, ".png\n", sep = "")
 
 
-# ── Graphique 3 : pertes indirectes par secteur (barres) ─────────────────────
+# ── Graphique 3 : pertes indirectes par secteur (barres) ──────────────────────
 g_pertes_secteurs <- tableau_pertes_secteur %>%
   ggplot(aes(x = reorder(Secteur, Perte_indirecte_musd),
              y = Perte_indirecte_musd,
@@ -10610,7 +10610,7 @@ ggsave(
 cat("  ✓ ario_pertes_secteurs_", NOM_SCENARIO, ".png\n", sep = "")
 
 
-# ── Carte : pertes indirectes par province (choropleth) ──────────────────────
+# ── Carte : pertes indirectes par province (choropleth) ───────────────────────
 # Avec seulement 5 provinces, une carte choroplèthe (polygones colorés par
 # valeur) est bien plus lisible qu'une carte par points.
 provinces_pertes_sf <- provinces_ario %>%
@@ -10665,7 +10665,7 @@ tmap_save(
 cat("  ✓ carte_ario_pertes_provinces_", NOM_SCENARIO, ".png\n", sep = "")
 
 
-# ── Heatmap : flux interindustriels inter-provinces (matrice Z agrégée) ──────
+# ── Heatmap : flux interindustriels inter-provinces (matrice Z agrégée) ───────
 # Avec 40 industries, on peut visualiser la matrice complète sous forme
 # de heatmap. C'est utile pour comprendre la structure des dépendances.
 Z_df <- Z %>%
@@ -10711,7 +10711,7 @@ ggsave(
 cat("  ✓ ario_heatmap_matrice_Z.png\n")
 
 
-# ── Exports CSV via DuckDB ───────────────────────────────────────────────────
+# ── Exports CSV via DuckDB ────────────────────────────────────────────────────
 duck_write(tableau_pertes_secteur,
            paste0("ario_pertes_secteurs_", NOM_SCENARIO))
 duck_write(tableau_pertes_province,
@@ -10787,10 +10787,6 @@ cat("    des inventaires (plus de stocks = moins de pertes indirectes).\n")
 cat("  → Faire varier ARIO_HORIZON_JOURS pour tester un horizon plus long\n")
 cat("    et observer la phase complète de rétablissement.\n")
 cat("==========================================================\n")
-
-################################################################################
-# FIN DE LA PARTIE X
-################################################################################
 
 cat("Script terminé le:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("===============================================================\n")
