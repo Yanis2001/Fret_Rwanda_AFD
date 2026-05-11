@@ -559,6 +559,79 @@ N_TOP_ARETES_CRITIQUES <- 50
 # marginales qui ne changent pas le classement de criticité.
 SEUIL_PAIRES_CRITICITE <- 100   # tonnes 
 
+# ==============================================================================
+# Paramètres du modèle ARIO-inventory
+# ==============================================================================
+
+# ── Paramètres de surproduction ──────────────────────────────────────────────
+# α_base : surproduction initiale à l'équilibre (1.0 = pas de surproduction).
+# α_max  : plafond de surproduction. Hallegatte 2014 utilise 1.25 (+25%).
+# τ_α    : temps caractéristique d'ajustement de α (en jours).
+#   1 an = 365 jours dans Hallegatte 2014. C'est lent volontairement : la mise
+#   en place de capacités supplémentaires (heures sup, recrutement, imports)
+#   prend du temps dans la réalité.
+ARIO_ALPHA_BASE  <- 1.00
+ARIO_ALPHA_MAX   <- 1.25
+ARIO_TAU_ALPHA   <- 365
+
+# ── Niveaux d'inventaire cibles (en jours de consommation) ────────────────────
+# Hallegatte 2014 : 90 jours pour les biens stockables.
+# Pour les biens non-stockables (transport notamment), max 3 jours (sinon
+# instabilités numériques avec δt = 1 jour).
+# La Construction est traitée comme "quasi-infinie" (365 jours) car le
+# rationnement de ce secteur n'affecte pas immédiatement la production
+# des autres secteurs.
+ARIO_INV_DUREE_JOURS <- c(
+  Agriculture    = 30,    # Périssables : stocks limités (céréales, etc.)
+  Mines          = 90,    # Minerais : stockables longtemps
+  Agro_industrie = 60,    # Produits transformés : stocks intermédiaires
+  Industrie      = 90,    # Pièces, matériaux : stocks classiques
+  Construction   = 365,   # ≈ infini (rationnement sans impact immédiat)
+  Commerce       = 60,    # Biens de consommation : rotation moyenne
+  Transport      = 3,     # Service non stockable
+  Services       = 30     # Stocks de fournitures uniquement
+)
+
+# τ_s : temps caractéristique de restauration des inventaires (en jours).
+# C'est la vitesse à laquelle les industries passent leurs commandes pour
+# combler le déficit d'inventaire.
+ARIO_TAU_S <- c(
+  Agriculture    = 30,
+  Mines          = 30,
+  Agro_industrie = 30,
+  Industrie      = 30,
+  Construction   = 30,
+  Commerce       = 30,
+  Transport      = 1,     # Non-stockable
+  Services       = 30
+)
+
+# ── Paramètre d'hétérogénéité ψ ───────────────────────────────────────────────
+# ψ ∈ [0, 1] : sensibilité de la production aux ruptures d'inventaire.
+#   ψ = 0   : biens parfaitement substituables au sein d'un secteur
+#             → la production tient tant que le stock total > 0
+#   ψ = 0.8 : valeur recommandée par Hallegatte 2014 (cas central)
+#             → une baisse de stock de 20% commence à pénaliser la production
+#   ψ = 1.0 : biens totalement spécialisés (production très fragile)
+# Plus ψ est élevé, plus les pertes indirectes sont importantes.
+# C'est le paramètre le plus sensible du modèle (cf. analyses Hallegatte).
+ARIO_PSI <- 0.80
+
+# ── Horizon de simulation et pas de temps ─────────────────────────────────────
+# La perturbation dure DUREE_JOURS (paramètre Partie IX). On simule au-delà
+# pour observer la phase de rétablissement (surproduction, reconstitution
+# des stocks). Horizon par défaut : 2 × DUREE_JOURS, plafonné à 365 jours.
+# Modifier ARIO_HORIZON_JOURS ci-dessous pour personnaliser.
+ARIO_HORIZON_JOURS <- min(2 * DUREE_JOURS, 365)
+ARIO_DT            <- 1   # Pas de temps en jours (Hallegatte 2014)
+
+# ── Récupération exponentielle du choc de capacité Δ ──────────────────────────
+# Une fois la perturbation passée (t > DUREE_JOURS), Δ_P décroît
+# exponentiellement vers 0 avec un temps caractéristique τ_recup :
+#   Δ_P(t) = Δ_P(t_0) × exp(-(t - DUREE_JOURS) / τ_recup)
+# τ_recup = DUREE_JOURS/2 → récupération rapide une fois les routes rouvertes.
+ARIO_TAU_RECUP <- DUREE_JOURS / 2
+
 cat("✓ Paramètres globaux chargés\n\n")
 
 # ==============================================================================
@@ -9597,7 +9670,7 @@ cat("==========================================================\n\n")
 
 
 # ==============================================================================
-# X.0 : Préparation des provinces et agrégation des zones
+# X.1 : Préparation des provinces et agrégation des zones
 #
 # On veut une couche provinciale fiable, avec au moins 4-5 polygones nommés.
 # Trois sources possibles :
@@ -9606,7 +9679,7 @@ cat("==========================================================\n\n")
 #   3. Fallback : rwanda_national en une seule "province" (cas dégradé)
 # ==============================================================================
 
-cat("── X.0 : Préparation des provinces ──────────────────────────────────\n\n")
+cat("── X.1 : Préparation des provinces ──────────────────────────────────\n\n")
 
 # ── Sélection de la source des provinces ──────────────────────────────────────
 # On considère la couche OSM utilisable si elle contient au moins 4 polygones
@@ -9718,13 +9791,13 @@ print(zones_par_province)
 cat("\n")
 
 
-# ── Matrice d'agrégation M (n_provinces × n_warehouses) ──────────────────────
-# M[P, i] = 1 si la zone i appartient à la province P, 0 sinon.
+# ── Matrice d'agrégation M (n_provinces × n_warehouses) ───────────────────────
+# M[P, i] = 1 si l'entrepôt i appartient à la province P, 0 sinon.
 # Cette matrice est très pratique pour agréger n'importe quelle matrice
-# zone × zone en matrice province × province via :
-#   matrice_prov = M %*% matrice_zone %*% t(M)
-# Elle agrège aussi les vecteurs zone via :
-#   vecteur_prov = M %*% vecteur_zone
+# entrepôt × entrepôt en matrice province × province via :
+#   matrice_prov = M %*% matrice_warehouses %*% t(M)
+# Elle agrège aussi les vecteurs warehouses via :
+#   vecteur_prov = M %*% vecteur_warehouses
 M_agg <- matrix(0, nrow = n_provinces, ncol = n_warehouses,
                 dimnames = list(noms_provinces, NULL))
 for (i in seq_len(n_warehouses)) {
@@ -9732,95 +9805,6 @@ for (i in seq_len(n_warehouses)) {
 }
 
 cat("  Matrice d'agrégation construite (", n_provinces, "×", n_warehouses, ")\n\n")
-
-
-# ==============================================================================
-# X.1 : Paramètres du modèle ARIO-inventory
-#
-# Tous les paramètres calibrables sont rassemblés ici pour faciliter les
-# analyses de sensibilité. Les valeurs par défaut suivent Hallegatte (2014).
-# ==============================================================================
-
-cat("── X.1 : Paramètres ARIO-inventory ──────────────────────────────────\n\n")
-
-# ── Paramètres de surproduction ──────────────────────────────────────────────
-# α_base : surproduction initiale à l'équilibre (1.0 = pas de surproduction).
-# α_max  : plafond de surproduction. Hallegatte 2014 utilise 1.25 (+25%).
-#   Le secteur Construction a souvent une marge plus élevée en aftermath de
-#   catastrophe, mais 1.25 est le consensus en littérature.
-# τ_α    : temps caractéristique d'ajustement de α (en jours).
-#   1 an = 365 jours dans Hallegatte 2014. C'est lent volontairement : la mise
-#   en place de capacités supplémentaires (heures sup, recrutement, imports)
-#   prend du temps dans la réalité.
-ARIO_ALPHA_BASE  <- 1.00
-ARIO_ALPHA_MAX   <- 1.25
-ARIO_TAU_ALPHA   <- 365
-
-# ── Niveaux d'inventaire cibles (en jours de consommation) ────────────────────
-# Hallegatte 2014 : 90 jours pour les biens stockables.
-# Pour les biens non-stockables (transport notamment), max 3 jours (sinon
-# instabilités numériques avec δt = 1 jour).
-# La Construction est traitée comme "quasi-infinie" (365 jours) car le
-# rationnement de ce secteur n'affecte pas immédiatement la production
-# des autres secteurs.
-ARIO_INV_DUREE_JOURS <- c(
-  Agriculture    = 30,    # Périssables : stocks limités (céréales, etc.)
-  Mines          = 90,    # Minerais : stockables longtemps
-  Agro_industrie = 60,    # Produits transformés : stocks intermédiaires
-  Industrie      = 90,    # Pièces, matériaux : stocks classiques
-  Construction   = 365,   # ≈ infini (rationnement sans impact immédiat)
-  Commerce       = 60,    # Biens de consommation : rotation moyenne
-  Transport      = 3,     # Service non stockable
-  Services       = 30     # Stocks de fournitures uniquement
-)
-
-# τ_s : temps caractéristique de restauration des inventaires (en jours).
-# C'est la vitesse à laquelle les industries passent leurs commandes pour
-# combler le déficit d'inventaire.
-ARIO_TAU_S <- c(
-  Agriculture    = 30,
-  Mines          = 30,
-  Agro_industrie = 30,
-  Industrie      = 30,
-  Construction   = 30,
-  Commerce       = 30,
-  Transport      = 1,     # Non-stockable
-  Services       = 30
-)
-
-# ── Paramètre d'hétérogénéité ψ ──────────────────────────────────────────────
-# ψ ∈ [0, 1] : sensibilité de la production aux ruptures d'inventaire.
-#   ψ = 0   : biens parfaitement substituables au sein d'un secteur
-#             → la production tient tant que le stock total > 0
-#   ψ = 0.8 : valeur recommandée par Hallegatte 2014 (cas central)
-#             → une baisse de stock de 20% commence à pénaliser la production
-#   ψ = 1.0 : biens totalement spécialisés (production très fragile)
-# Plus ψ est élevé, plus les pertes indirectes sont importantes.
-# C'est le paramètre le plus sensible du modèle (cf. analyses Hallegatte).
-ARIO_PSI <- 0.80
-
-# ── Horizon de simulation et pas de temps ────────────────────────────────────
-# La perturbation dure DUREE_JOURS (paramètre Partie IX). On simule au-delà
-# pour observer la phase de rétablissement (surproduction, reconstitution
-# des stocks). Horizon par défaut : 2 × DUREE_JOURS, plafonné à 365 jours.
-# Modifier ARIO_HORIZON_JOURS ci-dessous pour personnaliser.
-ARIO_HORIZON_JOURS <- min(2 * DUREE_JOURS, 365)
-ARIO_DT            <- 1   # Pas de temps en jours (Hallegatte 2014)
-
-# ── Récupération exponentielle du choc capacité Δ ────────────────────────────
-# Une fois la perturbation passée (t > DUREE_JOURS), Δ_P décroît
-# exponentiellement vers 0 avec un temps caractéristique τ_recup :
-#   Δ_P(t) = Δ_P(t_0) × exp(-(t - DUREE_JOURS) / τ_recup)
-# τ_recup = DUREE_JOURS/2 → récupération rapide une fois les routes rouvertes.
-ARIO_TAU_RECUP <- DUREE_JOURS / 2
-
-cat("Paramètres ARIO-inventory chargés :\n")
-cat("  ψ (hétérogénéité)        :", ARIO_PSI, "\n")
-cat("  α_max (surproduction)     :", ARIO_ALPHA_MAX, "\n")
-cat("  τ_α (jours)                :", ARIO_TAU_ALPHA, "\n")
-cat("  Horizon simulation (jours):", ARIO_HORIZON_JOURS, "\n")
-cat("  τ_récupération (jours)     :", ARIO_TAU_RECUP, "\n\n")
-
 
 # ==============================================================================
 # X.2 : Construction de l'état initial (équilibre pré-perturbation)
