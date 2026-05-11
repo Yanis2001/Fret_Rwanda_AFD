@@ -8895,7 +8895,10 @@ for (i in seq_along(warehouse_nodes_base)) {
       nom_destination = noeuds_entreposage$warehouse_name[j],
       cout_degrade    = min_cout_deg,   # Inf si plus de chemin possible
       distance_km_degrade = distance_km_degrade,      
-      connecte        = !is.infinite(min_cout_deg)  # FALSE = zones déconnectées
+      connecte        = !is.infinite(min_cout_deg),  # FALSE = zones déconnectées
+      co2_kg_degrade      = co2_kg_degrade,   # Émissions CO2 sur le chemin de contournement
+      nox_g_degrade       = nox_g_degrade,    # Émissions NOx sur le chemin de contournement
+      pm25_g_degrade      = pm25_g_degrade    # Émissions PM2.5 sur le chemin de contournement
     )
   }
   
