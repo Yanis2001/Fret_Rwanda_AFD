@@ -198,9 +198,6 @@ DISTANCE_DEDUP_VILLES_M     <- 3000
 DISTANCE_DEDUP_INDUSTRIEL_M <- 2000
 DISTANCE_DEDUP_RETAIL_M     <- 1000
 
-# Taille économique affectée par défaut aux entrepôts OSM (non manuels)
-taille_default <- 0.10
-
 # Buffer autour de la frontière nationale pour inclure les villes frontalières (m)
 BUFFER_FRONTIERE_VILLES_M <- 5000
 
@@ -3655,21 +3652,49 @@ tmap_save(
 )
 cat("  ✓ carte_population_zones.png\n")
 
+# ── Identification de la zone de référence (max population = future réf. demande) ──
+zone_ref_pop_approx <- diag_population %>%
+  arrange(desc(population_zone)) %>%
+  slice(1) %>%
+  pull(nom_zone)
+
+# Etiquette courte pour l'annotation (même troncature que Zone_court dans le plot)
+zone_ref_pop_label <- str_trunc(str_remove(zone_ref_pop_approx, " - .*"), 25)
+
 # ── Graphique : population par zone et par type ───────────────────────────────
 g_pop <- diag_population %>%
   arrange(desc(population_zone)) %>%
   mutate(
     Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 25),
     Zone_court = make.unique(Zone_court, sep = " #"),   # rend les labels uniques
-    Zone_court = factor(Zone_court, levels = rev(Zone_court))
+    Zone_court = factor(Zone_court, levels = rev(Zone_court)),
+    est_reference   = (nom_zone == zone_ref_pop_approx)
   ) %>%
   ggplot(aes(x = Zone_court, y = population_zone / 1000,
              fill = type_zone, alpha = source)) +
   geom_col(width = 0.75) +
+  # Surlignage de la barre de référence par un contour rouge épais
+  geom_col(
+    data = ~ filter(., est_reference),
+    aes(x = Zone_court, y = population_zone / 1000),
+    fill  = NA,
+    color = "#CC0000",
+    linewidth = 1.2,
+    width = 0.75,
+    inherit.aes = FALSE
+  ) +
+  # Annotation textuelle positionnée à droite de la barre de référence
+  annotate(
+    "text",
+    x     = zone_ref_pop_label,
+    y     = max(diag_population$population_zone / 1000, na.rm = TRUE) * 0.55,
+    label = "◄ Référence demande",
+    hjust = 0,
+    color = "#CC0000",
+    size  = 3.2,
+    fontface = "bold"
+  ) +
   coord_flip() +
-  # Transparence selon la fiabilité de la source
-  # NISR = source officielle → pleine opacité
-  # Fallback → semi-transparent pour signaler l'incertitude
   scale_alpha_manual(
     values = c("NISR_2022"     = 1.0,
                "WorldPop_2020" = 0.8,
@@ -3681,9 +3706,12 @@ g_pop <- diag_population %>%
   scale_y_continuous(labels = scales::label_number(suffix = " k")) +
   labs(
     title    = "Population par zone d'entrepôt",
-    subtitle = "Transparence = fiabilité de la source (opaque = NISR officiel)",
-    x        = NULL,
-    y        = "Population (milliers d'habitants)"
+    subtitle = paste0(
+      "Transparence = fiabilité de la source (opaque = NISR officiel)\n",
+      "Contour rouge = zone de référence de normalisation (taille_composite_demande = 1)"
+    ),
+    x = NULL,
+    y = "Population (milliers d'habitants)"
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -4372,6 +4400,29 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
       plot.title    = element_text(face = "bold"),
       plot.subtitle = element_text(color = "#555555", size = 10),
       legend.position = "right"
+    )+
+    # Cercle rouge autour du point de référence
+    geom_point(
+      data = ~ filter(., str_trunc(str_remove(nom_zone, " - .*"), 22) ==
+                        str_trunc(str_remove(zone_ref_pop_approx, " - .*"), 22)),
+      aes(x = pop_log, y = p_rwi),
+      shape  = 21,
+      size   = 6,
+      color  = "#CC0000",
+      fill   = NA,
+      stroke = 1.5,
+      inherit.aes = FALSE
+    ) +
+    # Légende textuelle du cercle
+    annotate(
+      "text",
+      x     = log10(max(diag_population$population_zone, na.rm = TRUE)) * 0.97,
+      y     = 0.05,
+      label = paste0("◄ Référence demande\n  (taille_composite = 1)"),
+      hjust = 1,
+      color = "#CC0000",
+      size  = 3.0,
+      fontface = "italic"
     )
   
   # ggrepel est nécessaire pour éviter les chevauchements de labels.
@@ -4814,21 +4865,15 @@ if (n_capees > 0) {
 taille_brute_offre <- log10(emploi_i + 1)^ALPHA_LOG_EMPLOI *
   (1 + K_RWI_OFFRE * p_rwi_i)
 
-# Normalisation relative à Kigali Hub (même principe que l'ancienne version)
-idx_kigali_offre <- which(
-  grepl("Kigali.*Hub", noeuds_entreposage$warehouse_name, ignore.case = TRUE)
-)
-if (length(idx_kigali_offre) > 0 &&
-    !is.na(taille_brute_offre[idx_kigali_offre[1]])) {
-  ref_kigali_offre       <- taille_brute_offre[idx_kigali_offre[1]]
-  taille_composite_offre <- taille_brute_offre / ref_kigali_offre
-  cat("\n  Référence offre (Kigali Hub) : masse brute emploi =",
-      round(ref_kigali_offre, 3), "\n")
-} else {
-  cat("  ⚠ Kigali Hub non trouvé (offre) — normalisation par max\n")
-  taille_composite_offre <- taille_brute_offre / max(taille_brute_offre, na.rm = TRUE)
-}
-taille_composite_offre <- pmax(taille_composite_offre, taille_default)
+# ── Normalisation par le maximum de l'échantillon ─────────────────────────────
+ref_offre              <- max(taille_brute_offre, na.rm = TRUE)
+idx_ref_offre          <- which.max(taille_brute_offre)
+nom_ref_offre          <- noeuds_entreposage$warehouse_name[idx_ref_offre]
+taille_composite_offre <- taille_brute_offre / ref_offre
+
+cat("\n  Référence offre   (max) : '", nom_ref_offre,
+    "' (idx =", idx_ref_offre, ") — masse brute emploi =",
+    round(ref_offre, 3), "\n")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAILLE COMPOSITE DEMANDE (basée sur la population — formule inchangée)
@@ -4839,28 +4884,21 @@ taille_composite_offre <- pmax(taille_composite_offre, taille_default)
 taille_brute_demande <- log10(pop_i + 1)^ALPHA_LOG_POP *
   (1 + K_RWI_TAILLE * p_rwi_i)
 
-idx_kigali_demande <- which(
-  grepl("Kigali.*Hub", noeuds_entreposage$warehouse_name, ignore.case = TRUE)
-)
-if (length(idx_kigali_demande) > 0 &&
-    !is.na(taille_brute_demande[idx_kigali_demande[1]])) {
-  ref_kigali_demande        <- taille_brute_demande[idx_kigali_demande[1]]
-  taille_composite_demande  <- taille_brute_demande / ref_kigali_demande
-  cat("  Référence demande (Kigali Hub) : masse brute pop =",
-      round(ref_kigali_demande, 3), "\n\n")
-} else {
-  cat("  ⚠ Kigali Hub non trouvé (demande) — normalisation par max\n")
-  taille_composite_demande <- taille_brute_demande /
-    max(taille_brute_demande, na.rm = TRUE)
-}
-taille_composite_demande <- pmax(taille_composite_demande, taille_default)
+# ── Normalisation par le maximum de l'échantillon ─────────────────────────────
+ref_demande              <- max(taille_brute_demande, na.rm = TRUE)
+idx_ref_demande          <- which.max(taille_brute_demande)
+nom_ref_demande          <- noeuds_entreposage$warehouse_name[idx_ref_demande]
+taille_composite_demande <- taille_brute_demande / ref_demande
+
+cat("  Référence demande (max) : '", nom_ref_demande,
+    "' (idx =", idx_ref_demande, ") — masse brute pop =",
+    round(ref_demande, 3), "\n\n")
 
 # ── Taille composite unifiée (rétrocompatibilité Parties VIII et IX) ──────────
 # Les Parties VIII et IX n'utilisent pas encore la distinction offre/demande.
 # On leur fournit la moyenne géométrique des deux, qui est un compromis neutre.
 # Ancienne formule supprimée : taille_composite = (log10(pop+1)^α × (1+K×rwi)) / ref
 taille_composite <- sqrt(taille_composite_offre * taille_composite_demande)
-taille_composite <- pmax(taille_composite, taille_default)
 
 # ── Sommes de normalisation (une par côté + une unifiée) ──────────────────────
 # Ces sommes sont utilisées dans VII.2 pour normer les volumes d'offre/demande.
@@ -4891,12 +4929,23 @@ entreposages_fictifs <- entreposages_fictifs %>%
   select(-any_of(c("taille_composite",
                    "taille_composite_offre",
                    "taille_composite_demande"))) %>%
-  left_join(taille_lookup, by = "nom") %>%
-  mutate(
-    taille_composite         = replace_na(taille_composite,         taille_default),
-    taille_composite_offre   = replace_na(taille_composite_offre,   taille_default),
-    taille_composite_demande = replace_na(taille_composite_demande, taille_default)
-  )
+  left_join(taille_lookup, by = "nom")
+
+# ── Diagnostic et exclusion des zones sans taille composite ───────────────────
+# Un NA après le left_join signifie que la zone n'a pas de correspondant dans
+# noeuds_entreposage (zone dupliquée éliminée, zone hors réseau, etc.).
+# On les signale explicitement puis on les exclut
+zones_na_taille <- entreposages_fictifs %>%
+  filter(is.na(taille_composite)) %>%
+  pull(nom)
+
+if (length(zones_na_taille) > 0) {
+  warning(length(zones_na_taille),
+          " zone(s) exclues faute de taille_composite : ",
+          paste(zones_na_taille, collapse = ", "))
+  entreposages_fictifs <- entreposages_fictifs %>%
+    filter(!is.na(taille_composite))
+}
 duck_write(
   taille_lookup %>%
     left_join(entreposages_fictifs %>% select(nom, type, pays), by = "nom"),
@@ -8287,6 +8336,12 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 # GRAPHIQUE 2 : Offre vs Demande par zone
 # ============================================================
 
+# ── Noms courts des zones de référence (mêmes règles de troncature que Zone_court) ──
+# str_trunc(28) est la troncature utilisée dans recap_zones → Zone_court.
+# On aligne les noms pour pouvoir les identifier sur l'axe Y du graphique.
+ref_offre_court   <- str_trunc(nom_ref_offre,   28)
+ref_demande_court <- str_trunc(nom_ref_demande, 28)
+
 g2 <- recap_zones %>%
   pivot_longer(
     cols      = c(offre_totale_musd, demande_totale_musd),
@@ -8303,19 +8358,39 @@ g2 <- recap_zones %>%
              y = Valeur,
              fill = Type_flux)) +
   geom_col(position = "dodge", width = 0.7) +
+  # Contour rouge sur la barre de la zone de référence offre
+  geom_col(
+    data = ~ filter(., Zone_court == ref_offre_court, Type_flux == "offre"),
+    aes(x = reorder(Zone_court, Valeur), y = Valeur),
+    fill = NA, color = "#CC0000", linewidth = 1.3,
+    position = "dodge", width = 0.7,
+    inherit.aes = FALSE
+  ) +
+  # Contour bleu foncé sur la barre de la zone de référence demande
+  geom_col(
+    data = ~ filter(., Zone_court == ref_demande_court, Type_flux == "demande"),
+    aes(x = reorder(Zone_court, Valeur), y = Valeur),
+    fill = NA, color = "#003399", linewidth = 1.3,
+    position = "dodge", width = 0.7,
+    inherit.aes = FALSE
+  ) +
   coord_flip() +
   scale_fill_manual(values = c("offre" = "#1976D2", "demande" = "#D32F2F")) +
   labs(
     title    = "Offre et Demande par zone économique",
-    subtitle = "Modèle gravitaire - Rwanda (données fictives réalistes)",
-    x        = NULL,
-    y        = "Valeur (millions USD)",
-    fill     = NULL
+    subtitle = paste0(
+      "Modèle gravitaire - Rwanda (données fictives réalistes)\n",
+      "Contour rouge = référence offre ('", nom_ref_offre, "') | ",
+      "Contour bleu = référence demande ('", nom_ref_demande, "')"
+    ),
+    x    = NULL,
+    y    = "Valeur (millions USD)",
+    fill = NULL
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title         = element_text(face = "bold", size = 14),
-    plot.subtitle      = element_text(color = "#666666"),
+    plot.subtitle      = element_text(color = "#666666", size = 9),
     legend.position    = "top",
     panel.grid.major.y = element_blank()
   )
