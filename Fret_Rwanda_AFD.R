@@ -468,7 +468,7 @@ ALPHA_LOG_POP <- 1.5
 # Plafond de population pour les zones de type "industrie".
 # Voir justification détaillée dans la transition IV.5 → V.
 # Mettre Inf pour désactiver le cap.
-CAP_POP_INDUSTRIE <- as.integer(CAP_EMPLOI_INDUSTRIE*1.4)
+CAP_POP_INDUSTRIE <- as.integer(CAP_EMPLOI_INDUSTRIE*2.5)
 
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
@@ -8490,6 +8490,114 @@ ggsave(file.path(DIR_OUTPUT,"graphique_composition_sectorielle.png"),
        g4, width = 14, height = 8, dpi = 300)
 cat("✓ Graphique composition sectorielle sauvegardé\n\n")
 
+# ==============================================================================
+# DIAGRAMME DE SANKEY — Flux de fret : Origine → Secteur → Destination
+# ==============================================================================
+
+if (!requireNamespace("ggalluvial", quietly = TRUE)) install.packages("ggalluvial")
+library(ggalluvial)
+
+cat("Génération du diagramme de Sankey...\n")
+
+# ── Agrégation par (type de zone origine × secteur × type de zone destination) ──
+# On travaille à l'échelle des TYPES de zones (6 types) plutôt que des 120 zones
+# individuelles, pour garantir la lisibilité du diagramme.
+# Les indices de ligne/colonne de flux_gravitaire[[s]] correspondent
+# directement aux lignes de noeuds_entreposage (construit en IV.3).
+
+sankey_raw <- map_dfr(SECTEURS, function(s) {
+  mat_s <- flux_gravitaire[[s]] * TONNES_PAR_musd[s]
+  # which() avec arr.ind = TRUE retourne une matrice à 2 colonnes :
+  # colonne 1 = indice de ligne (origine), colonne 2 = indice de colonne (destination)
+  idx <- which(mat_s > 0 & row(mat_s) != col(mat_s), arr.ind = TRUE)
+  if (nrow(idx) == 0) return(tibble())
+  tibble(
+    flux_t           = mat_s[idx],
+    type_origine     = noeuds_entreposage$warehouse_type[idx[, 1]],
+    type_destination = noeuds_entreposage$warehouse_type[idx[, 2]],
+    secteur          = s
+  )
+}) %>%
+  group_by(type_origine, secteur, type_destination) %>%
+  summarise(flux_t = sum(flux_t, na.rm = TRUE), .groups = "drop") %>%
+  # Seuil de lisibilité : on ne garde que les flux représentant au moins
+  # 0.1% du tonnage total pour éviter les micro-rubans illisibles
+  filter(flux_t > sum(flux_t) * 0.001) %>%
+  mutate(
+    type_origine     = factor(type_origine,     levels = names(PALETTE_ZONE_TYPE)),
+    secteur          = factor(secteur,           levels = SECTEURS),
+    type_destination = factor(type_destination, levels = names(PALETTE_ZONE_TYPE))
+  )
+
+g_sankey <- ggplot(
+  sankey_raw,
+  aes(
+    axis1 = type_origine,
+    axis2 = secteur,
+    axis3 = type_destination,
+    y     = flux_t / 1000        # Conversion en milliers de tonnes
+  )
+) +
+  # Rubans : chaque ruban = un flux (type_origine, secteur, type_destination)
+  # curve_type = "cubic" donne des courbes de Bézier lisses
+  geom_alluvium(
+    aes(fill = secteur),
+    width      = 1/5,
+    alpha      = 0.65,
+    curve_type = "cubic"
+  ) +
+  # Blocs : un par valeur unique sur chaque axe
+  geom_stratum(
+    width     = 1/5,
+    fill      = "white",
+    color     = "#333333",
+    linewidth = 0.4
+  ) +
+  # after_stat(stratum) : récupère le nom de la strate depuis le stat interne
+  geom_text(
+    stat     = "stratum",
+    aes(label = after_stat(stratum)),
+    size     = 3.2,
+    fontface = "bold",
+    color    = "#222222"
+  ) +
+  scale_fill_brewer(palette = "Set2", name = "Secteur") +
+  scale_x_discrete(
+    limits = c("type_origine", "secteur", "type_destination"),
+    labels = c("Type d'origine", "Secteur", "Type de destination"),
+    expand = expansion(add = 0.15)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_number(suffix = " kt"),
+    name   = "Volume (milliers de tonnes)"
+  ) +
+  labs(
+    title    = "Flux de fret interzonaux — Diagramme de Sankey",
+    subtitle = paste0(
+      "Agrégation par type de zone et secteur économique · ",
+      format(round(sum(sankey_raw$flux_t) / 1e6, 1)), " Mt modélisées"
+    ),
+    x = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 14),
+    plot.subtitle   = element_text(color = "#666666"),
+    panel.grid      = element_blank(),
+    axis.text.x     = element_text(size = 11, face = "bold"),
+    axis.text.y     = element_text(size = 9),
+    legend.position = "right"
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, "sankey_flux_fret.png"),
+  g_sankey,
+  width  = 14,
+  height = 8,
+  dpi    = 300
+)
+cat("✓ sankey_flux_fret.png\n\n")
+
 
 # ==============================================================================
 # VIII.3 : Exports finaux
@@ -9592,6 +9700,339 @@ ggsave(
   g_surcouts, width = 11, height = 6, dpi = 300
 )
 cat("  ✓ Graphique sauvegardé\n\n")
+
+# ==============================================================================
+# IX.6 BIS — CALCUL DES ITINÉRAIRES DE CONTOURNEMENT
+# Alimente la Carte D (nouvelles routes) et le graphique de report modal.
+# Dépend de : od_compare (IX.4), graphe_degrade (IX.3),
+#             indices_aretes_perturbees (IX.2), flux_tonnes_total (VIII)
+# ==============================================================================
+
+cat("── Calcul des itinéraires de contournement ───────────────────────────\n\n")
+
+# ── Sélection des paires reroutées les plus importantes ───────────────────────
+# On exclut les paires "inchangées" (chemin non affecté) et "déconnectées"
+# (plus de chemin possible → pas de nouveau trajet à calculer).
+# On limite aux 300 paires au plus fort surcoût absolu pour la performance.
+paires_reroutees <- od_compare %>%
+  filter(type_impact %in% c("faible", "modere", "fort", "tres_fort")) %>%
+  arrange(desc(abs(surcout_absolu_usd))) %>%
+  slice_head(n = min(300, nrow(.)))
+
+cat("  Paires reroutées à analyser :", nrow(paires_reroutees), "\n")
+
+# ── Initialisation des vecteurs d'accumulation ────────────────────────────────
+# Pour chaque arête physique (indices 1..n_aretes_physiques) :
+#   surcout_pondere_arete  = somme des (surcoût_relatif × volume_tonnes) pour
+#                            tous les flux empruntant cette arête en détour
+#   volume_detourne_arete  = somme des tonnages reroutés passant par l'arête
+#   n_flux_par_arete       = nombre de flux OD reroutés passant par l'arête
+surcout_pondere_arete  <- numeric(n_aretes_physiques)
+volume_detourne_arete  <- numeric(n_aretes_physiques)
+n_flux_par_arete       <- integer(n_aretes_physiques)
+
+poids_deg <- igraph::E(graphe_degrade)$weight
+
+pb_rerou <- progress_bar$new(
+  format = "  Contournements [:bar] :percent | ETA: :eta",
+  total  = nrow(paires_reroutees),
+  clear  = FALSE,
+  width  = 60
+)
+
+for (k in seq_len(nrow(paires_reroutees))) {
+  
+  i_k       <- paires_reroutees$id_origine[k]
+  j_k       <- paires_reroutees$id_destination[k]
+  surcout_k <- paires_reroutees$surcout_relatif_pct[k]
+  volume_k  <- flux_tonnes_total[i_k, j_k]
+  
+  if (is.na(volume_k) || volume_k <= 0) { pb_rerou$tick(); next }
+  
+  # Dijkstra multi-modal sur le réseau dégradé (même logique que Partie VI.1)
+  sources_k     <- as.integer(sapply(seq_len(n_vehicules),
+                                     function(v) node_multi(v, warehouse_nodes_base[i_k])))
+  targets_all_k <- as.integer(as.vector(sapply(seq_len(n_vehicules),
+                                               function(v) node_multi(v, warehouse_nodes_base))))
+  cols_k        <- j_k + (seq_len(n_vehicules) - 1) * n_warehouses
+  
+  dists_k   <- igraph::distances(graphe_degrade,
+                                 v       = sources_k,
+                                 to      = targets_all_k[cols_k],
+                                 weights = poids_deg)
+  min_cout_k <- min(dists_k, na.rm = TRUE)
+  if (is.infinite(min_cout_k)) { pb_rerou$tick(); next }
+  
+  # Identification du meilleur itinéraire et reconstruction du chemin
+  best_idx_k  <- which(dists_k == min_cout_k, arr.ind = TRUE)
+  if (!is.matrix(best_idx_k)) best_idx_k <- matrix(best_idx_k, nrow = 1)
+  best_from_k <- sources_k[best_idx_k[1, 1]]
+  best_to_k   <- targets_all_k[cols_k[best_idx_k[1, 2]]]
+  
+  path_k     <- igraph::shortest_paths(graphe_degrade,
+                                       from    = best_from_k,
+                                       to      = best_to_k,
+                                       weights = poids_deg,
+                                       output  = "epath")
+  edges_k    <- as.integer(path_k$epath[[1]])
+  rm(path_k)
+  
+  # Extraction des arêtes physiques valides (type "route", pas "transbordement")
+  edges_routes_k <- edges_k[
+    edges_k <= max_idx_mm & lookup_type[edges_k] == "route"
+  ]
+  if (length(edges_routes_k) == 0) { pb_rerou$tick(); next }
+  
+  idx_phys_k <- lookup_physique[edges_routes_k]
+  idx_phys_k <- idx_phys_k[idx_phys_k >= 1 & idx_phys_k <= n_aretes_physiques]
+  if (length(idx_phys_k) == 0) { pb_rerou$tick(); next }
+  
+  # Accumulation : pondération par le volume transporté
+  # Un flux de 5 000t contribue davantage à la criticité d'un axe de détour
+  # qu'un flux de 50t, même si leur surcoût relatif est identique.
+  surcout_pondere_arete[idx_phys_k] <- surcout_pondere_arete[idx_phys_k] +
+    surcout_k * volume_k
+  volume_detourne_arete[idx_phys_k] <- volume_detourne_arete[idx_phys_k] + volume_k
+  n_flux_par_arete[idx_phys_k]      <- n_flux_par_arete[idx_phys_k] + 1L
+  
+  pb_rerou$tick()
+}
+
+# Surcoût moyen pondéré par le volume sur chaque arête de détour
+surcout_moyen_detour <- ifelse(
+  volume_detourne_arete > 0,
+  surcout_pondere_arete / volume_detourne_arete,
+  NA_real_
+)
+
+cat("\n  Arêtes empruntées dans les détours :",
+    sum(volume_detourne_arete > 0), "\n\n")
+
+# ==============================================================================
+# CARTE D — Itinéraires de contournement, colorés par surcoût moyen
+# ==============================================================================
+
+cat("  Génération Carte D — routes de contournement...\n")
+
+# Palette de surcoût : vert (faible surcoût) → bordeaux (surcoût extrême)
+PALETTE_SURCOUT_DETOUR <- c(
+  "Faible (<10%)"       = "#1A9850",
+  "Modéré (10–30%)"     = "#FEE08B",
+  "Fort (30–60%)"       = "#FD8D3C",
+  "Très fort (60–100%)" = "#E31A1C",
+  "Extrême (>100%)"     = "#67001F"
+)
+
+# Construction de la couche géographique des arêtes de détour.
+# On exclut les arêtes perturbées elles-mêmes : seules les NOUVELLES
+# routes (hors zone de choc) sont affichées.
+aretes_detour_sf <- aretes_reseau_sf %>%
+  mutate(
+    surcout_moyen   = surcout_moyen_detour,
+    vol_detourne_t  = volume_detourne_arete
+  ) %>%
+  filter(
+    vol_detourne_t > 0,
+    !(arete_idx %in% indices_aretes_perturbees)
+  ) %>%
+  mutate(
+    classe_surcout = case_when(
+      surcout_moyen < 10  ~ "Faible (<10%)",
+      surcout_moyen < 30  ~ "Modéré (10–30%)",
+      surcout_moyen < 60  ~ "Fort (30–60%)",
+      surcout_moyen < 100 ~ "Très fort (60–100%)",
+      TRUE                ~ "Extrême (>100%)"
+    ),
+    classe_surcout = factor(
+      classe_surcout,
+      levels = names(PALETTE_SURCOUT_DETOUR)
+    ),
+    # Épaisseur de ligne proportionnelle au volume détourné (échelle log)
+    lwd_detour = as.numeric(rescale(log10(vol_detourne_t + 1), to = c(0.6, 5)))
+  )
+
+carte_detour <- fond_carte() +
+  
+  # Réseau de base en gris très clair (contexte géographique)
+  tm_shape(aretes_reseau_sf) +
+  tm_lines(col = "#EEEEEE", lwd = 0.3) +
+  
+  # Itinéraires de contournement : couleur = surcoût moyen, épaisseur = volume
+  tm_shape(aretes_detour_sf) +
+  tm_lines(
+    col        = "classe_surcout",
+    col.scale  = tm_scale(values = PALETTE_SURCOUT_DETOUR),
+    col.legend = tm_legend(title = "Surcoût moyen\n(flux reroutés)"),
+    lwd        = "lwd_detour",
+    lwd.scale  = tm_scale(values.range = c(0.6, 5)),
+    lwd.legend = tm_legend(show = FALSE)
+  ) +
+  
+  # Routes coupées en noir épais (référence visuelle)
+  tm_shape(aretes_perturbees_sf) +
+  tm_lines(
+    col        = "#000000",
+    lwd        = 4,
+    col.legend = tm_legend(show = FALSE)
+  ) +
+  
+  # Zones d'entrepôt
+  tm_shape(coords_zones_sf) +
+  tm_dots(
+    fill        = "warehouse_type",
+    fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
+    fill.legend = tm_legend(title = "Type de zone"),
+    size        = 0.5
+  ) +
+  
+  tm_title(paste0(
+    "Itinéraires de contournement — ", NOM_SCENARIO,
+    "\nCouleur = surcoût moyen pondéré | Épaisseur = volume détourné | Noir = routes coupées"
+  )) +
+  tm_layout(legend.outside = TRUE, frame = TRUE) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_compass(position  = c("right", "top"))
+
+tmap_save(
+  carte_detour,
+  file.path(DIR_OUTPUT, paste0("carte_detours_", NOM_SCENARIO, ".png")),
+  width = 3000, height = 2400, dpi = 300
+)
+cat("  ✓ carte_detours_", NOM_SCENARIO, ".png\n\n", sep = "")
+
+# ==============================================================================
+# GRAPHIQUE — Report de trafic par type de route (avant vs après le choc)
+# ==============================================================================
+
+cat("  Génération du graphique de report par type de route...\n")
+
+# ── Volumes de référence par type de route (avant choc) ───────────────────────
+vol_ref_type <- aretes_reseau_sf %>%
+  st_drop_geometry() %>%
+  mutate(volume_tonnes = replace_na(volume_tonnes, 0)) %>%
+  group_by(road_type) %>%
+  summarise(vol_ref_t = sum(volume_tonnes), .groups = "drop")
+
+# ── Volume de détour entrant par type de route (nouvelles routes utilisées) ───
+# On n'inclut QUE les arêtes non coupées pour mesurer les routes qui
+# ABSORBENT le trafic rerouté, pas celles qui le perdent.
+vol_detour_type <- aretes_reseau_sf %>%
+  st_drop_geometry() %>%
+  mutate(vol_det = volume_detourne_arete[arete_idx]) %>%
+  filter(!(arete_idx %in% indices_aretes_perturbees)) %>%
+  group_by(road_type) %>%
+  summarise(vol_detour_t = sum(vol_det, na.rm = TRUE), .groups = "drop")
+
+# ── Volume perdu (sur routes coupées) par type de route ───────────────────────
+vol_perdu_type <- aretes_reseau_sf %>%
+  st_drop_geometry() %>%
+  filter(arete_idx %in% indices_aretes_perturbees) %>%
+  mutate(volume_tonnes = replace_na(volume_tonnes, 0)) %>%
+  group_by(road_type) %>%
+  summarise(vol_perdu_t = sum(volume_tonnes), .groups = "drop")
+
+# ── Assemblage et calcul de la variation nette ────────────────────────────────
+report_df <- vol_ref_type %>%
+  left_join(vol_detour_type, by = "road_type") %>%
+  left_join(vol_perdu_type,  by = "road_type") %>%
+  replace_na(list(vol_detour_t = 0, vol_perdu_t = 0)) %>%
+  mutate(
+    road_type       = factor(road_type,
+                             levels = c("motorway", "trunk", "primary",
+                                        "secondary", "tertiary", "unclassified")),
+    # Variation nette = trafic de détour entrant - trafic perdu (route coupée)
+    variation_nette = vol_detour_t - vol_perdu_t,
+    pct_variation   = round(variation_nette / pmax(vol_ref_t, 1) * 100, 1),
+    # Position verticale du label : au-dessus de la barre la plus haute
+    y_label         = pmax(vol_detour_t, vol_perdu_t) / 1000
+  ) %>%
+  filter(!is.na(road_type))
+
+# ── Format long pour ggplot ───────────────────────────────────────────────────
+report_long <- report_df %>%
+  pivot_longer(
+    cols      = c(vol_ref_t, vol_detour_t, vol_perdu_t),
+    names_to  = "categorie",
+    values_to = "volume_t"
+  ) %>%
+  mutate(
+    categorie = recode(categorie,
+                       "vol_ref_t"    = "Référence (avant choc)",
+                       "vol_detour_t" = "Report entrant (détour)",
+                       "vol_perdu_t"  = "Perdu (route coupée)"
+    ),
+    categorie = factor(categorie,
+                       levels = c("Référence (avant choc)",
+                                  "Report entrant (détour)",
+                                  "Perdu (route coupée)"))
+  )
+
+# ── Graphique ─────────────────────────────────────────────────────────────────
+g_report <- ggplot(report_long,
+                   aes(x = road_type, y = volume_t / 1000, fill = categorie)) +
+  
+  geom_col(position = "dodge", width = 0.72) +
+  
+  # Annotation de la variation nette au-dessus des barres
+  geom_text(
+    data    = report_df,
+    mapping = aes(
+      x     = road_type,
+      y     = y_label + max(report_df$y_label, na.rm = TRUE) * 0.03,
+      label = paste0(ifelse(pct_variation >= 0, "+", ""), pct_variation, "%"),
+      color = ifelse(variation_nette >= 0, "#006400", "#CC0000")
+    ),
+    inherit.aes = FALSE,
+    vjust    = 0,
+    size     = 3.5,
+    fontface = "bold"
+  ) +
+  
+  # Ligne de référence à 0 pour la lisibilité
+  geom_hline(yintercept = 0, color = "#AAAAAA", linewidth = 0.4) +
+  
+  scale_fill_manual(
+    values = c(
+      "Référence (avant choc)"  = "#4393C3",
+      "Report entrant (détour)" = "#2CA25F",
+      "Perdu (route coupée)"    = "#D6604D"
+    )
+  ) +
+  scale_color_identity() +
+  scale_y_continuous(
+    labels = scales::label_number(suffix = " kt"),
+    expand = expansion(mult = c(0, 0.18))
+  ) +
+  
+  labs(
+    title    = paste0("Report de trafic par type de route — ", NOM_SCENARIO),
+    subtitle = paste0(
+      "Bleu = volume de référence · Vert = trafic de détour absorbé · ",
+      "Rouge = trafic perdu sur route coupée\n",
+      "Pourcentage = variation nette / volume de référence"
+    ),
+    x    = "Type de route",
+    y    = "Volume (milliers de tonnes)",
+    fill = NULL
+  ) +
+  
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 13),
+    plot.subtitle   = element_text(color = "#666666", size = 9),
+    legend.position = "top",
+    panel.grid.minor = element_blank(),
+    axis.text.x     = element_text(angle = 20, hjust = 1)
+  )
+
+ggsave(
+  file.path(DIR_OUTPUT, paste0("graphique_report_type_route_", NOM_SCENARIO, ".png")),
+  g_report,
+  width = 11,
+  height = 6,
+  dpi = 300
+)
+cat("  ✓ graphique_report_type_route_", NOM_SCENARIO, ".png\n\n", sep = "")
 
 # ── EXPORTS CSV et Parquet ────────────────────────────────────────────────────
 # Export de la table de comparaison OD (avant / après)
