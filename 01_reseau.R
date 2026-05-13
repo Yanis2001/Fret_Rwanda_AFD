@@ -675,44 +675,6 @@ fond_carte <- function() {
   carte
 }
 
-# ── Carte 1 : vérification post-nettoyage ─────────────────────────────────────
-# Cette carte est générée pour vérifier visuellement que le réseau routier
-# a été correctement chargé et nettoyé. Chaque type de route apparaît dans
-# une couleur différente (définie dans PALETTE_ROAD_TYPE).
-# tm_lines() : représente les lignes (routes) avec une couleur selon "road_type".
-# tm_scale() : définit comment mapper les valeurs de "road_type" aux couleurs.
-carte_verif_routes <- fond_carte() +
-  tm_shape(routes_rwanda) +
-  tm_lines(
-    col       = "road_type",
-    col.scale = tm_scale(values = PALETTE_ROAD_TYPE),
-    col.legend = tm_legend(title = "Type de route"),
-    lwd = 1.2
-  ) +
-  tm_title("Réseau Routier du Rwanda\nContrôle post-nettoyage (Partie 3)") +
-  tm_layout(legend.outside = TRUE, frame = TRUE) +
-  tm_scalebar(position = c("left", "bottom")) +
-  tm_compass(position = c("right", "top"))
-
-# tmap_save() exporte la carte en fichier PNG haute résolution.
-# width, height : dimensions en pixels. dpi = 300 : résolution pour impression.
-tmap_save(carte_verif_routes,
-          file.path(DIR_OUTPUT, "carte_verif_routes_partie3.png"),
-          width = 3000, height = 2400, dpi = 300)
-
-# Ce bloc if (FALSE) est volontairement désactivé (FALSE = ne jamais s'exécuter).
-# Pour l'activer temporairement et afficher la carte interactive dans RStudio,
-# il suffit de remplacer FALSE par TRUE et de relancer ce bloc.
-# tmap_mode("view") active le mode interactif (carte zoomable dans le Viewer).
-# tmap_mode("plot") remet le mode statique pour les exports PNG.
-if (FALSE) {
-  tmap_mode("view")
-  print(carte_verif_routes)
-  tmap_mode("plot")   # Remettre en mode statique pour la suite du script
-}
-
-cat("✓ Carte de vérification générée\n\n")
-
 # ==============================================================================
 # II.4 : Modèle Numérique de Terrain (DEM) 
 # Télécharge le DEM SRTM depuis AWS via elevatr. En cas d'échec, génère 
@@ -1199,47 +1161,6 @@ if (!cache_reseau_valide) {
     cat("\n")
   }
   
-  # ── 5. Carte des arêtes perdues ───────────────────────────────────────────────
-  cat("Génération de la carte des arêtes perdues...\n")
-  
-  # Palette par type de route (cohérente avec la carte de vérification Partie 3)
-  
-  carte_aretes_perdues <- fond_carte() +
-    
-    
-    # Arêtes perdues colorées par type de route
-    tm_shape(aretes_perdues) +
-    tm_lines(
-      col       = "road_type",
-      col.scale = tm_scale(values = PALETTE_ROAD_TYPE),
-      col.legend = tm_legend(title = "Type de route\n(arêtes perdues)"),
-      lwd = 3
-    ) +
-    
-    # Nœuds hors géante (points rouges) pour visualiser les isolats
-    tm_shape(noeuds_hors_geante) +
-    tm_dots(fill = "#CC0000", size = 0.2, fill_alpha = 0.5) +
-    
-    tm_title(paste0("Arêtes exclues de la composante géante\n(",
-                    round(nrow(aretes_perdues) / nrow(aretes_lisse) * 100, 1),
-                    "% du réseau)")) +
-    tm_layout(legend.outside = TRUE, frame = TRUE) +
-    tm_scalebar(position = c("left", "bottom")) +
-    tm_compass(position  = c("right", "top"))
-  
-  tmap_save(
-    carte_aretes_perdues,
-    file.path(DIR_OUTPUT, "carte_aretes_perdues.png"),
-    width = 3000, height = 2400, dpi = 300
-  )
-  if (FALSE) {
-    tmap_mode("view")
-    print(carte_aretes_perdues)
-    tmap_mode("plot")
-  }
-  
-  cat("✓ Carte des arêtes perdues sauvegardée\n\n")
-  
   # progress_bar$new() : crée une barre de progression qui s'affiche dans la console.
   # total = length(noeuds_geante) : nombre d'itérations attendues.
   # Avance la barre d'un pas à chaque itération.
@@ -1336,6 +1257,12 @@ if (!cache_reseau_valide) {
       date_creation      = Sys.time()
     ),
     CACHE_RESEAU
+  )
+  
+  saveRDS(
+    list(aretes_perdues    = aretes_perdues,
+         noeuds_hors_geante = noeuds_hors_geante),
+    file.path(DIR_OUTPUT, "persist_diag_reseau.rds")
   )
   
   cat("  ✓ Cache sauvegardé :", CACHE_RESEAU, "\n")
@@ -2590,125 +2517,6 @@ cat("  Nœuds avec population_zone > 0 :",
     sum(!is.na(igraph::V(reseau_rwanda %>% as_tbl_graph())$population_zone),
         na.rm = TRUE), "\n\n")
 
-
-# ==============================================================================
-# IV.4.E : Visualisation démographique (carte + graphique)
-# ==============================================================================
-
-cat("── Visualisation de la distribution démographique ───────────────────\n")
-
-# ── Carte : population par zone sur le réseau ─────────────────────────────────
-# Les entrepôts sont affichés comme des cercles dont le diamètre est
-# proportionnel à la population (échelle log pour gérer les ordres de grandeur).
-# Kigali (~1 M d'habitants) ne doit pas écraser visuellement les petites villes.
-
-entrepots_pop_sf <- reseau_rwanda %>%
-  activate("nodes") %>%
-  filter(is_warehouse, !is.na(population_zone)) %>%
-  st_as_sf() 
-
-carte_population <- fond_carte() +
-  
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col = "#DDDDDD", lwd = 0.4) +
-  
-  tm_shape(entrepots_pop_sf) +
-  tm_dots(
-    fill        = "population_zone",
-    fill.scale  = tm_scale_intervals(
-      style  = "quantile",
-      n      = 5,
-      values = "brewer.yl_or_rd"
-    ),
-    fill.legend = tm_legend(title = "Population\n(habitants)"),
-    size        = 0.3
-  ) +
-  
-  tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020 / OSM") +
-  tm_layout(legend.outside = TRUE, frame = TRUE) +
-  tm_scalebar(position = c("left", "bottom")) +
-  tm_compass(position  = c("right", "top"))
-
-tmap_save(
-  carte_population,
-  file.path(DIR_OUTPUT, "carte_population_zones.png"),
-  width = 3000, height = 2400, dpi = 300
-)
-cat("  ✓ carte_population_zones.png\n")
-
-# ── Identification de la zone de référence (max population = future réf. demande) ──
-zone_ref_pop_approx <- diag_population %>%
-  arrange(desc(population_zone)) %>%
-  slice(1) %>%
-  pull(nom_zone)
-
-# Etiquette courte pour l'annotation (même troncature que Zone_court dans le plot)
-zone_ref_pop_label <- str_trunc(str_remove(zone_ref_pop_approx, " - .*"), 25)
-
-# ── Graphique : population par zone et par type ───────────────────────────────
-g_pop <- diag_population %>%
-  arrange(desc(population_zone)) %>%
-  mutate(
-    Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 25),
-    Zone_court = make.unique(Zone_court, sep = " #"),   # rend les labels uniques
-    Zone_court = factor(Zone_court, levels = rev(Zone_court)),
-    est_reference   = (nom_zone == zone_ref_pop_approx)
-  ) %>%
-  ggplot(aes(x = Zone_court, y = population_zone / 1000,
-             fill = type_zone, alpha = source)) +
-  geom_col(width = 0.75) +
-  # Surlignage de la barre de référence par un contour rouge épais
-  geom_col(
-    data = ~ filter(., est_reference),
-    aes(x = Zone_court, y = population_zone / 1000),
-    fill  = NA,
-    color = "#CC0000",
-    linewidth = 1.2,
-    width = 0.75,
-    inherit.aes = FALSE
-  ) +
-  # Annotation textuelle positionnée à droite de la barre de référence
-  annotate(
-    "text",
-    x     = zone_ref_pop_label,
-    y     = max(diag_population$population_zone / 1000, na.rm = TRUE) * 0.55,
-    label = "◄ Référence demande",
-    hjust = 0,
-    color = "#CC0000",
-    size  = 3.2,
-    fontface = "bold"
-  ) +
-  coord_flip() +
-  scale_alpha_manual(
-    values = c("NISR_2022"     = 1.0,
-               "WorldPop_2020" = 0.8,
-               "OSM"           = 0.65,
-               "Fallback_1000" = 0.35),
-    name   = "Source"
-  ) +
-  scale_fill_manual(values = PALETTE_ZONE_TYPE, name = "Type de zone") +
-  scale_y_continuous(labels = scales::label_number(suffix = " k")) +
-  labs(
-    title    = "Population par zone d'entrepôt",
-    subtitle = paste0(
-      "Transparence = fiabilité de la source (opaque = NISR officiel)\n",
-      "Contour rouge = zone de référence de normalisation (taille_composite_demande = 1)"
-    ),
-    x = NULL,
-    y = "Population (milliers d'habitants)"
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(
-    plot.title = element_text(face = "bold"),
-    legend.position = "right"
-  )
-
-ggsave(
-  file.path(DIR_OUTPUT, "graphique_population_zones.png"),
-  g_pop, width = 12, height = 8, dpi = 300
-)
-cat("  ✓ graphique_population_zones.png\n\n")
-
 cat("✓ Partie IV.4 terminée — population_zone disponible dans :\n")
 cat("  • reseau_rwanda  (attribut de nœud)\n")
 cat("  • DuckDB         (table population_entrepots)\n")
@@ -3205,224 +3013,6 @@ duck_write(entreposages_fictifs, "zones_entreposage")
 
 cat("✓ rwi_brut et p_rwi intégrés dans reseau_rwanda et DuckDB\n\n")
 
-
-# ==============================================================================
-# IV.5.4 : Visualisations
-#
-# Deux sorties graphiques :
-#   Carte  — score p_rwi par zone d'entrepôt sur le réseau routier
-#   Graphique — corrélation RWI × population (les deux enrichissements)
-# ==============================================================================
-
-cat("── Visualisations RWI ────────────────────────────────────────────────\n")
-
-# ── Préparation de la couche sf pour les entrepôts enrichis RWI ───────────────
-entrepots_rwi_sf <- reseau_rwanda %>%
-  activate("nodes") %>%
-  filter(is_warehouse, !is.na(p_rwi)) %>%
-  st_as_sf() %>%
-  mutate(
-    taille_cercle = rescale(p_rwi, to = c(0.3, 2.5)),
-    classe_rwi    = case_when(
-      p_rwi >= 0.75 ~ "Très riche",
-      p_rwi >= 0.50 ~ "Riche",
-      p_rwi >= 0.25 ~ "Pauvre",
-      TRUE          ~ "Très pauvre"
-    ),
-    classe_rwi = factor(
-      classe_rwi,
-      levels = c("Très pauvre", "Pauvre", "Riche", "Très riche")
-    )
-  )
-
-# ── Carte : score p_rwi sur le réseau ─────────────────────────────────────────
-# Le dégradé de couleur va du bleu foncé (zones pauvres) au rouge foncé (zones
-# riches), ce qui est la convention cartographique habituelle pour les indices
-# de richesse. La taille des points est proportionnelle au score p_rwi.
-PALETTE_RWI <- c(
-  "#08519C",   # Bleu foncé  — très pauvre (p_rwi < 0.25)
-  "#6BAED6",   # Bleu clair  — pauvre      (p_rwi 0.25–0.50)
-  "#FD8D3C",   # Orange      — riche       (p_rwi 0.50–0.75)
-  "#A50026"    # Rouge foncé — très riche  (p_rwi > 0.75)
-)
-
-carte_rwi <- fond_carte() +
-  
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
-  tm_lines(col = "#DDDDDD", lwd = 0.4) +
-  
-  tm_shape(entrepots_rwi_sf) +
-  tm_dots(
-    fill        = "p_rwi",
-    fill.scale  = tm_scale_intervals(
-      style  = "fixed",
-      breaks = c(0, 0.25, 0.50, 0.75, 1.00),
-      values = PALETTE_RWI
-    ),
-    fill.legend = tm_legend(title = "Richesse relative\n(p_rwi normalisé)"),
-    size        = "taille_cercle",
-    size.scale  = tm_scale(values.range = c(0.3, 2.5)),
-    size.legend = tm_legend(show = FALSE)
-  ) +
-  
-  tm_title(paste0(
-    "Richesse relative des zones d'entrepôt\n",
-    "Relative Wealth Index — Meta / CIESIN (IDW dans buffer ",
-    BUFFER_RWI_M / 1000, " km)"
-  )) +
-  tm_layout(legend.outside = TRUE, frame = TRUE) +
-  tm_scalebar(position = c("left", "bottom")) +
-  tm_compass(position  = c("right", "top"))
-
-tmap_save(
-  carte_rwi,
-  file.path(DIR_OUTPUT, "carte_rwi_zones.png"),
-  width = 3000, height = 2400, dpi = 300
-)
-cat("  ✓ carte_rwi_zones.png\n")
-
-# ── Carte : raster RWI Rwanda (vue d'ensemble des données brutes) ─────────────
-# Cette carte montre les données RWI pour TOUT le Rwanda (pas seulement les
-# entrepôts), ce qui permet de visualiser les gradients spatiaux de richesse
-# et de vérifier que les entrepôts sont bien positionnés dans leur contexte.
-if (rwi_ok && nrow(rwi_sf) > 0) {
-  
-  carte_rwi_raster <- fond_carte() +
-    
-    tm_shape(rwi_sf) +
-    tm_dots(
-      fill        = "rwi",
-      fill.scale  = tm_scale_intervals(
-        style  = "quantile",
-        n      = 5,
-        values = c("#08519C", "#6BAED6", "#F7F7F7", "#FD8D3C", "#A50026")
-      ),
-      fill.legend = tm_legend(title = "Score RWI\n(brut, centré 0)"),
-      size        = 0.05,    # Petite taille : beaucoup de points (~1700 cellules)
-      fill_alpha  = 0.7
-    ) +
-    
-    # Superposition des entrepôts pour le repérage
-    tm_shape(entrepots_rwi_sf) +
-    tm_dots(
-      fill        = "warehouse_type",
-      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-      fill.legend = tm_legend(title = "Type d'entrepôt"),
-      size        = 0.5,
-      col         = "white",
-      lwd         = 1
-    ) +
-    
-    tm_title("Données RWI brutes — Rwanda\n(chaque point = cellule de ~2,4 km²)") +
-    tm_layout(legend.outside = TRUE, frame = TRUE) +
-    tm_scalebar(position = c("left", "bottom")) +
-    tm_compass(position  = c("right", "top"))
-  
-  tmap_save(
-    carte_rwi_raster,
-    file.path(DIR_OUTPUT, "carte_rwi_rwanda_brut.png"),
-    width = 3000, height = 2400, dpi = 300
-  )
-  cat("  ✓ carte_rwi_rwanda_brut.png\n")
-}
-
-# ── Graphique : corrélation RWI × population ──────────────────────────────────
-# Ce graphique met en relation les deux enrichissements (IV.4 et IV.5) pour
-# vérifier leur cohérence : on s'attend à ce que les zones à forte population
-# (Kigali, Musanze…) aient aussi des scores RWI élevés — mais pas toujours,
-# car les zones frontalières peuvent avoir une population élevée et un RWI faible.
-if ("population_zone" %in% names(entreposages_fictifs)) {
-  
-  g_rwi_pop <- diag_rwi %>%
-    left_join(
-      entreposages_fictifs %>%
-        select(nom, population_zone),
-      by = c("nom_zone" = "nom")
-    ) %>%
-    filter(!is.na(population_zone), population_zone > 0) %>%
-    mutate(
-      Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 22),
-      pop_log    = log10(population_zone)
-    ) %>%
-    ggplot(aes(x = pop_log, y = p_rwi,
-               color = type_zone, label = Zone_court)) +
-    
-    geom_point(size = 4, alpha = 0.85) +
-    ggrepel::geom_text_repel(
-      size = 3, max.overlaps = 12,
-      segment.color = "#AAAAAA"
-    ) +
-    
-    # Droite de régression pour visualiser la tendance générale
-    geom_smooth(
-      method  = "lm",
-      se      = TRUE,
-      color   = "#333333",
-      linetype = "dashed",
-      alpha   = 0.15
-    ) +
-    
-    scale_color_manual(values = PALETTE_ZONE_TYPE, name = "Type de zone") +
-    scale_x_continuous(
-      labels = function(x) format(10^x, big.mark = " ", scientific = FALSE),
-      name   = "Population (échelle log₁₀)"
-    ) +
-    scale_y_continuous(
-      limits = c(0, 1),
-      name   = "Score de richesse relative (p_rwi)"
-    ) +
-    
-    labs(
-      title    = "Richesse relative (RWI) × Population par zone d'entrepôt",
-      subtitle = paste0(
-        "Les zones en haut à droite (riches ET peuplées) génèrent la plus forte demande\n",
-        "Sources : Meta RWI (2021), NISR RPHC-5 (2022)"
-      )
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      plot.title    = element_text(face = "bold"),
-      plot.subtitle = element_text(color = "#555555", size = 10),
-      legend.position = "right"
-    )+
-    # Cercle rouge autour du point de référence
-    geom_point(
-      data = ~ filter(., str_trunc(str_remove(nom_zone, " - .*"), 22) ==
-                        str_trunc(str_remove(zone_ref_pop_approx, " - .*"), 22)),
-      aes(x = pop_log, y = p_rwi),
-      shape  = 21,
-      size   = 6,
-      color  = "#CC0000",
-      fill   = NA,
-      stroke = 1.5,
-      inherit.aes = FALSE
-    ) +
-    # Légende textuelle du cercle
-    annotate(
-      "text",
-      x     = log10(max(diag_population$population_zone, na.rm = TRUE)) * 0.97,
-      y     = 0.05,
-      label = paste0("◄ Référence demande\n  (taille_composite = 1)"),
-      hjust = 1,
-      color = "#CC0000",
-      size  = 3.0,
-      fontface = "italic"
-    )
-  
-  # ggrepel est nécessaire pour éviter les chevauchements de labels.
-  # S'il n'est pas installé, on produit le graphique sans labels.
-  if (!requireNamespace("ggrepel", quietly = TRUE)) {
-    install.packages("ggrepel")
-    library(ggrepel)
-  }
-  
-  ggsave(
-    file.path(DIR_OUTPUT, "graphique_rwi_vs_population.png"),
-    g_rwi_pop, width = 12, height = 7, dpi = 300
-  )
-  cat("  ✓ graphique_rwi_vs_population.png\n\n")
-}
-
 cat("✓ Partie IV.5 terminée — p_rwi disponible dans :\n")
 cat("  • reseau_rwanda  (attribut de nœud : rwi_brut, p_rwi)\n")
 cat("  • DuckDB         (table richesse_entrepots)\n")
@@ -3720,11 +3310,6 @@ cat("  • emploi_total_par_entrepot   [", nrow(entreposages_sf), "]\n\n")
 ################################################################################
 # TRANSITION IV.5 → V — CALCUL DES TAILLES COMPOSITES OFFRE ET DEMANDE
 #
-# CHANGEMENT PAR RAPPORT À L'ANCIENNE VERSION :
-#   Ancienne version : une seule taille_composite pour offre ET demande,
-#                      basée sur la population et le RWI.
-#   Nouvelle version : deux tailles composites distinctes.
-#
 # ── TAILLE COMPOSITE OFFRE (taille_composite_offre) ───────────────────────────
 #   Capte la CAPACITÉ PRODUCTIVE d'une zone.
 #   Basée sur l'emploi total du district (RPHC5 2022) si disponible,
@@ -3749,10 +3334,10 @@ cat("  • emploi_total_par_entrepot   [", nrow(entreposages_sf), "]\n\n")
 #   Parties VIII et IX qui n'utilisent pas encore la distinction offre/demande.
 #
 # DÉPENDANCES :
-#   - diag_population         (IV.4.D) → pop_i côté demande
-#   - emploi_total_par_entrepot (IV.4.F) → emploi_i côté offre
+#   - diag_population            (IV.4.D) → pop_i côté demande
+#   - emploi_total_par_entrepot  (IV.4.F) → emploi_i côté offre
 #   - profil_offre_empirique_all (IV.4.F) → profils d'offre empiriques
-#   - diag_rwi                (IV.5)   → p_rwi_i
+#   - diag_rwi                   (IV.5)   → p_rwi_i
 ################################################################################
 
 cat("── Calcul des tailles composites offre et demande (RPHC5) ─────────────\n\n")
@@ -3947,6 +3532,23 @@ cat("  Composite (géom.)      : min / max =",
     round(min(taille_composite),         3), "/",
     round(max(taille_composite),         3), "\n\n")
 
+# ── Indices des nœuds-entrepôts dans le graphe igraph ─────────────────────────
+# warehouse_nodes_base est un vecteur d'entiers : chaque valeur est la position
+# (l'indice) d'un nœud-entrepôt dans le graphe igraph sous-jacent à reseau_rwanda.
+# Il est distinct de noeuds_entreposage (qui est un tibble avec noms et types) :
+# ici on ne stocke que les numéros de lignes, ce dont igraph::distances() a besoin
+# pour lancer Dijkstra depuis les bons points de départ.
+# Exemple : warehouse_nodes_base = c(42, 187, 503, ...) signifie que les nœuds
+# n°42, 187, 503… du graphe sont des entrepôts.
+# Ce vecteur est calculé ici car is_warehouse est défini en IV.3 et reseau_rwanda
+# est complet. Il est ensuite transmis à 02_couts.R et 03_transport.R via
+# persist_entreposages.rds.
+warehouse_nodes_base <- which(
+  igraph::V(reseau_rwanda %>% as_tbl_graph())$is_warehouse
+)
+cat("✓ warehouse_nodes_base :", length(warehouse_nodes_base),
+    "nœuds-entrepôts indexés\n\n")
+
 # ==============================================================================
 # SAUVEGARDE INTER-SCRIPTS
 # ==============================================================================
@@ -3955,24 +3557,27 @@ cat("=== Sauvegarde des objets persistants (01_reseau) ===\n")
 
 saveRDS(
   list(
-    rwanda_boundary   = rwanda_boundary,
-    rwanda_national   = rwanda_national,
-    rwanda_provinces  = rwanda_provinces,
-    lacs_raw          = lacs_raw,
-    lacs_ok           = lacs_ok,
-    parcs_raw         = if (exists("parcs_raw")) parcs_raw else NULL,
-    parcs_ok          = parcs_ok,
-    bbox_carto        = bbox_carto,
-    villes_osm        = villes_osm
+    rwanda_boundary     = rwanda_boundary,
+    rwanda_national     = rwanda_national,
+    rwanda_provinces    = rwanda_provinces,
+    lacs_raw            = lacs_raw,
+    lacs_ok             = lacs_ok,
+    parcs_raw           = if (exists("parcs_raw")) parcs_raw else NULL,
+    parcs_ok            = parcs_ok,
+    bbox_carto          = bbox_carto,
+    villes_osm          = villes_osm,
+    zones_urbaines      = zones_urbaines,      
+    zones_industrielles = zones_industrielles
   ),
   PERSIST_GEODATA
 )
 
 saveRDS(
   list(
-    reseau_rwanda     = reseau_rwanda,
+    reseau_rwanda      = reseau_rwanda,
+    routes_rwanda      = routes_rwanda,
     n_aretes_physiques = igraph::ecount(reseau_rwanda %>% as_tbl_graph()),
-    date_creation     = Sys.time()
+    date_creation      = Sys.time()
   ),
   PERSIST_RESEAU_BASE
 )
@@ -3995,13 +3600,12 @@ saveRDS(
     somme_tailles_demande         = somme_tailles_demande,
     profil_offre_empirique        = profil_offre_empirique,
     profil_offre_empirique_all    = profil_offre_empirique_all,
-    # Landuse (pour 03_transport)
-    part_urbain                   = part_urbain,
-    part_industriel               = part_industriel,
     # Données démographiques
     diag_population               = diag_population,
     diag_rwi                      = diag_rwi,
     diag_emploi                   = if (exists("diag_emploi")) diag_emploi else NULL,
+    rwi_ok                        = rwi_ok,
+    rwi_sf                        = if (rwi_ok) rwi_sf else NULL,
     zone_to_prov_placeholder      = NULL   # rempli dans 05_ario
   ),
   PERSIST_ENTREPOSAGES
