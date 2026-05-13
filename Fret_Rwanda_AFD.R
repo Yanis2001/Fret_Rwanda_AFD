@@ -1,21 +1,6 @@
 ################################################################################
 # PROJET : Réseau Routier pour Modélisation du Commerce de Fret - Rwanda
-# OBJECTIF : Construire un graphe routier pondéré par les coûts de transport
-#            généralisés, puis modéliser les flux de fret entre zones via un
-#            modèle gravitaire calibré sur une table Input-Output fictive.
 # AUTEUR  : Yanis
-# DATE    : Mars 2026
-#
-# ── RÔLE DE DUCKDB ────────────────────────────────────────────────────────────
-#  DuckDB est une base analytique embarquée (pas de serveur).
-#  Dans ce projet, il remplace les boucles et mutate() R pour :
-#    • le nettoyage attributaire des routes (CASE WHEN SQL)
-#    • le calcul des coûts généralisés (CTEs chaînées)
-#    • le stockage de la matrice OD en format long
-#    • le modèle gravitaire (CROSS JOIN sur offres × demandes × frictions)
-#    • les exports Parquet/CSV (COPY TO, plus rapide que write.csv)
-#  Les opérations spatiales (géométries, Dijkstra) restent dans sf/igraph
-#  car DuckDB spatial n'est pas encore intégré avec sfnetworks.
 #
 # ── POUR RETROUVER LE DÉPÔT GITHUB ────────────────────────────────────────────
 #  system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
