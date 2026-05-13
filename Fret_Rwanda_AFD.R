@@ -8929,6 +8929,26 @@ cat("  Surfaces          :", resume_perturb$surfaces, "\n\n")
 
 cat("── Reconstruction du graphe dégradé ──────────────────────────────────\n\n")
 
+# ── Initialisation des vecteurs d'accumulation pour les itinéraires de contournement ──
+# On initialise ici les trois vecteurs qui mesurent l'usage des arêtes de détour. 
+# Trois métriques par arête physique :
+#   surcout_pondere_arete  : Σ(surcoût_relatif_% × volume_tonnes) pour tous les flux
+#                            reroutés passant par cette arête (indicateur d'exposition)
+#   volume_detourne_arete  : Σ(volume_tonnes) rerouté passant par cette arête (tonnes)
+surcout_pondere_arete  <- numeric(n_aretes_physiques)
+volume_detourne_arete  <- numeric(n_aretes_physiques)
+
+# ── Table de lookup pour les coûts OD de référence ────────────────────────────
+# Plutôt que de faire filter(od_long, id_origine == i, id_destination == j)
+# à chaque itération de la boucle interne (O(n) par appel), on construit
+# un vecteur nommé qui permet un accès direct en O(1) via la clé "i_j".
+# paste0(i, "_", j) est la clé unique pour chaque paire OD.
+od_ref_map <- setNames(
+  od_long$cout_usd,
+  paste0(od_long$id_origine, "_", od_long$id_destination)
+)
+cat("  Table de référence OD pré-chargée (", length(od_ref_map), "paires)\n\n")
+
 # ── Récupération des poids originaux du graphe multi-modal ────────────────────
 # igraph::E() : accède aux arêtes (edges) du graphe.
 # $weight : attribut "weight" de chaque arête (coût de transport en USD).
@@ -9061,6 +9081,55 @@ for (i in seq_along(warehouse_nodes_base)) {
       }
       
       rm(path_deg)
+      
+      # ── Accumulation pour les itinéraires de contournement ──────────────────
+      # Les paires inchangées (min_cout_deg ≈ cout_ref_ij) sont
+      # ignorées car leur chemin de détour est identique au chemin de référence.
+      if (!is.infinite(min_cout_deg) && length(edges_path_deg) > 0) {
+        
+        # Accès O(1) au coût de référence via la hash map (évite filter(od_long))
+        cout_ref_ij <- od_ref_map[paste0(i, "_", j)]
+        
+        # Vérifications : paire connue + surcoût positif + cout_ref > 0 (évite / 0)
+        if (!is.na(cout_ref_ij) && min_cout_deg > cout_ref_ij && cout_ref_ij > 0) {
+          
+          surcout_rel_ij <- (min_cout_deg - cout_ref_ij) / cout_ref_ij * 100
+          volume_ij      <- flux_tonnes_total[i, j]
+          
+          if (!is.na(volume_ij) && volume_ij > 0) {
+            
+            # Extraction des arêtes "route" uniquement (on exclut les arêtes de
+            # transbordement inter-véhicules qui n'ont pas d'équivalent physique).
+            # lookup_type et lookup_physique ont été construits en Partie V.2.
+            edges_routes_ij <- edges_path_deg[
+              edges_path_deg <= max_idx_mm &
+                lookup_type[edges_path_deg] == "route"
+            ]
+            
+            if (length(edges_routes_ij) > 0) {
+              
+              idx_phys_ij <- lookup_physique[edges_routes_ij]
+              # Filtrage défensif : on ne garde que les indices dans [1, n_aretes_physiques].
+              # Des indices hors plage peuvent apparaître sur les arêtes dégénérées
+              # créées par to_spatial_subdivision() (Partie III.2).
+              idx_phys_ij <- idx_phys_ij[
+                idx_phys_ij >= 1L & idx_phys_ij <= n_aretes_physiques
+              ]
+              
+              if (length(idx_phys_ij) > 0) {
+                
+                # Accumulation pondérée : un flux de 5 000 t avec +50% de surcoût
+                # pèse davantage qu'un flux de 50 t avec +200% dans le classement
+                # final des axes de détour les plus sollicités.
+                surcout_pondere_arete[idx_phys_ij] <-
+                  surcout_pondere_arete[idx_phys_ij] + surcout_rel_ij * volume_ij
+                volume_detourne_arete[idx_phys_ij] <-
+                  volume_detourne_arete[idx_phys_ij] + volume_ij
+              }
+            }
+          }
+        }
+      }
       
       if (length(edges_path_deg) > 0) {
         edge_data_deg   <- igraph::edge_attr(graphe_degrade)
@@ -9463,6 +9532,8 @@ cat("\n")
 #   Carte B — Arêtes critiques : classement des segments les plus sensibles
 #   Carte C — Surcoûts par zone : gradient de vulnérabilité économique
 #   Graphique — Distribution des surcoûts relatifs par type de route
+#   Carte D — Nouvelles routes 
+#   Graphique — Report modal.
 ################################################################################
 
 cat("── Génération des cartes et exports ──────────────────────────────────\n\n")
@@ -9484,7 +9555,7 @@ aretes_perturbees_sf <- aretes_reseau_sf %>%
   filter(arete_idx %in% indices_aretes_perturbees)
 
 # Arêtes critiques (top N pour la Carte B)
-N_ARETES_AFFICHEES <- min(20, nrow(criticite_df))
+N_ARETES_AFFICHEES <- min(200, nrow(criticite_df))
 aretes_critiques_sf <- aretes_reseau_sf %>%
   filter(arete_idx %in% criticite_df$arete_idx[1:N_ARETES_AFFICHEES]) %>%
   left_join(
@@ -9701,112 +9772,6 @@ ggsave(
 )
 cat("  ✓ Graphique sauvegardé\n\n")
 
-# ==============================================================================
-# IX.6 BIS — CALCUL DES ITINÉRAIRES DE CONTOURNEMENT
-# Alimente la Carte D (nouvelles routes) et le graphique de report modal.
-# Dépend de : od_compare (IX.4), graphe_degrade (IX.3),
-#             indices_aretes_perturbees (IX.2), flux_tonnes_total (VIII)
-# ==============================================================================
-
-cat("── Calcul des itinéraires de contournement ───────────────────────────\n\n")
-
-# ── Sélection des paires reroutées les plus importantes ───────────────────────
-# On exclut les paires "inchangées" (chemin non affecté) et "déconnectées"
-# (plus de chemin possible → pas de nouveau trajet à calculer).
-# On limite aux 300 paires au plus fort surcoût absolu pour la performance.
-paires_reroutees <- od_compare %>%
-  filter(type_impact %in% c("faible", "modere", "fort", "tres_fort")) %>%
-  arrange(desc(abs(surcout_absolu_usd))) %>%
-  slice_head(n = min(300, nrow(.)))
-
-cat("  Paires reroutées à analyser :", nrow(paires_reroutees), "\n")
-
-# ── Initialisation des vecteurs d'accumulation ────────────────────────────────
-# Pour chaque arête physique (indices 1..n_aretes_physiques) :
-#   surcout_pondere_arete  = somme des (surcoût_relatif × volume_tonnes) pour
-#                            tous les flux empruntant cette arête en détour
-#   volume_detourne_arete  = somme des tonnages reroutés passant par l'arête
-#   n_flux_par_arete       = nombre de flux OD reroutés passant par l'arête
-surcout_pondere_arete  <- numeric(n_aretes_physiques)
-volume_detourne_arete  <- numeric(n_aretes_physiques)
-n_flux_par_arete       <- integer(n_aretes_physiques)
-
-poids_deg <- igraph::E(graphe_degrade)$weight
-
-pb_rerou <- progress_bar$new(
-  format = "  Contournements [:bar] :percent | ETA: :eta",
-  total  = nrow(paires_reroutees),
-  clear  = FALSE,
-  width  = 60
-)
-
-for (k in seq_len(nrow(paires_reroutees))) {
-  
-  i_k       <- paires_reroutees$id_origine[k]
-  j_k       <- paires_reroutees$id_destination[k]
-  surcout_k <- paires_reroutees$surcout_relatif_pct[k]
-  volume_k  <- flux_tonnes_total[i_k, j_k]
-  
-  if (is.na(volume_k) || volume_k <= 0) { pb_rerou$tick(); next }
-  
-  # Dijkstra multi-modal sur le réseau dégradé (même logique que Partie VI.1)
-  sources_k     <- as.integer(sapply(seq_len(n_vehicules),
-                                     function(v) node_multi(v, warehouse_nodes_base[i_k])))
-  targets_all_k <- as.integer(as.vector(sapply(seq_len(n_vehicules),
-                                               function(v) node_multi(v, warehouse_nodes_base))))
-  cols_k        <- j_k + (seq_len(n_vehicules) - 1) * n_warehouses
-  
-  dists_k   <- igraph::distances(graphe_degrade,
-                                 v       = sources_k,
-                                 to      = targets_all_k[cols_k],
-                                 weights = poids_deg)
-  min_cout_k <- min(dists_k, na.rm = TRUE)
-  if (is.infinite(min_cout_k)) { pb_rerou$tick(); next }
-  
-  # Identification du meilleur itinéraire et reconstruction du chemin
-  best_idx_k  <- which(dists_k == min_cout_k, arr.ind = TRUE)
-  if (!is.matrix(best_idx_k)) best_idx_k <- matrix(best_idx_k, nrow = 1)
-  best_from_k <- sources_k[best_idx_k[1, 1]]
-  best_to_k   <- targets_all_k[cols_k[best_idx_k[1, 2]]]
-  
-  path_k     <- igraph::shortest_paths(graphe_degrade,
-                                       from    = best_from_k,
-                                       to      = best_to_k,
-                                       weights = poids_deg,
-                                       output  = "epath")
-  edges_k    <- as.integer(path_k$epath[[1]])
-  rm(path_k)
-  
-  # Extraction des arêtes physiques valides (type "route", pas "transbordement")
-  edges_routes_k <- edges_k[
-    edges_k <= max_idx_mm & lookup_type[edges_k] == "route"
-  ]
-  if (length(edges_routes_k) == 0) { pb_rerou$tick(); next }
-  
-  idx_phys_k <- lookup_physique[edges_routes_k]
-  idx_phys_k <- idx_phys_k[idx_phys_k >= 1 & idx_phys_k <= n_aretes_physiques]
-  if (length(idx_phys_k) == 0) { pb_rerou$tick(); next }
-  
-  # Accumulation : pondération par le volume transporté
-  # Un flux de 5 000t contribue davantage à la criticité d'un axe de détour
-  # qu'un flux de 50t, même si leur surcoût relatif est identique.
-  surcout_pondere_arete[idx_phys_k] <- surcout_pondere_arete[idx_phys_k] +
-    surcout_k * volume_k
-  volume_detourne_arete[idx_phys_k] <- volume_detourne_arete[idx_phys_k] + volume_k
-  n_flux_par_arete[idx_phys_k]      <- n_flux_par_arete[idx_phys_k] + 1L
-  
-  pb_rerou$tick()
-}
-
-# Surcoût moyen pondéré par le volume sur chaque arête de détour
-surcout_moyen_detour <- ifelse(
-  volume_detourne_arete > 0,
-  surcout_pondere_arete / volume_detourne_arete,
-  NA_real_
-)
-
-cat("\n  Arêtes empruntées dans les détours :",
-    sum(volume_detourne_arete > 0), "\n\n")
 
 # ==============================================================================
 # CARTE D — Itinéraires de contournement, colorés par surcoût moyen
@@ -9822,6 +9787,13 @@ PALETTE_SURCOUT_DETOUR <- c(
   "Très fort (60–100%)" = "#E31A1C",
   "Extrême (>100%)"     = "#67001F"
 )
+
+n_paires_reroutees_total <- sum(
+  !is.na(od_ref_map[paste0(od_degrade$id_origine, "_", od_degrade$id_destination)]) &
+    od_degrade$cout_degrade >
+    od_ref_map[paste0(od_degrade$id_origine, "_", od_degrade$id_destination)]
+)
+cat("  Paires reroutées traitées (toutes) :", n_paires_reroutees_total, "\n")
 
 # Construction de la couche géographique des arêtes de détour.
 # On exclut les arêtes perturbées elles-mêmes : seules les NOUVELLES
