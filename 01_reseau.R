@@ -4007,6 +4007,38 @@ saveRDS(
   PERSIST_ENTREPOSAGES
 )
 
+# Création de la closure fond_carte (embarque les données géo)
+fond_carte <- local({
+  .prov    <- rwanda_provinces
+  .nat     <- rwanda_national
+  .bbox    <- bbox_carto
+  .lacs_ok <- lacs_ok
+  .lacs    <- if (lacs_ok) lacs_raw  else NULL
+  .parc_ok <- parcs_ok
+  .parcs   <- if (parcs_ok) parcs_raw else NULL
+  
+  function() {
+    carte <- tm_shape(.prov, bbox = .bbox) +
+      tm_polygons(fill = "#F5F5F0", col = "#AAAAAA", lwd = 0.8,
+                  fill.legend = tm_legend(show = FALSE)) +
+      tm_shape(.nat) +
+      tm_borders(col = "#222222", lwd = 2.5)
+    
+    if (.parc_ok && !is.null(.parcs)) carte <- carte +
+        tm_shape(.parcs) +
+        tm_polygons(fill = "#A8D5A2", col = "#5A9E52", lwd = 1.2,
+                    fill_alpha = 0.45, fill.legend = tm_legend(show = FALSE))
+    
+    if (.lacs_ok && !is.null(.lacs)) carte <- carte +
+        tm_shape(.lacs) +
+        tm_polygons(fill = "#A8C8E8", col = "#7AAAC8", lwd = 0.5,
+                    fill.legend = tm_legend(show = FALSE))
+    carte
+  }
+})
+
+saveRDS(fond_carte, file.path(DIR_OUTPUT, "persist_fond_carte.rds"))
+cat("✓ persist_fond_carte.rds sauvegardé\n")
 cat("✓ persist_geodata.rds\n")
 cat("✓ persist_reseau_base.rds\n")
 cat("✓ persist_entreposages.rds\n\n")
