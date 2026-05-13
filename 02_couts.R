@@ -999,3 +999,45 @@ ggsave(file.path(DIR_OUTPUT, "graphique_emissions_par_vehicule.png"),
        g_emissions, width = 10, height = 6, dpi = 300)
 cat("  ✓ graphique_emissions_par_vehicule.png\n\n")
 
+# ==============================================================================
+# SAUVEGARDE INTER-SCRIPTS
+# ==============================================================================
+
+cat("=== Sauvegarde des objets persistants (02_couts) ===\n")
+
+saveRDS(
+  list(
+    reseau_rwanda     = reseau_rwanda,   # avec coûts + émissions intégrés
+    date_creation     = Sys.time()
+  ),
+  PERSIST_RESEAU_COUTS
+)
+
+# Le graphe multi-modal est lourd (~500 Mo) : on le sort de env_lourds
+saveRDS(
+  list(
+    graphe_multimodal  = recuperer_lourd("graphe_multimodal"),
+    n_noeuds           = n_noeuds,
+    n_vehicules        = n_vehicules,
+    date_creation      = Sys.time()
+  ),
+  PERSIST_GRAPHE_MM
+)
+
+saveRDS(
+  list(
+    mapping_aretes_mm  = mapping_aretes_mm,
+    lookup_type        = lookup_type,
+    lookup_physique    = lookup_physique,
+    lookup_vehicule    = lookup_vehicule,
+    max_idx_mm         = max_idx_mm,
+    poids_mm           = igraph::E(recuperer_lourd("graphe_multimodal"))$weight,
+    date_creation      = Sys.time()
+  ),
+  PERSIST_MAPPING_MM
+)
+
+cat("✓ persist_reseau_couts.rds\n")
+cat("✓ persist_graphe_mm.rds\n")
+cat("✓ persist_mapping_mm.rds\n\n")
+cat("Lancer 03_transport.R pour la suite.\n")
