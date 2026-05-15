@@ -61,7 +61,6 @@ packages_requis <- c(
   "tidygraph",     # Interface tidyverse pour manipuler des graphes igraph
   "geodata",       # Téléchargement de frontières administratives GADM
   "rnaturalearth", # Données géographiques Natural Earth (pays, côtes…)
-  "aws.s3",        # Accès aux objets stockés sur SSP Cloud (MinIO compatible S3)
   "duckdb",        # Base analytique embarquée — moteur SQL sans serveur
   "DBI",           # Interface R standard pour les bases de données (pilote DuckDB)
   "scales",        # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
@@ -125,12 +124,30 @@ for (d in c(DIR_CACHE, DIR_PERSIST, DIR_CARTES, DIR_EXPORTS, DIR_RASTERS)) {
   dir.create(d, showWarnings = FALSE, recursive = TRUE)
 }
 
+# URL publique et stable pour le PBF Rwanda (date fixe = reproductibilité)
+# Si on veut utiliser les données les plus à jour, utiliser le lien suivant : 
+# https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
+GEOFABRIK_PBF_URL <- "https://download.geofabrik.de/africa/rwanda-260315.osm.pbf"
+
 chemin_pbf     <- "rwanda-260315.osm.pbf"  # Nom local du fichier PBF après téléchargement
 
-# Chemins MinIO (SSP Cloud)
-MINIO_BUCKET   <- "yanisdumas"
-MINIO_PBF_PATH <- "data/raw/rwanda-260315.osm.pbf"
-MINIO_BASE_URL <- "minio.lab.sspcloud.fr"
+# WorldPop a réorganisé plusieurs fois son arborescence.
+# On teste les URLs candidates dans l'ordre jusqu'à en trouver une valide.
+# La première URL est la structure 2024 ; les suivantes sont des
+# fallbacks vers les structures antérieures.
+WORLDPOP_URLS_CANDIDATES <- c(
+  # Structure actuelle — constrained, ajusté UN, 100m
+  paste0("https://data.worldpop.org/GIS/Population/",
+         "Global_2000_2020_Constrained/2020/BSGM/RWA/",
+         "rwa_ppp_2020_UNadj_constrained.tif"),
+  # Structure alternative — unconstrained
+  paste0("https://data.worldpop.org/GIS/Population/",
+         "Global_2000_2020/2020/RWA/rwa_ppp_2020_UNadj.tif"),
+  # Structure via wopr (WorldPop Open Population Repository)
+  paste0("https://wopr.worldpop.org/data/",
+         "RWA/population/v1.0/",
+         "RWA_population_v1_0_gridded.tif")
+)
 
 # Chemin local du raster WorldPop si déjà téléchargé 
 WORLDPOP_LOCAL_PATH <- file.path(DIR_RASTERS, "worldpop_rwanda_100m.tif")

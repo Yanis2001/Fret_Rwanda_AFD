@@ -24,22 +24,21 @@ source("00_parametres.R")
 # utiles au fret via une requête GDAL filtrée sur les types de routes.
 # ==============================================================================
 
-# ── Téléchargement depuis MinIO (SSP Cloud) ───────────────────────────────────
-# Le fichier PBF (Protocolbuffer Binary Format) est le format natif d'OpenStreetMap.
-# Il est stocké sur le bucket S3 personnel sur la plateforme SSP Cloud.
-# save_object() télécharge l'objet S3 vers le répertoire de travail local.
-# Un "bucket S3" est un espace de stockage dans le cloud, similaire à un dossier
-# Google Drive ou Dropbox, mais accessible via une API (interface programmatique).
-# MinIO est une implémentation open-source compatible avec l'API Amazon S3,
-# utilisée sur la plateforme SSP Cloud de l'INSEE/CASD.
-save_object(
-  object    = MINIO_PBF_PATH,                      # Chemin dans le bucket S3
-  bucket    = MINIO_BUCKET,                        # Nom du bucket MinIO
-  file      = chemin_pbf,                          # Nom du fichier local après téléchargement
-  region    = "",                                  # Région vide pour MinIO (non AWS standard)
-  use_https = TRUE,
-  base_url  = MINIO_BASE_URL                       # Point d'accès MinIO SSP Cloud
-)
+# Téléchargement du PBF depuis Geofabrik si absent en local.
+# Source publique et pérenne — indépendante du compte SSPCloud.
+# L'URL datée garantit la reproductibilité (données OSM à date fixe).
+if (!file.exists(chemin_pbf)) {
+  cat("  Téléchargement du PBF depuis Geofabrik...\n")
+  download.file(
+    url      = GEOFABRIK_PBF_URL,
+    destfile = chemin_pbf,
+    mode     = "wb",
+    quiet    = FALSE
+  )
+  cat("✓ PBF téléchargé :", chemin_pbf, "\n\n")
+} else {
+  cat("✓ PBF déjà présent en local :", chemin_pbf, "\n\n")
+}
 
 # Vérification de l'existence du fichier avant de continuer.
 # stop() interrompt le script avec un message d'erreur explicite.
@@ -2074,24 +2073,6 @@ if (!is.null(WORLDPOP_LOCAL_PATH) && file.exists(WORLDPOP_LOCAL_PATH)) {
 # ── REMPLACER le bloc de téléchargement WorldPop ──────────────────────────────
 if (!worldpop_ok) {
   
-  # WorldPop a réorganisé plusieurs fois son arborescence.
-  # On teste les URLs candidates dans l'ordre jusqu'à en trouver une valide.
-  # La première URL est la structure 2024 ; les suivantes sont des
-  # fallbacks vers les structures antérieures.
-  WORLDPOP_URLS_CANDIDATES <- c(
-    # Structure actuelle — constrained, ajusté UN, 100m
-    paste0("https://data.worldpop.org/GIS/Population/",
-           "Global_2000_2020_Constrained/2020/BSGM/RWA/",
-           "rwa_ppp_2020_UNadj_constrained.tif"),
-    # Structure alternative — unconstrained
-    paste0("https://data.worldpop.org/GIS/Population/",
-           "Global_2000_2020/2020/RWA/rwa_ppp_2020_UNadj.tif"),
-    # Structure via wopr (WorldPop Open Population Repository)
-    paste0("https://wopr.worldpop.org/data/",
-           "RWA/population/v1.0/",
-           "RWA_population_v1_0_gridded.tif")
-  )
-  
   for (url_tentative in WORLDPOP_URLS_CANDIDATES) {
     
     cat("  Tentative :", url_tentative, "\n")
@@ -2199,20 +2180,6 @@ if (worldpop_ok) {
 cat("── Approche C : recensement NISR 2022 (par district) ────────────────\n")
 
 pop_nisr_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
-
-# ── Téléchargement du CSV NISR depuis MinIO si pas déjà présent ───────────────
-if (!file.exists(NISR_CSV_PATH)) {
-  dir.create(dirname(NISR_CSV_PATH), showWarnings = FALSE, recursive = TRUE)
-  save_object(
-    object    = NISR_CSV_PATH,
-    bucket    = MINIO_BUCKET,
-    file      = NISR_CSV_PATH,
-    region    = "",
-    use_https = TRUE,
-    base_url  = MINIO_BASE_URL
-  )
-  cat("  ✓ CSV NISR téléchargé depuis MinIO\n")
-}
 
 if (file.exists(NISR_CSV_PATH)) {
   
@@ -3042,24 +3009,6 @@ profil_offre_empirique_all <- matrix(
 )
 emploi_total_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
 rphc5_emploi_ok           <- FALSE
-
-# ── Téléchargement depuis MinIO si le fichier n'est pas en local ──────────────
-if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
-  dir.create(dirname(RPHC5_EMPLOI_CSV_PATH), showWarnings = FALSE, recursive = TRUE)
-  tryCatch({
-    save_object(
-      object    = RPHC5_EMPLOI_CSV_PATH,
-      bucket    = MINIO_BUCKET,
-      file      = RPHC5_EMPLOI_CSV_PATH,
-      region    = "",
-      use_https = TRUE,
-      base_url  = MINIO_BASE_URL
-    )
-    cat("  ✓ Fichier emploi RPHC5 téléchargé depuis MinIO\n")
-  }, error = function(e) {
-    cat("  ⚠ Téléchargement MinIO échoué :", conditionMessage(e), "\n")
-  })
-}
 
 if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
   
