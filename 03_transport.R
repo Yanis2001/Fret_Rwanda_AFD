@@ -98,7 +98,7 @@ idx     <- 0
 # on charge directement le fichier sauvegardé — le calcul est alors instantané.
 # Pour forcer un recalcul complet (ex : après avoir ajouté des zones ou modifié
 # le réseau), il suffit de supprimer le fichier "outputs/od_cache.rds".
-CACHE_OD <- file.path(DIR_OUTPUT, "od_cache.rds")
+CACHE_OD <- file.path(DIR_EXPORTS, "od_cache.rds")
 cache_od_valide <- FALSE
 
 # Colonnes attendues dans od_long — à mettre à jour si la structure change
@@ -234,7 +234,7 @@ if (!cache_od_valide) {
   # là où on s'est arrêté — utile sur SSP Cloud où les crashs sont fréquents.
   # Le checkpoint est différent du cache final : il sert UNIQUEMENT à reprendre
   # un calcul interrompu. Il sera supprimé automatiquement à la fin du calcul.
-  CHECKPOINT_OD <- file.path(DIR_OUTPUT, "od_checkpoint.rds")
+  CHECKPOINT_OD <- file.path(DIR_EXPORTS, "od_checkpoint.rds")
   i_start <- 1L  # Origine de départ par défaut
   
   if (file.exists(CHECKPOINT_OD)) {
@@ -503,31 +503,31 @@ duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 # Il peut contenir des géométries (points, lignes, polygones) + leurs attributs.
 # Compatible avec QGIS (logiciel SIG libre) et ArcGIS (logiciel SIG commercial).
 # Seul st_write() peut exporter des géométries (DuckDB ne les supporte pas encore)
-st_write(aretes_finales, file.path(DIR_OUTPUT,"reseau_rwanda_aretes.gpkg"),
+st_write(aretes_finales, file.path(DIR_EXPORTS,"reseau_rwanda_aretes.gpkg"),
          delete_dsn=TRUE, quiet=TRUE)
 
 noeuds_finaux <- reseau_rwanda %>%
   activate("nodes") %>%
   st_as_sf() %>%
   select(node_id, is_warehouse, warehouse_name, warehouse_type)
-st_write(noeuds_finaux, file.path(DIR_OUTPUT, "reseau_rwanda_noeuds.gpkg"),
+st_write(noeuds_finaux, file.path(DIR_EXPORTS, "reseau_rwanda_noeuds.gpkg"),
          delete_dsn=TRUE, quiet=TRUE)
 
 # Exports CSV depuis DuckDB via COPY TO
 # HEADER = TRUE : inclure les noms de colonnes en première ligne du fichier
 dbExecute(con, paste0(
   "COPY (SELECT * FROM matrice_od) TO '",
-  file.path(DIR_OUTPUT, "matrice_od_long.csv"),
+  file.path(DIR_EXPORTS, "matrice_od_long.csv"),
   "' (FORMAT CSV, HEADER)"
 ))
 dbExecute(con, paste0(
   "COPY (SELECT * FROM aretes_finales) TO '",
-  file.path(DIR_OUTPUT,'aretes_finales.csv'),
+  file.path(DIR_EXPORTS,'aretes_finales.csv'),
   "'(FORMAT CSV, HEADER)"
 ))
 dbExecute(con, paste0(
   "COPY (SELECT * FROM couts_prebordure) TO '",
-  file.path(DIR_OUTPUT, "couts_prebordure.csv"),
+  file.path(DIR_EXPORTS, "couts_prebordure.csv"),
   "' (FORMAT CSV, HEADER)"
 ))
 cat("  ✓ couts_prebordure.csv\n")
@@ -536,12 +536,12 @@ cat("  ✓ couts_prebordure.csv\n")
 # Lisible directement avec : Python → pd.read_parquet() ; R → arrow::read_parquet()
 dbExecute(con, paste0(
   "COPY (SELECT * FROM aretes_finales) TO '",
-  file.path(DIR_OUTPUT, 'aretes_finales.parquet'), 
+  file.path(DIR_EXPORTS, 'aretes_finales.parquet'), 
   "'(FORMAT PARQUET)"
 ))
 dbExecute(con, paste0(
   "COPY (SELECT * FROM matrice_od) TO '",
-  file.path(DIR_OUTPUT, 'matrice_od.parquet'), 
+  file.path(DIR_EXPORTS, 'matrice_od.parquet'), 
   "'(FORMAT PARQUET)"
 ))
 
@@ -764,7 +764,7 @@ calc_part_landuse <- function(buffer_geom, zones_sf) {
 # Comme pour les pentes et la matrice OD, on met le résultat en cache pour
 # éviter de le recalculer inutilement à chaque exécution.
 # Le cache est invalidé si le nombre de zones change (nouvelle zone ajoutée).
-CACHE_LANDUSE <- file.path(DIR_OUTPUT, "landuse_cache.rds")
+CACHE_LANDUSE <- file.path(DIR_CACHE, "landuse_cache.rds")
 cache_landuse_valide <- FALSE
 
 if (file.exists(CACHE_LANDUSE)) {
@@ -1204,7 +1204,7 @@ cat("  Tonnage total modélisé:",
 paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
 paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
 
-CACHE_AFFECTATION      <- file.path(DIR_OUTPUT, "affectation_cache.rds")
+CACHE_AFFECTATION      <- file.path(DIR_CACHE, "affectation_cache.rds")
 cache_affectation_valide <- FALSE
 
 # Empreinte (hash) des entrées du calcul. Si l'une d'entre elles change,
@@ -1830,19 +1830,19 @@ cat("\n✓ Transition VIII.1 → VIII.2 terminée\n\n")
 cat("Export des données du modèle de fret...\n")
 
 write.csv(as.data.frame(A),
-          file.path(DIR_OUTPUT,"table_io_coefficients.csv"),
+          file.path(DIR_EXPORTS,"table_io_coefficients.csv"),
           row.names = TRUE)
 write.csv(recap_io,
-          file.path(DIR_OUTPUT,"table_io_recap.csv"),
+          file.path(DIR_EXPORTS,"table_io_recap.csv"),
           row.names = FALSE)
 write.csv(as.data.frame(flux_total) %>% rownames_to_column("Zone"),
-          file.path(DIR_OUTPUT,"matrice_flux_gravitaire_musd.csv"),
+          file.path(DIR_EXPORTS,"matrice_flux_gravitaire_musd.csv"),
           row.names = FALSE)
 write.csv(as.data.frame(flux_tonnes_total) %>% rownames_to_column("Zone"),
-          file.path(DIR_OUTPUT,"matrice_flux_fret_tonnes.csv"),
+          file.path(DIR_EXPORTS,"matrice_flux_fret_tonnes.csv"),
           row.names = FALSE)
 write.csv(recap_zones,
-          file.path(DIR_OUTPUT,"offre_demande_zones.csv"),
+          file.path(DIR_EXPORTS,"offre_demande_zones.csv"),
           row.names = FALSE)
 
 # ── Export complémentaire : réseau avec volumes fret ──────────────────────────
@@ -1856,7 +1856,7 @@ aretes_fret_export <- reseau_rwanda %>%
          part_camion_lourd)
 
 st_write(aretes_fret_export,
-         file.path(DIR_OUTPUT, "reseau_rwanda_avec_fret.gpkg"),
+         file.path(DIR_EXPORTS, "reseau_rwanda_avec_fret.gpkg"),
          delete_dsn = TRUE, quiet = TRUE)
 cat("✓ GeoPackage avec volumes fret exporté\n")
 
@@ -1868,7 +1868,7 @@ aretes_fret_sectoriel <- aretes_fret_export %>%
   bind_cols(volume_par_secteur_df)
 
 write.csv(aretes_fret_sectoriel,
-          file.path(DIR_OUTPUT, "volumes_fret_par_secteur.csv"),
+          file.path(DIR_EXPORTS, "volumes_fret_par_secteur.csv"),
           row.names = FALSE)
 cat("✓ Export sectoriel par arête sauvegardé\n")
 

@@ -22,7 +22,7 @@
 ################################################################################
 
 source("00_parametres.R")
-fond_carte <- readRDS(file.path(DIR_OUTPUT, "persist_fond_carte.rds"))
+fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 
 .ent  <- readRDS(PERSIST_ENTREPOSAGES)
 list2env(.ent, envir = .GlobalEnv)
@@ -57,7 +57,7 @@ carte_verif_routes <- fond_carte() +
 # tmap_save() exporte la carte en fichier PNG haute résolution.
 # width, height : dimensions en pixels. dpi = 300 : résolution pour impression.
 tmap_save(carte_verif_routes,
-          file.path(DIR_OUTPUT, "carte_verif_routes.png"),
+          file.path(DIR_CARTES, "carte_verif_routes.png"),
           width = 3000, height = 2400, dpi = 300)
 
 # Ce bloc if (FALSE) est volontairement désactivé (FALSE = ne jamais s'exécuter).
@@ -76,8 +76,8 @@ cat("✓ Carte de vérification générée\n\n")
 # ── Carte des arêtes perdues ────────────────────────────────────────────────
 cat("Génération de la carte des arêtes perdues...\n")
 
-if (file.exists(file.path(DIR_OUTPUT, "persist_diag_reseau.rds"))) {
-  .diag <- readRDS(file.path(DIR_OUTPUT, "persist_diag_reseau.rds"))
+if (file.exists(file.path(DIR_PERSIST, "persist_diag_reseau.rds"))) {
+  .diag <- readRDS(file.path(DIR_PERSIST, "persist_diag_reseau.rds"))
   list2env(.diag, envir = .GlobalEnv)
   rm(.diag)
 }
@@ -109,7 +109,7 @@ carte_aretes_perdues <- fond_carte() +
 
 tmap_save(
   carte_aretes_perdues,
-  file.path(DIR_OUTPUT, "carte_aretes_perdues.png"),
+  file.path(DIR_CARTES, "carte_aretes_perdues.png"),
   width = 3000, height = 2400, dpi = 300
 )
 if (FALSE) {
@@ -158,7 +158,7 @@ carte_population <- fond_carte() +
 
 tmap_save(
   carte_population,
-  file.path(DIR_OUTPUT, "carte_population_zones.png"),
+  file.path(DIR_CARTES, "carte_population_zones.png"),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ carte_population_zones.png\n")
@@ -231,7 +231,7 @@ g_pop <- diag_population %>%
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, "graphique_population_zones.png"),
+  file.path(DIR_CARTES, "graphique_population_zones.png"),
   g_pop, width = 12, height = 8, dpi = 300
 )
 cat("  ✓ graphique_population_zones.png\n\n")
@@ -298,7 +298,7 @@ carte_rwi <- fond_carte() +
 
 tmap_save(
   carte_rwi,
-  file.path(DIR_OUTPUT, "carte_rwi_zones.png"),
+  file.path(DIR_CARTES, "carte_rwi_zones.png"),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ carte_rwi_zones.png\n")
@@ -342,7 +342,7 @@ if (rwi_ok && nrow(rwi_sf) > 0) {
   
   tmap_save(
     carte_rwi_raster,
-    file.path(DIR_OUTPUT, "carte_rwi_rwanda_brut.png"),
+    file.path(DIR_CARTES, "carte_rwi_rwanda_brut.png"),
     width = 3000, height = 2400, dpi = 300
   )
   cat("  ✓ carte_rwi_rwanda_brut.png\n")
@@ -439,7 +439,7 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
   }
   
   ggsave(
-    file.path(DIR_OUTPUT, "graphique_rwi_vs_population.png"),
+    file.path(DIR_CARTES, "graphique_rwi_vs_population.png"),
     g_rwi_pop, width = 12, height = 7, dpi = 300
   )
   cat("  ✓ graphique_rwi_vs_population.png\n\n")
@@ -494,7 +494,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     tm_compass(position=c("right","top"))
   
   nom_fichier <- paste0("carte_couts_", id_veh, ".png")
-  tmap_save(carte, file.path(DIR_OUTPUT, nom_fichier), width=3000, height=2400, dpi=300)
+  tmap_save(carte, file.path(DIR_CARTES, nom_fichier), width=3000, height=2400, dpi=300)
   cat("  ✓", nom_fichier, "\n")
 }
 
@@ -583,7 +583,7 @@ if (nrow(ratio_df) > 0) {
     tm_scalebar(position=c("left","bottom")) +
     tm_compass(position=c("right","top"))
   
-  tmap_save(carte_ratio, file.path(DIR_OUTPUT,"carte_ratio_vehicules.png"),
+  tmap_save(carte_ratio, file.path(DIR_CARTES,"carte_ratio_vehicules.png"),
             width=3000, height=2400, dpi=300)
   cat("  ✓ carte_ratio_vehicules.png\n")
 }
@@ -628,7 +628,7 @@ if (nrow(ratio_moyen_df) > 0) {
     tm_compass(position=c("right","top"))
   
   tmap_save(carte_ratio_moyen,
-            file.path(DIR_OUTPUT,"carte_ratio_moyen_camionnette.png"),
+            file.path(DIR_CARTES,"carte_ratio_moyen_camionnette.png"),
             width=3000, height=2400, dpi=300)
   cat("  ✓ carte_ratio_moyen_camionnette.png\n")
 }
@@ -653,7 +653,7 @@ carte_pentes <- fond_carte() +
   tm_scalebar(position=c("left","bottom")) +
   tm_compass(position=c("right","top"))
 
-tmap_save(carte_pentes, file.path(DIR_OUTPUT,"carte_pentes_rwanda.png"),
+tmap_save(carte_pentes, file.path(DIR_CARTES,"carte_pentes_rwanda.png"),
           width=3000, height=2400, dpi=300)
 cat("  ✓ carte_pentes_rwanda.png\n")
 
@@ -694,7 +694,7 @@ carte_co2 <- fond_carte() +
   tm_compass(position  = c("right", "top"))
 
 tmap_save(carte_co2,
-          file.path(DIR_OUTPUT, "carte_emissions_co2_par_tkm.png"),
+          file.path(DIR_CARTES, "carte_emissions_co2_par_tkm.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("  ✓ carte_emissions_co2_par_tkm.png\n")
 
@@ -719,7 +719,7 @@ carte_nox <- fond_carte() +
   tm_compass(position  = c("right", "top"))
 
 tmap_save(carte_nox,
-          file.path(DIR_OUTPUT, "carte_emissions_nox_par_tkm.png"),
+          file.path(DIR_CARTES, "carte_emissions_nox_par_tkm.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("  ✓ carte_emissions_nox_par_tkm.png\n")
 
@@ -793,7 +793,7 @@ g_emissions <- ggplot(emissions_long,
     legend.position = "top"
   )
 
-ggsave(file.path(DIR_OUTPUT, "graphique_emissions_par_vehicule.png"),
+ggsave(file.path(DIR_CARTES, "graphique_emissions_par_vehicule.png"),
        g_emissions, width = 10, height = 6, dpi = 300)
 cat("  ✓ graphique_emissions_par_vehicule.png\n\n")
 

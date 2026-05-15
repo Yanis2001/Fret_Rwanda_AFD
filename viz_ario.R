@@ -19,7 +19,7 @@
 ################################################################################
 
 source("00_parametres.R")
-fond_carte <- readRDS(file.path(DIR_OUTPUT, "persist_fond_carte.rds"))
+fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 
 .ario <- readRDS(PERSIST_ARIO)
 list2env(.ario, envir = .GlobalEnv)
@@ -82,7 +82,7 @@ g_traj_secteurs <- ggplot(traj_secteurs,
   )
 
 ggsave(
-  file.path(DIR_OUTPUT,
+  file.path(DIR_CARTES,
             paste0("ario_trajectoire_secteurs_", NOM_SCENARIO, ".png")),
   g_traj_secteurs, width = 12, height = 7, dpi = 300
 )
@@ -123,7 +123,7 @@ g_traj_provinces <- ggplot(traj_provinces,
   )
 
 ggsave(
-  file.path(DIR_OUTPUT,
+  file.path(DIR_CARTES,
             paste0("ario_trajectoire_provinces_", NOM_SCENARIO, ".png")),
   g_traj_provinces, width = 12, height = 6, dpi = 300
 )
@@ -151,7 +151,7 @@ g_pertes_secteurs <- tableau_pertes_secteur %>%
   theme(plot.title = element_text(face = "bold"))
 
 ggsave(
-  file.path(DIR_OUTPUT,
+  file.path(DIR_CARTES,
             paste0("ario_pertes_secteurs_", NOM_SCENARIO, ".png")),
   g_pertes_secteurs, width = 11, height = 6, dpi = 300
 )
@@ -206,7 +206,7 @@ carte_pertes_ario <- fond_carte() +
 
 tmap_save(
   carte_pertes_ario,
-  file.path(DIR_OUTPUT,
+  file.path(DIR_CARTES,
             paste0("carte_ario_pertes_provinces_", NOM_SCENARIO, ".png")),
   width = 3000, height = 2400, dpi = 300
 )
@@ -253,7 +253,7 @@ g_heatmap_Z <- ggplot(Z_df, aes(x = Industrie_cliente, y = Industrie_fournisseur
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, "ario_heatmap_matrice_Z.png"),
+  file.path(DIR_CARTES, "ario_heatmap_matrice_Z.png"),
   g_heatmap_Z, width = 14, height = 12, dpi = 300
 )
 cat("  ✓ ario_heatmap_matrice_Z.png\n")

@@ -250,7 +250,7 @@ print(stats_flotte)
 # les grands tableaux analytiques. Lisible avec pandas en Python ou arrow en R.
 dbExecute(con, paste0(
   "COPY (SELECT * FROM aretes_couts_tous) TO '",
-  file.path(DIR_OUTPUT, "aretes_couts_tous_vehicules.parquet"),
+  file.path(DIR_EXPORTS, "aretes_couts_tous_vehicules.parquet"),
   "' (FORMAT PARQUET)"
 ))
 # Le chiffre qu'il y a à la suite de la commande précédente correspond au nombre de lignes bien exportées

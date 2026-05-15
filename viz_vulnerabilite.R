@@ -22,7 +22,7 @@
 ################################################################################
 
 source("00_parametres.R")
-fond_carte <- readRDS(file.path(DIR_OUTPUT, "persist_fond_carte.rds"))
+fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 
 .ent  <- readRDS(PERSIST_ENTREPOSAGES)
 list2env(.ent, envir = .GlobalEnv)
@@ -145,7 +145,7 @@ carte_reseau_degrade <- fond_carte() +
 
 tmap_save(
   carte_reseau_degrade,
-  file.path(DIR_OUTPUT, paste0("carte_reseau_degrade_", NOM_SCENARIO, ".png")),
+  file.path(DIR_CARTES, paste0("carte_reseau_degrade_", NOM_SCENARIO, ".png")),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ Carte A sauvegardée\n")
@@ -187,7 +187,7 @@ carte_criticite <- fond_carte() +
 
 tmap_save(
   carte_criticite,
-  file.path(DIR_OUTPUT, paste0("carte_criticite_aretes_", NOM_SCENARIO, ".png")),
+  file.path(DIR_CARTES, paste0("carte_criticite_aretes_", NOM_SCENARIO, ".png")),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ Carte B sauvegardée\n")
@@ -249,7 +249,7 @@ carte_vulnerabilite <- fond_carte() +
 
 tmap_save(
   carte_vulnerabilite,
-  file.path(DIR_OUTPUT, paste0("carte_vulnerabilite_zones_", NOM_SCENARIO, ".png")),
+  file.path(DIR_CARTES, paste0("carte_vulnerabilite_zones_", NOM_SCENARIO, ".png")),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ Carte C sauvegardée\n")
@@ -283,7 +283,7 @@ g_surcouts <- od_compare %>%
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, paste0("graphique_surcouts_", NOM_SCENARIO, ".png")),
+  file.path(DIR_CARTES, paste0("graphique_surcouts_", NOM_SCENARIO, ".png")),
   g_surcouts, width = 11, height = 6, dpi = 300
 )
 cat("  ✓ Graphique sauvegardé\n\n")
@@ -383,7 +383,7 @@ carte_detour <- fond_carte() +
 
 tmap_save(
   carte_detour,
-  file.path(DIR_OUTPUT, paste0("carte_detours_", NOM_SCENARIO, ".png")),
+  file.path(DIR_CARTES, paste0("carte_detours_", NOM_SCENARIO, ".png")),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ carte_detours_", NOM_SCENARIO, ".png\n\n", sep = "")
@@ -514,7 +514,7 @@ g_report <- ggplot(report_long,
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, paste0("graphique_report_type_route_", NOM_SCENARIO, ".png")),
+  file.path(DIR_CARTES, paste0("graphique_report_type_route_", NOM_SCENARIO, ".png")),
   g_report,
   width = 11,
   height = 6,

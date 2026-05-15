@@ -36,7 +36,7 @@ max_idx_mm            <- .map$max_idx_mm
 node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
 
 # Chargement de la matrice OD de référence (cache existant)
-.od_cache <- readRDS(file.path(DIR_OUTPUT, "od_cache.rds"))
+.od_cache <- readRDS(file.path(DIR_CACHE, "od_cache.rds"))
 od_long   <- .od_cache$od_long
 rm(.geo, .ent, .mm, .map, .fret, .od_cache)
 
@@ -385,7 +385,7 @@ od_rows_degrade <- list()
 idx_deg         <- 0
 
 # ── Chargement du checkpoint si disponible ────────────────────────────────────   
-CHECKPOINT_OD_DEG <- file.path(DIR_OUTPUT, "od_degrade_checkpoint.rds")     
+CHECKPOINT_OD_DEG <- file.path(DIR_EXPORTS, "od_degrade_checkpoint.rds")     
 origines_deja_traitees <- c()                                                
 if (file.exists(CHECKPOINT_OD_DEG)) {                                        
   checkpoint <- readRDS(CHECKPOINT_OD_DEG)                                   
@@ -921,14 +921,14 @@ cat("\n")
 # Export de la table de comparaison OD (avant / après)
 dbExecute(con, paste0(
   "COPY (SELECT * FROM ", nom_table_impact, ") TO '",
-  file.path(DIR_OUTPUT, paste0("impact_od_", NOM_SCENARIO, ".csv")),
+  file.path(DIR_EXPORTS, paste0("impact_od_", NOM_SCENARIO, ".csv")),
   "' (FORMAT CSV, HEADER)"
 ))
 
 # Export de la table de criticité des arêtes
 dbExecute(con, paste0(
   "COPY (SELECT * FROM criticite_aretes_", NOM_SCENARIO, ") TO '",
-  file.path(DIR_OUTPUT, paste0("criticite_aretes_", NOM_SCENARIO, ".csv")),
+  file.path(DIR_EXPORTS, paste0("criticite_aretes_", NOM_SCENARIO, ".csv")),
   "' (FORMAT CSV, HEADER)"
 ))
 

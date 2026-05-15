@@ -23,7 +23,7 @@
 ################################################################################
 
 source("00_parametres.R")
-fond_carte <- readRDS(file.path(DIR_OUTPUT, "persist_fond_carte.rds"))
+fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 
 .ent  <- readRDS(PERSIST_ENTREPOSAGES)
 list2env(.ent, envir = .GlobalEnv)
@@ -135,7 +135,7 @@ carte_fret <- fond_carte() +
   tm_compass(position = c("right", "top"))
 
 tmap_save(carte_fret,
-          file.path(DIR_OUTPUT,"carte_trafic_fret.png"),
+          file.path(DIR_CARTES,"carte_trafic_fret.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("✓ Carte trafic fret sauvegardée\n")
 
@@ -242,7 +242,7 @@ for (s in SECTEURS) {
   nom_fichier_s <- paste0("carte_trafic_fret_", s, ".png")
   tmap_save(
     carte_s,
-    file.path(DIR_OUTPUT, nom_fichier_s),
+    file.path(DIR_CARTES, nom_fichier_s),
     width = 3000, height = 2400, dpi = 300
   )
   cat("  ✓", nom_fichier_s, "\n")
@@ -335,7 +335,7 @@ carte_dominant <- fond_carte() +
 
 tmap_save(
   carte_dominant,
-  file.path(DIR_OUTPUT, "carte_secteur_dominant.png"),
+  file.path(DIR_CARTES, "carte_secteur_dominant.png"),
   width = 3000, height = 2400, dpi = 300
 )
 cat("  ✓ carte_secteur_dominant.png\n\n")
@@ -374,7 +374,7 @@ carte_ges_affecte <- fond_carte() +
   tm_compass(position  = c("right", "top"))
 
 tmap_save(carte_ges_affecte,
-          file.path(DIR_OUTPUT, "carte_emissions_co2_affecte.png"),
+          file.path(DIR_CARTES, "carte_emissions_co2_affecte.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("✓ Carte émissions CO2 affectées sauvegardée\n\n")
 
@@ -470,7 +470,7 @@ g_top_aretes <- ggplot(top_aretes_long,
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, "heatmap_top_aretes_secteurs.png"),
+  file.path(DIR_CARTES, "heatmap_top_aretes_secteurs.png"),
   g_top_aretes,
   width = 12, height = 9, dpi = 300
 )
@@ -554,7 +554,7 @@ g_compo_route <- ggplot(compo_par_type_route,
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, "graphique_compo_secteurs_type_route.png"),
+  file.path(DIR_CARTES, "graphique_compo_secteurs_type_route.png"),
   g_compo_route,
   width = 11, height = 6, dpi = 300
 )
@@ -615,7 +615,7 @@ g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, "distribution_trafic_par_secteur.png"),
+  file.path(DIR_CARTES, "distribution_trafic_par_secteur.png"),
   g_distrib,
   width = 13, height = 7, dpi = 300
 )
@@ -648,7 +648,7 @@ carte_modal <- fond_carte() +
   tm_compass(position  = c("right","top"))
 
 tmap_save(carte_modal,
-          file.path(DIR_OUTPUT,"carte_repartition_modale.png"),
+          file.path(DIR_CARTES,"carte_repartition_modale.png"),
           width = 3000, height = 2400, dpi = 300)
 cat("✓ Carte répartition modale sauvegardée\n")
 
@@ -682,7 +682,7 @@ g1 <- flux_par_secteur_df %>%
     panel.grid.minor   = element_blank()
   )
 
-ggsave(file.path(DIR_OUTPUT,"graphique_flux_secteurs.png"),
+ggsave(file.path(DIR_CARTES,"graphique_flux_secteurs.png"),
        g1, width = 11, height = 6, dpi = 300)
 cat("✓ Graphique flux secteurs sauvegardé\n")
 
@@ -750,7 +750,7 @@ g2 <- recap_zones %>%
     panel.grid.major.y = element_blank()
   )
 
-ggsave(file.path(DIR_OUTPUT,"graphique_offre_demande.png"),
+ggsave(file.path(DIR_CARTES,"graphique_offre_demande.png"),
        g2, width = 13, height = 8, dpi = 300)
 cat("✓ Graphique offre/demande sauvegardé\n")
 
@@ -803,7 +803,7 @@ g3 <- ggplot(flux_heatmap,
     legend.position = "right"
   )
 
-ggsave(file.path(DIR_OUTPUT,"heatmap_flux_od.png"),
+ggsave(file.path(DIR_CARTES,"heatmap_flux_od.png"),
        g3, width = 13, height = 11, dpi = 300)
 cat("✓ Heatmap flux OD sauvegardée\n")
 
@@ -841,7 +841,7 @@ g4 <- offre_long %>%
     legend.position = "right"
   )
 
-ggsave(file.path(DIR_OUTPUT,"graphique_composition_sectorielle.png"),
+ggsave(file.path(DIR_CARTES,"graphique_composition_sectorielle.png"),
        g4, width = 14, height = 8, dpi = 300)
 cat("✓ Graphique composition sectorielle sauvegardé\n\n")
 
@@ -945,7 +945,7 @@ g_sankey <- ggplot(
   )
 
 ggsave(
-  file.path(DIR_OUTPUT, "sankey_flux_fret.png"),
+  file.path(DIR_CARTES, "sankey_flux_fret.png"),
   g_sankey,
   width  = 14,
   height = 8,

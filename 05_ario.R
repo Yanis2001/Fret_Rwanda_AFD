@@ -969,7 +969,7 @@ fichiers_a_exporter <- c(
 for (nom_table in fichiers_a_exporter) {
   dbExecute(con, paste0(
     "COPY (SELECT * FROM ", nom_table, ") TO '",
-    file.path(DIR_OUTPUT, paste0(nom_table, ".csv")),
+    file.path(DIR_EXPORTS, paste0(nom_table, ".csv")),
     "' (FORMAT CSV, HEADER)"
   ))
 }

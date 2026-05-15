@@ -91,7 +91,6 @@ print(table(place_test$place))
 
 ################################################################################
 # DIAGNOSTIC — EXPLORATION DES TAGS OSM DISPONIBLES DANS LE PBF
-# À insérer après le chargement du PBF (Section II.1)
 # Objectif : inventaire complet des tags directs ET des clés cachées dans
 # other_tags, sur toutes les couches (lines, points, multipolygons)
 ################################################################################
@@ -99,6 +98,8 @@ print(table(place_test$place))
 cat("==========================================================\n")
 cat("  DIAGNOSTIC — TAGS OSM DISPONIBLES DANS LE PBF\n")
 cat("==========================================================\n\n")
+
+if (FALSE) {
 
 # ==============================================================================
 # 1. COLONNES DIRECTES PAR COUCHE
@@ -294,6 +295,8 @@ tryCatch({
 cat("\n✓ Diagnostic des tags OSM terminé\n")
 cat("  → Modifier CLES_A_INSPECTER pour explorer d'autres clés\n")
 cat("  → Augmenter N_LIGNES_SAMPLE pour un inventaire plus complet\n\n")
+
+}
 
 # ==============================================================================
 # II.2 : Nettoyage des attributs routiers
@@ -559,8 +562,8 @@ tryCatch({
 
 # 1. Calcul du centroïde du Rwanda (point central)
 centre_rwanda <- rwanda_national %>% st_centroid() %>% st_coordinates()
-centre_x <- centre_rwanda[1, "X"]  # Coordonnée X (Est-Ouest) du centroïde
-centre_y <- centre_rwanda[1, "Y"]  # Coordonnée Y (Nord-Sud) du centroïde
+centre_x      <- centre_rwanda[1, "X"]  # Coordonnée X (Est-Ouest) du centroïde
+centre_y      <- centre_rwanda[1, "Y"]  # Coordonnée Y (Nord-Sud) du centroïde
 
 # 2. Définition du buffer de 125 km 
 buffer_km <- 125000 
@@ -763,7 +766,7 @@ plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
 # Pour forcer un recalcul : supprimer le fichier .rds.
 ################################################################################
 
-CACHE_RESEAU     <- file.path(DIR_OUTPUT, "reseau_corrige_cache.rds")
+CACHE_RESEAU     <- file.path(DIR_CACHE, "reseau_corrige_cache.rds")
 cache_reseau_valide <- FALSE
 
 # Empreinte du PBF : la taille du fichier est un proxy simple et rapide
@@ -1234,7 +1237,7 @@ if (!cache_reseau_valide) {
   saveRDS(
     list(aretes_perdues    = aretes_perdues,
          noeuds_hors_geante = noeuds_hors_geante),
-    file.path(DIR_OUTPUT, "persist_diag_reseau.rds")
+    file.path(DIR_EXPORTS, "persist_diag_reseau.rds")
   )
   
   cat("  ✓ Cache sauvegardé :", CACHE_RESEAU, "\n")
@@ -1388,7 +1391,7 @@ cat("✓ Zones d'usage du sol chargées et arêtes taguées\n\n")
 # Si le réseau a changé (nouvelles corrections topo, nouveau PBF),
 # le cache est automatiquement invalidé et le calcul repart de zéro.
 
-CACHE_PENTES <- file.path(DIR_OUTPUT, "pentes_cache.rds")
+CACHE_PENTES <- file.path(DIR_CACHE, "pentes_cache.rds")
 
 aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
 n_aretes         <- nrow(aretes_avec_geom)
@@ -2201,7 +2204,7 @@ pop_nisr_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
 if (!file.exists(NISR_CSV_PATH)) {
   dir.create(dirname(NISR_CSV_PATH), showWarnings = FALSE, recursive = TRUE)
   save_object(
-    object    = "data/raw/rwa_admpop_adm2_2023.csv",
+    object    = NISR_CSV_PATH,
     bucket    = MINIO_BUCKET,
     file      = NISR_CSV_PATH,
     region    = "",
@@ -2721,7 +2724,7 @@ cat("── Calcul IDW du RWI par entrepôt ────────────
 
 # ── Mise en cache ─────────────────────────────────────────────────────────────
 # Même logique que le cache landuse : invalider si le nombre d'entrepôts change.
-CACHE_RWI <- file.path(DIR_OUTPUT, "rwi_cache.rds")
+CACHE_RWI <- file.path(DIR_CACHE, "rwi_cache.rds")
 cache_rwi_valide <- FALSE
 
 if (file.exists(CACHE_RWI) && rwi_ok) {
@@ -2902,7 +2905,7 @@ p_rwi <- if (rwi_max_entrepots > rwi_min_entrepots) {
 } else {
   # Cas dégénéré : tous les entrepôts ont le même score (données manquantes…)
   # → valeur neutre 0.5 pour tous (pas d'effet sur les profils)
-  rep(0.5, n_warehouses)
+  rep(0.5, nrow(entreposages_sf))
 }
 
 cat("  Score p_rwi après normalisation :\n")
@@ -3615,7 +3618,7 @@ fond_carte <- local({
   }
 })
 
-saveRDS(fond_carte, file.path(DIR_OUTPUT, "persist_fond_carte.rds"))
+saveRDS(fond_carte, file.path(DIR_CARTES, "persist_fond_carte.rds"))
 cat("✓ persist_fond_carte.rds sauvegardé\n")
 cat("✓ persist_geodata.rds\n")
 cat("✓ persist_reseau_base.rds\n")

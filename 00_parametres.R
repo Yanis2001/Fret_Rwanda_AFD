@@ -113,6 +113,18 @@ cat("✓ Tous les packages sont chargés\n\n")
 
 DB_PATH        <- "reseau_rwanda.duckdb"   # Fichier DuckDB persistant
 DIR_OUTPUT     <- "outputs"                # Dossier de sortie de tous les fichiers
+# Sous-dossiers de sortie
+DIR_CACHE   <- file.path(DIR_OUTPUT, "cache")
+DIR_PERSIST <- file.path(DIR_OUTPUT, "persist")
+DIR_CARTES  <- file.path(DIR_OUTPUT, "cartes")
+DIR_EXPORTS <- file.path(DIR_OUTPUT, "exports")
+DIR_RASTERS <- file.path(DIR_OUTPUT, "rasters")
+
+# Création de tous les sous-dossiers
+for (d in c(DIR_CACHE, DIR_PERSIST, DIR_CARTES, DIR_EXPORTS, DIR_RASTERS)) {
+  dir.create(d, showWarnings = FALSE, recursive = TRUE)
+}
+
 chemin_pbf     <- "rwanda-260315.osm.pbf"  # Nom local du fichier PBF après téléchargement
 
 # Chemins MinIO (SSP Cloud)
@@ -121,7 +133,7 @@ MINIO_PBF_PATH <- "data/raw/rwanda-260315.osm.pbf"
 MINIO_BASE_URL <- "minio.lab.sspcloud.fr"
 
 # Chemin local du raster WorldPop si déjà téléchargé 
-WORLDPOP_LOCAL_PATH <- file.path(DIR_OUTPUT, "worldpop_rwanda_100m.tif")
+WORLDPOP_LOCAL_PATH <- file.path(DIR_RASTERS, "worldpop_rwanda_100m.tif")
 
 # Chemin du fichier NISR
 NISR_CSV_PATH <- "data/raw/rwa_admpop_adm2_2023.csv"
@@ -138,9 +150,9 @@ RWI_ZIP_URL <- paste0(
 # Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
 RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
 
-# Chemin local pour le cache du ZIP et du CSV extrait
-RWI_ZIP_LOCAL   <- file.path(DIR_OUTPUT, "rwi_all_countries.zip")
-RWI_CSV_LOCAL   <- file.path(DIR_OUTPUT, "RWA_relative_wealth_index.csv")
+# Chemin local du ZIP et du CSV
+RWI_CSV_LOCAL  <- "data/raw/rwa_relative_wealth_index.csv"   
+RWI_ZIP_LOCAL  <- "data/raw/rwi_all_countries.zip"          
 
 # Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
 # Exemples de sources de données :
@@ -636,11 +648,11 @@ RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer
 if (RESET_CACHES) {
   
   caches <- c(
-    file.path(DIR_OUTPUT, "reseau_corrige_cache.rds"),
-    file.path(DIR_OUTPUT, "pentes_cache.rds"),
-    file.path(DIR_OUTPUT, "landuse_cache.rds"),
-    file.path(DIR_OUTPUT, "od_cache.rds"),
-    file.path(DIR_OUTPUT, "affectation_cache.rds")
+    file.path(DIR_CACHE, "reseau_corrige_cache.rds"),
+    file.path(DIR_CACHE, "pentes_cache.rds"),
+    file.path(DIR_CACHE, "landuse_cache.rds"),
+    file.path(DIR_CACHE, "od_cache.rds"),
+    file.path(DIR_CACHE, "affectation_cache.rds")
   )
   
   cat("=== RESET COMPLET DES CACHES ===\n")
@@ -1059,15 +1071,15 @@ node_multi <- function(v_idx, n_id, n_noeuds_local) {
 }
 
 # ── Chemins des fichiers de persistance inter-scripts ─────────────────────────
-PERSIST_GEODATA      <- file.path(DIR_OUTPUT, "persist_geodata.rds")
-PERSIST_RESEAU_BASE  <- file.path(DIR_OUTPUT, "persist_reseau_base.rds")
-PERSIST_ENTREPOSAGES <- file.path(DIR_OUTPUT, "persist_entreposages.rds")
-PERSIST_RESEAU_COUTS <- file.path(DIR_OUTPUT, "persist_reseau_couts.rds")
-PERSIST_GRAPHE_MM    <- file.path(DIR_OUTPUT, "persist_graphe_mm.rds")
-PERSIST_MAPPING_MM   <- file.path(DIR_OUTPUT, "persist_mapping_mm.rds")
-PERSIST_FLUX_FRET    <- file.path(DIR_OUTPUT, "persist_flux_fret.rds")
-PERSIST_RESEAU_FRET  <- file.path(DIR_OUTPUT, "persist_reseau_fret.rds")
-PERSIST_VULNERAB     <- file.path(DIR_OUTPUT, "persist_vulnerabilite.rds")
-PERSIST_ARIO         <- file.path(DIR_OUTPUT, "persist_ario.rds")
+PERSIST_GEODATA      <- file.path(DIR_PERSIST, "persist_geodata.rds")
+PERSIST_RESEAU_BASE  <- file.path(DIR_PERSIST, "persist_reseau_base.rds")
+PERSIST_ENTREPOSAGES <- file.path(DIR_PERSIST, "persist_entreposages.rds")
+PERSIST_RESEAU_COUTS <- file.path(DIR_PERSIST, "persist_reseau_couts.rds")
+PERSIST_GRAPHE_MM    <- file.path(DIR_PERSIST, "persist_graphe_mm.rds")
+PERSIST_MAPPING_MM   <- file.path(DIR_PERSIST, "persist_mapping_mm.rds")
+PERSIST_FLUX_FRET    <- file.path(DIR_PERSIST, "persist_flux_fret.rds")
+PERSIST_RESEAU_FRET  <- file.path(DIR_PERSIST, "persist_reseau_fret.rds")
+PERSIST_VULNERAB     <- file.path(DIR_PERSIST, "persist_vulnerabilite.rds")
+PERSIST_ARIO         <- file.path(DIR_PERSIST, "persist_ario.rds")
 
 cat("✓ 00_parametres.R chargé\n")
