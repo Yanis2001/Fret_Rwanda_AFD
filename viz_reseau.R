@@ -671,11 +671,6 @@ if (FALSE) {
 # Et un graphique comparatif des émissions totales par véhicule.
 # ==============================================================================
 
-# ── Palette d'émissions (vert pâle → rouge foncé) ─────────────────────────────
-# Rouge = route très émettrice (pente forte + mauvaise surface + véhicule lourd)
-# Vert  = route peu émettrice (plat, bitumée, camion léger)
-PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
-
 # ── Carte : intensité carbone (co2_kg_par_tkm) pour le véhicule de référence ──
 # Cette carte identifie les segments routiers où chaque tonne-kilomètre
 # transportée génère le plus de CO2 : pentes fortes, mauvaise surface,
