@@ -3563,6 +3563,8 @@ saveRDS(
     noeuds_entreposage            = noeuds_entreposage,
     n_warehouses                  = n_warehouses,
     warehouse_nodes_base          = warehouse_nodes_base,
+    nom_ref_offre                 = nom_ref_offre,   
+    nom_ref_demande               = nom_ref_demande,  
     # Tailles composites
     taille_composite              = taille_composite,
     taille_composite_offre        = taille_composite_offre,
