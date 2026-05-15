@@ -1,5 +1,16 @@
-.Rproj.user
+# Outputs locaux (recalculables)
+outputs/
+
+# Base DuckDB (recalculable)
+*.duckdb
+
+# Fichiers PBF (gros, téléchargés depuis Geofabrik)
+*.pbf
+
+# Rasters (gros, téléchargés automatiquement)
+*.tif
+
+# Fichiers R temporaires
 .Rhistory
 .RData
-.Ruserdata
-.positai
+.Rproj.user/
