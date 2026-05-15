@@ -258,9 +258,9 @@ WORLDPOP_ZOOM <- 9
 
 # Noms attendus des colonnes dans le CSV NISR (à adapter selon le fichier réel)
 # Ces noms correspondent au format typique des exports NISR data.gov.rw.
-NISR_COL_DISTRICT  <- "District"       # Colonne du nom du district
-NISR_COL_PROVINCE  <- "Province"       # Colonne de la province
-NISR_COL_POP_TOTAL <- "Total"          # Colonne de population totale
+NISR_COL_DISTRICT  <- "ADM2_FR"   # Nom du district en français
+NISR_COL_PROVINCE  <- "ADM1_FR"   # Nom de la province en français
+NISR_COL_POP_TOTAL <- "T_TL"      # Population totale 
 
 # ==============================================================================
 # Paramètres RWI
