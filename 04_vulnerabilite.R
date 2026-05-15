@@ -9,33 +9,6 @@
 # NOTE : Modifier NOM_SCENARIO dans 00_parametres.R avant de relancer.
 ################################################################################
 
-################################################################################
-# PROJET : Réseau Routier pour Modélisation du Commerce de Fret - Rwanda
-# AUTEUR  : Yanis
-#
-# ── POUR RETROUVER LE DÉPÔT GITHUB ────────────────────────────────────────────
-#  system("git clone https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-################################################################################
-
-# ==============================================================================
-# CONNEXION GIT
-# ==============================================================================
-
-# Authentification Git via le Personal Access Token stocké en variable d'env.
-# Sys.getenv() lit la variable d'environnement GITHUB_PAT sans l'exposer
-# dans le code source (bonne pratique de sécurité).
-token <- Sys.getenv("GITHUB_PAT")
-# Configurer le helper de credentials : plus besoin de mettre le mot de passe et nom d'utilisateur avant de pusher sur Git
-system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
-
-# S'assurer que le remote 'origin' pointe vers mon dépôt perso
-system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-# Pusher le script sur deux Git
-system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
-# Vérifier la configuration
-system("git remote -v")
-
 source("00_parametres.R")
 
 cat("=== Chargement des objets ===\n")
