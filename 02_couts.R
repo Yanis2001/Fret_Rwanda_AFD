@@ -23,9 +23,6 @@ reseau_rwanda      <- .res$reseau_rwanda
 n_aretes_physiques <- .res$n_aretes_physiques
 rm(.geo, .ent, .res)
 
-# Reconstruction de fond_carte() (dépend des objets géo)
-source("utils_fond_carte.R")   # voir note ci-dessous
-
 cat("✓ Objets chargés\n\n")
 
 ################################################################################

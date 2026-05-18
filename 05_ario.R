@@ -29,12 +29,10 @@ reseau_rwanda             <- .res$reseau_rwanda
 od_compare                <- .vuln$od_compare
 fraction_perdue_zone      <- .vuln$fraction_perdue_zone
 indices_aretes_perturbees <- .vuln$indices_aretes_perturbees
-aretes_perturbees_sf      <- .vuln$aretes_perturbees_sf
 NOM_SCENARIO              <- .vuln$NOM_SCENARIO
 
 rm(.geo, .ent, .flux, .res, .vuln)
 
-source("utils_fond_carte.R")
 cat("✓ Objets chargés\n\n")
 
 ################################################################################
@@ -491,31 +489,6 @@ cat("  Inventaires initiaux totaux:",
 # ==============================================================================
 
 cat("── X.3 : Traduction des chocs de transport ──────────────────────────\n\n")
-
-# ── Construction du tableau de référence des fractions perdues ────────────────
-# Pour chaque paire OD (origine zone, destination zone) dans od_compare, on
-# calcule sa fraction perdue.
-od_lookup <- od_compare %>%
-  select(id_origine, id_destination, type_impact, surcout_relatif_pct) %>%
-  mutate(
-    fraction_perdue = case_when(
-      type_impact == "deconnecte" ~ 1.0,
-      type_impact == "inchange"   ~ 0.0,
-      is.na(surcout_relatif_pct)  ~ 0.0,
-      TRUE ~ pmin(1.0, surcout_relatif_pct / 100)
-    )
-  )
-
-# ── Matrice fraction perdue par paire de zones (n × n) ────────────────────────
-# fraction_perdue_zone[i, j] = fraction du flux entre zone i et zone j perdue
-# pendant la perturbation. Sert ensuite à agréger au niveau provincial.
-fraction_perdue_zone <- matrix(0, nrow = n_warehouses, ncol = n_warehouses)
-for (k in seq_len(nrow(od_lookup))) {
-  i <- od_lookup$id_origine[k]
-  j <- od_lookup$id_destination[k]
-  fraction_perdue_zone[i, j] <- od_lookup$fraction_perdue[k]
-}
-
 
 # ── (A) Calcul du choc de capacité Δ_P par province ───────────────────────────
 # Pour chaque province Q, on calcule Δ_Q comme la moyenne des fractions

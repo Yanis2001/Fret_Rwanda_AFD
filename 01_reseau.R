@@ -1235,8 +1235,10 @@ if (!cache_reseau_valide) {
   
   saveRDS(
     list(aretes_perdues    = aretes_perdues,
-         noeuds_hors_geante = noeuds_hors_geante),
-    file.path(DIR_EXPORTS, "persist_diag_reseau.rds")
+         noeuds_hors_geante = noeuds_hors_geante,
+         n_aretes_avant      = nrow(aretes_lisse)
+         ),
+    PERSIST_DIAG_RES
   )
   
   cat("  ✓ Cache sauvegardé :", CACHE_RESEAU, "\n")

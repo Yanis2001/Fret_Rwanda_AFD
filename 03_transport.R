@@ -41,8 +41,6 @@ rm(.ent, .res, .mm, .map)
 # Redéfinition locale de node_multi avec n_noeuds chargé
 node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
 
-source("utils_fond_carte.R")
-
 cat("✓ Objets chargés\n\n")
 
 ################################################################################
@@ -98,7 +96,7 @@ idx     <- 0
 # on charge directement le fichier sauvegardé — le calcul est alors instantané.
 # Pour forcer un recalcul complet (ex : après avoir ajouté des zones ou modifié
 # le réseau), il suffit de supprimer le fichier "outputs/od_cache.rds".
-CACHE_OD <- file.path(DIR_EXPORTS, "od_cache.rds")
+CACHE_OD <- file.path(DIR_CACHE, "od_cache.rds")
 cache_od_valide <- FALSE
 
 # Colonnes attendues dans od_long — à mettre à jour si la structure change
@@ -234,7 +232,7 @@ if (!cache_od_valide) {
   # là où on s'est arrêté — utile sur SSP Cloud où les crashs sont fréquents.
   # Le checkpoint est différent du cache final : il sert UNIQUEMENT à reprendre
   # un calcul interrompu. Il sera supprimé automatiquement à la fin du calcul.
-  CHECKPOINT_OD <- file.path(DIR_EXPORTS, "od_checkpoint.rds")
+  CHECKPOINT_OD <- file.path(DIR_CACHE, "od_checkpoint.rds")
   i_start <- 1L  # Origine de départ par défaut
   
   if (file.exists(CHECKPOINT_OD)) {

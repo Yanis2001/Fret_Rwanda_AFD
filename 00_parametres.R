@@ -65,7 +65,8 @@ packages_requis <- c(
   "DBI",           # Interface R standard pour les bases de données (pilote DuckDB)
   "scales",        # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
   "progress",      # Barre de progression
-  "exactextractr"  # Agrégation précise de rasters sur des polygones
+  "exactextractr", # Agrégation précise de rasters sur des polygones
+  "digest"
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
@@ -1098,5 +1099,6 @@ PERSIST_FLUX_FRET    <- file.path(DIR_PERSIST, "persist_flux_fret.rds")
 PERSIST_RESEAU_FRET  <- file.path(DIR_PERSIST, "persist_reseau_fret.rds")
 PERSIST_VULNERAB     <- file.path(DIR_PERSIST, "persist_vulnerabilite.rds")
 PERSIST_ARIO         <- file.path(DIR_PERSIST, "persist_ario.rds")
+PERSIST_DIAG_RES     <- file.path(DIR_PERSIST, "persist_diag_reseau.rds")
 
 cat("✓ 00_parametres.R chargé\n")

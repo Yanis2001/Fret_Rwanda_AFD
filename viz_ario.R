@@ -44,9 +44,7 @@ cat("── X.6 : Visualisations et exports ────────────
 # Production journalière agrégée par secteur, en écart % par rapport à
 # l'équilibre pré-choc. Une ligne verticale rouge marque la fin de la
 # perturbation (rétablissement des routes).
-traj_secteurs <- production_par_jour_secteur %>%
-  as.data.frame() %>%
-  mutate(jour = seq_len(ARIO_HORIZON_JOURS)) %>%
+traj_secteurs <- trajectoire_secteurs_df %>%   # chargé via list2env(.ario, ...)
   pivot_longer(-jour, names_to = "Secteur", values_to = "Production_musd") %>%
   group_by(Secteur) %>%
   mutate(
@@ -90,9 +88,7 @@ cat("  ✓ ario_trajectoire_secteurs_", NOM_SCENARIO, ".png\n", sep = "")
 
 
 # ── Graphique 2 : trajectoire de la production par province ───────────────────
-traj_provinces <- production_par_jour_province %>%
-  as.data.frame() %>%
-  mutate(jour = seq_len(ARIO_HORIZON_JOURS)) %>%
+traj_provinces <- trajectoire_provinces_df %>%   # chargé via list2env(.ario, ...)
   pivot_longer(-jour, names_to = "Province", values_to = "Production_musd") %>%
   group_by(Province) %>%
   mutate(

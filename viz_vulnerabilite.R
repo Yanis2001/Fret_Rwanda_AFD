@@ -32,9 +32,37 @@ reseau_rwanda    <- .fret$reseau_rwanda   # version avec volumes fret
 volumes_par_zone <- .fret$volumes_par_zone
 rm(.fret)
 
+# ── Reconstruction d'aretes_reseau_sf ─────────────────────────────────────────
+# Couche sf de toutes les arêtes du réseau, avec un index entier arete_idx.
+# Nécessaire pour : filtrer les arêtes perturbées/critiques, calculer les volumes
+# par type de route, et construire les couches de détour.
+# On repart de reseau_rwanda (déjà chargé) plutôt que de le sauvegarder dans
+# PERSIST_VULNERAB (objet géométrique lourd, ~50 Mo).
+aretes_reseau_sf <- reseau_rwanda %>%
+  activate("edges") %>%
+  st_as_sf() %>%
+  mutate(arete_idx = row_number())
+
+# ── Reconstruction de coords_zones_sf ─────────────────────────────────────────
+# Points sf des zones d'entrepôt, utilisés sur la Carte D (itinéraires de détour).
+# Version simplifiée sans taille_point — la Carte D n'en a pas besoin.
+coords_zones_sf <- reseau_rwanda %>%
+  activate("nodes") %>%
+  filter(is_warehouse) %>%
+  st_as_sf()
+
 .vuln <- readRDS(PERSIST_VULNERAB)
 list2env(.vuln, envir = .GlobalEnv)
 rm(.vuln)
+
+# ── Reconstruction d'od_ref_map ───────────────────────────────────────────────
+# Table de lookup : clé "i_j" → coût de référence (avant perturbation).
+# Reconstruit depuis od_compare (disponible via list2env) pour éviter de
+# recharger od_cache.rds 
+od_ref_map <- setNames(
+  od_compare$cout_usd,
+  paste0(od_compare$id_origine, "_", od_compare$id_destination)
+)
 
 if (!exists("surcout_moyen_detour")) {
   surcout_moyen_detour <- surcout_pondere_arete / pmax(volume_detourne_arete, 1)

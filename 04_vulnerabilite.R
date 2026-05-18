@@ -22,9 +22,6 @@ cat("=== Chargement des objets ===\n")
 list2env(.geo,  envir = .GlobalEnv)
 list2env(.ent,  envir = .GlobalEnv)
 reseau_rwanda         <- .fret$reseau_rwanda
-volume_trafic         <- .fret$volume_trafic
-volume_trafic_mm_s    <- .fret$volume_trafic_mm_s
-volume_par_secteur    <- .fret$volume_par_secteur
 flux_tonnes_total     <- readRDS(PERSIST_FLUX_FRET)$flux_tonnes_total
 n_noeuds              <- .mm$n_noeuds
 n_vehicules           <- .mm$n_vehicules
@@ -33,6 +30,7 @@ lookup_type           <- .map$lookup_type
 lookup_physique       <- .map$lookup_physique
 lookup_vehicule       <- .map$lookup_vehicule
 max_idx_mm            <- .map$max_idx_mm
+n_aretes_physiques    <- length(.map$lookup_type[.map$lookup_type == "route"]) / .mm$n_vehicules
 node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
 
 # Chargement de la matrice OD de référence (cache existant)
@@ -40,7 +38,6 @@ node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
 od_long   <- .od_cache$od_long
 rm(.geo, .ent, .mm, .map, .fret, .od_cache)
 
-source("utils_fond_carte.R")
 cat("✓ Objets chargés\n\n")
 
 ################################################################################
@@ -286,6 +283,13 @@ if (n_perturb == 0) {
 }
 
 cat("\n✓ Arêtes perturbées identifiées :", n_perturb, "\n")
+
+# Objet sf des arêtes perturbées — utilisé dans :
+#   - viz_vulnerabilite.R (cartes A, B, C, D : surlignage des routes coupées)
+#   - viz_ario.R (carte choroplèthe des pertes ARIO)
+# On le construit ici une seule fois et on le sauvegarde dans PERSIST_VULNERAB
+aretes_perturbees_sf <- aretes_reseau_sf %>%
+  filter(arete_idx %in% indices_aretes_perturbees)
 
 # Synthèse attributaire des arêtes perturbées (pour le rapport)
 resume_perturb <- aretes_reseau_sf %>%
@@ -746,6 +750,38 @@ cat("Top 5 des zones les plus isolées (en tant que destination) :\n")
 print(head(surcouts_par_destination, 5))
 cat("\n")
 
+# ── Pré-calcul de la matrice de fractions de flux perdus par paire OD ─────────
+# Traduit chaque paire OD de od_compare en fraction [0, 1] du flux commercial
+# considéré comme perdu pendant la perturbation :
+#   - déconnecté            → 1.0  (flux totalement interrompu)
+#   - surcoût de x%         → x/100 (élasticité-prix implicite = 1)
+#   - inchangé ou NA        → 0.0
+#
+# Cette matrice n_warehouses × n_warehouses est sauvegardée dans PERSIST_VULNERAB
+# pour être chargée directement par 05_ario.R, qui l'utilise pour calculer les
+# chocs de capacité (Delta_P) et d'inventaire. On évite ainsi une duplication de
+# la logique de conversion et une dépendance de 05_ario.R sur od_compare.
+od_lookup_perdu <- od_compare %>%
+  select(id_origine, id_destination, type_impact, surcout_relatif_pct) %>%
+  mutate(
+    fraction_perdue = case_when(
+      type_impact == "deconnecte" ~ 1.0,
+      type_impact == "inchange"   ~ 0.0,
+      is.na(surcout_relatif_pct)  ~ 0.0,
+      TRUE ~ pmin(1.0, surcout_relatif_pct / 100)
+    )
+  )
+
+fraction_perdue_zone <- matrix(0, nrow = n_warehouses, ncol = n_warehouses)
+for (k in seq_len(nrow(od_lookup_perdu))) {
+  i <- od_lookup_perdu$id_origine[k]
+  j <- od_lookup_perdu$id_destination[k]
+  fraction_perdue_zone[i, j] <- od_lookup_perdu$fraction_perdue[k]
+}
+
+cat("✓ Matrice fraction_perdue_zone calculée (",
+    sum(fraction_perdue_zone > 0), "paires impactées)\n\n")
+
 
 ################################################################################
 # PARTIE IX.5 — IDENTIFICATION DES ARÊTES CRITIQUES
@@ -995,6 +1031,9 @@ saveRDS(
     od_degrade                = od_degrade,
     criticite_df              = criticite_df,
     indices_aretes_perturbees = indices_aretes_perturbees,
+    aretes_perturbees_sf      = aretes_perturbees_sf,    
+    fraction_perdue_zone      = fraction_perdue_zone,    
+    surcouts_par_zone         = surcouts_par_zone,       
     aretes_perturbees_sf      = aretes_perturbees_sf,
     fraction_perdue_zone      = fraction_perdue_zone,
     fraction_perdue_prov      = if (exists("fraction_perdue_prov")) fraction_perdue_prov else NULL,
