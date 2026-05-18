@@ -893,33 +893,6 @@ recap_zones <- duck_query("
 
 cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
 
-# ==============================================================================
-# VII.3 : Modèle gravitaire
-# T_ij^s = K^s × O_i^s × D_j^s × (C_ij + C_prebordure_ij^s)^(-beta_s)
-# C_ij        = coût réseau interne (matrice OD Partie VI)
-# C_prebordure = coût de transport depuis le pays étranger jusqu'à la frontière
-# beta_s      = sensibilité au coût par secteur (2.5 Construction, 0.9 Services)
-# ==============================================================================
-
-
-# Le modèle gravitaire estime les flux commerciaux bilatéraux :
-#
-#   T_ij^s = K^s * O_i^s * D_j^s *(C_ij + C_prebordure_ij^s)^(-beta_s)
-#
-# où :
-#   T_ij^s            = flux du secteur s de la zone i vers la zone j (M USD)
-#   O_i^s             = offre du secteur s en zone i
-#   D_j^s             = demande du secteur s en zone j
-#   F_ij              = facteur de friction = C_ij^(-beta)
-#   C_ij              = coût généralisé de transport (USD / tonne) entre i et j
-#   C_prebordure_ij^s = coût généralisé de transport (USD / tonne) entre i et j lorsque i est une ville frontalière (intègre le coût de transport intra-pays frontaliers)
-#   beta_s            = paramètre de friction (sensibilité au coût) par secteur
-#   K^s               = constante de calibration par secteur
-#
-# Intuition : les zones proches (coût faible) échangent plus que les zones
-# lointaines. Le paramètre beta modèle à quel point la distance/coût freine
-# les échanges. Agriculture : très sensible (produits frais, lourds → beta élevé).
-# Services : peu sensible (transactions financières → beta faible).
 
 cat("Paramètres du modèle gravitaire:\n")
 
