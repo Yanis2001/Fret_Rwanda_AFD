@@ -66,7 +66,7 @@ packages_requis <- c(
   "scales",        # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
   "progress",      # Barre de progression
   "exactextractr", # Agrégation précise de rasters sur des polygones
-  "digest"
+  "digest"         # Génèration d'empreinte numérique (hash) d'objets R
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
