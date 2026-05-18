@@ -1003,84 +1003,456 @@ for (i in seq_len(n_warehouses)) {
 
 cat("✓ Matrice de coûts pré-frontière construite\n\n")
 
+# ==============================================================================
+# VII.3.0 : Coût fixe de chargement/déchargement par véhicule
+#
+# PRINCIPE :
+#   Tout trajet de fret implique deux opérations fixes indépendantes de la
+#   distance : le chargement à l'origine et le déchargement à la destination.
+#   Ces opérations mobilisent de la main-d'œuvre, du matériel (hayon, chariot)
+#   et du temps — qu'on livre à 2 km ou à 200 km.
+#
+# RÔLE DANS LE MODÈLE GRAVITAIRE :
+#   En ajoutant ce coût fixe à C_ij, le coût généralisé total d'un trajet
+#   ne peut jamais descendre en dessous du coût de manutention, même pour deux
+#   zones quasi-colocalisées. Cela évite l'explosion du terme C_ij^(-beta) qui
+#   produisait des flux irréalistes entre zones très proches (ex : Karongi/Kibuye).
+#
+#   C_ij_total = C_ij_trajet + cout_fixe_par_tonne[vehicule]
+#                ↑                  ↑
+#          coût variable      coût fixe (présent même si distance → 0)
+#
+# CALCUL :
+#   cout_fixe_par_tonne[v] = (cout_chargement_usd[v] + cout_dechargement_usd[v])
+#                            / capacite_tonnes[v]
+#
+#   La division par la capacité convertit un coût par trajet (USD/trajet) en
+#   coût par tonne transportée (USD/tonne) — l'unité attendue par C_ij.
+#
+#   Ce coût par tonne décroît avec la capacité du véhicule : un camion lourd
+#   (20t) a un coût de manutention par tonne plus faible qu'une camionnette
+#   (3.5t), même si son coût de manutention absolu est plus élevé. C'est
+#   l'économie d'échelle à la manutention.
+#
+#   Exemple numérique :
+#     Camionnette  (3.5t)  : (15 + 15) / 3.5  ≈  8.6 USD/tonne
+#     Camion moyen (7.5t)  : (25 + 25) / 7.5  ≈  6.7 USD/tonne
+#     Camion lourd  (20t)  : (40 + 40) / 20.0 =  4.0 USD/tonne
+#
+# VÉHICULE DE RÉFÉRENCE :
+#   Le modèle gravitaire utilise une seule matrice C_ij (celle du véhicule de
+#   référence, camion_moyen). On ajoute donc le coût fixe du véhicule de
+#   référence. Le choix du véhicule de référence ne change pas le ROUTAGE
+#   (Dijkstra reste multi-modal) mais calibre l'INTENSITÉ de la friction dans
+#   le modèle gravitaire.
+# ==============================================================================
 
-# --- Calcul des flux gravitaires par secteur ---
-cat("Calcul des flux gravitaires...\n")
+# Récupération des coûts fixes depuis DuckDB
+# La requête calcule directement le coût par tonne pour chaque véhicule,
+# en divisant la somme des coûts de manutention par la capacité de chargement.
+cout_fixe_par_vehicule <- duck_query("
+  SELECT
+    vehicule_id,
+    nom,
+    capacite_tonnes,
+    cout_chargement_usd,
+    cout_dechargement_usd,
+    -- Coût fixe total par trajet (USD) = chargement + déchargement
+    (cout_chargement_usd + cout_dechargement_usd)
+      AS cout_fixe_trajet_usd,
+    -- Coût fixe par tonne (USD/tonne) = coût par trajet / capacité
+    -- C'est cette valeur qui s'ajoute à C_ij dans le modèle gravitaire
+    (cout_chargement_usd + cout_dechargement_usd) / capacite_tonnes
+      AS cout_fixe_par_tonne
+  FROM params_flotte
+  ORDER BY capacite_tonnes
+")
 
-flux_gravitaire <- list()   # Matrice de flux par secteur (M USD)
+cat("── Coûts fixes de manutention par véhicule ─────────────────────────────\n")
+print(
+  cout_fixe_par_vehicule %>%
+    select(nom, capacite_tonnes, cout_fixe_trajet_usd, cout_fixe_par_tonne) %>%
+    mutate(
+      cout_fixe_trajet_usd = round(cout_fixe_trajet_usd, 1),
+      cout_fixe_par_tonne  = round(cout_fixe_par_tonne,  2)
+    ) %>%
+    rename(
+      Véhicule             = nom,
+      `Capacité (t)`       = capacite_tonnes,
+      `Coût trajet (USD)`  = cout_fixe_trajet_usd,
+      `Coût/tonne (USD/t)` = cout_fixe_par_tonne
+    )
+)
+
+# Extraction du coût fixe pour le véhicule de référence uniquement.
+# Ce scalaire sera ajouté à l'ensemble de la matrice C_ij dans la boucle
+# sectorielle ci-dessous.
+cout_fixe_ref <- cout_fixe_par_vehicule$cout_fixe_par_tonne[
+  cout_fixe_par_vehicule$vehicule_id == VEHICULE_REFERENCE
+]
+
+cat("\n  Coût fixe de référence (", VEHICULE_REFERENCE, ") :",
+    round(cout_fixe_ref, 2), "USD/tonne\n")
+cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
+
+
+# ==============================================================================
+# VII.3 : Modèle gravitaire DOUBLEMENT CONTRAINT (Wilson 1967 / Furness 1965)
+#
+# CHANGEMENT PAR RAPPORT AU MODÈLE PRÉCÉDENT :
+#   Avant : T_ij^s = K^s × O_i^s × D_j^s × C_ij^(-beta_s)
+#           → K^s est un scalaire global. Rien ne garantit que
+#             sum_j T_ij^s = O_i^s (les flux sortants peuvent être
+#             très différents de l'offre de la zone i).
+#
+#   Maintenant : T_ij^s = A_i^s × B_j^s × O_i^s × D_j^s × C_ij^(-beta_s)
+#           → A_i^s et B_j^s sont des facteurs SPÉCIFIQUES à chaque zone,
+#             calculés pour satisfaire EXACTEMENT les deux contraintes :
+#               sum_j T_ij^s = O_i^s  (flux sortants = offre de i)
+#               sum_i T_ij^s = D_j^s  (flux entrants = demande de j)
+#
+# INTUITION ÉCONOMIQUE :
+#   Dans le modèle non contraint, une ville très bien connectée à un grand hub
+#   peut "aspirer" plus de flux qu'elle ne peut réellement absorber (D_j^s).
+#   Le doublement contraint corrige cela : si Kigali peut absorber 500 M USD
+#   de commerce, la somme de tous les flux arrivant à Kigali vaudra exactement
+#   500 M USD — ni plus, ni moins.
+#
+# COMPATIBILITÉ OFFRE / DEMANDE :
+#   offre_zones[i,s] et demande_zones[j,s] sont construits indépendamment
+#   (Partie VII.2) et leur somme totale n'est pas nécessairement égale.
+#   On normalise les deux cibles sur leur moyenne géométrique :
+#     S^s = sqrt(sum_i O_i^s × sum_j D_j^s)
+#   Cela préserve les distributions relatives tout en rendant les totaux compatibles.
+#
+# RÉFÉRENCES :
+#   - Wilson (1967), Transportation Research 1(3), 253-269
+#     → dérivation par maximisation d'entropie, preuve d'existence de A_i, B_j
+#   - Furness (1965), Traffic Engineering and Control 7(7), 458-460
+#     → algorithme IPF pour calculer A_i et B_j par itérations alternées
+#   - Anderson & van Wincoop (2003), AER 93(1), 170-192
+#     → A_i^s et B_j^s sont les "résistances multilatérales" de la théorie
+#       structurelle du commerce international — même objet, deux littératures
+# ==============================================================================
+
+
+# ── Définition de la fonction d'équilibrage de Furness ────────────────────────
+#
+# furness_gravity() implémente l'algorithme de Furness (Iterative Proportional
+# Fitting) qui calcule les facteurs A_i et B_j du modèle doublement contraint.
+#
+# ALGORITHME (3 étapes répétées jusqu'à convergence) :
+#   Étape 0 : initialiser T_ij = O_i × D_j × friction_ij
+#   Étape A : pour chaque ligne i,  T_ij ← T_ij × (target_O_i / sum_j T_ij)
+#             → A_i implicite = target_O_i / sum_j T_ij_avant
+#   Étape B : pour chaque colonne j, T_ij ← T_ij × (target_D_j / sum_i T_ij)
+#             → B_j implicite = target_D_j / sum_i T_ij_avant
+#   La convergence est garantie si friction > 0 partout (Sinkhorn & Knopp 1967).
+#
+# Paramètres :
+#   O_s      — vecteur n_warehouses des offres sectorielles (déjà scalées par
+#              PART_ECHANGEABLE via echelle_offre dans VII.2, donc en M USD)
+#   D_s      — vecteur n_warehouses des demandes sectorielles (même convention)
+#   friction — matrice n×n des termes C_ij^(-beta). Doit avoir des NA là où
+#              les zones ne sont pas connectées (diag inclus).
+#   secteur  — chaîne de caractères pour les messages de log uniquement
+#
+# Retourne :
+#   Une matrice n×n de flux en M USD, dont les marges (sommes de lignes et
+#   de colonnes) correspondent aux offres et demandes cibles dans la limite
+#   de la tolérance FURNESS_TOL.
+
+furness_gravity <- function(O_s,
+                            D_s,
+                            friction,
+                            secteur = "") {
+  
+  n <- length(O_s)
+  stopifnot(
+    length(D_s)    == n,
+    nrow(friction) == n,
+    ncol(friction) == n
+  )
+  
+  # ── Calcul des cibles normalisées ────────────────────────────────────────────
+  # offre_zones et demande_zones ont été construits indépendamment dans VII.2.
+  # Leur somme totale n'est pas nécessairement égale (O_total ≠ D_total).
+  # On les normalise toutes deux sur la moyenne géométrique de leurs totaux :
+  #   S = sqrt(sum(O) × sum(D))
+  # Cela équivaut à mettre à l'échelle chaque cible par un facteur constant :
+  #   target_O_i = O_i × S / sum(O)  →  sum(target_O) = S
+  #   target_D_j = D_j × S / sum(D)  →  sum(target_D) = S
+  # La distribution RELATIVE entre zones est préservée ; seule l'échelle change.
+  # Après normalisation, sum(target_O) == sum(target_D) == S, ce qui est
+  # la condition nécessaire à l'existence d'une solution doublement contrainte.
+  
+  total_O <- sum(O_s, na.rm = TRUE)
+  total_D <- sum(D_s, na.rm = TRUE)
+  
+  # Cas dégénéré : secteur sans offre ou sans demande (ex : secteur Mines dans
+  # une zone uniquement résidentielle). On retourne une matrice nulle.
+  if (total_O < 1e-12 || total_D < 1e-12) {
+    cat("  [", secteur, "] Offre ou demande nulle — matrice de flux vide\n")
+    return(matrix(0, nrow = n, ncol = n))
+  }
+  
+  # Moyenne géométrique des totaux = cible commune pour les deux marges
+  S_cible  <- sqrt(total_O * total_D)
+  
+  # Facteurs de normalisation : ratio entre la cible commune et le total actuel
+  # target_O_i = O_i × (S / sum(O)) : redistributionne S en proportions de O_i
+  # target_D_j = D_j × (S / sum(D)) : redistributionne S en proportions de D_j
+  target_O <- O_s * (S_cible / total_O)
+  target_D <- D_s * (S_cible / total_D)
+  
+  # Vérification numérique de la compatibilité (les deux doivent valoir S_cible)
+  # L'écart relatif doit être inférieur à 1e-8 (erreur d'arrondi flottant)
+  ecart_rel <- abs(sum(target_O) - sum(target_D)) / S_cible
+  if (ecart_rel > 1e-6) {
+    warning("  [", secteur, "] Déséquilibre offre/demande après normalisation : ",
+            round(ecart_rel * 100, 6), "% — vérifier offre_zones et demande_zones")
+  }
+  
+  # ── Initialisation de la matrice de flux ─────────────────────────────────────
+  # T_ij = O_i × D_j × friction_ij
+  # C'est le point de départ de Furness : la matrice "non contrainte" qui
+  # respecte déjà la structure de friction mais pas les marges cibles.
+  # outer(x, y) : produit extérieur — élément [i,j] = x[i] × y[j]
+  T_mat <- outer(O_s, D_s) * friction
+  
+  # Nettoyage : les NA viennent de la friction (zones non connectées ou diagonale).
+  # On les met à 0 : une zone non connectée ne peut pas échanger.
+  T_mat[is.na(T_mat) | is.nan(T_mat) | is.infinite(T_mat)] <- 0
+  diag(T_mat) <- 0   # Par sécurité : interdire les échanges intra-zone
+  
+  # ── Boucle de Furness ─────────────────────────────────────────────────────────
+  # Chaque itération alterne deux équilibrages :
+  #   Étape A (lignes)   : force la somme des flux sortants à target_O_i
+  #   Étape B (colonnes) : force la somme des flux entrants à target_D_j
+  # La preuve de convergence repose sur le fait que la matrice de friction est
+  # non-négative et irréductible (Sinkhorn & Knopp 1967).
+  
+  for (iter in seq_len(FURNESS_MAX_ITER)) {
+    
+    # ── Étape A : équilibrage des LIGNES (contrainte sur les origines) ──────────
+    # On veut sum_j T_ij = target_O_i pour tout i.
+    # Le facteur d'ajustement A_i = target_O_i / (sum_j T_ij actuel)
+    # Multiplier chaque ligne i par A_i recentre la somme de la ligne sur target_O_i.
+    # pmax(..., 1e-12) : évite la division par zéro si une ligne est entièrement vide
+    # (zone sans aucune connexion réseau → ses flux restent à 0 après multiplication)
+    row_sums      <- rowSums(T_mat)
+    row_sums_safe <- pmax(row_sums, 1e-12)
+    A_i           <- target_O / row_sums_safe
+    
+    # Zones sans offre (target_O_i = 0) : facteur forcé à 0 pour ne pas
+    # amplifier un résidu numérique (produit de flottants proche de zéro)
+    A_i[target_O < 1e-12] <- 0
+    
+    # Multiplication ligne par ligne : T_ij ← A_i × T_ij
+    # En R, la multiplication d'une matrice par un vecteur opère colonne par colonne
+    # par défaut. Pour opérer ligne par ligne, on transpose (t()), multiplie, retranspose.
+    T_mat <- T_mat * A_i   # broadcast ligne par ligne (vecteur recycled par R)
+    
+    # ── Étape B : équilibrage des COLONNES (contrainte sur les destinations) ────
+    # Même logique que l'étape A, mais appliquée aux colonnes.
+    # B_j = target_D_j / (sum_i T_ij actuel)
+    col_sums      <- colSums(T_mat)
+    col_sums_safe <- pmax(col_sums, 1e-12)
+    B_j           <- target_D / col_sums_safe
+    B_j[target_D < 1e-12] <- 0
+    
+    # t(t(T_mat) * B_j) : transposer, multiplier (ce qui fait un broadcast ligne),
+    # retransposer → équivaut à multiplier chaque colonne j par B_j
+    T_mat <- t(t(T_mat) * B_j)
+    
+    # ── Test de convergence ──────────────────────────────────────────────────────
+    # On calcule l'erreur relative maximale sur les deux contraintes.
+    # Erreur relative = |marge_actuelle - marge_cible| / marge_cible
+    # On prend le max sur toutes les zones pour le critère d'arrêt.
+    # Seules les zones avec une cible non nulle entrent dans le calcul
+    # (les zones sans offre ou demande ne doivent pas être comptées).
+    err_O <- max(
+      abs(rowSums(T_mat)[target_O > 1e-12] - target_O[target_O > 1e-12]) /
+        target_O[target_O > 1e-12]
+    )
+    err_D <- max(
+      abs(colSums(T_mat)[target_D > 1e-12] - target_D[target_D > 1e-12]) /
+        target_D[target_D > 1e-12]
+    )
+    err_max <- max(err_O, err_D)
+    
+    # Critère d'arrêt : les deux marges sont respectées à FURNESS_TOL près
+    if (err_max < FURNESS_TOL) {
+      cat("  [", secteur, "] Furness convergé — itération", iter,
+          "| erreur max :", formatC(err_max * 100, format = "e", digits = 2), "%\n")
+      break
+    }
+    
+    # Avertissement si la boucle atteint la limite sans converger
+    if (iter == FURNESS_MAX_ITER) {
+      warning("  [", secteur, "] Furness non convergé après ", FURNESS_MAX_ITER,
+              " itérations. Erreur finale : ", round(err_max * 100, 4), "%",
+              "\n  → Vérifier les zones isolées (offre ou demande = 0).",
+              "\n  → Augmenter FURNESS_MAX_ITER ou revoir C_IJ_PLANCHER.")
+    }
+  }
+  
+  # Remise à zéro de la diagonale par sécurité (peut avoir reçu un résidu
+  # numérique lors des multiplications ligne/colonne successives)
+  diag(T_mat) <- 0
+  
+  T_mat
+}
+
+# ── Application sectorielle du modèle doublement contraint ────────────────────
+
+cat("Calcul des flux gravitaires (modèle doublement contraint)...\n\n")
+
+flux_gravitaire <- list()   # Liste des matrices de flux par secteur (M USD)
 
 # Création de la matrice de flux total avec des noms de zones UNIQUES.
-# noeuds_entreposage$warehouse_name peut contenir des doublons si deux zones
-# portent le même nom (ex : deux zones OSM appelées "Kigali").
-# make.unique() règle ce problème une fois pour toutes ici, ce qui évite
-# les erreurs "must have unique names" lors de tous les pivot_longer(),
-# rownames_to_column() et write.csv() qui utilisent flux_total plus loin.
+# make.unique() évite les erreurs "must have unique names" dans pivot_longer()
+# si deux zones OSM portent le même nom dans noeuds_entreposage.
 noms_zones_uniques <- make.unique(noeuds_entreposage$warehouse_name, sep = "_")
 
 flux_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
-                     dimnames = list(noms_zones_uniques,
-                                     noms_zones_uniques))
+                     dimnames = list(noms_zones_uniques, noms_zones_uniques))
+
 for (s in SECTEURS) {
+  
   beta_s <- BETA_SECTEUR[s]
   
-  # C_ij effective = coût réseau interne + coût pré-frontière
+  # ── Construction du coût effectif ij pour ce secteur ─────────────────────────
+  # C_ij_effectif intègre deux composantes :
+  #   C_ij           : coût de transport interne rwandais (matrice OD, Partie VI)
+  #   C_prebordure   : surcoût de transport depuis l'origine étrangère jusqu'à
+  #                    la frontière (non nul uniquement si i est un poste frontière)
+  # Pour une paire purement interne (i et j tous les deux dans le Rwanda),
+  # C_prebordure[i,j,s] = 0 et C_ij_effectif = C_ij.
+  # Pour une importation via la frontière de Gatuna (Ouganda → Rwanda),
+  # C_ij_effectif = C_ij + coût_transport_Kampala_Gatuna pour ce secteur.
   C_ij_effectif <- C_ij + C_prebordure[, , s]
-  C_ij_effectif[is.na(C_ij_effectif)] <- NA  # Conserver les NA (zones non connectées)
+  # Conserver les NA : une paire non connectée dans C_ij reste non connectée
+  # même avec un coût pré-frontière (on ne peut pas l'atteindre par le réseau)
+  C_ij_effectif[is.na(C_ij)] <- NA
   
-  # Friction : zones proches ont plus d'échanges
-  friction <- C_ij_effectif^(-beta_s)
+  # ── Ajout du coût fixe de manutention à C_ij ─────────────────────────────────
+  # C_ij représente le coût variable du trajet (USD/tonne) : carburant, usure,
+  # temps du chauffeur. Il tend vers 0 quand la distance tend vers 0.
+  #
+  # On ajoute le coût fixe de manutention pour obtenir le coût généralisé total :
+  #   C_ij_total = C_ij_trajet + C_prebordure + cout_fixe_manutention
+  #
+  # L'addition avec un scalaire (cout_fixe_ref) préserve naturellement les NA :
+  #   NA + 6.7 = NA en R → les zones non connectées restent non connectées.
+  # C'est le comportement souhaité : on n'invente pas de connexion là où le
+  # réseau routier n'en a pas créé.
+  #
+  # Effet plancher automatique :
+  #   Même pour C_ij_trajet → 0 (zones quasi-colocalisées), C_ij_total ≥ cout_fixe_ref.
+  #   Avec cout_fixe_ref ≈ 6.7 USD/tonne, C_ij_total^(-2.5) ≤ 6.7^(-2.5) ≈ 0.009
+  #   → le terme de friction est borné sans aucun artifice numérique.
+  C_ij_total <- C_ij_effectif + cout_fixe_ref
+  # Note : les NA dans C_ij_effectif restent NA dans C_ij_total (addition avec NA = NA)
+  
+  # ── Calcul de la friction spatiale ───────────────────────────────────────────
+  friction                  <- C_ij_total^(-beta_s)
   friction[is.na(friction)] <- 0
+  diag(friction)            <- 0
   
-  # Offres et demandes sectorielles
-  O_s <- offre_zones[, s]
-  D_s <- demande_zones[, s]
+  # ── Calcul de la friction spatiale ───────────────────────────────────────────
+  # friction_ij = C_ij^(-beta_s)
+  # Ce terme capture la résistance à l'échange liée à la distance/coût :
+  #   - beta élevé (Agriculture = 2.2) : les produits lourds/fragiles voyagent peu
+  #   - beta faible (Services = 0.9)   : les services (finance, conseil) sont
+  #     peu sensibles à la distance (contrats signés à distance, transactions digitales)
+  # Les NA (zones non connectées) sont mis à 0 : pas de flux possible entre
+  # des zones que le réseau ne relie pas.
+  friction                    <- C_ij_plancher_applique^(-beta_s)
+  friction[is.na(friction)]   <- 0
+  diag(friction)              <- 0    # Pas d'échange d'une zone avec elle-même
   
-  # Flux gravitaire brut : T_ij = O_i * D_j * F_ij
-  # outer(x, y) : produit extérieur — crée une matrice n×m où chaque élément [i,j] = x[i] * y[j]
-  flux_brut <- outer(O_s, D_s) * friction
-  diag(flux_brut) <- 0  # Une zone ne peut pas s'échanger avec elle-même
+  # ── Appel à Furness ───────────────────────────────────────────────────────────
+  # offre_zones[, s]   : vecteur des offres de chaque zone pour le secteur s
+  #                      (déjà scalé par PART_ECHANGEABLE via echelle_offre)
+  # demande_zones[, s] : vecteur des demandes de chaque zone pour le secteur s
+  #                      (déjà scalé par PART_ECHANGEABLE via echelle_demande)
+  # La fonction normalise en interne sur la moyenne géométrique pour assurer
+  # la compatibilité sum(offre) ≈ sum(demande).
+  flux_gravitaire[[s]] <- furness_gravity(
+    O_s      = offre_zones[, s],
+    D_s      = demande_zones[, s],
+    friction = friction,
+    secteur  = s
+  )
   
-  # Calibration : normalisation pour respecter les totaux
-  # sqrt(sum_O × sum_D) est une cible géométrique qui équilibre offre et demande.
-  # On multiplie tous les flux par un facteur K tel que leur somme = cible.
-  if (sum(flux_brut) > 0) {
-    cible     <- sqrt(sum(O_s) * sum(D_s))
-    facteur_k <- cible / sum(flux_brut)
-    flux_calibre <- flux_brut * facteur_k
-  } else {
-    flux_calibre <- flux_brut
-  }
-  
-  flux_gravitaire[[s]] <- flux_calibre
-  flux_total <- flux_total + flux_calibre
+  # Accumulation dans la matrice de flux toutes-secteurs
+  flux_total <- flux_total + flux_gravitaire[[s]]
 }
 
-cat("✓ Flux gravitaires calculés pour", length(SECTEURS), "secteurs\n")
+# ── Vérification des contraintes de marges ────────────────────────────────────
+# On contrôle que les flux sortants de chaque zone correspondent bien à son
+# offre sectorielle, et idem pour les flux entrants et la demande.
+# Un écart > 0.1% signale un problème de convergence ou de données.
 
-# --- Résultats globaux ---
-# sapply() : applique une fonction à chaque élément d'un vecteur et retourne
-# un vecteur (ou matrice) de résultats.
+cat("\n── Vérification des contraintes de marges ─────────────────────────────\n")
+
+for (s in SECTEURS) {
+  
+  T_s      <- flux_gravitaire[[s]]
+  O_s      <- offre_zones[, s]
+  D_s      <- demande_zones[, s]
+  
+  # Recalcul des cibles normalisées (même logique que dans furness_gravity)
+  # pour comparer avec les marges effectives de la matrice obtenue
+  total_O  <- sum(O_s, na.rm = TRUE)
+  total_D  <- sum(D_s, na.rm = TRUE)
+  
+  if (total_O < 1e-12 || total_D < 1e-12) next
+  
+  S_cible  <- sqrt(total_O * total_D)
+  target_O <- O_s * (S_cible / total_O)
+  target_D <- D_s * (S_cible / total_D)
+  
+  # Erreur relative maximale : max sur toutes les zones non-nulles
+  zones_O_actives <- target_O > 1e-12
+  zones_D_actives <- target_D > 1e-12
+  
+  err_O <- if (any(zones_O_actives)) {
+    max(abs(rowSums(T_s)[zones_O_actives] - target_O[zones_O_actives]) /
+          target_O[zones_O_actives]) * 100
+  } else 0
+  
+  err_D <- if (any(zones_D_actives)) {
+    max(abs(colSums(T_s)[zones_D_actives] - target_D[zones_D_actives]) /
+          target_D[zones_D_actives]) * 100
+  } else 0
+  
+  statut <- if (max(err_O, err_D) < 0.01) "✓" else "⚠"
+  cat("  ", statut, "[", formatC(s, width = 14), "]",
+      "err. origine :", formatC(err_O, format = "f", digits = 4), "%",
+      "| err. destin. :", formatC(err_D, format = "f", digits = 4), "%\n")
+}
+
+# ── Résultats globaux ─────────────────────────────────────────────────────────
 flux_par_secteur_df <- tibble(
-  Secteur          = SECTEURS,
-  Beta             = unname(BETA_SECTEUR),
-  Flux_total_musd  = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 1)),
-  Flux_moyen_musd  = sapply(SECTEURS, function(s) {
+  Secteur         = SECTEURS,
+  Beta            = unname(BETA_SECTEUR),
+  Flux_total_musd = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 1)),
+  Flux_moyen_musd = sapply(SECTEURS, function(s) {
     f <- flux_gravitaire[[s]]
     round(mean(f[f > 0]), 3)
   })
 )
 
-cat("\nFlux par secteur:\n")
+cat("\nFlux par secteur (modèle doublement contraint):\n")
 print(flux_par_secteur_df)
 
 # Vérifier les doublons dans les noms de zones
-cat("Doublons dans warehouse_name :\n")
+cat("\nDoublons dans warehouse_name :\n")
 print(noeuds_entreposage$warehouse_name[duplicated(noeuds_entreposage$warehouse_name)])
 
 # Top 10 des paires OD
-# pivot_longer() : transforme la matrice carrée en format long (1 ligne = 1 paire OD).
-# filter(flux_musd > 0.01) : exclut les flux négligeables (< 10 000 USD).
-# arrange(desc()) : trie par ordre décroissant de flux.
 flux_total_long <- flux_total %>%
   as.data.frame() %>%
   setNames(make.unique(colnames(.), sep = "_")) %>%
@@ -1094,7 +1466,6 @@ print(head(flux_total_long, 10))
 cat("\n")
 cat("✓ Flux total modélisé:", round(sum(flux_total), 1), "M USD\n")
 cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
-
 
 ################################################################################
 # PARTIE VIII — AFFECTATION DU FRET ET RÉSULTATS

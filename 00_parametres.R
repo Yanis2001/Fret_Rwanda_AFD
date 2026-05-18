@@ -375,6 +375,24 @@ BETA_SECTEUR <- c(
   Services       = 0.9
 )
 
+# ── Paramètres du modèle gravitaire doublement contraint ──────────────────────
+# Ces paramètres contrôlent l'algorithme de Furness (IPF) qui calcule les
+# facteurs d'équilibrage A_i et B_j permettant de respecter exactement les
+# contraintes sur les flux sortants (offre) et entrants (demande).
+
+# Nombre maximal d'itérations de l'algorithme de Furness.
+# En pratique, la convergence est atteinte en 20-50 itérations sur des matrices
+# bien conditionnées (pas de zones isolées avec offre ou demande nulle).
+# 200 itérations est une sécurité pour les cas dégradés (matrices creuses).
+FURNESS_MAX_ITER <- 200
+
+# Seuil de convergence : erreur relative maximale tolérée sur les contraintes.
+# L'algorithme s'arrête quand (|sum_j T_ij - target_O_i| / target_O_i) < TOL
+# pour toutes les origines i, et idem pour les colonnes (destinations j).
+# 1e-6 = 0.0001% d'erreur — suffisant pour que les flux soient économiquement
+# indiscernables de la solution exacte.
+FURNESS_TOL <- 1e-6
+
 # Matrice des coefficients techniques A 
 # a[i,j] = proportion de la production du secteur j (colonne)
 # consommée comme intrant par le secteur i (ligne)
@@ -905,10 +923,10 @@ cat("✓ Palettes de couleurs définies\n\n")
 # du temps du chauffeur, coûts d'usure selon le type de route, capacité de
 # chargement, et pénalité en zone urbaine (congestion, restrictions de tonnage).
 params_flotte_df <- tribble(
-  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_usd, ~cout_dechargement_usd,
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,                  15,                   15,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,                  25,                   25,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090,                  40,                   40
 )
 duck_write(params_flotte_df, "params_flotte")
 
@@ -1068,7 +1086,7 @@ cat("✓ Coûts pré-frontière chargés dans DuckDB :",
 # de distinguer les véhicules.
 
 # Véhicule de référence pour la matrice OD et le modèle gravitaire
-VEHICULE_REFERENCE   <- "camion_moyen"
+VEHICULE_REFERENCE   <- "camion_lourd"
 
 # Récupérer les ids pour les boucles de cartographie (Partie 10)
 VEHICULES_IDS <- duck_query("SELECT vehicule_id, nom FROM params_flotte")
