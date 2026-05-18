@@ -431,13 +431,6 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
       fontface = "italic"
     )
   
-  # ggrepel est nécessaire pour éviter les chevauchements de labels.
-  # S'il n'est pas installé, on produit le graphique sans labels.
-  if (!requireNamespace("ggrepel", quietly = TRUE)) {
-    install.packages("ggrepel")
-    library(ggrepel)
-  }
-  
   ggsave(
     file.path(DIR_CARTES, "graphique_rwi_vs_population.png"),
     g_rwi_pop, width = 12, height = 7, dpi = 300

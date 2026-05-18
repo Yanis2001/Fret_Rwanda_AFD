@@ -66,7 +66,10 @@ packages_requis <- c(
   "scales",        # Mise à l'échelle et formatage pour ggplot2 (rescale, percent…)
   "progress",      # Barre de progression
   "exactextractr", # Agrégation précise de rasters sur des polygones
-  "digest"         # Génèration d'empreinte numérique (hash) d'objets R
+  "digest",        # Génération d'empreinte numérique (hash) d'objets R
+  "ggrepel",       # Étiquettes ggplot2 sans chevauchement (graphiques RWI, démographie)
+  "ggalluvial",    # Diagrammes de Sankey pour les flux de fret (viz_fret.R)
+  "RColorBrewer"   # Palettes de couleurs pour les cartes et graphiques sectoriels
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
@@ -532,9 +535,10 @@ CENTRE_PERTURBATION_LAT <- -2.150   # Nord-Sud
 # Nombre d'arêtes candidates testées pour l'analyse de criticité
 N_TOP_ARETES_CRITIQUES <- 50
 
-# Seuil de volume fret (tonnes) pour qu'une paire OD soit incluse
-# dans le calcul de criticité (filtre pour accélérer le calcul)
-SEUIL_PAIRES_CRITICITE <- 100
+# Pour accélérer le calcul de criticité, on ne recalcule que les paires OD avec un volume de fret
+# supérieur à un seuil (SEUIL_PAIRES_CRITICITE), ce qui exclut les paires
+# marginales qui ne changent pas le classement de criticité.
+SEUIL_PAIRES_CRITICITE <- 100   # tonnes 
 
 # Nombre d'arêtes critiques affichées sur la carte de criticité
 N_ARETES_AFFICHEES_CRITICITE <- 20
@@ -570,15 +574,6 @@ PROP_ROUTES_INONDEES_RASTER <- 0.7
 # Changer la graine = simuler un autre tirage du même événement.
 SEED_INONDATION <- 42
 
-# Nombre d'arêtes à tester pour la criticité.
-# 50 = bon compromis rapidité / exhaustivité pour un premier diagnostic.
-# Pour une analyse complète, augmenter à 200 ou 500 (plusieurs heures).
-N_TOP_ARETES_CRITIQUES <- 50
-
-# Pour accélérer le calcul de criticité, on ne recalcule que les paires OD avec un volume de fret
-# supérieur à un seuil (SEUIL_PAIRES_CRITICITE), ce qui exclut les paires
-# marginales qui ne changent pas le classement de criticité.
-SEUIL_PAIRES_CRITICITE <- 100   # tonnes 
 
 # ==============================================================================
 # Paramètres du modèle ARIO-inventory
@@ -1081,12 +1076,6 @@ VEHICULES_IDS <- duck_query("SELECT vehicule_id, nom FROM params_flotte")
 cat("✓ Flotte chargée dans DuckDB :",
     nrow(VEHICULES_IDS), "véhicules —",
     paste(VEHICULES_IDS$vehicule_id, collapse = ", "), "\n\n")
-
-# ── Fonction de remappage multi-modal (définie ici car utilisée dans 02 et 03)
-# n_noeuds doit être chargé avant d'appeler cette fonction
-node_multi <- function(v_idx, n_id, n_noeuds_local) {
-  as.integer((v_idx - 1L) * n_noeuds_local + n_id)
-}
 
 # ── Chemins des fichiers de persistance inter-scripts ─────────────────────────
 PERSIST_GEODATA      <- file.path(DIR_PERSIST, "persist_geodata.rds")

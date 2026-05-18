@@ -849,9 +849,6 @@ cat("✓ Graphique composition sectorielle sauvegardé\n\n")
 # DIAGRAMME DE SANKEY — Flux de fret : Origine → Secteur → Destination
 # ==============================================================================
 
-if (!requireNamespace("ggalluvial", quietly = TRUE)) install.packages("ggalluvial")
-library(ggalluvial)
-
 cat("Génération du diagramme de Sankey...\n")
 
 # ── Agrégation par (type de zone origine × secteur × type de zone destination) ──

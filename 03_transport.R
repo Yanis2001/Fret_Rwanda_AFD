@@ -427,7 +427,7 @@ if (!cache_od_valide) {
   )
   cat("  ✓ Cache OD sauvegardé :", CACHE_OD, "\n")
   cat("  Colonnes sauvegardées :", paste(names(od_long), collapse = ", "), "\n\n")
-  duck_write(od_long, "matrice_od")
+
   
   # Statistiques enrichies incluant les transbordements
   od_stats <- duck_query("
@@ -450,6 +450,7 @@ if (!cache_od_valide) {
   cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
   
 }
+duck_write(od_long, "matrice_od")
 
 # ==============================================================================
 # VI.2 : Exports du réseau (GeoPackage, CSV, Parquet)

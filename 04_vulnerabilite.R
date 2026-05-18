@@ -1034,8 +1034,6 @@ saveRDS(
     aretes_perturbees_sf      = aretes_perturbees_sf,    
     fraction_perdue_zone      = fraction_perdue_zone,    
     surcouts_par_zone         = surcouts_par_zone,       
-    aretes_perturbees_sf      = aretes_perturbees_sf,
-    fraction_perdue_zone      = fraction_perdue_zone,
     fraction_perdue_prov      = if (exists("fraction_perdue_prov")) fraction_perdue_prov else NULL,
     surcout_pondere_arete     = surcout_pondere_arete,
     volume_detourne_arete     = volume_detourne_arete,
