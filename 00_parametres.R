@@ -86,10 +86,27 @@ installer_si_necessaire <- function(packages) {
 
 installer_si_necessaire(packages_requis)
 
+# Charge un package ; si le chargement échoue (dépendance manquante, package
+# corrompu…), le réinstalle avec toutes ses dépendances puis réessaie.
+# Cela couvre le cas où un package est déjà présent dans installed.packages()
+# mais dont une dépendance a été supprimée ou n'a jamais été installée
+# (scénario courant en dehors des environnements conteneurisés comme Onyxia).
+charger_package <- function(pkg) {
+  tryCatch(
+    library(pkg, character.only = TRUE),
+    error = function(e) {
+      message("⚠ Échec du chargement de '", pkg,
+              "' — réinstallation avec dépendances…")
+      install.packages(pkg, dependencies = TRUE)
+      library(pkg, character.only = TRUE)
+    }
+  )
+}
+
 # invisible() évite d'afficher un message de confirmation dans la console pour
 # chaque package chargé. lapply() est une boucle compacte qui applique la
-# fonction library() à chaque élément de la liste packages_requis.
-invisible(lapply(packages_requis, library, character.only = TRUE))
+# fonction charger_package() à chaque élément de la liste packages_requis.
+invisible(lapply(packages_requis, charger_package))
 
 # options(timeout = 600) : donne 600 secondes (10 minutes) au lieu des 60 secondes
 # par défaut avant d'abandonner un téléchargement. Utile pour les gros fichiers
