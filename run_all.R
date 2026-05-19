@@ -11,22 +11,27 @@
 
 # ==============================================================================
 # CONNEXION GIT
+# Le token est lu depuis la variable d'environnement GITHUB_PAT.
+# → Première utilisation : lancez source("setup.R") une seule fois pour
+#   enregistrer votre token de façon permanente dans ~/.Renviron.
+# → Les utilisateurs qui veulent seulement faire tourner le code sans pusher
+#   peuvent ignorer cette étape : le bloc est silencieusement ignoré.
 # ==============================================================================
 
-# Authentification Git via le Personal Access Token stocké en variable d'env.
-# Sys.getenv() lit la variable d'environnement GITHUB_PAT sans l'exposer
-# dans le code source (bonne pratique de sécurité).
 token <- Sys.getenv("GITHUB_PAT")
-# Configurer le helper de credentials : plus besoin de mettre le mot de passe et nom d'utilisateur avant de pusher sur Git
-system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
 
-# S'assurer que le remote 'origin' pointe vers mon dépôt perso
-system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-# Pusher le script sur deux Git
-system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
-# Vérifier la configuration
-system("git remote -v")
+if (nchar(token) > 0) {
+  # Credential helper : transmet le token à Git sans mot de passe interactif
+  system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
+  # Remotes : dépôt principal + miroir GEMMES-AFD
+  system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+  system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+  system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
+  system("git remote -v")
+} else {
+  cat("ℹ GITHUB_PAT non défini — synchronisation Git désactivée.\n")
+  cat("  Pour activer le push automatique, lancez source(\"setup.R\") une seule fois.\n\n")
+}
 
 # ==============================================================================
 # CONFIGURATION DU RUN

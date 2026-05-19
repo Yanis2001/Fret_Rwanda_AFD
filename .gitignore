@@ -14,3 +14,7 @@ outputs/
 .Rhistory
 .RData
 .Rproj.user/
+.positai
+
+# Variables d'environnement (tokens, secrets — ne jamais committer)
+.Renviron
