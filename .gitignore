@@ -3,6 +3,7 @@ outputs/
 
 # Base DuckDB (recalculable)
 *.duckdb
+*.duckdb.wal
 
 # Fichiers PBF (gros, téléchargés depuis Geofabrik)
 *.pbf

@@ -1,0 +1,15 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# .Renviron.example — Modèle de variables d'environnement pour ce projet
+# ──────────────────────────────────────────────────────────────────────────────
+# Ce fichier est un MODÈLE : il est versionné dans le dépôt Git pour documenter
+# les variables attendues, mais ne contient aucune valeur réelle.
+#
+# À NE PAS MODIFIER directement. À la place :
+#   1. Lancez source("setup.R") dans R pour une configuration guidée, OU
+#   2. Copiez les lignes utiles dans votre fichier ~/.Renviron
+#      (une ligne par variable, sans espaces autour du =)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Personal Access Token GitHub (nécessaire uniquement pour pousser des commits)
+# Créer le vôtre sur : https://github.com/settings/tokens/new  (droits : repo)
+GITHUB_PAT=ghp_VotreTokenIci
