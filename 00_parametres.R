@@ -237,13 +237,6 @@ BUFFER_FRONTIERE_VILLES_M <- 5000
 SEUIL_LONGUEUR_ARETE_M <- 0.5
 
 # ==============================================================================
-# Véhicule de référence et paramètres multi-modal
-# ==============================================================================
-
-# Véhicule utilisé par défaut pour la matrice OD et le modèle gravitaire
-VEHICULE_REFERENCE <- "camion_moyen"
-
-# ==============================================================================
 # Paramètres démographiques 
 # ==============================================================================
 

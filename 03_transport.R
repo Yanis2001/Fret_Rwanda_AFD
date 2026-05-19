@@ -1333,18 +1333,6 @@ for (s in SECTEURS) {
   friction[is.na(friction)] <- 0
   diag(friction)            <- 0
   
-  # ── Calcul de la friction spatiale ───────────────────────────────────────────
-  # friction_ij = C_ij^(-beta_s)
-  # Ce terme capture la résistance à l'échange liée à la distance/coût :
-  #   - beta élevé (Agriculture = 2.2) : les produits lourds/fragiles voyagent peu
-  #   - beta faible (Services = 0.9)   : les services (finance, conseil) sont
-  #     peu sensibles à la distance (contrats signés à distance, transactions digitales)
-  # Les NA (zones non connectées) sont mis à 0 : pas de flux possible entre
-  # des zones que le réseau ne relie pas.
-  friction                    <- C_ij_plancher_applique^(-beta_s)
-  friction[is.na(friction)]   <- 0
-  diag(friction)              <- 0    # Pas d'échange d'une zone avec elle-même
-  
   # ── Appel à Furness ───────────────────────────────────────────────────────────
   # offre_zones[, s]   : vecteur des offres de chaque zone pour le secteur s
   #                      (déjà scalé par PART_ECHANGEABLE via echelle_offre)

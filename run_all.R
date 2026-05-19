@@ -15,13 +15,13 @@ RUN_PARAMETRES   <- TRUE   # 00 — toujours TRUE si on part de zéro
 RUN_RESEAU       <- TRUE   # 01 — long (~30 min, pentes + Worldpop)
 RUN_COUTS        <- TRUE   # 02 — moyen (~5 min)
 RUN_TRANSPORT    <- TRUE   # 03 — long (~1h, Dijkstra + gravitaire)
-RUN_VULNERAB     <- TRUE   # 04 — long (~2h, criticité)
-RUN_ARIO         <- TRUE   # 05 — rapide (~1 min)
+RUN_VULNERAB     <- FALSE   # 04 — long (~2h, criticité)
+RUN_ARIO         <- FALSE   # 05 — rapide (~1 min)
 
 RUN_VIZ_RESEAU   <- TRUE   # viz — cartes réseau / coûts / pentes
 RUN_VIZ_FRET     <- TRUE   # viz — cartes fret / Sankey
-RUN_VIZ_VULNERAB <- TRUE   # viz — cartes vulnérabilité / détours
-RUN_VIZ_ARIO     <- TRUE   # viz — trajectoires ARIO
+RUN_VIZ_VULNERAB <- FALSE   # viz — cartes vulnérabilité / détours
+RUN_VIZ_ARIO     <- FALSE   # viz — trajectoires ARIO
 
 # ==============================================================================
 # EXÉCUTION SÉQUENTIELLE
