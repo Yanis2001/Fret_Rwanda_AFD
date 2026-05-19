@@ -1,5 +1,8 @@
-# Outputs locaux (recalculables)
-outputs/
+# Outputs recalculables — exclus sauf les cartes PNG
+outputs/*
+!outputs/cartes/
+outputs/cartes/*
+!outputs/cartes/*.png
 
 # Base DuckDB (recalculable)
 *.duckdb
