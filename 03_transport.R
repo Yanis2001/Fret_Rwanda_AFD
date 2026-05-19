@@ -428,9 +428,15 @@ if (!cache_od_valide) {
   cat("  ✓ Cache OD sauvegardé :", CACHE_OD, "\n")
   cat("  Colonnes sauvegardées :", paste(names(od_long), collapse = ", "), "\n\n")
 
-  
-  # Statistiques enrichies incluant les transbordements
-  od_stats <- duck_query("
+}
+
+# duck_write est hors du bloc if : il s'exécute que od_long vienne du calcul
+# ou du cache, pour que matrice_od soit toujours disponible dans DuckDB.
+duck_write(od_long, "matrice_od")
+
+# Statistiques enrichies — placées après duck_write pour que matrice_od
+# existe dans DuckDB, quel que soit le chemin emprunté (calcul ou cache).
+od_stats <- duck_query("
   SELECT
     COUNT(*)                          AS n_paires,
     ROUND(AVG(cout_usd), 2)           AS cout_moyen_usd,
@@ -439,18 +445,15 @@ if (!cache_od_valide) {
     ROUND(AVG(n_transbordements), 2)  AS transbordements_moyens
   FROM matrice_od
 ")
-  
-  cat("✓ Matrice OD multi-modale stockée dans DuckDB\n")
-  cat("  Paires connectées            :", od_stats$n_paires, "(sur ",
-      n_warehouses * (n_warehouses - 1),"paires possibles", 
-      round(od_stats$n_paires / (n_warehouses * (n_warehouses - 1)) * 100, 1),
-      "% de connectivité)\n")
-  cat("  Coût moyen                   :", od_stats$cout_moyen_usd, "USD\n")
-  cat("  Paires avec transbordement   :", od_stats$paires_avec_transbordement, "\n")
-  cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
-  
-}
-duck_write(od_long, "matrice_od")
+
+cat("✓ Matrice OD multi-modale stockée dans DuckDB\n")
+cat("  Paires connectées            :", od_stats$n_paires, "(sur ",
+    n_warehouses * (n_warehouses - 1),"paires possibles",
+    round(od_stats$n_paires / (n_warehouses * (n_warehouses - 1)) * 100, 1),
+    "% de connectivité)\n")
+cat("  Coût moyen                   :", od_stats$cout_moyen_usd, "USD\n")
+cat("  Paires avec transbordement   :", od_stats$paires_avec_transbordement, "\n")
+cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
 # ==============================================================================
 # VI.2 : Exports du réseau (GeoPackage, CSV, Parquet)
