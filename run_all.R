@@ -59,7 +59,8 @@ RUN_VIZ_ESTEEM   <- FALSE   # viz — visualisations ESTEEM
 # ==============================================================================
 
 t_debut <- Sys.time()
-cat("╔══════════════════════════════════════════╗\n
+cat("
+     ╔══════════════════════════════════════════╗\n
      ║  RUN COMPLET — Réseau Fret Rwanda        ║\n
      ╚══════════════════════════════════════════╝\n\n")
 
@@ -75,7 +76,14 @@ executer_module <- function(nom, fichier, actif) {
   t0 <- Sys.time()
   source(fichier, local = FALSE)
   duree <- round(difftime(Sys.time(), t0, units = "mins"), 1)
-  cat("\n✓", nom, "terminé en", duree, "min\n\n")
+  cat("\n✓", nom, "terminé en", duree, "min\n")
+  # Double gc() après chaque module : le premier passage marque les objets
+  # libérables, le second les supprime effectivement de la mémoire physique.
+  # Cela évite l'accumulation d'objets entre modules et réduit le risque de crash
+  # par pression mémoire en fin de run.
+  ram_avant <- sum(gc(verbose = FALSE)[, 2])
+  invisible(gc(verbose = FALSE))
+  cat("  RAM après nettoyage :", round(ram_avant, 0), "MB\n\n")
 }
 
 executer_module("00_parametres",   "00_parametres.R",   RUN_PARAMETRES)
@@ -95,3 +103,9 @@ duree_totale <- round(difftime(Sys.time(), t_debut, units = "mins"), 1)
 cat("══════════════════════════════════════════\n")
 cat("  Run terminé en", duree_totale, "min\n")
 cat("══════════════════════════════════════════\n")
+
+# Fermeture explicite de la connexion DuckDB.
+if (exists("con") && tryCatch(DBI::dbIsValid(con), error = function(e) FALSE)) {
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  cat("✓ Connexion DuckDB fermée proprement.\n")
+}

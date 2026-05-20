@@ -1028,4 +1028,20 @@ saveRDS(
 )
 
 cat("✓ persist_vulnerabilite.rds\n\n")
+
+# Libération des gros objets intermédiaires de la partie IX.
+# graphe_degrade et graphe_criticite sont des copies du graphe multimodal (~500 Mo
+# selon la taille du réseau). aretes_ems_cache et od_rows_degrade peuvent aussi
+# être volumineux. Tout est déjà dans le .rds ci-dessus.
+objets_a_liberer <- c(
+  "graphe_degrade", "graphe_criticite",
+  "aretes_ems_cache", "aretes_ems_idx",
+  "od_rows_degrade", "od_degrade",
+  "chemins_par_vehicule", "edge_attrs_deg",
+  "paires_importantes_crit"
+)
+rm(list = intersect(objets_a_liberer, ls()))
+invisible(gc(verbose = FALSE))
+invisible(gc(verbose = FALSE))
+
 cat("Lancer 05_ario.R pour la suite.\n")

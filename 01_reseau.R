@@ -3590,4 +3590,21 @@ cat("✓ persist_fond_carte.rds sauvegardé\n")
 cat("✓ persist_geodata.rds\n")
 cat("✓ persist_reseau_base.rds\n")
 cat("✓ persist_entreposages.rds\n\n")
+
+# Libération des gros objets intermédiaires.
+# Ces objets peuvent représenter plusieurs centaines de Mo en RAM et ne sont
+# plus nécessaires pour les scripts suivants, qui rechargent depuis les .rds.
+objets_a_liberer <- c(
+  "raster_worldpop",       # Raster WorldPop (~150 Mo)
+  "population_osm_raw",    # Points OSM de population
+  "routes_rwanda",         # Arêtes brutes avant nettoyage
+  "aretes_reseau_sf",      # Arêtes sf intermédiaires
+  "population_zone_finale",
+  "pop_worldpop_par_entrepot", "pop_nisr_par_entrepot", "pop_osm_par_entrepot",
+  "rwanda_districts_gadm", "nisr_pop_raw"
+)
+rm(list = intersect(objets_a_liberer, ls()))
+invisible(gc(verbose = FALSE))
+invisible(gc(verbose = FALSE))
+
 cat("Lancer 02_couts.R pour la suite.\n")
