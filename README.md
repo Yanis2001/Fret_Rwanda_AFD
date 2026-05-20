@@ -72,7 +72,6 @@ Les résultats (cartes, CSV, Parquet, GeoPackage) sont écrits dans le dossier `
 | `05_ario.R` | Modèle économique ARIO (pertes indirectes) |
 | `viz_*.R` | Scripts de visualisation (cartes, Sankey, graphiques) |
 | `outputs/` | Résultats générés (non versionnés) |
-| `.Renviron.example` | Modèle de variables d'environnement à configurer |
 
 ---
 
