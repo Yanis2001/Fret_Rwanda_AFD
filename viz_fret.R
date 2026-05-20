@@ -140,7 +140,7 @@ tmap_save(carte_fret,
 cat("✓ Carte trafic fret sauvegardée\n")
 
 # ============================================================
-# CARTES 4bis : Intensité du fret PAR SECTEUR
+# CARTE 5 : Intensité du fret PAR SECTEUR
 # Une carte par secteur économique, même style que carte_trafic_fret
 # mais en filtrant le volume pour ne garder que les tonnes du secteur.
 # ============================================================
@@ -252,7 +252,7 @@ cat("✓", length(SECTEURS), "cartes sectorielles générées\n\n")
 
 
 # ============================================================
-# CARTE 4ter : Secteur DOMINANT par arête
+# CARTE 6 : Secteur DOMINANT par arête
 # Pour chaque arête, on identifie le secteur qui y transporte le plus
 # de tonnes et on colore l'arête selon ce secteur dominant.
 # ============================================================

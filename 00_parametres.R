@@ -657,7 +657,7 @@ cat("✓ Paramètres globaux chargés\n\n")
 # Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
 # ==============================================================================
 
-RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
+RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
 
 if (RESET_CACHES) {
   
@@ -688,7 +688,7 @@ if (RESET_CACHES) {
 }
 
 # ==============================================================================
-# I.2 bis : Environnement séparé pour les gros objets
+# I.2 : Environnement séparé pour les gros objets
 # Crée un environnement R distinct de .GlobalEnv qui n'est PAS indexé par
 # RStudio Server. Les gros objets (graphes, réseaux, rasters) y sont stockés
 # pour éviter que RStudio ne fige la session en tentant d'afficher leur
@@ -758,7 +758,7 @@ lister_lourds <- function() {
 cat("✓ Environnement env_lourds créé (objets non visibles dans RStudio)\n\n")
 
 # ==============================================================================
-# I.2 : Connexion DuckDB et fonctions utilitaires
+# I.3 : Connexion DuckDB et fonctions utilitaires
 # Ouvre la base analytique persistante et définit les raccourcis duck_write()
 # et duck_query() utilisés dans toutes les parties suivantes.
 # ==============================================================================
@@ -822,7 +822,7 @@ duck_write <- function(df, table_name) {
 duck_query <- function(sql) dbGetQuery(con, sql)
 
 # ==============================================================================
-# I.3 : Palettes de couleurs centralisées
+# I.4 : Palettes de couleurs centralisées
 # Définit toutes les couleurs utilisées dans les cartes. Modifier ici
 # répercute les changements sur l'ensemble des visualisations du script.
 # ==============================================================================
@@ -897,7 +897,7 @@ cat("✓ Palettes de couleurs définies\n\n")
 
 
 # ==============================================================================
-# I.4 : Paramètres de la flotte de véhicules
+# I.5 : Paramètres de la flotte de véhicules
 # Définit les 3 tables DuckDB décrivant la flotte (coûts, vitesses, pentes,
 # transbordements, coûts pré-frontière). Pour ajouter un véhicule :
 # modifier uniquement ce bloc, le reste du script s'adapte automatiquement.

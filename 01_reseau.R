@@ -2963,7 +2963,7 @@ cat("  • DuckDB         (table richesse_entrepots)\n")
 cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 
 ################################################################################
-# PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022 ET PROFILS D'OFFRE EMPIRIQUES
+# PARTIE IV.6 — EMPLOI SECTORIEL RPHC5 2022 ET PROFILS D'OFFRE EMPIRIQUES
 #
 # OBJECTIF : Produire deux outputs à partir du RPHC5 2022 :
 #

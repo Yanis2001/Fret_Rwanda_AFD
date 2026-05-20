@@ -48,11 +48,11 @@ cat("✓ Objets chargés\n\n")
 #            l'impact sur les coûts de transport entre toutes les paires OD.
 #
 # STRUCTURE :
-#   IX.2 — Identification des arêtes perturbées
-#   IX.3 — Recalcul de la matrice OD sur le réseau dégradé
-#   IX.4 — Calcul des surcoûts et classification des impacts
-#   IX.5 — Identification des arêtes critiques (analyse de sensibilité)
-#   IX.6 — Cartes et exports
+#   IX.1 — Identification des arêtes perturbées
+#   IX.2 — Recalcul de la matrice OD sur le réseau dégradé
+#   IX.3 — Calcul des surcoûts et classification des impacts
+#   IX.4 — Identification des arêtes critiques (analyse de sensibilité)
+#   IX.5 — Cartes et exports
 #
 # DESIGN POUR L'AVENIR :
 #   Ce script est conçu pour accepter, à terme, des cartes raster de zones
@@ -78,7 +78,7 @@ cat("✓ Objets chargés\n\n")
 
 
 ################################################################################
-# PARTIE IX.2 — IDENTIFICATION DES ARÊTES PERTURBÉES
+# PARTIE IX.1 — IDENTIFICATION DES ARÊTES PERTURBÉES
 #
 # Les trois modes sont fusionnés en un seul ensemble d'arêtes.
 ################################################################################
@@ -310,7 +310,7 @@ cat("  Surfaces          :", resume_perturb$surfaces, "\n\n")
 
 
 ################################################################################
-# PARTIE IX.3 — RECALCUL DE LA MATRICE OD SUR LE RÉSEAU DÉGRADÉ
+# PARTIE IX.2 — RECALCUL DE LA MATRICE OD SUR LE RÉSEAU DÉGRADÉ
 #
 # On reconstruit le graphe multi-modal en retirant les arêtes perturbées,
 # puis on recalcule les distances OD optimales sur ce réseau dégradé.
@@ -576,7 +576,7 @@ cat("✓ Matrice OD dégradée calculée\n\n")
 
 
 ################################################################################
-# PARTIE IX.4 — CALCUL DES SURCOÛTS ET CLASSIFICATION DES IMPACTS
+# PARTIE IX.3 — CALCUL DES SURCOÛTS ET CLASSIFICATION DES IMPACTS
 #
 # On compare les deux matrices OD (avant / après perturbation) pour calculer :
 #   - Le surcoût absolu (USD supplémentaires par trajet)
@@ -784,7 +784,7 @@ cat("✓ Matrice fraction_perdue_zone calculée (",
 
 
 ################################################################################
-# PARTIE IX.5 — IDENTIFICATION DES ARÊTES CRITIQUES
+# PARTIE IX.4 — IDENTIFICATION DES ARÊTES CRITIQUES
 #
 # OBJECTIF : Trouver les arêtes qui, si elles sont supprimées individuellement,
 #            causent le plus grand surcoût agrégé sur le réseau.

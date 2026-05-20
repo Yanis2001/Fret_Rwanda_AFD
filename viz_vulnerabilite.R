@@ -69,7 +69,7 @@ if (!exists("surcout_moyen_detour")) {
 }
 
 ################################################################################
-# PARTIE IX.6 — CARTES ET EXPORTS
+# PARTIE IX.5 — CARTES ET EXPORTS
 #
 # Génère quatre sorties visuelles :
 #   Carte A — Réseau dégradé : arêtes perturbées + impact sur les OD

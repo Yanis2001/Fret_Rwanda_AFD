@@ -980,7 +980,7 @@ for (i in seq_len(n_warehouses)) {
 cat("✓ Matrice de coûts pré-frontière construite\n\n")
 
 # ==============================================================================
-# VII.3.0 : Coût fixe de chargement/déchargement par véhicule
+# VII.3 : Coût fixe de chargement/déchargement par véhicule
 #
 # PRINCIPE :
 #   Tout trajet de fret implique deux opérations fixes indépendantes de la
@@ -1073,7 +1073,7 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 
 
 # ==============================================================================
-# VII.3 : Modèle gravitaire DOUBLEMENT CONTRAINT (Wilson 1967 / Furness 1965)
+# VII.4 : Modèle gravitaire DOUBLEMENT CONTRAINT (Wilson 1967 / Furness 1965)
 #
 # CHANGEMENT PAR RAPPORT AU MODÈLE PRÉCÉDENT :
 #   Avant : T_ij^s = K^s × O_i^s × D_j^s × C_ij^(-beta_s)
