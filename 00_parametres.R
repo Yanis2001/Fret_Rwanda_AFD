@@ -534,7 +534,9 @@ OSM_IDS_PERTURBES_MANUEL <- c(479687569)
 NOM_SCENARIO <- tryCatch({
   if (!file.exists(DB_PATH)) stop("DuckDB absent")
   con_tmp <- DBI::dbConnect(duckdb::duckdb(), dbdir = DB_PATH, read_only = TRUE)
-  on.exit(try(DBI::dbDisconnect(con_tmp, shutdown = TRUE), silent = TRUE), add = TRUE)
+  # Pas de shutdown = TRUE ici : on ferme uniquement cette connexion temporaire,
+  # sans arrêter l'instance DuckDB (con sera ouvert ensuite).
+  on.exit(try(DBI::dbDisconnect(con_tmp), silent = TRUE), add = TRUE)
   noms <- DBI::dbGetQuery(
     con_tmp,
     sprintf(
@@ -543,7 +545,7 @@ NOM_SCENARIO <- tryCatch({
       paste(OSM_IDS_PERTURBES_MANUEL, collapse = ", ")
     )
   )$name
-  DBI::dbDisconnect(con_tmp, shutdown = TRUE)
+  DBI::dbDisconnect(con_tmp)
   if (length(noms) == 0) stop("aucun nom OSM trouvé")
   noms_clean <- gsub("[^[:alnum:]_]", "", gsub("\\s+", "_", trimws(noms)))
   paste(c(TYPE_EVENEMENT, noms_clean), collapse = "_")

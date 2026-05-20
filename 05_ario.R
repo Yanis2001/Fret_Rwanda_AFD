@@ -13,25 +13,40 @@ source("00_parametres.R")
 
 cat("=== Chargement des objets ===\n")
 
-.geo   <- readRDS(PERSIST_GEODATA)
-.ent   <- readRDS(PERSIST_ENTREPOSAGES)
-.flux  <- readRDS(PERSIST_FLUX_FRET)
-.res   <- readRDS(PERSIST_RESEAU_FRET)
-.vuln  <- readRDS(PERSIST_VULNERAB)
+# Chargement séquentiel avec libération mémoire entre chaque fichier lourd.
+# persist_reseau_fret.rds contient un sfnetworks (~40 Mo compressé, plusieurs
+# Go en RAM) ; sans gc() intermédiaire, la décompression du fichier suivant
+# échoue avec "error reading from connection" sur les machines à RAM limitée.
+.geo  <- readRDS(PERSIST_GEODATA)
+list2env(.geo, envir = .GlobalEnv)
+rm(.geo)
 
-list2env(.geo,  envir = .GlobalEnv)
-list2env(.ent,  envir = .GlobalEnv)
-flux_gravitaire           <- .flux$flux_gravitaire
-flux_tonnes_total         <- .flux$flux_tonnes_total
-offre_zones               <- .flux$offre_zones
-demande_zones             <- .flux$demande_zones
-reseau_rwanda             <- .res$reseau_rwanda
+.ent  <- readRDS(PERSIST_ENTREPOSAGES)
+list2env(.ent, envir = .GlobalEnv)
+rm(.ent)
+
+.flux <- readRDS(PERSIST_FLUX_FRET)
+flux_gravitaire  <- .flux$flux_gravitaire
+flux_tonnes_total <- .flux$flux_tonnes_total
+offre_zones      <- .flux$offre_zones
+demande_zones    <- .flux$demande_zones
+rm(.flux)
+
+.vuln <- readRDS(PERSIST_VULNERAB)
 od_compare                <- .vuln$od_compare
 fraction_perdue_zone      <- .vuln$fraction_perdue_zone
 indices_aretes_perturbees <- .vuln$indices_aretes_perturbees
 NOM_SCENARIO              <- .vuln$NOM_SCENARIO
+rm(.vuln)
 
-rm(.geo, .ent, .flux, .res, .vuln)
+invisible(gc(verbose = FALSE))
+
+# persist_reseau_fret.rds chargé en dernier : c'est le plus volumineux.
+.res          <- readRDS(PERSIST_RESEAU_FRET)
+reseau_rwanda <- .res$reseau_rwanda
+rm(.res)
+
+invisible(gc(verbose = FALSE))
 
 cat("✓ Objets chargés\n\n")
 
