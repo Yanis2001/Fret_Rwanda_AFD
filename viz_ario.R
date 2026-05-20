@@ -62,7 +62,7 @@ g_traj_secteurs <- ggplot(traj_secteurs,
   annotate("text", x = DUREE_JOURS + 1, 
            y = max(traj_secteurs$Production_pct, na.rm = TRUE) * 0.95,
            label = "Fin perturbation", hjust = 0, color = "#CC0000", size = 3) +
-  scale_color_brewer(palette = "Set2") +
+  scale_color_manual(values = PALETTE_SECTEURS) +
   scale_y_continuous(labels = scales::percent_format(scale = 1, accuracy = 0.1)) +
   labs(
     title    = "ARIO-inventory — Trajectoire de la production par secteur",
@@ -135,7 +135,7 @@ g_pertes_secteurs <- tableau_pertes_secteur %>%
   geom_text(aes(label = paste0(round(Perte_pct, 1), "%")),
             hjust = -0.1, size = 3.5) +
   coord_flip(clip = "off") +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = PALETTE_SECTEURS) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
   labs(
     title    = "Pertes indirectes par secteur (ARIO-inventory)",
@@ -189,9 +189,9 @@ carte_pertes_ario <- fond_carte() +
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#888888", lwd = 0.3) +
   
-  # Arêtes perturbées du scénario
+  # Arêtes perturbées du scénario (même couleur que Cartes A et C de viz_vulnerabilite.R)
   tm_shape(aretes_perturbees_sf) +
-  tm_lines(col = "#0000CC", lwd = 2.5,
+  tm_lines(col = "#CC0000", lwd = 2.5,
            col.legend = tm_legend(show = FALSE)) +
   
   tm_title(paste0("Pertes indirectes par province — ARIO-inventory\n",

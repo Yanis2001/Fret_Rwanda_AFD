@@ -303,13 +303,7 @@ aretes_dominant_sf <- aretes_geom_base %>%
   ) %>%
   filter(!is.na(secteur_dominant))
 
-# Palette pour les secteurs (une couleur distincte par secteur).
-# RColorBrewer::brewer.pal(8, "Set2") donne 8 couleurs contrastées
-# adaptées à des catégories non ordonnées.
-PALETTE_SECTEURS <- setNames(
-  RColorBrewer::brewer.pal(N_SECTEURS, "Set2"),
-  SECTEURS
-)
+# PALETTE_SECTEURS est définie dans 00_parametres.R (chargé via source() en début de script).
 
 carte_dominant <- fond_carte() +
   
@@ -536,7 +530,7 @@ compo_par_type_route <- compo_par_type_route %>%
 g_compo_route <- ggplot(compo_par_type_route,
                         aes(x = road_type, y = part_pct, fill = Secteur)) +
   geom_col(position = "stack", width = 0.7) +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = PALETTE_SECTEURS) +
   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   labs(
     title    = "Composition sectorielle du trafic par type de route",
@@ -598,7 +592,7 @@ g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
     labels = scales::label_number(big.mark = " "),
     breaks = c(1, 10, 100, 1000, 10000, 100000)
   ) +
-  scale_fill_brewer(palette = "Set2", guide = "none") +
+  scale_fill_manual(values = PALETTE_SECTEURS, guide = "none") +
   labs(
     title    = "Distribution du volume par arête, par secteur",
     subtitle = paste0("Échelle log — une distribution étroite indique une ",
@@ -666,7 +660,7 @@ g1 <- flux_par_secteur_df %>%
   geom_text(aes(label = paste0(Flux_total_musd, " M$")),
             hjust = -0.1, size = 3.5, color = "#333333") +
   coord_flip(clip = "off") +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = PALETTE_SECTEURS) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
   labs(
     title    = "Flux commerciaux interzonaux par secteur",
@@ -713,19 +707,19 @@ g2 <- recap_zones %>%
              y = Valeur,
              fill = Type_flux)) +
   geom_col(position = "dodge", width = 0.7) +
-  # Contour rouge sur la barre de la zone de référence offre
+  # Contour bleu sur la barre de la zone de référence offre (cohérent avec fill offre = bleu)
   geom_col(
     data = ~ filter(., Zone_court == ref_offre_court, Type_flux == "offre"),
     aes(x = reorder(Zone_court, Valeur), y = Valeur),
-    fill = NA, color = "#CC0000", linewidth = 1.3,
+    fill = NA, color = "#1976D2", linewidth = 1.3,
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
   ) +
-  # Contour bleu foncé sur la barre de la zone de référence demande
+  # Contour rouge sur la barre de la zone de référence demande (cohérent avec fill demande = rouge)
   geom_col(
     data = ~ filter(., Zone_court == ref_demande_court, Type_flux == "demande"),
     aes(x = reorder(Zone_court, Valeur), y = Valeur),
-    fill = NA, color = "#003399", linewidth = 1.3,
+    fill = NA, color = "#D32F2F", linewidth = 1.3,
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
   ) +
@@ -735,8 +729,8 @@ g2 <- recap_zones %>%
     title    = "Offre et Demande par zone économique",
     subtitle = paste0(
       "Modèle gravitaire - Rwanda (données fictives réalistes)\n",
-      "Contour rouge = référence offre ('", nom_ref_offre, "') | ",
-      "Contour bleu = référence demande ('", nom_ref_demande, "')"
+      "Contour bleu = référence offre ('", nom_ref_offre, "') | ",
+      "Contour rouge = référence demande ('", nom_ref_demande, "')"
     ),
     x    = NULL,
     y    = "Valeur (millions USD)",
@@ -826,7 +820,7 @@ g4 <- offre_long %>%
              fill = Secteur)) +
   geom_col(width = 0.8) +
   coord_flip() +
-  scale_fill_brewer(palette = "Set2") +
+  scale_fill_manual(values = PALETTE_SECTEURS) +
   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   labs(
     title    = "Composition sectorielle de l'offre par zone",
@@ -913,7 +907,7 @@ g_sankey <- ggplot(
     fontface = "bold",
     color    = "#222222"
   ) +
-  scale_fill_brewer(palette = "Set2", name = "Secteur") +
+  scale_fill_manual(values = PALETTE_SECTEURS, name = "Secteur") +
   scale_x_discrete(
     limits = c("type_origine", "secteur", "type_destination"),
     labels = c("Type d'origine", "Secteur", "Type de destination"),

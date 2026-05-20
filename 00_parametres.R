@@ -657,7 +657,7 @@ cat("✓ Paramètres globaux chargés\n\n")
 # Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
 # ==============================================================================
 
-RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer
+RESET_CACHES <- TRUE  # ← passer à TRUE pour tout recalculer
 
 if (RESET_CACHES) {
   
@@ -884,6 +884,14 @@ PALETTE_CLASSE_TRAFIC <- c(
 # Rouge = route très émettrice (pente forte + mauvaise surface + véhicule lourd)
 # Vert  = route peu émettrice (plat, bitumée, camion léger)
 PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
+
+# ── Secteurs économiques (Set2, dans l'ordre de SECTEURS) ─────────────────────
+# Centralisé ici pour garantir que chaque secteur a toujours la même couleur
+# dans tous les graphiques et cartes (barres, trajectoires, Sankey, carte dominante).
+PALETTE_SECTEURS <- setNames(
+  RColorBrewer::brewer.pal(N_SECTEURS, "Set2"),
+  SECTEURS
+)
 
 cat("✓ Palettes de couleurs définies\n\n")
 
