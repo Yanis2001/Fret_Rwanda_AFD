@@ -2139,16 +2139,21 @@ if (worldpop_ok) {
       progress = FALSE
     )
     
-    # exact_extract avec fun="sum" retourne directement un vecteur numérique.
-    # On remplace les éventuels NA par 0 (zones sans données WorldPop).
+    # exact_extract avec fun="sum" retourne un vecteur numérique.
+    # Quand tous les pixels d'un buffer sont NA, R calcule sum(NA, na.rm=TRUE) = 0,
+    # ce qui masquerait le vrai "sans données" et empêcherait coalesce() de
+    # basculer sur NISR ou OSM. On reconvertit donc ces 0 en NA.
     pop_worldpop_par_entrepot <- as.numeric(resultats_wp)
-    
+    pop_worldpop_par_entrepot[
+      !is.na(pop_worldpop_par_entrepot) & pop_worldpop_par_entrepot == 0
+    ] <- NA_real_
+
     cat("  ✓ Population WorldPop calculée pour",
-        sum(pop_worldpop_par_entrepot > 0), "/", nrow(entreposages_sf),
+        sum(!is.na(pop_worldpop_par_entrepot)), "/", nrow(entreposages_sf),
         "entrepôts\n")
     cat("  Pop. WorldPop min :",
-        round(min(pop_worldpop_par_entrepot[pop_worldpop_par_entrepot > 0])),
-        "| max :", round(max(pop_worldpop_par_entrepot)), "\n\n")
+        round(min(pop_worldpop_par_entrepot, na.rm = TRUE)),
+        "| max :", round(max(pop_worldpop_par_entrepot, na.rm = TRUE)), "\n\n")
     
   }, error = function(e) {
     cat("  ⚠ Agrégation WorldPop échouée :", conditionMessage(e), "\n")
