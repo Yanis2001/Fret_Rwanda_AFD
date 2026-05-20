@@ -863,31 +863,16 @@ if (!cache_reseau_valide) {
   # et crée des nœuds aux points d'intersection. C'est l'opération fondamentale
   # pour connecter des routes qui se croisent physiquement.
   
-  cat("  Étape 1/4 : subdivision aux intersections...\n")
-  
-  reseau_subdivise <- reseau_rwanda %>%
+  cat("  Étape 1/3 : subdivision aux intersections...\n")
+
+  reseau_lisse <- reseau_rwanda %>%
     convert(to_spatial_subdivision)
-  
-  cat("  → ", igraph::count_components(reseau_subdivise), "composantes après subdivision\n")
-  
-  # ── Étape 2 : Suppression des pseudo-nœuds ────────────────────────────────────
-  # Un pseudo-nœud (degré 2) est un nœud connecté à exactement 2 arêtes.
-  # Il n'est pas topologiquement nécessaire (pas une vraie intersection) et alourdit
-  # le graphe. to_spatial_smooth() les supprime et fusionne les arêtes adjacentes.
-  # Exemple : une route droite avec 50 nœuds intermédiaires (à chaque virage OSM)
-  # devient une seule arête après lissage — bien plus efficace pour Dijkstra.
-  
-  cat("  Étape 2/4 : suppression des pseudo-nœuds...\n")
-  
-  reseau_lisse <- reseau_subdivise %>%
-    convert(to_spatial_smooth)
-  
-  cat("  → ", igraph::count_components(reseau_lisse), "composantes après lissage\n")
-  
-  
+
+  cat("  → ", igraph::count_components(reseau_lisse), "composantes après subdivision\n")
+
   # Remplacer FALSE par TRUE si on veut activer cette partie du code : ⚠ ~1 jour de calcul
   if(FALSE) {
-    # ── Étape 3 : snapping ciblé post-topologie ─────────────────────────────────
+    # ── Étape 2 : snapping ciblé post-topologie ─────────────────────────────────
     # Maintenant que la topologie est propre, un snapping léger (5m seulement)
     # connecte les extrémités quasi-jointives.
     # Les gaps < 5m sont rarissimes dans les PBF OSM Rwanda bien maintenus.
@@ -898,7 +883,7 @@ if (!cache_reseau_valide) {
     # proches mais pas exactement connectées (écart de quelques mètres dû à
     # des imprécisions de saisie dans OSM).
     
-    cat("  Étape 3/4 : snapping léger (5m)...\n")
+    cat("  Étape 2/3 : snapping léger (5m)...\n")
     
     tryCatch({
       aretes_sf     <- reseau_lisse %>% 
@@ -966,7 +951,7 @@ if (!cache_reseau_valide) {
   # nœud à n'importe quel autre nœud. Les petits fragments isolés (une piste
   # de quelques km sans connexion) en sont exclus.
   
-  cat("  Étape 4/4 : extraction de la composante géante...\n")
+  cat("  Étape 3/3 : extraction de la composante géante...\n")
   
   # - `as_tbl_graph()` : Convertit le réseau sfnetwork en un graphe tidygraph/igraph.
   #   Cela permet d'utiliser les fonctions d'analyse de graphe d'igraph.
