@@ -735,15 +735,17 @@ for (t in seq_len(ARIO_HORIZON_JOURS)) {
   consommation <- A_sectoriel *
     matrix(x_a, nrow = N_SECTEURS, ncol = p, byrow = TRUE)
   
-  S_t <- pmax(0, S_t + livraisons - consommation)
-  
+  # [] préserve la structure matricielle de S_t : pmax(scalar, matrix) peut
+  # perdre l'attribut dim en R ; l'assignation en place évite ce comportement.
+  S_t[] <- pmax(0, S_t + livraisons - consommation)
+
   # ── Étape 7 : Mise à jour des commandes O(t+1) ──────────────────────────────
   # Cible d'inventaire : n_j × A_sect × x_opt (Hallegatte Eq. 3)
   S_target <- n_j_matrix * A_sectoriel *
     matrix(x_opt, nrow = N_SECTEURS, ncol = p, byrow = TRUE)
-  
-  # Écart à combler (positif uniquement)
-  S_gap <- pmax(0, S_target - S_t)
+
+  # Écart à combler (positif uniquement) — matrix() garantit les dims N_SECTEURS × p.
+  S_gap <- matrix(pmax(0, S_target - S_t), nrow = N_SECTEURS, ncol = p)
   
   # Commandes totales par (secteur fournisseur, industrie cliente) :
   #   O_total[s, f] = (1/τ_s) × S_gap[s, f] + consommation[s, f]
