@@ -1994,19 +1994,6 @@ cat("  Tonnage OD attendu (paires > seuil) :",
 cat("  Ratio moyen (≈ longueur moyenne de chemin en arêtes) :",
     round(tonnage_affecte / tonnage_attendu, 1), "\n")
 
-# Vérification : le tonnage affecté doit être proche du tonnage généré
-# pour les paires au-dessus du seuil (pas égal au total car on filtre
-# les flux < SEUIL_FLUX_TONNES).
-tonnage_affecte <- sum(volume_par_secteur)
-tonnage_attendu <- sum(flux_tonnes_total[paires_actives])
-
-cat("  Tonnage affecté au réseau :",
-    format(round(tonnage_affecte), big.mark = " "), "tonnes\n")
-cat("  Tonnage attendu (paires > seuil) :",
-    format(round(tonnage_attendu), big.mark = " "), "tonnes\n")
-cat("  Ratio affecté/attendu :",
-    round(tonnage_affecte / tonnage_attendu, 3), "\n")
-
 # ══════════════════════════════════════════════════════════════════════════════
 # SUITE : calculs rapides toujours exécutés (qu'on ait un cache ou non)
 # ══════════════════════════════════════════════════════════════════════════════
