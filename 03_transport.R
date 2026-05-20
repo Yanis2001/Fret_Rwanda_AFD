@@ -2212,6 +2212,9 @@ cat("✓ Export sectoriel par arête sauvegardé\n")
 
 cat("=== Sauvegarde des objets persistants (03_transport) ===\n")
 
+# ── Sauvegarde 1 : flux et matrices gravitaires ───────────────────────────────
+# On sauvegarde en premier les matrices de flux (plus légères), puis on les
+# supprime immédiatement pour libérer de la RAM avant la sauvegarde du réseau.
 saveRDS(
   list(
     flux_gravitaire     = flux_gravitaire,
@@ -2220,27 +2223,64 @@ saveRDS(
     offre_zones         = offre_zones,
     demande_zones       = demande_zones,
     noms_zones_uniques  = noms_zones_uniques,
-    flux_par_secteur_df = flux_par_secteur_df,  
-    recap_zones         = recap_zones,      
+    flux_par_secteur_df = flux_par_secteur_df,
+    recap_zones         = recap_zones,
     date_creation       = Sys.time()
   ),
   PERSIST_FLUX_FRET
 )
+cat("✓ persist_flux_fret.rds\n")
 
+# Libération immédiate après sauvegarde : ces objets ne sont plus nécessaires
+# pour la sauvegarde du réseau qui suit. Sans ce rm(), ils resteraient en
+# mémoire et doubleraient le pic RAM lors du saveRDS suivant.
+rm(flux_gravitaire, flux_total, flux_tonnes_total,
+   offre_zones, demande_zones, flux_par_secteur_df, recap_zones)
+invisible(gc(full = TRUE))
+invisible(gc(full = TRUE))
+afficher_ram("entre les deux sauvegardes")
+
+# ── Sauvegarde 2 : réseau enrichi avec volumes fret ───────────────────────────
+# On ne sauvegarde que les objets effectivement lus par les scripts en aval
+# (viz_fret.R, viz_vulnerabilite.R, 04_vulnerabilite.R).
+# volume_trafic_mm_s / volume_trafic / volume_trafic_mm sont intentionnellement
+# exclus : aucun script en aval ne les lit depuis ce fichier (ils sont déjà
+# intégrés dans les arêtes de reseau_rwanda ou disponibles via affectation_cache).
 saveRDS(
   list(
-    reseau_rwanda          = reseau_rwanda,   # avec volumes fret
-    volume_trafic_mm_s     = volume_trafic_mm_s,
-    volume_trafic          = volume_trafic,
-    volume_trafic_mm       = volume_trafic_mm,
-    volume_par_secteur     = volume_par_secteur,
-    volume_par_secteur_df  = volume_par_secteur_df,
-    volumes_par_zone       = volumes_par_zone,
-    date_creation          = Sys.time()
+    reseau_rwanda         = reseau_rwanda,
+    volume_par_secteur    = volume_par_secteur,
+    volume_par_secteur_df = volume_par_secteur_df,
+    volumes_par_zone      = volumes_par_zone,
+    date_creation         = Sys.time()
   ),
   PERSIST_RESEAU_FRET
 )
-
-cat("✓ persist_flux_fret.rds\n")
 cat("✓ persist_reseau_fret.rds\n\n")
+
+# ── Nettoyage final explicite ─────────────────────────────────────────────────
+# Quand un script R se termine, la session tente de libérer automatiquement
+# tous les objets en mémoire. Les gros objets (sfnetworks, igraph, tableaux 3D)
+# peuvent provoquer un crash lors de ce nettoyage automatique si la RAM est
+# saturée. On les détruit explicitement ici pour prévenir ce crash.
+cat("── Nettoyage final ─────────────────────────────────────────────────────\n")
+
+objets_fin <- c(
+  "reseau_rwanda", "volume_trafic_mm_s", "volume_trafic",
+  "volume_trafic_mm", "volume_par_secteur", "volume_par_secteur_df",
+  "volumes_par_zone", "paires_actives", "aretes_fret_export",
+  "aretes_fret_sectoriel", "aretes_emissions_base", "longueurs_km",
+  "emissions_co2_aretes", "emissions_nox_aretes", "emissions_pm25_aretes",
+  "noms_zones_uniques", "flux_total_long", "od_long"
+)
+rm(list = intersect(objets_fin, ls(envir = .GlobalEnv)), envir = .GlobalEnv)
+
+# Vider env_lourds : contient le graphe multi-modal (plusieurs centaines de MB)
+rm(list = ls(envir = env_lourds), envir = env_lourds)
+
+invisible(gc(full = TRUE))
+invisible(gc(full = TRUE))
+afficher_ram("fin de script")
+
+cat("✓ Nettoyage terminé — session stable\n")
 cat("Lancer 04_vulnerabilite.R ou un script viz_*.R pour la suite.\n")
