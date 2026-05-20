@@ -511,8 +511,7 @@ SEUIL_FLUX_TONNES <- 50
 # Paramètres de l'analyse de vulnérabilité (Partie IX)
 # ==============================================================================
 
-# Paramètres du scénario de perturbation 
-NOM_SCENARIO          <- "Inondation_RN1_Kigali_Huye"
+# Paramètres du scénario de perturbation
 DESCRIPTION_SCENARIO  <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
 DUREE_JOURS           <- 14
 TYPE_EVENEMENT        <- "inondation"
@@ -524,7 +523,31 @@ TYPE_EVENEMENT        <- "inondation"
 # Si plusieurs méthodes sont choisies, les routes affectées seront celles de l'union des méthodes
 
 # Mettre l'identifiant OSM de la ou des routes affectées
-OSM_IDS_PERTURBES_MANUEL <- c(479687569 )
+OSM_IDS_PERTURBES_MANUEL <- c(479687569)
+
+# Nom du scénario — généré automatiquement depuis les noms OSM des arêtes perturbées.
+# Pour forcer un nom différent, remplacer NULL par une chaîne entre guillemets.
+# Exemple : NOM_SCENARIO <- "Mon_scenario_custom"
+#
+# Fallback "Scenario_default" si DuckDB n'est pas encore disponible (session fraîche
+# avant le premier lancement de 01_reseau.R).
+NOM_SCENARIO <- tryCatch({
+  if (!file.exists(DB_PATH)) stop("DuckDB absent")
+  con_tmp <- DBI::dbConnect(duckdb::duckdb(), dbdir = DB_PATH, read_only = TRUE)
+  on.exit(try(DBI::dbDisconnect(con_tmp, shutdown = TRUE), silent = TRUE), add = TRUE)
+  noms <- DBI::dbGetQuery(
+    con_tmp,
+    sprintf(
+      "SELECT DISTINCT name FROM routes_attrs_raw
+       WHERE CAST(osm_id AS BIGINT) IN (%s) AND name IS NOT NULL AND name <> ''",
+      paste(OSM_IDS_PERTURBES_MANUEL, collapse = ", ")
+    )
+  )$name
+  DBI::dbDisconnect(con_tmp, shutdown = TRUE)
+  if (length(noms) == 0) stop("aucun nom OSM trouvé")
+  noms_clean <- gsub("[^[:alnum:]_]", "", gsub("\\s+", "_", trimws(noms)))
+  paste(c(TYPE_EVENEMENT, noms_clean), collapse = "_")
+}, error = function(e) "Scenario_default")
 # Pour les activer : mettre TRUE, sinon : mettre FALSE
 UTILISER_MODE_BUFFER        <- FALSE  
 UTILISER_MODE_RASTER        <- FALSE

@@ -162,6 +162,7 @@ g1 <- ggplot(df_prod, aes(x = Jour, y = Production, color = Scenario,
   labs(
     title    = "Production économique totale — Modèle ESTEEM",
     subtitle = paste0(
+      "Scénario : ", NOM_SCENARIO, "\n",
       "Dynamique d'ajustement hors-équilibre après le choc de transport\n",
       "β_y = ", ESTEEM_BETA_Y, "/an | β_p = ", ESTEEM_BETA_P, "/an | η = ", ESTEEM_ETA
     ),

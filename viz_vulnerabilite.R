@@ -207,8 +207,8 @@ carte_criticite <- fond_carte() +
   tm_lines(col = "#0000CC", lwd = 2,
            col.legend = tm_legend(show = FALSE)) +
   
-  tm_title(paste0("Arêtes critiques du réseau — ",
-                  "Top ", N_ARETES_AFFICHEES, " par surcoût pondéré")) +
+  tm_title(paste0("Arêtes critiques du réseau — ", NOM_SCENARIO,
+                  "\nTop ", N_ARETES_AFFICHEES, " par surcoût pondéré")) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
