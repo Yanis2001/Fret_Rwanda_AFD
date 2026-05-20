@@ -154,9 +154,9 @@ g1 <- ggplot(df_prod, aes(x = Jour, y = Production, color = Scenario,
   annotate("text", x = xintercept_choc + 1, y = max(df_prod$Production) * 0.99,
            label = paste("Fin du choc\n(J", xintercept_choc, ")"),
            hjust = 0, size = 3.5, color = "#CC0000") +
-  scale_color_manual(values = c("Référence" = "#333333", !!NOM_SCENARIO := "#D62728"),
+  scale_color_manual(values = setNames(c("#333333", "#D62728"), c("Référence", NOM_SCENARIO)),
                      name = "Scénario") +
-  scale_linetype_manual(values = c("Référence" = "dashed", !!NOM_SCENARIO := "solid"),
+  scale_linetype_manual(values = setNames(c("dashed", "solid"), c("Référence", NOM_SCENARIO)),
                         name = "Scénario") +
   scale_y_continuous(labels = scales::label_number(suffix = " M$")) +
   labs(
