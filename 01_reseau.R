@@ -1893,7 +1893,7 @@ if (any(!doublons_noeuds$meme_type)) {
 #
 # STRATÉGIE DE FUSION :
 #   On calcule une colonne "population_zone" finale en appliquant une
-#   hiérarchie de priorité : B (WorldPop) > C (NISR) > A (OSM) > 0
+#   hiérarchie de priorité : B (WorldPop) > A (OSM) > C (NISR) > 0
 #   La colonne est ensuite intégrée dans reseau_rwanda (attribut de nœud)
 #   et dans DuckDB pour être accessible aux requêtes SQL des Parties V à IX.
 #
@@ -1974,44 +1974,30 @@ population_osm_raw <- tryCatch({
 
 cat("  Lieux OSM avec tag population :", nrow(population_osm_raw), "\n")
 
-# ── Association à chaque entrepôt : point OSM le plus proche ──────────────────
-# Pour chaque entrepôt, on cherche le point OSM peuplé dans un rayon de
-# BUFFER_DEMO_M mètres. S'il y en a plusieurs, on prend le plus proche.
+# ── Association à chaque entrepôt : somme des points OSM dans le buffer ────────
+# Pour chaque entrepôt, on cherche tous les points OSM peuplés dans un rayon de
+# BUFFER_DEMO_M mètres et on somme leurs populations.
 # S'il n'y en a aucun, la population OSM reste NA (sera complétée par B ou C).
 
 if (nrow(population_osm_raw) > 0) {
-  
-  # st_join() avec st_nearest_feature = FALSE, on préfère st_is_within_distance
-  # pour contrôler explicitement la distance maximale d'association.
+
   # st_is_within_distance() : matrice booléenne entrepôts × lieux OSM peuplés.
-  # lengths() > 0 : TRUE si au moins un lieu OSM est dans le buffer.
+  # Retourne pour chaque entrepôt la liste des indices des points OSM dans le buffer.
   within_buffer_A <- st_is_within_distance(
     entreposages_sf,
     population_osm_raw,
     dist = BUFFER_DEMO_M
   )
-  
-  # Pour chaque entrepôt, on identifie le lieu OSM le plus proche dans le buffer.
-  # st_nearest_feature() renvoie un indice (le plus proche parmi les candidats).
+
+  # Pour chaque entrepôt, on somme la population de tous les points OSM dans le buffer.
+  # sum() avec na.rm = TRUE ignore les tags mal renseignés sans planter le calcul.
   pop_osm_par_entrepot <- sapply(seq_len(nrow(entreposages_sf)), function(i) {
-    
+
     candidats <- within_buffer_A[[i]]  # Indices des lieux OSM dans le buffer
-    
+
     if (length(candidats) == 0) return(NA_real_)  # Aucun lieu OSM à proximité
-    
-    if (length(candidats) == 1) {
-      # Un seul candidat : on prend directement sa population
-      return(population_osm_raw$pop_osm_brute[candidats])
-    }
-    
-    # Plusieurs candidats : on prend le plus proche géographiquement.
-    # distances() calcule la distance entre l'entrepôt i et chacun des candidats.
-    dists_candidats <- as.numeric(
-      st_distance(entreposages_sf[i,], population_osm_raw[candidats,])
-    )
-    # which.min() renvoie l'indice du candidat le plus proche.
-    idx_plus_proche <- candidats[which.min(dists_candidats)]
-    return(population_osm_raw$pop_osm_brute[idx_plus_proche])
+
+    sum(population_osm_raw$pop_osm_brute[candidats], na.rm = TRUE)
   })
   
 } else {
@@ -2367,8 +2353,8 @@ if (file.exists(NISR_CSV_PATH)) {
 # en une seule colonne "population_zone" par entrepôt selon la hiérarchie :
 #
 #   Priorité 1 : WorldPop (B)        — disponible et non-NA  → utiliser
-#   Priorité 2 : NISR officiel (C)   — si C absent ou NA     → utiliser
-#   Priorité 3 : OSM (A)             — si B absent ou NA     → utiliser
+#   Priorité 2 : OSM (A)             — si B absent ou NA     → utiliser
+#   Priorité 3 : NISR officiel (C)   — si A absent ou NA     → utiliser
 #   Priorité 0 : Population minimale — si tout est NA        → 1 000 hab (évite les divisions par zéro)
 #
 # La population finale est intégrée :
@@ -2391,8 +2377,8 @@ entreposages_fictifs <- entreposages_fictifs %>%
 # C'est l'opérateur de "hiérarchie de sources" en une seule fonction.
 population_zone_finale <- coalesce(
   replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
-  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR 
   replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
+  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR
   rep(1000, nrow(entreposages_sf))                  # Fallback : 1 000 hab. minimum
 ) %>%
   round()   # Les populations sont des entiers
@@ -2402,8 +2388,8 @@ population_zone_finale <- coalesce(
 # les zones pour lesquelles on a dû utiliser le fallback.
 source_utilisee <- case_when(
   !is.na(pop_worldpop_par_entrepot) ~ "WorldPop_2020",
-  !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
   !is.na(pop_osm_par_entrepot)      ~ "OSM",
+  !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
   TRUE                              ~ "Fallback_1000"
 )
 
