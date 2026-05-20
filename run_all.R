@@ -44,22 +44,24 @@ RUN_PARAMETRES   <- TRUE   # 00 — toujours TRUE si on part de zéro
 RUN_RESEAU       <- TRUE   # 01 — long (~30 min, pentes + Worldpop)
 RUN_COUTS        <- TRUE   # 02 — moyen (~5 min)
 RUN_TRANSPORT    <- TRUE   # 03 — long (~1h, Dijkstra + gravitaire)
-RUN_VULNERAB     <- FALSE   # 04 — long (~2h, criticité)
+RUN_VULNERAB     <- TRUE   # 04 — long (~2h, criticité)
 RUN_ARIO         <- FALSE   # 05 — rapide (~1 min)
+RUN_ESTEEM       <- FALSE   # 06 — modèle ESTEEM
 
 RUN_VIZ_RESEAU   <- TRUE   # viz — cartes réseau / coûts / pentes
 RUN_VIZ_FRET     <- TRUE   # viz — cartes fret / Sankey
-RUN_VIZ_VULNERAB <- FALSE   # viz — cartes vulnérabilité / détours
+RUN_VIZ_VULNERAB <- TRUE   # viz — cartes vulnérabilité / détours
 RUN_VIZ_ARIO     <- FALSE   # viz — trajectoires ARIO
+RUN_VIZ_ESTEEM   <- FALSE   # viz — visualisations ESTEEM
 
 # ==============================================================================
 # EXÉCUTION SÉQUENTIELLE
 # ==============================================================================
 
 t_debut <- Sys.time()
-cat("╔══════════════════════════════════════════╗\n")
-cat("║  RUN COMPLET — Réseau Fret Rwanda        ║\n")
-cat("╚══════════════════════════════════════════╝\n\n")
+cat("╔══════════════════════════════════════════╗\n
+     ║  RUN COMPLET — Réseau Fret Rwanda        ║\n
+     ╚══════════════════════════════════════════╝\n\n")
 
 executer_module <- function(nom, fichier, actif) {
   if (!actif) {
@@ -82,10 +84,12 @@ executer_module("02_couts",        "02_couts.R",        RUN_COUTS)
 executer_module("03_transport",    "03_transport.R",    RUN_TRANSPORT)
 executer_module("04_vulnerabilite","04_vulnerabilite.R",RUN_VULNERAB)
 executer_module("05_ario",         "05_ario.R",         RUN_ARIO)
+executer_module("06_esteem",       "06_esteem.R",       RUN_ESTEEM)
 executer_module("viz_reseau",      "viz_reseau.R",      RUN_VIZ_RESEAU)
 executer_module("viz_fret",        "viz_fret.R",        RUN_VIZ_FRET)
 executer_module("viz_vulnerabilite","viz_vulnerabilite.R",RUN_VIZ_VULNERAB)
 executer_module("viz_ario",        "viz_ario.R",        RUN_VIZ_ARIO)
+executer_module("viz_esteem",      "viz_esteem.R",      RUN_VIZ_ESTEEM)
 
 duree_totale <- round(difftime(Sys.time(), t_debut, units = "mins"), 1)
 cat("══════════════════════════════════════════\n")
