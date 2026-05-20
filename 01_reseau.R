@@ -2298,23 +2298,48 @@ if (file.exists(NISR_CSV_PATH)) {
         )
       
       pop_nisr_par_entrepot <- entrepots_join_nisr$pop_total
-      
+
       # Fallback pour les entrepôts hors district (frontières, problèmes topo)
       # st_nearest_feature() : pour les entrepôts sans district (NA), on leur
       # associe le district le plus proche géographiquement.
       manquants_idx <- which(is.na(pop_nisr_par_entrepot))
       if (length(manquants_idx) > 0) {
-        
+
         idx_district_proche <- st_nearest_feature(
           entreposages_sf[manquants_idx, ],
           districts_avec_pop
         )
         pop_nisr_par_entrepot[manquants_idx] <-
           districts_avec_pop$pop_total[idx_district_proche]
-        
+
         cat("  Entrepôts hors district (fallback nearest) :", length(manquants_idx), "\n")
       }
-      
+
+      # ── Partage égal de la population entre entrepôts du même district ─────────
+      # On divise la population du district par le nombre d'entrepôts qu'il contient,
+      # en supposant que chaque entrepôt dessert une part égale de la population.
+      # NOTE : cette hypothèse sera affinée lorsque les données NISR au niveau
+      # administratif 3 (secteurs) seront disponibles.
+      district_par_entrepot <- entrepots_join_nisr$district_gadm
+
+      # Pour les entrepôts du fallback nearest, on leur attribue le nom du district
+      # le plus proche afin qu'ils participent au partage.
+      if (length(manquants_idx) > 0) {
+        district_par_entrepot[manquants_idx] <-
+          districts_avec_pop$district_gadm[idx_district_proche]
+      }
+
+      # Compte le nombre d'entrepôts par district puis divise la population.
+      n_entrepots_par_district <- table(district_par_entrepot)
+      pop_nisr_par_entrepot <- pop_nisr_par_entrepot /
+        as.numeric(n_entrepots_par_district[district_par_entrepot])
+
+      n_districts_partages <- sum(n_entrepots_par_district > 1)
+      if (n_districts_partages > 0) {
+        cat("  Districts avec plusieurs entrepôts (population partagée) :",
+            n_districts_partages, "\n")
+      }
+
       cat("  ✓ Population NISR associée :", sum(!is.na(pop_nisr_par_entrepot)),
           "/", nrow(entreposages_sf), "entrepôts\n")
       cat("  Pop. NISR min :", round(min(pop_nisr_par_entrepot, na.rm = TRUE)),
