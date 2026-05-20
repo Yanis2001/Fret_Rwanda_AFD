@@ -2107,39 +2107,7 @@ volumes_par_zone <- tibble(
 print(head(volumes_par_zone, 15))
 cat("\n")
 
-# ── Diagnostic de connectivité (optionnel mais utile pour debug) ──────────────
-# Ce diagnostic reconstruit brièvement graphe_igraph pour vérifier la 
-# connectivité des entrepôts. 
-
-cat("=== Diagnostic de connectivité des entrepôts ===\n\n")
-
-# Reconstruction LÉGÈRE du graphe igraph (on l'avait supprimé en VIII.1)
-graphe_igraph <- reseau_rwanda %>%
-  activate("edges") %>%
-  mutate(weight = cost_per_tkm * length_km) %>%
-  as_tbl_graph()
-
-warehouse_node_ids <- which(igraph::V(graphe_igraph)$is_warehouse)
-
-composantes <- igraph::components(graphe_igraph)
-cat("Nombre de composantes connexes:", composantes$no, "\n")
-cat("Taille de la plus grande composante:", max(composantes$csize), "nœuds\n\n")
-
-# On ne liste que les 10 premiers entrepôts pour ne pas polluer le log
-cat("Composante de chaque entrepôt (10 premiers) :\n")
-for (i in seq_len(min(10, length(warehouse_node_ids)))) {
-  node_id <- warehouse_node_ids[i]
-  comp    <- composantes$membership[node_id]
-  taille  <- composantes$csize[comp]
-  cat("  [", i, "]", noeuds_entreposage$warehouse_name[i],
-      "→ composante", comp, "(", taille, "nœuds)\n")
-}
-
-# Libération du graphe igraph après diagnostic (on en a fini avec lui)
-rm(graphe_igraph, composantes)
-invisible(gc(verbose = FALSE))
-
-cat("\n✓ Transition VIII.1 → VIII.2 terminée\n\n")
+cat("✓ Transition VIII.1 → VIII.2 terminée\n\n")
 
 
 # ==============================================================================
