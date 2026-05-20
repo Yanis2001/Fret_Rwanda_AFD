@@ -3111,15 +3111,17 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
       }
       
       # ── Jointure spatiale entrepôts × districts ─────────────────────────────
-      # Même logique qu'en IV.4.C pour la population :
-      # chaque entrepôt hérite des données du district qui le contient.
+      # Chaque entrepôt hérite des données d'emploi du district qui le contient.
+      # L'emploi est ensuite divisé par le nombre d'entrepôts dans le même
+      # district pour éviter les doubles comptes (si N entrepôts partagent un
+      # district, chacun reçoit 1/N de l'emploi total du district).
       entrepots_join_emploi <- entreposages_sf %>%
         st_join(
           districts_avec_emploi,
           join    = st_within,
           largest = TRUE
         )
-      
+
       # Fallback nearest pour les entrepôts hors frontière (postes frontières…)
       manquants_idx_e <- which(is.na(entrepots_join_emploi$emploi_total))
       if (length(manquants_idx_e) > 0) {
@@ -3133,13 +3135,32 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
         cat("  Entrepôts hors district (fallback nearest) :",
             length(manquants_idx_e), "\n")
       }
-      
+
+      # ── Division par le nombre d'entrepôts par district (anti double-compte) ──
+      # On compte combien d'entrepôts partagent le même district (via district_gadm),
+      # puis on divise toutes les colonnes d'emploi par ce nombre.
+      n_entrepots_par_district <- entrepots_join_emploi %>%
+        st_drop_geometry() %>%
+        count(district_gadm, name = "n_entrepots_district")
+
+      entrepots_join_emploi <- entrepots_join_emploi %>%
+        left_join(n_entrepots_par_district, by = "district_gadm") %>%
+        mutate(across(
+          all_of(cols_emploi_disponibles),
+          ~ . / n_entrepots_district
+        ))
+
+      cat("  Nombre d'entrepôts par district : min =",
+          min(n_entrepots_par_district$n_entrepots_district),
+          "| max =", max(n_entrepots_par_district$n_entrepots_district),
+          "| médiane =", median(n_entrepots_par_district$n_entrepots_district), "\n")
+
       # ── Stockage de l'emploi total (vecteur nrow(entreposages_sf)) ──────────
       emploi_total_par_entrepot <- as.numeric(entrepots_join_emploi$emploi_total)
       emploi_total_par_entrepot[is.na(emploi_total_par_entrepot)] <-
         median(emploi_total_par_entrepot, na.rm = TRUE)
-      
-      cat("  Emploi total : min =", round(min(emploi_total_par_entrepot)),
+
+      cat("  Emploi total (après division) : min =", round(min(emploi_total_par_entrepot)),
           "| max =", round(max(emploi_total_par_entrepot)), "\n\n")
       
       # ── Construction des profils d'offre empiriques ─────────────────────────
