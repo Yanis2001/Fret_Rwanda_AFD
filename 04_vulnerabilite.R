@@ -383,6 +383,16 @@ cat("  ✓ Graphe dégradé construit (arêtes bloquées avec poids = Inf)\n\n")
 # ── Recalcul de la matrice OD sur le réseau dégradé ───────────────────────────
 cat("  Recalcul des distances OD sur le réseau dégradé...\n")
 
+# Cache de la table aretes_couts_tous en mémoire vive.
+aretes_ems_cache <- duck_query(
+  "SELECT arete_id, vehicule_id, co2_kg, nox_g, pm25_g FROM aretes_couts_tous"
+)
+aretes_ems_idx <- setNames(
+  seq_len(nrow(aretes_ems_cache)),
+  paste0(aretes_ems_cache$arete_id, "_", aretes_ems_cache$vehicule_id)
+)
+cat("  Cache émissions chargé :", nrow(aretes_ems_cache), "arêtes × véhicules\n\n")
+
 # On stocke les résultats dans une liste, puis on l'assemble en data.frame.
 # La structure est identique à od_long (Partie VI) pour faciliter la comparaison.
 od_rows_degrade <- list()
@@ -416,12 +426,27 @@ for (i in seq_along(warehouse_nodes_base)) {
   # dans le graphe DÉGRADÉ (routes bloquées = poids infini).
   # La syntaxe est identique au Dijkstra de la Partie VI, seul le graphe change.
   dists_deg <- igraph::distances(
-    graphe_degrade,             
+    graphe_degrade,
     v       = sources_i,
     to      = targets_all,
     weights = igraph::E(graphe_degrade)$weight
   )
-  
+
+  # Reconstruction des chemins depuis chaque couche véhicule de l'origine i
+  # vers TOUTES les cibles en une seule passe par couche (n_vehicules appels)
+  chemins_par_vehicule <- lapply(seq_len(n_vehicules), function(v) {
+    igraph::shortest_paths(
+      graphe_degrade,
+      from    = sources_i[v],
+      to      = targets_all,
+      weights = igraph::E(graphe_degrade)$weight,
+      output  = "epath"
+    )$epath
+  })
+
+  # Attributs des arêtes extraits une seule fois par origine (évite un appel par j).
+  edge_attrs_deg <- igraph::edge_attr(graphe_degrade)
+
   for (j in seq_along(warehouse_nodes_base)) {
     if (i == j) next
     
@@ -430,94 +455,55 @@ for (i in seq_along(warehouse_nodes_base)) {
     
     # ── Reconstruction du chemin dégradé pour mesurer la distance réelle ──────
     distance_km_degrade <- NA_real_
-    
+    co2_kg_degrade      <- NA_real_
+    nox_g_degrade       <- NA_real_
+    pm25_g_degrade      <- NA_real_
+
     if (!is.infinite(min_cout_deg)) {
+
+      # Lookup du chemin dans chemins_par_vehicule (pré-calculé par origine).
+      # v_source    = couche véhicule optimale (ligne dans dists_deg).
+      # t_cible_idx = index dans targets_all correspondant à la destination j.
       best_idx_mat <- which(dists_deg[, cols_j] == min_cout_deg, arr.ind = TRUE)
       if (!is.matrix(best_idx_mat)) best_idx_mat <- matrix(best_idx_mat, nrow = 1)
-      best_from_deg <- sources_i[best_idx_mat[1, 1]]
-      best_to_deg   <- targets_all[cols_j[best_idx_mat[1, 2]]]
-      
-      path_deg <- igraph::shortest_paths(
-        graphe_degrade,
-        from    = best_from_deg,
-        to      = best_to_deg,
-        weights = igraph::E(graphe_degrade)$weight,
-        output  = "epath"
-      )
-      edges_path_deg <- as.integer(path_deg$epath[[1]])
-      
-      # Calcul des émissions réelles sur le chemin de contournement
-      co2_kg_degrade  <- NA_real_
-      nox_g_degrade   <- NA_real_
-      pm25_g_degrade  <- NA_real_
-      
+      v_source    <- best_idx_mat[1, 1]
+      t_cible_idx <- cols_j[best_idx_mat[1, 2]]
+      edges_path_deg <- as.integer(chemins_par_vehicule[[v_source]][[t_cible_idx]])
+
       if (length(edges_path_deg) > 0) {
-        
-        # Filtrer les arêtes "route" (pas les transbordements)
+
         edges_routes_deg <- edges_path_deg[lookup_type[edges_path_deg] == "route"]
-        
+
         if (length(edges_routes_deg) > 0) {
-          
-          # Remontée vers les arêtes physiques et véhicules
           idx_phys_deg <- lookup_physique[edges_routes_deg]
           veh_id_deg   <- lookup_vehicule[edges_routes_deg]
-          
-          # Requête DuckDB : émissions réelles arête × véhicule
-          paires_sql <- paste0(
-            "SELECT co2_kg, nox_g, pm25_g FROM aretes_couts_tous ",
-            "WHERE (arete_id, vehicule_id) IN (",
-            paste(sprintf("(%d,'%s')", idx_phys_deg, veh_id_deg), collapse = ","),
-            ")"
-          )
-          ems_deg <- duck_query(paires_sql)
-          
-          co2_kg_degrade <- sum(ems_deg$co2_kg,  na.rm = TRUE)
-          nox_g_degrade  <- sum(ems_deg$nox_g,   na.rm = TRUE)
-          pm25_g_degrade <- sum(ems_deg$pm25_g,  na.rm = TRUE)
+          cles_ems     <- paste0(idx_phys_deg, "_", veh_id_deg)
+          idx_ems      <- aretes_ems_idx[cles_ems]
+          valides_ems  <- !is.na(idx_ems)
+          co2_kg_degrade <- sum(aretes_ems_cache$co2_kg[idx_ems[valides_ems]], na.rm = TRUE)
+          nox_g_degrade  <- sum(aretes_ems_cache$nox_g[idx_ems[valides_ems]],  na.rm = TRUE)
+          pm25_g_degrade <- sum(aretes_ems_cache$pm25_g[idx_ems[valides_ems]], na.rm = TRUE)
         }
-      }
-      
-      rm(path_deg)
-      
-      # ── Accumulation pour les itinéraires de contournement ──────────────────
-      # Les paires inchangées (min_cout_deg ≈ cout_ref_ij) sont
-      # ignorées car leur chemin de détour est identique au chemin de référence.
-      if (!is.infinite(min_cout_deg) && length(edges_path_deg) > 0) {
-        
-        # Accès O(1) au coût de référence via la hash map (évite filter(od_long))
+
+        # Accumulation pour les itinéraires de contournement
         cout_ref_ij <- od_ref_map[paste0(i, "_", j)]
-        
-        # Vérifications : paire connue + surcoût positif + cout_ref > 0 (évite / 0)
         if (!is.na(cout_ref_ij) && min_cout_deg > cout_ref_ij && cout_ref_ij > 0) {
-          
+
           surcout_rel_ij <- (min_cout_deg - cout_ref_ij) / cout_ref_ij * 100
           volume_ij      <- flux_tonnes_total[i, j]
-          
+
           if (!is.na(volume_ij) && volume_ij > 0) {
-            
-            # Extraction des arêtes "route" uniquement (on exclut les arêtes de
-            # transbordement inter-véhicules qui n'ont pas d'équivalent physique).
-            # lookup_type et lookup_physique ont été construits en Partie V.2.
+
+            # Arêtes "route" uniquement — on exclut les transbordements inter-véhicules.
             edges_routes_ij <- edges_path_deg[
-              edges_path_deg <= max_idx_mm &
-                lookup_type[edges_path_deg] == "route"
+              edges_path_deg <= max_idx_mm & lookup_type[edges_path_deg] == "route"
             ]
-            
+
             if (length(edges_routes_ij) > 0) {
-              
               idx_phys_ij <- lookup_physique[edges_routes_ij]
-              # Filtrage défensif : on ne garde que les indices dans [1, n_aretes_physiques].
-              # Des indices hors plage peuvent apparaître sur les arêtes dégénérées
-              # créées par to_spatial_subdivision() (Partie III.2).
-              idx_phys_ij <- idx_phys_ij[
-                idx_phys_ij >= 1L & idx_phys_ij <= n_aretes_physiques
-              ]
-              
+              # Filtrage défensif : indices hors plage sur arêtes dégénérées (III.2).
+              idx_phys_ij <- idx_phys_ij[idx_phys_ij >= 1L & idx_phys_ij <= n_aretes_physiques]
               if (length(idx_phys_ij) > 0) {
-                
-                # Accumulation pondérée : un flux de 5 000 t avec +50% de surcoût
-                # pèse davantage qu'un flux de 50 t avec +200% dans le classement
-                # final des axes de détour les plus sollicités.
                 surcout_pondere_arete[idx_phys_ij] <-
                   surcout_pondere_arete[idx_phys_ij] + surcout_rel_ij * volume_ij
                 volume_detourne_arete[idx_phys_ij] <-
@@ -526,13 +512,9 @@ for (i in seq_along(warehouse_nodes_base)) {
             }
           }
         }
-      }
-      
-      if (length(edges_path_deg) > 0) {
-        edge_data_deg   <- igraph::edge_attr(graphe_degrade)
-        distance_km_degrade <- sum(
-          edge_data_deg$length_km[edges_path_deg], na.rm = TRUE
-        )
+
+        # edge_attrs_deg extrait une fois par origine i (hors boucle j)
+        distance_km_degrade <- sum(edge_attrs_deg$length_km[edges_path_deg], na.rm = TRUE)
       }
     }
     
@@ -826,70 +808,72 @@ cat("  Arêtes candidates :", length(aretes_candidates),
 #   - Construit un graphe temporaire avec ces arêtes bloquées (poids = Inf)
 #   - Recalcule les distances OD pour les paires les plus importantes
 #   - Retourne le surcoût total agrégé (en USD)
+calculer_surcout_total <- function(indices_a_supprimer, graphe_ref, paires_imp) {
 
-calculer_surcout_total <- function(indices_a_supprimer) {
-  
-  # Construction du graphe temporaire
-  graphe_temp <- recuperer_lourd("graphe_multimodal")
-  
-  # Indices multi-modaux à bloquer (toutes couches véhicule)
-  idx_mm_temp <- which(
-    lookup_type     == "route" &
-      lookup_physique %in% indices_a_supprimer
-  )
-  igraph::E(graphe_temp)$weight[idx_mm_temp] <- Inf
-  
-  # Paires OD à tester (uniquement les paires avec fort volume de fret)
-  # flux_tonnes_total a été construit en Partie VIII
-  paires_importantes <- which(flux_tonnes_total > SEUIL_PAIRES_CRITICITE,
-                              arr.ind = TRUE)
-  
+  # Blocage des arêtes perturbées dans toutes les couches véhicule.
+  # R applique copy-on-modify : graphe_ref est copié localement à cette ligne,
+  # l'original (graphe_criticite) reste intact pour l'itération suivante.
+  idx_mm_temp <- which(lookup_type == "route" & lookup_physique %in% indices_a_supprimer)
+  igraph::E(graphe_ref)$weight[idx_mm_temp] <- Inf
+
+  # Regroupement des paires par origine unique.
+  n_wh          <- length(warehouse_nodes_base)
+  targets_all_c <- as.vector(sapply(seq_len(n_vehicules), function(v) node_multi(v, warehouse_nodes_base)))
+  origines_uniq <- unique(paires_imp[, 1])
+
   surcout_cumule <- 0
   n_deconnexions <- 0L
-  
-  for (k in seq_len(nrow(paires_importantes))) {
-    i_k <- paires_importantes[k, 1]
-    j_k <- paires_importantes[k, 2]
-    if (i_k == j_k) next
-    
-    sources_k <- sapply(seq_len(n_vehicules),
-                        function(v) node_multi(v, warehouse_nodes_base[i_k]))
-    cols_k    <- j_k + (seq_len(n_vehicules) - 1) * length(warehouse_nodes_base)
-    targets_k <- as.vector(sapply(seq_len(n_vehicules),
-                                  function(v) node_multi(v, warehouse_nodes_base)))
-    
-    dists_k <- igraph::distances(
-      graphe_temp,
-      v       = sources_k,
-      to      = targets_k[cols_k],
-      weights = igraph::E(graphe_temp)$weight
+
+  for (i_u in origines_uniq) {
+
+    # Toutes les destinations de cette origine (diagonale déjà exclue)
+    j_list <- paires_imp[paires_imp[, 1] == i_u, 2]
+    if (length(j_list) == 0) next
+
+    sources_u <- sapply(seq_len(n_vehicules), function(v) node_multi(v, warehouse_nodes_base[i_u]))
+
+    # Un seul appel distances() pour toutes les destinations de l'origine i_u
+    dists_u <- igraph::distances(
+      graphe_ref,
+      v       = sources_u,
+      to      = targets_all_c,
+      weights = igraph::E(graphe_ref)$weight
     )
-    
-    cout_degrade_k <- min(dists_k, na.rm = TRUE)
-    
-    # Décompte des arêtes déconnectées du réseau
-    if (is.infinite(cout_degrade_k)) {
-      n_deconnexions <- n_deconnexions + 1L
-      next
+
+    for (j_k in j_list) {
+      cols_k         <- j_k + (seq_len(n_vehicules) - 1) * n_wh
+      cout_degrade_k <- min(dists_u[, cols_k], na.rm = TRUE)
+
+      if (is.infinite(cout_degrade_k)) {
+        n_deconnexions <- n_deconnexions + 1L
+        next
+      }
+
+      ref_k <- od_ref_map[paste0(i_u, "_", j_k)]
+      if (is.na(ref_k) || ref_k == 0) next
+
+      surcout_cumule <- surcout_cumule +
+        max(0, cout_degrade_k - ref_k) * flux_tonnes_total[i_u, j_k]
     }
-    
-    # Coût de référence pour cette paire (depuis od_long)
-    ref_k <- od_long %>%
-      filter(id_origine == i_k, id_destination == j_k) %>%
-      pull(cout_usd)
-    if (length(ref_k) == 0 || is.na(ref_k)) next
-    
-    delta_k <- max(0, cout_degrade_k - ref_k)
-    # Pondération par le volume de fret : une arête qui détourne 10 000 tonnes
-    # est plus critique qu'une arête qui détourne 10 tonnes au même surcoût.
-    surcout_cumule <- surcout_cumule +
-      delta_k * flux_tonnes_total[i_k, j_k]
   }
-  
+
   list(surcout = surcout_cumule, n_deconnexions = n_deconnexions)
 }
 
 # ── Calcul de la criticité pour chaque arête candidate ────────────────────────
+# Paires importantes calculées une seule fois ici, avant la boucle.
+paires_importantes_crit <- which(flux_tonnes_total > SEUIL_PAIRES_CRITICITE, arr.ind = TRUE)
+paires_importantes_crit <- paires_importantes_crit[
+  paires_importantes_crit[, 1] != paires_importantes_crit[, 2], , drop = FALSE
+]
+
+# Copie unique du graphe avant la boucle.
+# R copiera graphe_criticite localement dans calculer_surcout_total() au moment
+# de la modification des poids (copy-on-modify)
+graphe_criticite <- recuperer_lourd("graphe_multimodal")
+
+cat("  Paires OD importantes (seuil :", SEUIL_PAIRES_CRITICITE, "t) :",
+    nrow(paires_importantes_crit), "\n")
 cat("  Calcul de la criticité (", length(aretes_candidates),
     "arêtes × Dijkstra) — prend environ 2h...\n")
 
@@ -907,7 +891,7 @@ pb_crit <- progress_bar$new(
 )
 
 for (k in seq_along(aretes_candidates)) {
-  resultat_k <- calculer_surcout_total(aretes_candidates[k])
+  resultat_k <- calculer_surcout_total(aretes_candidates[k], graphe_criticite, paires_importantes_crit)
   criticite_df$surcout_pondere[k]     <- resultat_k$surcout
   criticite_df$n_deconnexions_caus[k] <- resultat_k$n_deconnexions
   pb_crit$tick()
