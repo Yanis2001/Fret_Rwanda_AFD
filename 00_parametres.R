@@ -42,7 +42,8 @@ packages_requis <- c(
   "digest",        # Génération d'empreinte numérique (hash) d'objets R
   "ggrepel",       # Étiquettes ggplot2 sans chevauchement (graphiques RWI, démographie)
   "ggalluvial",    # Diagrammes de Sankey pour les flux de fret (viz_fret.R)
-  "RColorBrewer"   # Palettes de couleurs pour les cartes et graphiques sectoriels
+  "RColorBrewer",  # Palettes de couleurs pour les cartes et graphiques sectoriels
+  "wbstats"        # Accès à l'API Banque Mondiale 
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
@@ -400,29 +401,150 @@ A <- matrix(c(
 ), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
 dimnames = list(SECTEURS, SECTEURS))
 
-# Production totale par secteur (millions USD, Rwanda 2022)
-# Calibrées sur Banque Mondiale : PIB Rwanda ~13 Md USD en 2022
-production_totale <- c(
-  Agriculture    = 2100,  # Café, thé, pyrèthre, cultures vivrières (principal secteur)
-  Mines          = 280,   # Coltan, cassitérite, wolfram (3T : exportations majeures)
-  Agro_industrie = 520,   # Transformation alimentaire, boissons, tabac
-  Industrie      = 380,   # Textiles, ciment, matériaux de construction
-  Construction   = 750,   # BTP, infrastructure (très actif : Vision 2050)
-  Commerce       = 1100,  # Commerce de gros et de détail
-  Transport      = 480,   # Transport routier, aérien, services logistiques
-  Services       = 2200   # Finance, tourisme, services publics, éducation, santé
+# ==============================================================================
+# Prix du carburant — Source : RURA (Rwanda Utilities Regulatory Authority)
+# RURA fixe le prix du diesel à la pompe chaque mois (www.rura.rw > Fuel Prices).
+# Q2 2022 : 1 291 RWF/L ÷ 1 033 RWF/USD ≈ 1.25 USD/L
+# Q4 2022 : 1 463 RWF/L ÷ 1 048 RWF/USD ≈ 1.40 USD/L  ← valeur retenue (moyenne annuelle)
+# Ce paramètre est utilisé dans params_flotte_df (I.5) pour tous les types de véhicules.
+# ==============================================================================
+
+PRIX_CARBURANT_USD_L <- 1.40  # Diesel Rwanda, source : RURA 2022
+
+# ==============================================================================
+# Production totale par secteur — Source : Banque Mondiale (wbstats)
+# production_totale = production BRUTE (output brut), calculée en divisant la
+# valeur ajoutée (VA) sectorielle par la fraction de VA dans l'output :
+#   output_j = VA_j / (1 - Σ_i A[i,j])
+# Cette formule assure la cohérence avec la matrice A dans le modèle de Leontief :
+#   A %*% output_brut donne les consommations intermédiaires attendues.
+#
+# Téléchargement automatique via wbstats (nécessite une connexion internet).
+# En cas d'échec, les valeurs WB_VA_FALLBACK (BM Rwanda 2022 pré-calculées) sont utilisées.
+#
+# Indicateurs BM utilisés :
+#   NV.AGR.TOTL.CD : VA Agriculture, sylviculture, pêche (USD courants)
+#   NV.MNF.TOTL.CD : VA Industrie manufacturière (USD courants)
+#   NV.IND.TOTL.CD : VA Industrie totale incl. construction (USD courants)
+#   NV.SRV.TOTL.CD : VA Services (USD courants)
+#   NV.IND.CONS.ZS : Construction (% du PIB)
+#   NY.GDP.MKTP.CD : PIB (USD courants)
+#
+# Désagrégation appliquée (la BM ne publie pas ce niveau de détail) :
+#   Manufacturier → Agro_industrie (45%) + Industrie (55%) [parts RPHC5 2022]
+#   Mines         → Industrie_totale − Manufacturier − Construction (résidu)
+#   Services      → Commerce (22%) + Transport (12%) + Services_résiduel (66%)
+#                   [parts calées sur la structure EAC, Rwanda Economic Update 2022]
+# ==============================================================================
+
+# Chemin du cache local (évite de re-télécharger à chaque session)
+WB_CACHE_PATH <- file.path(DIR_CACHE, "wb_rwanda_secteurs.rds")
+
+# Valeurs de repli VA en M USD (Rwanda 2022, Banque Mondiale)
+# Utilisées si wbstats est indisponible ou si le téléchargement échoue.
+WB_VA_FALLBACK <- c(
+  Agriculture    = 3294,  # NV.AGR.TOTL.CD Rwanda 2022
+  Mines          =  245,  # NV.IND.TOTL.CD − NV.MNF.TOTL.CD − Construction
+  Agro_industrie =  340,  # NV.MNF.TOTL.CD (756 M USD) × 0.45 (RPHC5)
+  Industrie      =  416,  # NV.MNF.TOTL.CD (756 M USD) × 0.55 (RPHC5)
+  Construction   =  474,  # NV.IND.CONS.ZS (4.26%) × PIB (11 127 M USD)
+  Commerce       = 1399,  # NV.SRV.TOTL.CD (6 358 M USD) × 0.22 (structure EAC)
+  Transport      =  763,  # NV.SRV.TOTL.CD × 0.12 (structure EAC)
+  Services       = 4196   # NV.SRV.TOTL.CD × 0.66 (résiduel)
 )
 
-# Facteurs de conversion valeur → masse (tonnes par million USD) 
+# Télécharge (ou recharge depuis le cache) les données VA sectorielles BM Rwanda.
+# Retourne un data.frame avec une ligne par année, colonnes = indicateurs nommés.
+telecharger_wb_va <- function() {
+  if (file.exists(WB_CACHE_PATH)) {
+    age_j <- as.numeric(difftime(Sys.time(), file.mtime(WB_CACHE_PATH), units = "days"))
+    if (age_j < 90) {
+      cat("    Cache BM utilisé (", round(age_j, 0), "j)\n", sep = "")
+      return(readRDS(WB_CACHE_PATH))
+    }
+  }
+  cat("    Téléchargement Banque Mondiale Rwanda…\n")
+  res <- tryCatch(
+    wbstats::wb_data(
+      indicator  = c(
+        agri      = "NV.AGR.TOTL.CD",
+        manuf     = "NV.MNF.TOTL.CD",
+        indus     = "NV.IND.TOTL.CD",
+        serv      = "NV.SRV.TOTL.CD",
+        const_pct = "NV.IND.CONS.ZS",
+        gdp       = "NY.GDP.MKTP.CD"
+      ),
+      country    = "RWA",
+      start_date = 2020, end_date = 2023
+    ),
+    error = function(e) { message("    ⚠ wbstats : ", conditionMessage(e)); NULL }
+  )
+  if (is.null(res)) return(NULL)
+  res_ok <- res[!is.na(res$gdp), ]
+  if (nrow(res_ok) == 0) return(NULL)
+  res_ok <- res_ok[order(-res_ok$date), ][1L, ]
+  saveRDS(res_ok, WB_CACHE_PATH)
+  cat("    ✓ Rwanda ", res_ok$date, " — PIB ", round(res_ok$gdp / 1e9, 1), " Md USD\n", sep = "")
+  res_ok
+}
+
+# Calcule l'output brut à partir des VA sectorielles via l'inverse de Leontief.
+# Formule : output = (I - A)^{-1} × va
+# Justification : le modèle (03_transport.R) calcule conso_interm = A %*% output
+# et valeur_ajoutee = output - conso_interm = (I - A) × output.
+# En posant (I - A) × output = va_cible, on obtient output = (I - A)^{-1} × va_cible,
+# ce qui garantit que la BM et le modèle donnent exactement les mêmes VA sectorielles.
+calculer_output_brut <- function(va) {
+  leontief_inv <- solve(diag(N_SECTEURS) - A)
+  setNames(round(as.vector(leontief_inv %*% va)), SECTEURS)
+}
+
+cat("  → Données Banque Mondiale (production_totale)…\n")
+wb_rwa <- telecharger_wb_va()
+
+if (!is.null(wb_rwa)) {
+  gdp_m     <- wb_rwa$gdp[1]       / 1e6
+  agri_m    <- wb_rwa$agri[1]      / 1e6
+  manuf_m   <- wb_rwa$manuf[1]     / 1e6
+  indus_m   <- wb_rwa$indus[1]     / 1e6
+  serv_m    <- wb_rwa$serv[1]      / 1e6
+  const_pct <- wb_rwa$const_pct[1]
+
+  const_m   <- const_pct / 100 * gdp_m
+  mines_m   <- max(0, indus_m - manuf_m - const_m)
+
+  va_wb <- c(
+    Agriculture    = agri_m,
+    Mines          = mines_m,
+    Agro_industrie = manuf_m * 0.45,
+    Industrie      = manuf_m * 0.55,
+    Construction   = const_m,
+    Commerce       = serv_m * 0.22,
+    Transport      = serv_m * 0.12,
+    Services       = serv_m * 0.66
+  )
+  production_totale <- calculer_output_brut(va_wb)
+  cat("  ✓ production_totale : Banque Mondiale", wb_rwa$date, "\n")
+} else {
+  production_totale <- calculer_output_brut(WB_VA_FALLBACK)
+  cat("  ✓ production_totale : valeurs de repli BM Rwanda 2022\n")
+}
+
+# Facteurs de conversion output brut → masse de fret (tonnes par million USD)
+# Calibrés sur :
+#   Agriculture    : FAOSTAT Rwanda 2022 — ~7,2 Mt production totale / ~4 390 M USD output
+#   Mines          : RMB Annual Report 2022 — ~730 kt (3T + carrières) / ~318 M USD output
+#   Autres secteurs: rescaling cohérent avec les nouveaux outputs bruts BM 2022,
+#                    visant à conserver une masse totale de fret plausible (~20 Mt/an).
 TONNES_PAR_musd <- c(
-  Agriculture    = 8000,   # Produits bruts : lourds, faible valeur (bananes, céréales)
-  Mines          = 3000,   # Minerais : denses, valeur croissante avec la transformation
-  Agro_industrie = 4000,   # Produits transformés (huile, farine, sucre, conserves)
-  Industrie      = 2000,   # Produits manufacturés intermédiaires
-  Construction   = 10000,  # Ciment, gravier, acier : très lourds par rapport à la valeur
-  Commerce       = 1500,   # Mix de biens distribués (alimentaire, électronique, textile)
-  Transport      = 300,    # Services : peu de fret physique directement associé
-  Services       = 100     # Quasi-immatériel (finance, éducation, santé, conseil)
+  Agriculture    = 1600,   # FAOSTAT 2022 : ~7,2 Mt / ~4 390 M USD (bananes, céréales, café, thé)
+  Mines          = 2300,   # RMB 2022 : ~730 kt (coltan, cassitérite, wolfram + carrières)
+  Agro_industrie = 1800,   # Transformation alimentaire (farine, boissons, huiles, sucre)
+  Industrie      = 1100,   # Manufactures légères (textiles, emballages, matériaux)
+  Construction   = 9000,   # Agrégats, ciment, acier : matériaux très lourds / faible valeur
+  Commerce       = 750,    # Mix de biens distribués ; valeur unitaire plus élevée que bruts
+  Transport      = 130,    # Secteur de services : fret physique marginal
+  Services       = 35      # Quasi-immatériel (finance, conseil, éducation, santé)
 )
 
 
@@ -940,9 +1062,9 @@ cat("✓ Palettes de couleurs définies\n\n")
 # chargement, et pénalité en zone urbaine (congestion, restrictions de tonnage).
 params_flotte_df <- tribble(
   ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_usd, ~cout_dechargement_usd,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,                  15,                   15,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,                  25,                   25,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090,                  40,                   40
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  PRIX_CARBURANT_USD_L,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,                  15,                   15,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  PRIX_CARBURANT_USD_L,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,                  25,                   25,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  PRIX_CARBURANT_USD_L,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090,                  40,                   40
 )
 duck_write(params_flotte_df, "params_flotte")
 
