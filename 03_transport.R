@@ -674,8 +674,7 @@ cat("✓ Profils landuse définis\n\n")
 
 # Part du PIB qui "voyage" entre zones (le reste est consommé localement)
 # 35% est une hypothèse conservatrice pour un pays enclavé comme le Rwanda
-echelle_offre    <- sum(production_totale) * PART_ECHANGEABLE
-echelle_demande  <- sum(production_totale) * PART_ECHANGEABLE
+echelle <- sum(production_totale) * PART_ECHANGEABLE
 
 # Génération des matrices offre et demande (lignes = zones, colonnes = secteurs)
 # matrix(0, n, m) : crée une matrice de zéros de dimensions n×m.
@@ -865,8 +864,8 @@ for (i in 1:n_warehouses) {
   # Côté demande : taille_demande (population) / somme_tailles_demande
   # La distinction garantit que l'offre et la demande nationales sont
   # normées séparément, évitant des déséquilibres structurels dans la matrice.
-  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle_offre   / somme_tailles_offre
-  demande_zones[i,] <- profil_d_final * taille_demande * echelle_demande / somme_tailles_demande
+  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle / somme_tailles_offre
+  demande_zones[i,] <- profil_d_final * taille_demande * echelle / somme_tailles_demande
 }
 
 # ── Stockage dans DuckDB en format long ───────────────────────────────────────
@@ -1127,7 +1126,7 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 #
 # Paramètres :
 #   O_s      — vecteur n_warehouses des offres sectorielles (déjà scalées par
-#              PART_ECHANGEABLE via echelle_offre dans VII.2, donc en M USD)
+#              PART_ECHANGEABLE via echelle dans VII.2, donc en M USD)
 #   D_s      — vecteur n_warehouses des demandes sectorielles (même convention)
 #   friction — matrice n×n des termes C_ij^(-beta). Doit avoir des NA là où
 #              les zones ne sont pas connectées (diag inclus).
@@ -1338,9 +1337,9 @@ for (s in SECTEURS) {
   
   # ── Appel à Furness ───────────────────────────────────────────────────────────
   # offre_zones[, s]   : vecteur des offres de chaque zone pour le secteur s
-  #                      (déjà scalé par PART_ECHANGEABLE via echelle_offre)
+  #                      (déjà scalé par PART_ECHANGEABLE via echelle)
   # demande_zones[, s] : vecteur des demandes de chaque zone pour le secteur s
-  #                      (déjà scalé par PART_ECHANGEABLE via echelle_demande)
+  #                      (déjà scalé par PART_ECHANGEABLE via echelle)
   # La fonction normalise en interne sur la moyenne géométrique pour assurer
   # la compatibilité sum(offre) ≈ sum(demande).
   flux_gravitaire[[s]] <- furness_gravity(
