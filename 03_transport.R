@@ -1189,7 +1189,7 @@ furness_gravity <- function(O_s,
   }
   
   # ── Initialisation de la matrice de flux ─────────────────────────────────────
-  # T_ij = O_i × D_j × friction_ij
+  # T_ij = O_i^s × D_j^s × friction_ij
   # C'est le point de départ de Furness : la matrice "non contrainte" qui
   # respecte déjà la structure de friction mais pas les marges cibles.
   # outer(x, y) : produit extérieur — élément [i,j] = x[i] × y[j]
