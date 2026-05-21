@@ -1590,51 +1590,48 @@ if (file.exists(CACHE_AFFECTATION)) {
   }
 }
 
+# ── Diagnostic du filtre par seuil ────────────────────────────────────────────
+# On calcule le nombre de paires exclues par le seuil SEUIL_FLUX_TONNES
+# pour vérifier que le filtre n'élimine pas trop de flux économiquement
+# significatifs. Une paire exclue = flux trop faible pour être affecté
+# au réseau routier, mais qui contribue quand même au tonnage total.
+# Ce diagnostic est affiché même quand le cache d'affectation est valide.
+
+# Toutes les paires hors diagonale (i ≠ j), sans filtre de seuil
+toutes_paires <- which(flux_tonnes_total > 0, arr.ind = TRUE)
+toutes_paires <- toutes_paires[toutes_paires[, 1] != toutes_paires[, 2], ]
+
+# Paires sous le seuil = toutes les paires actives MOINS celles retenues
+n_paires_sous_seuil <- nrow(toutes_paires) - nrow(paires_actives)
+
+# Tonnage total des paires exclues (pour juger de leur poids économique)
+tonnage_exclu <- sum(flux_tonnes_total[toutes_paires]) -
+  sum(flux_tonnes_total[paires_actives])
+tonnage_total_avant_filtre <- sum(flux_tonnes_total[toutes_paires])
+
+cat("── Diagnostic du filtre seuil (", SEUIL_FLUX_TONNES, "tonnes) ──────────\n")
+flush.console()
+cat("  Paires totales (flux > 0)  :", nrow(toutes_paires), "\n")
+flush.console()
+cat("  Paires retenues (> seuil)  :", nrow(paires_actives), "\n")
+flush.console()
+cat("  Paires exclues (< seuil)   :", n_paires_sous_seuil,
+    "(", round(n_paires_sous_seuil / nrow(toutes_paires) * 100, 1), "%)\n")
+flush.console()
+cat("  Tonnage exclu              :", format(round(tonnage_exclu), big.mark = " "),
+    "tonnes (", round(tonnage_exclu / tonnage_total_avant_filtre * 100, 2),
+    "% du total)\n\n")
+flush.console()
+cat("  Paires OD à traiter :", format(nrow(paires_actives), big.mark = " "),
+    "(sur", format(n_warehouses^2 - n_warehouses, big.mark = " "),
+    "possibles)\n\n")
+flush.console()
+
 # ══════════════════════════════════════════════════════════════════════════════
 # BLOC CONDITIONNEL : l'affectation ne s'exécute que si pas de cache valide
 # ══════════════════════════════════════════════════════════════════════════════
 if (!cache_affectation_valide) {
-  
-  # ── ÉTAPE 3 : Pré-filtrage des paires OD à traiter ────────────────────────────
-  
-  # ── Diagnostic du filtre par seuil ────────────────────────────────────────────
-  # On calcule le nombre de paires exclues par le seuil SEUIL_FLUX_TONNES
-  # pour vérifier que le filtre n'élimine pas trop de flux économiquement
-  # significatifs. Une paire exclue = flux trop faible pour être affecté
-  # au réseau routier, mais qui contribue quand même au tonnage total.
-  
-  # Toutes les paires hors diagonale (i ≠ j), sans filtre de seuil
-  toutes_paires <- which(flux_tonnes_total > 0, arr.ind = TRUE)
-  toutes_paires <- toutes_paires[toutes_paires[, 1] != toutes_paires[, 2], ]
-  
-  # Paires sous le seuil = toutes les paires actives MOINS celles retenues
-  n_paires_sous_seuil <- nrow(toutes_paires) - nrow(paires_actives)
-  
-  # Tonnage total des paires exclues (pour juger de leur poids économique)
-  tonnage_exclu <- sum(flux_tonnes_total[toutes_paires]) - 
-    sum(flux_tonnes_total[paires_actives])
-  tonnage_total_avant_filtre <- sum(flux_tonnes_total[toutes_paires])
-  
-  cat("── Diagnostic du filtre seuil (", SEUIL_FLUX_TONNES, "tonnes) ──────────\n")
-  flush.console()
-  cat("  Paires totales (flux > 0)  :", nrow(toutes_paires), "\n")
-  flush.console()
-  cat("  Paires retenues (> seuil)  :", nrow(paires_actives), "\n")
-  flush.console()
-  cat("  Paires exclues (< seuil)   :", n_paires_sous_seuil,
-      "(", round(n_paires_sous_seuil / nrow(toutes_paires) * 100, 1), "%)\n")
-  flush.console()
-  cat("  Tonnage exclu              :", format(round(tonnage_exclu), big.mark = " "),
-      "tonnes (", round(tonnage_exclu / tonnage_total_avant_filtre * 100, 2), 
-      "% du total)\n\n")
-  flush.console()
-  
-  n_paires <- nrow(paires_actives)
-  cat("  Paires OD à traiter :", format(n_paires, big.mark = " "),
-      "(sur", format(n_warehouses^2 - n_warehouses, big.mark = " "),
-      "possibles)\n\n")
-  flush.console()
-  
+
   # ── ÉTAPE 4 : Préparation des matrices de résultats ───────────────────────────
   # Tableau 3D (arêtes × véhicules × secteurs) pour conserver l'information sectorielle.
   # Chaque "tranche" du tableau correspond à un secteur économique.
