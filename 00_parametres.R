@@ -423,18 +423,18 @@ PRIX_CARBURANT_USD_L <- 1.40  # Diesel Rwanda, source : RURA 2022
 # En cas d'échec, les valeurs WB_VA_FALLBACK (BM Rwanda 2022 pré-calculées) sont utilisées.
 #
 # Indicateurs BM utilisés :
-#   NV.AGR.TOTL.CD : VA Agriculture, sylviculture, pêche (USD courants)
-#   NV.MNF.TOTL.CD : VA Industrie manufacturière (USD courants)
-#   NV.IND.TOTL.CD : VA Industrie totale incl. construction (USD courants)
-#   NV.SRV.TOTL.CD : VA Services (USD courants)
-#   NV.IND.CONS.ZS : Construction (% du PIB)
-#   NY.GDP.MKTP.CD : PIB (USD courants)
+#   NV.AGR.TOTL.CD  : VA Agriculture, sylviculture, pêche (USD courants)
+#   NV.IND.MANF.CD  : VA Industrie manufacturière (USD courants)
+#   NV.IND.TOTL.CD  : VA Industrie totale incl. construction (USD courants)
+#   NV.SRV.TOTL.CD  : VA Services (USD courants)
+#   NY.GDP.MKTP.CD  : PIB (USD courants)
 #
 # Désagrégation appliquée (la BM ne publie pas ce niveau de détail) :
-#   Manufacturier → Agro_industrie (45%) + Industrie (55%) [parts RPHC5 2022]
-#   Mines         → Industrie_totale − Manufacturier − Construction (résidu)
-#   Services      → Commerce (22%) + Transport (12%) + Services_résiduel (66%)
-#                   [parts calées sur la structure EAC, Rwanda Economic Update 2022]
+#   Manufacturier     → Agro_industrie (45%) + Industrie (55%) [parts RPHC5 2022]
+#   Industrie_non_mfg → Mines (34%) + Construction (66%)
+#     [parts calées sur Rwanda 2022 : Mines 245 M USD, Construction 474 M USD]
+#   Services          → Commerce (22%) + Transport (12%) + Services_résiduel (66%)
+#     [parts calées sur la structure EAC, Rwanda Economic Update 2022]
 # ==============================================================================
 
 # Chemin du cache local (évite de re-télécharger à chaque session)
@@ -444,10 +444,10 @@ WB_CACHE_PATH <- file.path(DIR_CACHE, "wb_rwanda_secteurs.rds")
 # Utilisées si wbstats est indisponible ou si le téléchargement échoue.
 WB_VA_FALLBACK <- c(
   Agriculture    = 3294,  # NV.AGR.TOTL.CD Rwanda 2022
-  Mines          =  245,  # NV.IND.TOTL.CD − NV.MNF.TOTL.CD − Construction
-  Agro_industrie =  340,  # NV.MNF.TOTL.CD (756 M USD) × 0.45 (RPHC5)
-  Industrie      =  416,  # NV.MNF.TOTL.CD (756 M USD) × 0.55 (RPHC5)
-  Construction   =  474,  # NV.IND.CONS.ZS (4.26%) × PIB (11 127 M USD)
+  Mines          =  245,  # (NV.IND.TOTL.CD − NV.IND.MANF.CD) × 0.34
+  Agro_industrie =  340,  # NV.IND.MANF.CD (756 M USD) × 0.45 (RPHC5)
+  Industrie      =  416,  # NV.IND.MANF.CD (756 M USD) × 0.55 (RPHC5)
+  Construction   =  474,  # (NV.IND.TOTL.CD − NV.IND.MANF.CD) × 0.66
   Commerce       = 1399,  # NV.SRV.TOTL.CD (6 358 M USD) × 0.22 (structure EAC)
   Transport      =  763,  # NV.SRV.TOTL.CD × 0.12 (structure EAC)
   Services       = 4196   # NV.SRV.TOTL.CD × 0.66 (résiduel)
@@ -467,12 +467,11 @@ telecharger_wb_va <- function() {
   res <- tryCatch(
     wbstats::wb_data(
       indicator  = c(
-        agri      = "NV.AGR.TOTL.CD",
-        manuf     = "NV.MNF.TOTL.CD",
-        indus     = "NV.IND.TOTL.CD",
-        serv      = "NV.SRV.TOTL.CD",
-        const_pct = "NV.IND.CONS.ZS",
-        gdp       = "NY.GDP.MKTP.CD"
+        agri  = "NV.AGR.TOTL.CD",
+        manuf = "NV.IND.MANF.CD",
+        indus = "NV.IND.TOTL.CD",
+        serv  = "NV.SRV.TOTL.CD",
+        gdp   = "NY.GDP.MKTP.CD"
       ),
       country    = "RWA",
       start_date = 2020, end_date = 2023
@@ -503,15 +502,16 @@ cat("  → Données Banque Mondiale (production_totale)…\n")
 wb_rwa <- telecharger_wb_va()
 
 if (!is.null(wb_rwa)) {
-  gdp_m     <- wb_rwa$gdp[1]       / 1e6
-  agri_m    <- wb_rwa$agri[1]      / 1e6
-  manuf_m   <- wb_rwa$manuf[1]     / 1e6
-  indus_m   <- wb_rwa$indus[1]     / 1e6
-  serv_m    <- wb_rwa$serv[1]      / 1e6
-  const_pct <- wb_rwa$const_pct[1]
+  agri_m       <- wb_rwa$agri[1]  / 1e6
+  manuf_m      <- wb_rwa$manuf[1] / 1e6
+  indus_m      <- wb_rwa$indus[1] / 1e6
+  serv_m       <- wb_rwa$serv[1]  / 1e6
 
-  const_m   <- const_pct / 100 * gdp_m
-  mines_m   <- max(0, indus_m - manuf_m - const_m)
+  # Industrie hors manufacturier = Mines + Construction + Utilities (résidu)
+  # Parts calées sur Rwanda 2022 : Mines 34%, Construction 66%
+  non_manuf_m  <- max(0, indus_m - manuf_m)
+  mines_m      <- non_manuf_m * 0.34
+  const_m      <- non_manuf_m * 0.66
 
   va_wb <- c(
     Agriculture    = agri_m,
