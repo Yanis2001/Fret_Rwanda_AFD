@@ -346,8 +346,6 @@ N_SECTEURS <- length(SECTEURS)
 #   Construction (0.15)   : matériaux issus de carrières de proximité, très locaux
 #   Industrie (0.55)      : manufactures légères distribuées à l'échelle nationale
 #   Transport (0.60)      : service structurellement interzonal par définition
-# Ces parts remplacent l'ancien scalaire PART_ECHANGEABLE = 0.35.
-# Pour retrouver le comportement précédent : mettre toutes les valeurs à 0.35.
 PART_ECHANGEABLE_SECTEUR <- c(
   Agriculture    = 0.20,
   Mines          = 0.70,
