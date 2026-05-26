@@ -672,9 +672,10 @@ PROFIL_DEMANDE_LANDUSE_URBAIN     <- PROFILS_DEMANDE[["hub"]]
 
 cat("✓ Profils landuse définis\n\n")
 
-# Part du PIB qui "voyage" entre zones (le reste est consommé localement)
-# 35% est une hypothèse conservatrice pour un pays enclavé comme le Rwanda
-echelle <- sum(production_totale) * PART_ECHANGEABLE
+# Volume échangeable par secteur : chaque secteur a sa propre part interzonale.
+# echelle_par_secteur[s] = production_totale[s] × PART_ECHANGEABLE_SECTEUR[s]
+# Résultat : vecteur nommé de longueur N_SECTEURS (M USD échangeables par secteur).
+echelle_par_secteur <- production_totale * PART_ECHANGEABLE_SECTEUR
 
 # Génération des matrices offre et demande (lignes = zones, colonnes = secteurs)
 # matrix(0, n, m) : crée une matrice de zéros de dimensions n×m.
@@ -859,13 +860,22 @@ for (i in 1:n_warehouses) {
                        PROFIL_DEMANDE_LANDUSE_INDUSTRIEL * p_ind +
                        PROFIL_DEMANDE_LANDUSE_URBAIN     * p_urb) / denominateur_d
   
-  # ── Volumes finaux avec tailles composites et sommes de normalisation ───────
-  # Côté offre : taille_offre (emploi) / somme_tailles_offre
-  # Côté demande : taille_demande (population) / somme_tailles_demande
-  # La distinction garantit que l'offre et la demande nationales sont
-  # normées séparément, évitant des déséquilibres structurels dans la matrice.
-  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle / somme_tailles_offre
-  demande_zones[i,] <- profil_d_final * taille_demande * echelle / somme_tailles_demande
+  # ── Facteur de modulation landuse sur la part échangeable ───────────────────
+  # Une zone entourée d'industries ou de zones urbaines est plus intégrée au
+  # marché interzonal : sa part échangeable est augmentée proportionnellement
+  # à la part de ces usages du sol dans son buffer de 2 km.
+  # p_ind et p_urb ont été calculés dans la section "Composition landuse" ci-dessus.
+  facteur_lu_ech <- 1 +
+    p_ind * (FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL - 1) +
+    p_urb * (FACTEUR_ECHANGEABLE_LANDUSE_URBAIN     - 1)
+
+  # ── Volumes finaux avec tailles composites, échelle sectorielle et landuse ──
+  # echelle_par_secteur est un vecteur (N_SECTEURS) → multiplication élément par élément
+  # avec profil_o_final (N_SECTEURS) : chaque secteur porte son propre volume échangeable.
+  # facteur_lu_ech est un scalaire (propre à la zone i) qui amplifie uniformément
+  # tous les secteurs selon l'environnement landuse de la zone.
+  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle_par_secteur * facteur_lu_ech / somme_tailles_offre
+  demande_zones[i,] <- profil_d_final * taille_demande * echelle_par_secteur * facteur_lu_ech / somme_tailles_demande
 }
 
 # ── Stockage dans DuckDB en format long ───────────────────────────────────────
@@ -1126,7 +1136,7 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 #
 # Paramètres :
 #   O_s      — vecteur n_warehouses des offres sectorielles (déjà scalées par
-#              PART_ECHANGEABLE via echelle dans VII.2, donc en M USD)
+#              PART_ECHANGEABLE_SECTEUR via echelle_par_secteur dans VII.2, donc en M USD)
 #   D_s      — vecteur n_warehouses des demandes sectorielles (même convention)
 #   friction — matrice n×n des termes C_ij^(-beta). Doit avoir des NA là où
 #              les zones ne sont pas connectées (diag inclus).
@@ -1337,9 +1347,9 @@ for (s in SECTEURS) {
   
   # ── Appel à Furness ───────────────────────────────────────────────────────────
   # offre_zones[, s]   : vecteur des offres de chaque zone pour le secteur s
-  #                      (déjà scalé par PART_ECHANGEABLE via echelle)
+  #                      (déjà scalé par PART_ECHANGEABLE_SECTEUR[s] × facteur_lu_ech)
   # demande_zones[, s] : vecteur des demandes de chaque zone pour le secteur s
-  #                      (déjà scalé par PART_ECHANGEABLE via echelle)
+  #                      (déjà scalé par PART_ECHANGEABLE_SECTEUR[s] × facteur_lu_ech)
   # La fonction normalise en interne sur la moyenne géométrique pour assurer
   # la compatibilité sum(offre) ≈ sum(demande).
   flux_gravitaire[[s]] <- furness_gravity(
@@ -1551,7 +1561,7 @@ if (!requireNamespace("digest", quietly = TRUE)) {
 
 empreinte_entrees <- digest::digest(
   list(
-    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, PART_ECHANGEABLE
+    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, PART_ECHANGEABLE_SECTEUR
     seuil             = SEUIL_FLUX_TONNES,
     n_aretes          = n_aretes_physiques,
     n_warehouses      = n_warehouses,

@@ -8,7 +8,7 @@
 # RELANCER 01_reseau.R + 02_couts.R + 03_transport.R avant ce script si :
 #   → les paramètres BETA_SECTEUR ont changé (sensibilité gravitaire)
 #   → la matrice A ou production_totale ont changé (table IO)
-#   → PART_ECHANGEABLE ou PART_DEMANDE_FINALE ont changé
+#   → PART_ECHANGEABLE_SECTEUR, FACTEUR_ECHANGEABLE_LANDUSE_* ou PART_DEMANDE_FINALE ont changé
 #   → SEUIL_FLUX_TONNES a changé (filtre affectation)
 #   → de nouvelles zones d'entrepôt ont été ajoutées ou retirées
 #   → les profils PROFILS_OFFRE ou PROFILS_DEMANDE ont été modifiés
@@ -943,4 +943,109 @@ ggsave(
   dpi    = 300
 )
 cat("✓ sankey_flux_fret.png\n\n")
+
+
+# ============================================================
+# GRAPHIQUE : Structure de la production vs volumes échangeables
+#
+# Objectif : visualiser l'effet de PART_ECHANGEABLE_SECTEUR.
+# Pour chaque secteur, deux barres horizontales :
+#   — Bleue  : poids du secteur dans la PRODUCTION TOTALE nationale
+#   — Orange : poids du secteur dans les VOLUMES ÉCHANGEABLES
+#              (= production × PART_ECHANGEABLE_SECTEUR)
+# L'écart entre les deux barres reflète directement le taux sectoriel :
+#   un secteur avec un taux élevé (ex. Mines 70%) apparaît proportionnellement
+#   plus gros dans la barre orange que dans la barre bleue, et inversement
+#   pour un secteur avec un taux faible (ex. Construction 15%).
+# L'annotation entre parenthèses rappelle le taux appliqué à chaque secteur.
+# ============================================================
+
+cat("Génération du graphique structure échangeable vs production...\n")
+
+# ── Calcul des parts sectorielles ────────────────────────────────────────────
+# production_totale et PART_ECHANGEABLE_SECTEUR sont disponibles via source()
+# au début de ce script. On aligne les noms pour garantir la correspondance.
+df_prod_ech <- tibble(
+  Secteur          = SECTEURS,
+  Production_musd  = as.numeric(production_totale[SECTEURS]),
+  Part_echangeable = as.numeric(PART_ECHANGEABLE_SECTEUR[SECTEURS])
+) %>%
+  mutate(
+    Echangeable_musd = Production_musd * Part_echangeable,
+    # Part dans la production nationale totale
+    Part_prod_pct    = Production_musd  / sum(Production_musd)  * 100,
+    # Part dans les volumes échangeables nationaux totaux
+    Part_ech_pct     = Echangeable_musd / sum(Echangeable_musd) * 100,
+    # Annotation : taux d'échange appliqué (affiché entre parenthèses)
+    label_taux       = paste0("(", round(Part_echangeable * 100), "%)"),
+    # Ordre des secteurs : du plus petit au plus grand en production totale (pour coord_flip)
+    Secteur          = factor(Secteur, levels = Secteur[order(Production_musd)])
+  )
+
+# ── Format long pour ggplot ────────────────────────────────────────────────────
+df_long_ech <- df_prod_ech %>%
+  pivot_longer(
+    c(Part_prod_pct, Part_ech_pct),
+    names_to  = "Type",
+    values_to = "Part_pct"
+  ) %>%
+  mutate(
+    Type = recode(Type,
+      "Part_prod_pct" = "Production totale",
+      "Part_ech_pct"  = "Volumes échangeables"
+    )
+  )
+
+# ── Graphique ─────────────────────────────────────────────────────────────────
+g_prod_ech <- ggplot(df_long_ech,
+                     aes(x = Secteur, y = Part_pct, fill = Type)) +
+  geom_col(position = "dodge", width = 0.72) +
+  # Annotation du taux échangeable : placée à droite de la barre la plus longue
+  geom_text(
+    data        = df_prod_ech,
+    aes(x       = Secteur,
+        y       = pmax(Part_prod_pct, Part_ech_pct),
+        label   = label_taux),
+    hjust       = -0.12,
+    size        = 3.2,
+    color       = "#555555",
+    fontface    = "italic",
+    inherit.aes = FALSE
+  ) +
+  coord_flip(clip = "off") +
+  scale_fill_manual(
+    values = c("Production totale"    = "#2171B5",
+               "Volumes échangeables" = "#E6550D"),
+    name   = NULL
+  ) +
+  scale_y_continuous(
+    labels = scales::label_number(suffix = "%"),
+    expand = expansion(mult = c(0, 0.22))
+  ) +
+  labs(
+    title    = "Structure de l'économie vs volumes échangeables par secteur",
+    subtitle = paste0(
+      "Bleu = part de chaque secteur dans la production nationale totale — ",
+      "Orange = part dans les volumes échangeables (production × taux).\n",
+      "Annotation = taux PART_ECHANGEABLE_SECTEUR appliqué à ce secteur."
+    ),
+    x = NULL,
+    y = "Part dans le total national (%)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    plot.subtitle      = element_text(color = "#666666", size = 9),
+    legend.position    = "top",
+    panel.grid.major.y = element_blank()
+  )
+
+ggsave(
+  file.path(DIR_CARTES, "graphique_structure_echangeable.png"),
+  g_prod_ech,
+  width  = 12,
+  height = 7,
+  dpi    = 300
+)
+cat("✓ graphique_structure_echangeable.png\n\n")
 

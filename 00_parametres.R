@@ -338,9 +338,34 @@ SECTEURS <- c("Agriculture", "Mines", "Agro_industrie", "Industrie",
 
 N_SECTEURS <- length(SECTEURS)
 
-# Part du PIB considérée comme échangeable entre zones
-# (le reste est consommé localement et ne génère pas de fret interzonal)
-PART_ECHANGEABLE <- 0.35
+# Part du PIB considérée comme échangeable entre zones, par secteur.
+# Plus la valeur est élevée, plus ce secteur génère de fret interzonal.
+# Calibrage sur la structure économique rwandaise :
+#   Agriculture (0.20)    : forte autoconsommation locale, marchés peu intégrés
+#   Mines (0.70)          : quasi-totalité exportée vers Kigali ou à l'international
+#   Construction (0.15)   : matériaux issus de carrières de proximité, très locaux
+#   Industrie (0.55)      : manufactures légères distribuées à l'échelle nationale
+#   Transport (0.60)      : service structurellement interzonal par définition
+# Ces parts remplacent l'ancien scalaire PART_ECHANGEABLE = 0.35.
+# Pour retrouver le comportement précédent : mettre toutes les valeurs à 0.35.
+PART_ECHANGEABLE_SECTEUR <- c(
+  Agriculture    = 0.20,
+  Mines          = 0.70,
+  Agro_industrie = 0.45,
+  Industrie      = 0.55,
+  Construction   = 0.15,
+  Commerce       = 0.40,
+  Transport      = 0.60,
+  Services       = 0.30
+)
+
+# Facteurs multiplicatifs sur la part échangeable selon la composition du sol.
+# Interprétation : une zone entièrement industrielle (p_ind = 1) voit sa part
+# échangeable multipliée par FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL.
+# L'effet est interpolé linéairement : p_ind = 0.30 → facteur = 1 + 0.30 × (1.30 − 1) = 1.09.
+# Mettre à 1.0 pour désactiver la modulation par usage du sol.
+FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL <- 1.30   # +30% pour zones purement industrielles
+FACTEUR_ECHANGEABLE_LANDUSE_URBAIN     <- 1.15   # +15% pour zones purement urbaines
 
 # Part de la valeur ajoutée qui constitue la demande finale
 PART_DEMANDE_FINALE <- 0.85
