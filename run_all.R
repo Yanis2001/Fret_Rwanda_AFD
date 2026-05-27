@@ -74,7 +74,16 @@ executer_module <- function(nom, fichier, actif) {
   cat("│ Heure :", format(Sys.time(), "%H:%M:%S"), "\n")
   cat("└──────────────────────────────────────────\n")
   t0 <- Sys.time()
-  source(fichier, local = FALSE)
+  # tryCatch intercepte toute erreur survenue pendant l'exécution du module,
+  # l'affiche clairement et arrête le run pour éviter les échecs silencieux.
+  tryCatch(
+    source(fichier, local = FALSE),
+    error = function(e) {
+      cat("\n✗ ERREUR dans", nom, ":\n  ", conditionMessage(e), "\n")
+      cat("  Traceback disponible via traceback() dans la console R.\n\n")
+      stop(paste("Échec du module", nom, "—", conditionMessage(e)), call. = FALSE)
+    }
+  )
   duree <- round(difftime(Sys.time(), t0, units = "mins"), 1)
   cat("\n✓", nom, "terminé en", duree, "min\n")
   # Double gc() après chaque module : le premier passage marque les objets

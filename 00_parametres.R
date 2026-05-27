@@ -940,14 +940,10 @@ cat("✓ Environnement env_lourds créé (objets non visibles dans RStudio)\n\n"
 # toutes les tables sur le disque, ce qui permet de reprendre le travail sans 
 # recalculer depuis zéro.
 
-# Fermeture propre de la connexion à DuckDB afin de la rouvrir ensuite proprement
+# Fermeture propre de la connexion à DuckDB afin de la rouvrir ensuite proprement.
 if (exists("con")) {
-  # tryCatch() : tente d'exécuter le code entre accolades ;
-  # si une erreur survient, la fonction "error" l'attrape silencieusement
-  # (NULL = ne rien faire). Cela évite que le script s'arrête si la connexion
-  # n'existait pas encore.
   tryCatch(
-    DBI::dbDisconnect(con, shutdown = TRUE),
+    DBI::dbDisconnect(con, shutdown = FALSE),
     error = function(e) NULL
   )
 }
