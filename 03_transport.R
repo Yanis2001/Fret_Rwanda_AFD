@@ -868,14 +868,16 @@ for (i in 1:n_warehouses) {
   facteur_lu_ech <- 1 +
     p_ind * (FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL - 1) +
     p_urb * (FACTEUR_ECHANGEABLE_LANDUSE_URBAIN     - 1)
+  
+  echelle <- echelle_par_secteur * facteur_lu_ech
 
   # ── Volumes finaux avec tailles composites, échelle sectorielle et landuse ──
   # echelle_par_secteur est un vecteur (N_SECTEURS) → multiplication élément par élément
   # avec profil_o_final (N_SECTEURS) : chaque secteur porte son propre volume échangeable.
   # facteur_lu_ech est un scalaire (propre à la zone i) qui amplifie uniformément
   # tous les secteurs selon l'environnement landuse de la zone.
-  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle_par_secteur * facteur_lu_ech / somme_tailles_offre
-  demande_zones[i,] <- profil_d_final * taille_demande * echelle_par_secteur * facteur_lu_ech / somme_tailles_demande
+  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle / somme_tailles_offre
+  demande_zones[i,] <- profil_d_final * taille_demande * echelle / somme_tailles_demande
 }
 
 # ── Stockage dans DuckDB en format long ───────────────────────────────────────
