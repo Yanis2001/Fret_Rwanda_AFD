@@ -14,6 +14,9 @@ outputs/cartes/*
 # Rasters (gros, téléchargés automatiquement)
 *.tif
 
+# Fichiers macOS (métadonnées Finder, spécifiques à la machine)
+.DS_Store
+
 # Fichiers R temporaires
 .Rhistory
 .RData
