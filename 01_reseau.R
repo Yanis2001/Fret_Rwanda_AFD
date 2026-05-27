@@ -3277,10 +3277,6 @@ cat("  • emploi_total_par_entrepot   [", nrow(entreposages_sf), "]\n\n")
 #                              × (1 + K_RWI_TAILLE × p_rwi_i)
 #     taille_composite_demande_i = taille_brute_demande_i / ref_kigali_demande
 #
-# ── RÉTROCOMPATIBILITÉ ────────────────────────────────────────────────────────
-#   taille_composite (moyenne géométrique des deux) est conservé pour les
-#   Parties VIII et IX qui n'utilisent pas encore la distinction offre/demande.
-#
 # DÉPENDANCES :
 #   - diag_population            (IV.4.D) → pop_i côté demande
 #   - emploi_total_par_entrepot  (IV.4.F) → emploi_i côté offre
@@ -3396,7 +3392,6 @@ cat("\n  Référence offre   (max) : '", nom_ref_offre,
 # TAILLE COMPOSITE DEMANDE (basée sur la population — formule inchangée)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Identique à l'ancienne taille_composite :
 #   log10(pop + 1)^ALPHA_LOG_POP × (1 + K_RWI_TAILLE × p_rwi)
 taille_brute_demande <- log10(pop_i + 1)^ALPHA_LOG_POP *
   (1 + K_RWI_TAILLE * p_rwi_i)
@@ -3412,16 +3407,11 @@ cat("  Référence demande (max) : '", nom_ref_demande,
     round(ref_demande, 3), "\n\n")
 
 # ── Taille composite unifiée (rétrocompatibilité Parties VIII et IX) ──────────
-# Les Parties VIII et IX n'utilisent pas encore la distinction offre/demande.
-# On leur fournit la moyenne géométrique des deux, qui est un compromis neutre.
-# Ancienne formule supprimée : taille_composite = (log10(pop+1)^α × (1+K×rwi)) / ref
-taille_composite <- sqrt(taille_composite_offre * taille_composite_demande)
 
-# ── Sommes de normalisation (une par côté + une unifiée) ──────────────────────
+# ── Sommes de normalisation (une par côté) ────────────────────────────────────
 # Ces sommes sont utilisées dans VII.2 pour normer les volumes d'offre/demande.
 somme_tailles_offre   <- sum(taille_composite_offre)
 somme_tailles_demande <- sum(taille_composite_demande)
-somme_tailles         <- sum(taille_composite)   # Rétrocompatibilité
 
 # ── Extraction des profils d'offre empiriques pour noeuds_entreposage ─────────
 # profil_offre_empirique_all a nrow(entreposages_sf) lignes (toutes les zones).
@@ -3437,14 +3427,12 @@ profil_offre_empirique <- profil_offre_empirique_all[
 # ── Mise à jour de entreposages_fictifs et DuckDB ─────────────────────────────
 taille_lookup <- tibble(
   nom                      = noeuds_entreposage$warehouse_name,
-  taille_composite         = taille_composite,
   taille_composite_offre   = taille_composite_offre,
   taille_composite_demande = taille_composite_demande
 ) %>% distinct(nom, .keep_all = TRUE)
 
 entreposages_fictifs <- entreposages_fictifs %>%
-  select(-any_of(c("taille_composite",
-                   "taille_composite_offre",
+  select(-any_of(c("taille_composite_offre",
                    "taille_composite_demande"))) %>%
   left_join(taille_lookup, by = "nom")
 
@@ -3453,15 +3441,15 @@ entreposages_fictifs <- entreposages_fictifs %>%
 # noeuds_entreposage (zone dupliquée éliminée, zone hors réseau, etc.).
 # On les signale explicitement puis on les exclut
 zones_na_taille <- entreposages_fictifs %>%
-  filter(is.na(taille_composite)) %>%
+  filter(is.na(taille_composite_offre)) %>%
   pull(nom)
 
 if (length(zones_na_taille) > 0) {
   warning(length(zones_na_taille),
-          " zone(s) exclues faute de taille_composite : ",
+          " zone(s) exclues faute de taille_composite_offre : ",
           paste(zones_na_taille, collapse = ", "))
   entreposages_fictifs <- entreposages_fictifs %>%
-    filter(!is.na(taille_composite))
+    filter(!is.na(taille_composite_offre))
 }
 duck_write(
   taille_lookup %>%
@@ -3475,10 +3463,7 @@ cat("  Offre   (emploi RPHC5) : min / max =",
     round(max(taille_composite_offre),   3), "\n")
 cat("  Demande (population)   : min / max =",
     round(min(taille_composite_demande), 3), "/",
-    round(max(taille_composite_demande), 3), "\n")
-cat("  Composite (géom.)      : min / max =",
-    round(min(taille_composite),         3), "/",
-    round(max(taille_composite),         3), "\n\n")
+    round(max(taille_composite_demande), 3), "\n\n")
 
 # ── Indices des nœuds-entrepôts dans le graphe igraph ─────────────────────────
 # warehouse_nodes_base est un vecteur d'entiers : chaque valeur est la position
@@ -3542,10 +3527,8 @@ saveRDS(
     nom_ref_offre                 = nom_ref_offre,   
     nom_ref_demande               = nom_ref_demande,  
     # Tailles composites
-    taille_composite              = taille_composite,
     taille_composite_offre        = taille_composite_offre,
     taille_composite_demande      = taille_composite_demande,
-    somme_tailles                 = somme_tailles,
     somme_tailles_offre           = somme_tailles_offre,
     somme_tailles_demande         = somme_tailles_demande,
     profil_offre_empirique        = profil_offre_empirique,
