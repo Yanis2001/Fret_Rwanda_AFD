@@ -8,10 +8,10 @@
 # RELANCER 01_reseau.R + 02_couts.R + 03_transport.R avant ce script si :
 #   → les paramètres BETA_SECTEUR ont changé (sensibilité gravitaire)
 #   → la matrice A ou production_totale ont changé (table IO)
-#   → PART_ECHANGEABLE_SECTEUR, FACTEUR_ECHANGEABLE_LANDUSE_* ou PART_DEMANDE_FINALE ont changé
+#   → DEMANDE_FINALE_NISR ou COMMERCE_EXTERIEUR_NISR ont changé
 #   → SEUIL_FLUX_TONNES a changé (filtre affectation)
 #   → de nouvelles zones d'entrepôt ont été ajoutées ou retirées
-#   → les profils PROFILS_OFFRE ou PROFILS_DEMANDE ont été modifiés
+#   → PROFILS_OFFRE a été modifié (profil de fallback RPHC5)
 #   → POIDS_PROFIL_EMPLOI_RPHC5 ou K_RWI_OFFRE ont changé
 #
 # RELANCER uniquement 03_transport.R (sans 01 ni 02) si :
@@ -946,66 +946,60 @@ cat("✓ sankey_flux_fret.png\n\n")
 
 
 # ============================================================
-# GRAPHIQUE : Structure de la production vs volumes échangeables
+# GRAPHIQUE : Production locale vs demande par secteur (bilan MRIO)
 #
-# Objectif : visualiser l'effet de PART_ECHANGEABLE_SECTEUR.
-# Pour chaque secteur, deux barres horizontales :
-#   — Bleue  : poids du secteur dans la PRODUCTION TOTALE nationale
-#   — Orange : poids du secteur dans les VOLUMES ÉCHANGEABLES
-#              (= production × PART_ECHANGEABLE_SECTEUR)
-# L'écart entre les deux barres reflète directement le taux sectoriel :
-#   un secteur avec un taux élevé (ex. Mines 70%) apparaît proportionnellement
-#   plus gros dans la barre orange que dans la barre bleue, et inversement
-#   pour un secteur avec un taux faible (ex. Construction 15%).
-# L'annotation entre parenthèses rappelle le taux appliqué à chaque secteur.
+# Objectif : visualiser pour chaque secteur l'écart entre la production
+# nationale totale et la demande totale (intermédiaire + finale), issu
+# du modèle MRIO. L'écart = surplus exportable net vers les autres zones.
 # ============================================================
 
-cat("Génération du graphique structure échangeable vs production...\n")
+cat("Génération du graphique production vs demande (bilan MRIO)...\n")
 
-# ── Calcul des parts sectorielles ────────────────────────────────────────────
-# production_totale et PART_ECHANGEABLE_SECTEUR sont disponibles via source()
-# au début de ce script. On aligne les noms pour garantir la correspondance.
-df_prod_ech <- tibble(
-  Secteur          = SECTEURS,
-  Production_musd  = as.numeric(production_totale[SECTEURS]),
-  Part_echangeable = as.numeric(PART_ECHANGEABLE_SECTEUR[SECTEURS])
-) %>%
+# ── Calcul des agrégats sectoriels depuis DuckDB ──────────────────────────────
+# On relit les tables offre_zones et demande_zones pour obtenir les totaux
+# par secteur (somme sur toutes les zones), reflet direct du bilan MRIO.
+bilan_mrio <- duck_query("
+  SELECT
+    o.secteur,
+    ROUND(SUM(o.offre_musd),   2) AS surplus_total_musd,
+    ROUND(SUM(d.demande_musd), 2) AS deficit_total_musd
+  FROM offre_zones  o
+  JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
+  GROUP BY o.secteur
+  ORDER BY surplus_total_musd DESC
+")
+
+df_mrio <- bilan_mrio %>%
   mutate(
-    Echangeable_musd = Production_musd * Part_echangeable,
-    # Part dans la production nationale totale
-    Part_prod_pct    = Production_musd  / sum(Production_musd)  * 100,
-    # Part dans les volumes échangeables nationaux totaux
-    Part_ech_pct     = Echangeable_musd / sum(Echangeable_musd) * 100,
-    # Annotation : taux d'échange appliqué (affiché entre parenthèses)
-    label_taux       = paste0("(", round(Part_echangeable * 100), "%)"),
-    # Ordre des secteurs : du plus petit au plus grand en production totale (pour coord_flip)
-    Secteur          = factor(Secteur, levels = Secteur[order(Production_musd)])
+    Secteur = factor(secteur, levels = secteur[order(surplus_total_musd)]),
+    # Solde net = surplus agrégé − déficit agrégé : positif = exportateur net
+    Solde_musd = surplus_total_musd - deficit_total_musd
   )
 
-# ── Format long pour ggplot ────────────────────────────────────────────────────
-df_long_ech <- df_prod_ech %>%
+# ── Format long pour ggplot ───────────────────────────────────────────────────
+df_mrio_long <- df_mrio %>%
   pivot_longer(
-    c(Part_prod_pct, Part_ech_pct),
+    c(surplus_total_musd, deficit_total_musd),
     names_to  = "Type",
-    values_to = "Part_pct"
+    values_to = "Valeur_musd"
   ) %>%
   mutate(
     Type = recode(Type,
-      "Part_prod_pct" = "Production totale",
-      "Part_ech_pct"  = "Volumes échangeables"
+      "surplus_total_musd" = "Offre (surplus exportable)",
+      "deficit_total_musd" = "Demande (besoin importé)"
     )
   )
 
 # ── Graphique ─────────────────────────────────────────────────────────────────
-g_prod_ech <- ggplot(df_long_ech,
-                     aes(x = Secteur, y = Part_pct, fill = Type)) +
+g_prod_ech <- ggplot(df_mrio_long,
+                     aes(x = Secteur, y = Valeur_musd, fill = Type)) +
   geom_col(position = "dodge", width = 0.72) +
-  # Annotation du taux échangeable : placée à droite de la barre la plus longue
+  # Annotation du solde net
   geom_text(
-    data        = df_prod_ech,
+    data        = df_mrio,
     aes(x       = Secteur,
-        y       = pmax(Part_prod_pct, Part_ech_pct),
-        label   = label_taux),
+        y       = pmax(surplus_total_musd, deficit_total_musd),
+        label   = paste0(ifelse(Solde_musd >= 0, "+", ""), round(Solde_musd))),
     hjust       = -0.12,
     size        = 3.2,
     color       = "#555555",
@@ -1014,23 +1008,23 @@ g_prod_ech <- ggplot(df_long_ech,
   ) +
   coord_flip(clip = "off") +
   scale_fill_manual(
-    values = c("Production totale"    = "#2171B5",
-               "Volumes échangeables" = "#E6550D"),
+    values = c("Offre (surplus exportable)" = "#2171B5",
+               "Demande (besoin importé)"   = "#D32F2F"),
     name   = NULL
   ) +
   scale_y_continuous(
-    labels = scales::label_number(suffix = "%"),
+    labels = scales::label_number(suffix = " M USD", scale = 1),
     expand = expansion(mult = c(0, 0.22))
   ) +
   labs(
-    title    = "Structure de l'économie vs volumes échangeables par secteur",
+    title    = "Bilan MRIO par secteur — surplus exportable vs besoin importé",
     subtitle = paste0(
-      "Bleu = part de chaque secteur dans la production nationale totale — ",
-      "Orange = part dans les volumes échangeables (production × taux).\n",
-      "Annotation = taux PART_ECHANGEABLE_SECTEUR appliqué à ce secteur."
+      "Bleu = offre agrégée (surplus x[i,s] − d[i,s] > 0 sommé sur toutes les zones) — ",
+      "Rouge = demande agrégée (déficit d[i,s] − x[i,s] > 0).\n",
+      "Annotation = solde net (M USD) ; positif = le secteur est exportateur net au Rwanda."
     ),
     x = NULL,
-    y = "Part dans le total national (%)"
+    y = "Volume agrégé (M USD)"
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -1041,11 +1035,11 @@ g_prod_ech <- ggplot(df_long_ech,
   )
 
 ggsave(
-  file.path(DIR_CARTES, "graphique_structure_echangeable.png"),
+  file.path(DIR_CARTES, "graphique_bilan_mrio.png"),
   g_prod_ech,
   width  = 12,
   height = 7,
   dpi    = 300
 )
-cat("✓ graphique_structure_echangeable.png\n\n")
+cat("✓ graphique_bilan_mrio.png\n\n")
 

@@ -9,7 +9,7 @@
 #   → de nouvelles zones d'entrepôt ont été ajoutées / modifiées
 #   → les données WorldPop, NISR ou RPHC5 ont été mises à jour
 #   → les paramètres BUFFER_DEMO_M, BUFFER_RWI_M ou BUFFER_ENTREPOT_M ont changé
-#   → les paramètres K_RWI_TAILLE, ALPHA_LOG_POP ou POIDS_PROFIL_EMPLOI_RPHC5 ont changé
+#   → les paramètres K_RWI_TAILLE, K_RWI_OFFRE ou POIDS_PROFIL_EMPLOI_RPHC5 ont changé
 #
 # RELANCER 02_couts.R avant ce script si :
 #   → les paramètres de flotte (params_flotte, vitesses_flotte, facteurs_pente)
@@ -219,7 +219,7 @@ g_pop <- diag_population %>%
     title    = "Population par zone d'entrepôt",
     subtitle = paste0(
       "Transparence = fiabilité de la source (opaque = NISR officiel)\n",
-      "Contour rouge = zone de référence de normalisation (taille_composite_demande = 1)"
+      "Contour rouge = zone de population maximale (référence MRIO)"
     ),
     x = NULL,
     y = "Population (milliers d'habitants)"
@@ -424,7 +424,7 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
       "text",
       x     = log10(max(diag_population$population_zone, na.rm = TRUE)) * 0.97,
       y     = 0.05,
-      label = paste0("◄ Référence demande\n  (taille_composite = 1)"),
+      label = paste0("◄ Population max\n  (référence MRIO)"),
       hjust = 1,
       color = "#CC0000",
       size  = 3.0,

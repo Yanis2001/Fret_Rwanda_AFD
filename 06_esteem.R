@@ -112,7 +112,6 @@ rm(.vuln, .fret, .ent)
 # calculés (voir la section "Paramètres du modèle économique") :
 #   conso_interm   = A %*% production_totale
 #   valeur_ajoutee = production_totale - conso_interm
-#   demande_finale = valeur_ajoutee * PART_DEMANDE_FINALE
 #
 # On calcule ici la production d'équilibre de Leontief : x* = (I-A)^{-1} y_f
 L           <- solve(diag(N_SECTEURS) - A)   # Inverse de Leontief

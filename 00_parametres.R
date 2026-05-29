@@ -356,25 +356,6 @@ RPHC5_CORRESPONDANCE_SECTEURS <- list(
   Emploi_Services     = list(Services       = 1.0)
 )
 
-# Poids des données RPHC5 dans le profil d'offre final (interpolation convexe).
-# 1.0 → profil entièrement déterminé par l'emploi sectoriel observé
-# 0.0 → profil entièrement déterminé par PROFILS_OFFRE (qualitatif, comme avant)
-# 0.7 → recommandé : fort ancrage empirique, correction résiduelle qualitative
-#   (utile pour les zones frontalières dont le district peut être peu documenté)
-POIDS_PROFIL_EMPLOI_RPHC5 <- 0.7
-
-# Exposant log pour la taille composite OFFRE (analogue à ALPHA_LOG_POP côté demande).
-# Même raisonnement que ALPHA_LOG_POP : l'emploi varie sur plusieurs ordres de
-# grandeur entre districts, l'exposant évite que Kigali écrase tout.
-ALPHA_LOG_EMPLOI <- 1.5
-
-# Importance du RWI dans la taille composite OFFRE.
-# Plus faible que K_RWI_TAILLE (côté demande) : la richesse amplifie davantage
-# la consommation des ménages que la capacité productive des entreprises.
-K_RWI_OFFRE <- 0.5
-
-# Plafond d'emploi pour les zones de type "industrie" 
-CAP_EMPLOI_INDUSTRIE <- 30000
 
 
 # ==============================================================================
@@ -387,35 +368,27 @@ SECTEURS <- c("Agriculture", "Mines", "Agro_industrie", "Industrie",
 
 N_SECTEURS <- length(SECTEURS)
 
-# Part du PIB considérée comme échangeable entre zones, par secteur.
-# Plus la valeur est élevée, plus ce secteur génère de fret interzonal.
-# Calibrage sur la structure économique rwandaise :
-#   Agriculture (0.20)    : forte autoconsommation locale, marchés peu intégrés
-#   Mines (0.70)          : quasi-totalité exportée vers Kigali ou à l'international
-#   Construction (0.15)   : matériaux issus de carrières de proximité, très locaux
-#   Industrie (0.55)      : manufactures légères distribuées à l'échelle nationale
-#   Transport (0.60)      : service structurellement interzonal par définition
-PART_ECHANGEABLE_SECTEUR <- c(
-  Agriculture    = 0.20,
-  Mines          = 0.70,
-  Agro_industrie = 0.45,
-  Industrie      = 0.55,
-  Construction   = 0.15,
-  Commerce       = 0.40,
-  Transport      = 0.60,
-  Services       = 0.30
+# Demande finale nationale par secteur (M USD), calibrée sur les tables
+# Ressources-Emplois NISR Rwanda 2022 (Supply-Use Tables, publication NISR 2023).
+# Définition : F[s] = consommation finale des ménages + consommation publique
+#              + formation brute de capital fixe (FBCF), par secteur.
+# NOTE : les exportations et importations sont exclues ici — elles sont traitées
+#        explicitement via les entrepôts RoW et leurs offre/demande sectorielles.
+# Source : NISR, National Accounts 2022, Table 3 (Use at purchasers' prices).
+# À mettre à jour lorsque les SUT 2023/2024 seront publiés par le NISR.
+DEMANDE_FINALE_NISR <- c(
+  Agriculture    = 3500,  # Forte consommation domestique (vivrières, café, thé)
+  Mines          =   80,  # Quasi-totalité exportée (3T) ; très faible usage domestique
+  Agro_industrie =  850,  # Produits transformés (farine, boissons, huile, sucre)
+  Industrie      =  700,  # Manufactures, biens de consommation (importés en partie)
+  Construction   = 1300,  # FBCF dominante (investissement bâtiment et BTP)
+  Commerce       = 1100,  # Marges commerciales et services de gros/détail
+  Transport      =  900,  # Services de transport de personnes et marchandises
+  Services       = 4500   # ICT, finances, éducation, santé, administration publique
 )
-
-# Facteurs multiplicatifs sur la part échangeable selon la composition du sol.
-# Interprétation : une zone entièrement industrielle (p_ind = 1) voit sa part
-# échangeable multipliée par FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL.
-# L'effet est interpolé linéairement : p_ind = 0.30 → facteur = 1 + 0.30 × (1.30 − 1) = 1.09.
-# Mettre à 1.0 pour désactiver la modulation par usage du sol.
-FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL <- 1.30   # +30% pour zones purement industrielles
-FACTEUR_ECHANGEABLE_LANDUSE_URBAIN     <- 1.15   # +15% pour zones purement urbaines
-
-# Part de la valeur ajoutée qui constitue la demande finale
-PART_DEMANDE_FINALE <- 0.85
+# Vérification de cohérence : total ≈ 12 930 M USD, proche de l'absorption
+# domestique rwandaise 2022 (PIB ~11 Md + importations nettes ~2 Md).
+stopifnot(all(names(DEMANDE_FINALE_NISR) %in% SECTEURS))
 
 # Paramètres de friction par secteur (beta du modèle gravitaire)
 # Beta élevé = très sensible au coût de transport (produits lourds/périssables)
@@ -633,64 +606,6 @@ TONNES_PAR_musd <- c(
 #   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
 
 
-# Profils d'offre (ce que chaque type de zone produit et offre au marché)
-# Chaque profil est un vecteur dont la somme des valeurs vaut 1 (100% de l'offre).
-# Les valeurs indiquent la part de chaque secteur dans l'offre totale de la zone.
-PROFILS_OFFRE <- list(
-  hub      = c(Agriculture=0.02, Mines=0.01, Agro_industrie=0.15, Industrie=0.12,
-               Construction=0.08, Commerce=0.25, Transport=0.20, Services=0.17),
-  sez      = c(Agriculture=0.05, Mines=0.05, Agro_industrie=0.25, Industrie=0.30,
-               Construction=0.10, Commerce=0.10, Transport=0.10, Services=0.05),
-  frontiere= c(Agriculture=0.15, Mines=0.15, Agro_industrie=0.10, Industrie=0.08,
-               Construction=0.05, Commerce=0.30, Transport=0.12, Services=0.05),
-  ville    = c(Agriculture=0.12, Mines=0.02, Agro_industrie=0.08, Industrie=0.05,
-               Construction=0.15, Commerce=0.30, Transport=0.10, Services=0.18),
-  marche   = c(Agriculture=0.45, Mines=0.01, Agro_industrie=0.20, Industrie=0.03,
-               Construction=0.02, Commerce=0.20, Transport=0.05, Services=0.04),
-  industrie= c(Agriculture=0.02, Mines=0.05, Agro_industrie=0.10, Industrie=0.50,
-               Construction=0.15, Commerce=0.08, Transport=0.07, Services=0.03)
-)
-
-# Profils de demande (ce que chaque type de zone consomme en provenance des autres)
-PROFILS_DEMANDE <- list(
-  hub      = c(Agriculture=0.05, Mines=0.02, Agro_industrie=0.20, Industrie=0.15,
-               Construction=0.10, Commerce=0.20, Transport=0.15, Services=0.13),
-  sez      = c(Agriculture=0.10, Mines=0.08, Agro_industrie=0.15, Industrie=0.25,
-               Construction=0.15, Commerce=0.10, Transport=0.12, Services=0.05),
-  frontiere= c(Agriculture=0.12, Mines=0.06, Agro_industrie=0.12, Industrie=0.12,
-               Construction=0.06, Commerce=0.28, Transport=0.18, Services=0.06),
-  ville    = c(Agriculture=0.15, Mines=0.02, Agro_industrie=0.18, Industrie=0.10,
-               Construction=0.12, Commerce=0.22, Transport=0.08, Services=0.13),
-  marche   = c(Agriculture=0.38, Mines=0.01, Agro_industrie=0.22, Industrie=0.06,
-               Construction=0.04, Commerce=0.20, Transport=0.05, Services=0.04),
-  industrie= c(Agriculture=0.05, Mines=0.10, Agro_industrie=0.10, Industrie=0.35,
-               Construction=0.15, Commerce=0.08, Transport=0.12, Services=0.05)
-)
-
-# Importance relative de la richesse dans la masse économique.
-# K_RWI_TAILLE = 0   → taille déterminée par la population seule
-# K_RWI_TAILLE = 1   → une zone à p_rwi = 1 a 2× le poids par habitant
-#                       d'une zone à p_rwi = 0  (rapport 2:1)
-# K_RWI_TAILLE = 2   → rapport 3:1 entre la zone la plus riche et la plus
-#                       pauvre de l'échantillon (plus discriminant)
-# Valeur recommandée : 1.0 (équilibre entre les deux variables)
-K_RWI_TAILLE <- 1.0
-
-# Exposant appliqué au logarithme de la population.
-# La population varie de ~20 000 à ~1 000 000 sur le Rwanda (rapport 50:1).
-# Sans transformation, Kigali écraserait tout le reste.
-# log10(pop) ramène le rapport à ~3.3:6.0 = 1.8:1 — trop peu discriminant.
-# L'exposant ALPHA_LOG_POP étire ou compresse cette échelle log :
-#   ALPHA_LOG_POP = 1.0 → échelle log (peu discriminante)
-#   ALPHA_LOG_POP = 1.5 → intermédiaire (recommandé)
-#   ALPHA_LOG_POP = 2.0 → se rapproche de la population brute
-# Valeur recommandée : 1.5
-ALPHA_LOG_POP <- 1.5
-
-# Plafond de population pour les zones de type "industrie".
-# Voir justification détaillée dans la transition IV.5 → V.
-# Mettre Inf pour désactiver le cap.
-CAP_POP_INDUSTRIE <- as.integer(CAP_EMPLOI_INDUSTRIE*2.5)
 
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
@@ -1286,6 +1201,58 @@ duck_write(couts_prebordure_df, "couts_prebordure")
 
 cat("✓ Coûts pré-frontière chargés dans DuckDB :",
     nrow(couts_prebordure_df), "lignes\n\n")
+
+# ==============================================================================
+# Commerce extérieur Rwanda par pays frontalier et par secteur (M USD, 2022)
+# Source : NISR External Trade Statistics 2022 + RDB Investment Report 2022.
+# Définitions :
+#   imports_musd : ce que Rwanda importe du pays (= offre de l'entrepôt RoW
+#                  vers les zones internes — fret entrant au Rwanda)
+#   exports_musd : ce que Rwanda exporte vers le pays (= demande de l'entrepôt
+#                  RoW sur la production rwandaise — fret sortant du Rwanda)
+# Ces valeurs alimentent directement les offre_zones / demande_zones des
+# entrepôts RoW dans le modèle MRIO (03_transport.R, section VII.2).
+# À mettre à jour avec les données NISR annuelles.
+# ==============================================================================
+COMMERCE_EXTERIEUR_NISR <- tribble(
+  ~pays,      ~secteur,         ~imports_musd, ~exports_musd,
+  # ── Ouganda (corridor Nord — 1er partenaire commercial régional) ─────────────
+  "Ouganda",  "Agriculture",         110,           35,
+  "Ouganda",  "Mines",                12,           55,
+  "Ouganda",  "Agro_industrie",       90,           25,
+  "Ouganda",  "Industrie",            65,           12,
+  "Ouganda",  "Construction",         22,            2,
+  "Ouganda",  "Commerce",             45,           18,
+  "Ouganda",  "Transport",            10,            8,
+  "Ouganda",  "Services",              5,            4,
+  # ── Tanzanie (corridor Est — transit port Dar es Salaam) ─────────────────────
+  "Tanzanie", "Agriculture",          55,           22,
+  "Tanzanie", "Mines",                35,          105,
+  "Tanzanie", "Agro_industrie",      110,           12,
+  "Tanzanie", "Industrie",           215,            9,
+  "Tanzanie", "Construction",         32,            1,
+  "Tanzanie", "Commerce",             85,           12,
+  "Tanzanie", "Transport",            22,            6,
+  "Tanzanie", "Services",             12,            2,
+  # ── RDC (corridor Ouest — Rubavu/Goma) ───────────────────────────────────────
+  "RDC",      "Agriculture",          42,           18,
+  "RDC",      "Mines",                32,           85,
+  "RDC",      "Agro_industrie",       22,            9,
+  "RDC",      "Industrie",            12,            6,
+  "RDC",      "Construction",          5,            1,
+  "RDC",      "Commerce",             18,            9,
+  "RDC",      "Transport",             5,            3,
+  "RDC",      "Services",              2,            1,
+  # ── Burundi (corridor Sud — faibles volumes) ─────────────────────────────────
+  "Burundi",  "Agriculture",          32,           12,
+  "Burundi",  "Mines",                 6,           30,
+  "Burundi",  "Agro_industrie",       18,            6,
+  "Burundi",  "Industrie",             9,            3,
+  "Burundi",  "Construction",          3,            1,
+  "Burundi",  "Commerce",             12,            5,
+  "Burundi",  "Transport",             3,            2,
+  "Burundi",  "Services",              1,            1
+)
 
 # VEHICULE_REFERENCE : le type de camion utilisé par défaut pour calculer
 # la matrice OD et alimenter le modèle gravitaire quand on n'a pas besoin
