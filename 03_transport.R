@@ -555,7 +555,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # Construit la chaîne économique complète :
 #   Table IO → multiplicateurs Leontief → offres/demandes par zone
 #   → modèle gravitaire avec friction sur coûts de transport (C_ij)
-#     et coûts pré-frontière (C_prebordure).
+#     et nœuds RoW virtuels intégrant les coûts pré-frontière.
 # Dépend de la Partie VI (matrice OD) pour construire C_ij.
 ################################################################################
 
@@ -587,10 +587,12 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # A %*% x donne le vecteur des consommations intermédiaires : pour chaque secteur i,
 # la somme de a_ij × production_j sur tous les secteurs j fournisseurs.
 conso_interm   <- as.vector(A %*% production_totale)
-# Valeur ajoutée = production - consommations intermédiaires 
+# Valeur ajoutée = production - consommations intermédiaires
 valeur_ajoutee <- production_totale - conso_interm
-# Demande finale ≈ 85% de la valeur ajoutée 
-demande_finale <- valeur_ajoutee * PART_DEMANDE_FINALE
+# Demande finale calibrée sur les comptes nationaux NISR (Supply-Use Tables 2022).
+# DEMANDE_FINALE_NISR est un vecteur par secteur en M USD, défini dans 00_parametres.R.
+# On réordonne selon l'ordre canonique SECTEURS pour garantir l'alignement des indices.
+demande_finale <- DEMANDE_FINALE_NISR[SECTEURS]
 
 # ── Stockage dans DuckDB ──────────────────────────────────────────────────────
 io_table <- tibble(
@@ -634,48 +636,11 @@ cat("✓ Table IO + multiplicateurs de Leontief chargés dans DuckDB\n\n")
 
 
 # ==============================================================================
-# VII.2 : Offres et demandes par zone
-# Affecte à chaque zone un profil sectoriel d'offre et de demande via une
-# moyenne pondérée entre le profil de base (déterminé par le type de zone)
-# et les profils des types de zones correspondant aux usages du sol environnants.
-#
-# FORMULE :
-#   profil_final = (profil_base * 1 + profil_industrie * part_ind 
-#                  + profil_hub * part_urb)
-#                / (1 + part_ind + part_urb)
-#
-# Les profils landuse réutilisent PROFILS_OFFRE et PROFILS_DEMANDE déjà
-# définis : les zones industrielles environnantes contribuent via le profil
-# "industrie", les zones urbaines via le profil "urbain" (le type de zone le
-# plus représentatif d'un environnement urbain dense).
-#
-# Cette interpolation convexe garantit que :
-#   1. La somme des parts sectorielles reste toujours égale à 1
-#   2. L'identité structurelle de la zone n'est jamais effacée par son
-#      contexte local (le profil de base a toujours un poids de 1)
-#   3. Les poids sont directement interprétables comme des proportions
-#      de surface dans le buffer de 2km
-#   4. Pas besoin de pmax(), renormalisation, plafonds ou bruit aléatoire
+# VII.2 : Offres et demandes par zone (modèle MRIO)
+# Calcule pour chaque zone la production locale x[i,s], la demande totale
+# d[i,s] (intermédiaire + finale), et en déduit les surplus/déficits sectoriels
+# qui servent d'offre et de demande dans le modèle gravitaire.
 # ==============================================================================
-
-# ── Correspondance entre types de landuse et profils de zone ──────────────────
-# Les zones industrielles dans le buffer sont représentées par le profil
-# "industrie" déjà défini dans PROFILS_OFFRE/DEMANDE.
-# Les zones urbaines sont représentées par le profil "hub" — le type de zone
-# dont la structure économique est la plus proche d'un environnement urbain dense.
-# Ce choix est explicite et discutable : on pourrait utiliser "ville" pour
-# les zones résidentielles si on disposait de données plus granulaires.
-PROFIL_OFFRE_LANDUSE_INDUSTRIEL   <- PROFILS_OFFRE[["industrie"]]
-PROFIL_DEMANDE_LANDUSE_INDUSTRIEL <- PROFILS_DEMANDE[["industrie"]]
-PROFIL_OFFRE_LANDUSE_URBAIN       <- PROFILS_OFFRE[["hub"]]
-PROFIL_DEMANDE_LANDUSE_URBAIN     <- PROFILS_DEMANDE[["hub"]]
-
-cat("✓ Profils landuse définis\n\n")
-
-# Volume échangeable par secteur : chaque secteur a sa propre part interzonale.
-# echelle_par_secteur[s] = production_totale[s] × PART_ECHANGEABLE_SECTEUR[s]
-# Résultat : vecteur nommé de longueur N_SECTEURS (M USD échangeables par secteur).
-echelle_par_secteur <- production_totale * PART_ECHANGEABLE_SECTEUR
 
 # Génération des matrices offre et demande (lignes = zones, colonnes = secteurs)
 # matrix(0, n, m) : crée une matrice de zéros de dimensions n×m.
@@ -685,203 +650,117 @@ offre_zones   <- matrix(0, n_warehouses, N_SECTEURS,
 demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
                         dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
 
-# ── Calcul de la composition d'usage du sol autour de chaque entrepôt ─────────
-# Pour chaque entrepôt, on calcule la part de chaque landuse dans un buffer
-# de 2km. Cette composition module les profils d'offre/demande.
-# Une zone industrielle entourée de grandes zones industrielles aura un profil
-# d'offre encore plus orienté "Industrie" que la moyenne de son type.
-
-# calc_part_landuse() : calcule la proportion de la surface d'un buffer
-# qui est couverte par des polygones d'usage du sol (zones urbaines ou industrielles).
+# ==============================================================================
+# VII.2.B : Modèle MRIO — allocation de la production et de la demande
 #
-# Paramètres :
-#   buffer_geom — géométrie sf d'un seul buffer circulaire (autour d'un entrepôt)
-#   zones_sf    — objet sf contenant les polygones de landuse à tester
-#                 (zones_urbaines ou zones_industrielles selon l'appel)
+# PRINCIPE (Input-Output interrégional) :
+#   Offre et demande de chaque zone découlent de la même identité comptable,
+#   garantissant l'équilibre agrégé avant le modèle gravitaire.
 #
-# Retourne :
-#   Un nombre entre 0 et 1 :
-#     0   = aucune zone de ce type dans le buffer
-#     0.4 = 40% de la surface du buffer est couverte par ce type de zone
-#     1   = le buffer est entièrement dans une zone de ce type
+#   Production locale (allocation composite emploi + RWI) :
+#     w[i,s] = α × (emp[i,s] / emp_national[s])
+#            + (1-α) × (p_rwi[i] / Σ_j p_rwi[j])
+#     x[i,s] = production_totale[s] × w[i,s]
+#     α = ALPHA_EMPLOI_RWI (00_parametres.R) ; par construction Σ_i w[i,s] = 1.
+#     Justification : forme additive car le RWI n'est pas sectoriel —
+#     il agit comme un correcteur de productivité uniforme sur tous les secteurs.
 #
-# Exemple d'interprétation :
-#   calc_part_landuse(buf, zones_industrielles) = 0.35
-#   → 35% de la zone dans un rayon de 2km autour de l'entrepôt est industrielle
-#   → son profil d'offre sera davantage orienté "Industrie" et "Construction"
+#   Demande intermédiaire (via la matrice I/O nationale) :
+#     d_inter[i,s] = Σ_r  A[s,r] × x[i,r]
+#     → intrants du secteur s nécessaires à la production de tous les secteurs r.
+#
+#   Demande finale (allocation multiplicative population × RWI) :
+#     z[i] = pop[i] × (p_rwi[i] + EPSILON_RWI)
+#     d_finale[i,s] = demande_finale[s] × (z[i] / Σ_j z[j])
+#     Justification : pop × richesse ≈ masse monétaire locale (Chi et al. 2022,
+#     PNAS) ; EPSILON_RWI évite qu'une zone très pauvre mais peuplée reçoive
+#     un poids nul.
+#
+#   Surplus exportable et besoin importé :
+#     offre_zones[i,s]   = max(0,  x[i,s] − d[i,s])
+#     demande_zones[i,s] = max(0,  d[i,s] − x[i,s])
+#
+# ÉQUILIBRE AGRÉGÉ :
+#   Σ_i x[i,s] = production_totale[s]  (par construction : Σ_i w[i,s] = 1)
+#   Σ_i d[i,s] ≈ production_totale[s]  (identité ressources-emplois Leontief)
+#   → Σ_i offre[i,s] ≈ Σ_i demande[i,s] ; les résidus = commerce avec le RoW.
+#   La normalisation par moyenne géométrique dans furness_gravity() absorbe
+#   ces résidus résiduels d'économie ouverte.
+# ==============================================================================
 
-calc_part_landuse <- function(buffer_geom, zones_sf) {
-  
-  # Vérification préalable : si la couche de zones est vide (ex : pas de zones
-  # industrielles dans le PBF), on retourne directement 0 sans calcul.
-  if (nrow(zones_sf) == 0) return(0)
-  
-  # Encapsulation de la géométrie brute dans un objet sf complet avec son CRS.
-  # st_sfc() : crée une colonne géométrique à partir d'une géométrie brute.
-  # st_as_sf() : transforme en objet sf manipulable par les fonctions spatiales.
-  # Le CRS 32735 (UTM Zone 35S) est celui de tout le réseau routier — il est
-  # indispensable de le spécifier ici car buffer_geom est une géométrie brute
-  # extraite d'un objet sf, qui a perdu son CRS au passage.
-  buffer_sf <- st_as_sf(st_sfc(buffer_geom, crs = 32735))
-  
-  # st_intersection() : calcule la géométrie commune entre le buffer et les zones.
-  # Résultat : les fragments des polygones de landuse qui se trouvent à l'intérieur
-  # du buffer circulaire de 2km autour de l'entrepôt.
-  # Si aucun polygone ne chevauche le buffer, st_intersection retourne un sf vide.
-  # suppressWarnings() : évite les messages d'avertissement sur les géométries
-  # complexes (lignes de bord, coins de polygones) qui n'impactent pas le résultat.
-  intersection <- suppressWarnings(st_intersection(zones_sf, buffer_sf))
-  
-  # Si l'intersection est vide (aucune zone de ce type dans le buffer),
-  # on retourne 0 immédiatement sans calculer d'aire.
-  if (nrow(intersection) == 0) return(0)
-  
-  # Calcul de l'aire totale des fragments d'intersection en mètres carrés.
-  # st_area() calcule l'aire de chaque polygone résultant de l'intersectionen m² ;
-  # as.numeric() le convertit en nombre ordinaire pour les opérations arithmétiques.
-  # sum() additionne toutes les surfaces si plusieurs polygones se chevauchent
-  # avec le buffer.
-  aire_intersection <- sum(as.numeric(st_area(intersection)), na.rm = TRUE)
-  
-  # Calcul de l'aire totale du buffer de référence (cercle de 2km de rayon).
-  # Cette valeur est la même pour tous les entrepôts (même rayon) mais on la
-  # recalcule ici pour que la fonction soit générique (indépendante du rayon).
-  aire_buffer <- as.numeric(st_area(buffer_sf))
-  
-  # Protection contre une division par zéro si le buffer a une aire nulle
-  # (ne devrait pas arriver avec des coordonnées valides, mais par sécurité).
-  if (aire_buffer == 0) return(0)
-  
-  # Calcul de la proportion et plafonnement à 1.
-  # min(..., 1) : évite d'obtenir une valeur > 1 en cas d'artefacts géométriques
-  # (ex : légers chevauchements de polygones qui gonflent artificiellement l'aire).
-  min(aire_intersection / aire_buffer, 1)
+# Emploi national par secteur = somme sur toutes les zones actives.
+# Garantit que Σ_i x[i,s] = production_totale[s] (la production est entièrement
+# allouée aux zones, sans fuite hors réseau).
+emploi_national <- colSums(emploi_zone_secteur, na.rm = TRUE)
+# Protection contre division par zéro si un secteur est absent du RPHC5.
+emploi_national[emploi_national == 0] <- 1
+
+# Population totale des zones actives — dénominateur de la demande finale.
+pop_totale <- sum(pop_i, na.rm = TRUE)
+if (pop_totale == 0) stop("pop_totale est nulle — vérifier diag_population dans persist.")
+
+# ── Extraction du RWI normalisé aligné sur noeuds_entreposage ────────────────
+# p_rwi est calculé dans 01_reseau.R (min-max sur [0,1]) et stocké dans diag_rwi.
+# On réaligne sur noeuds_entreposage (même logique que pop_i ci-dessus).
+p_rwi_zones <- diag_rwi$p_rwi[
+  match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
+]
+p_rwi_zones <- replace_na(p_rwi_zones, median(p_rwi_zones, na.rm = TRUE))
+stopifnot(length(p_rwi_zones) == n_warehouses)
+
+# Dénominateur du terme RWI dans le poids de production (Σ_i p_rwi_i).
+rwi_total <- sum(p_rwi_zones)
+if (rwi_total == 0) stop("rwi_total est nul — vérifier diag_rwi dans persist.")
+
+# Poids de demande finale z[i] = pop[i] × (p_rwi[i] + ε) — forme multiplicative.
+# EPSILON_RWI évite un poids nul pour les zones très pauvres mais peuplées.
+z_demande <- pop_i * (p_rwi_zones + EPSILON_RWI)
+z_totale   <- sum(z_demande)
+if (z_totale == 0) stop("z_totale est nul — vérifier pop_i et p_rwi_zones.")
+
+cat("  Emploi national par secteur (dénominateur MRIO) :\n")
+print(round(emploi_national))
+cat("  Population totale zones actives :", round(pop_totale), "\n")
+cat("  RWI total zones actives :", round(rwi_total, 3),
+    "| z_totale (pop×rwi) :", round(z_totale), "\n\n")
+
+for (i in seq_len(n_warehouses)) {
+
+  # ── Production locale x[i,s] ────────────────────────────────────────────────
+  # Poids composite w[i,s] = α × part_emploi[i,s] + (1-α) × part_rwi[i].
+  # La part RWI est scalaire (même valeur pour tous les secteurs) car le RWI
+  # est une caractéristique géographique de la zone, pas sectorielle.
+  emp_i      <- emploi_zone_secteur[i, ]           # vecteur N_SECTEURS (effectifs bruts)
+  part_emp_i <- emp_i / emploi_national            # part d'emploi par secteur (Σ_i = 1)
+  part_rwi_i <- p_rwi_zones[i] / rwi_total         # part RWI scalaire (Σ_i = 1)
+  w_i        <- ALPHA_EMPLOI_RWI * part_emp_i + (1 - ALPHA_EMPLOI_RWI) * part_rwi_i
+  x_i        <- production_totale * w_i            # vecteur N_SECTEURS (M USD)
+
+  # ── Demande intermédiaire d_inter[i,s] ──────────────────────────────────────
+  # Pour chaque secteur s, quantité consommée comme intrant par la production
+  # locale de tous les secteurs r : Σ_r A[s,r] × x[i,r] = (A %*% x_i)[s].
+  # A %*% x_i : produit matriciel (N_SECTEURS × N_SECTEURS) × (N_SECTEURS) → N_SECTEURS.
+  d_inter_i <- as.vector(A %*% x_i)
+  names(d_inter_i) <- SECTEURS
+
+  # ── Demande finale d_finale[i,s] ────────────────────────────────────────────
+  # Pondération multiplicative z[i] = pop[i] × (p_rwi[i] + ε), calculée hors boucle.
+  # Capture la masse monétaire locale (population × pouvoir d'achat).
+  d_finale_i <- demande_finale * (z_demande[i] / z_totale)  # vecteur N_SECTEURS (M USD)
+
+  # ── Demande totale et surplus/déficit ───────────────────────────────────────
+  d_i <- d_inter_i + d_finale_i
+
+  # pmax(0, ...) : max élément par élément entre 0 et le vecteur → remplace les
+  # valeurs négatives par 0 (une zone ne peut pas avoir d'offre négative).
+  offre_zones[i, ]   <- pmax(0, x_i - d_i)   # surplus exportable (M USD)
+  demande_zones[i, ] <- pmax(0, d_i - x_i)   # besoin importé     (M USD)
 }
 
-# ── Mise en cache du calcul de composition landuse ────────────────────────────
-# Pour chaque zone d'entreposage, on calcule la part de surface urbanisée et
-# industrielle dans un rayon de 2km. Ce calcul nécessite des intersections
-# géométriques entre les buffers de chaque zone et les polygones de landuse,
-# ce qui peut prendre plusieurs minutes.
-# Comme pour les pentes et la matrice OD, on met le résultat en cache pour
-# éviter de le recalculer inutilement à chaque exécution.
-# Le cache est invalidé si le nombre de zones change (nouvelle zone ajoutée).
-CACHE_LANDUSE <- file.path(DIR_CACHE, "landuse_cache.rds")
-cache_landuse_valide <- FALSE
-
-if (file.exists(CACHE_LANDUSE)) {
-  cache_lu <- readRDS(CACHE_LANDUSE)
-  # On vérifie que le nombre de zones est identique à la session actuelle.
-  # Si de nouvelles zones ont été ajoutées, le cache est rejeté.
-  if (!is.null(cache_lu$n_warehouses) && cache_lu$n_warehouses == n_warehouses) {
-    part_urbain     <- cache_lu$part_urbain
-    part_industriel <- cache_lu$part_industriel
-    cache_landuse_valide <- TRUE
-    cat("  ✓ Cache landuse valide (", n_warehouses, "zones) — calcul ignoré\n\n")
-  } else {
-    cat("  ⚠ Cache landuse invalide — recalcul...\n")
-  }
-}
-
-if (!cache_landuse_valide) {
-  cat("  Calcul de la composition landuse par zone...\n")
-  
-  # Deux vecteurs numériques initialisés à zéro, un par type de landuse.
-  # numeric(n) crée un vecteur de n zéros — on les remplira zone par zone.
-  part_urbain     <- numeric(n_warehouses)
-  part_industriel <- numeric(n_warehouses)
-  
-  for (i in seq_len(n_warehouses)) {
-    buf <- entreposages_buffer[i, ]$geometry
-    part_urbain[i]     <- calc_part_landuse(buf, zones_urbaines)
-    part_industriel[i] <- calc_part_landuse(buf, zones_industrielles)
-    if (i %% 5 == 0) cat("  Landuse par zone :", round(i/n_warehouses*100), "%\n")
-  }
-  
-  # Sauvegarde des deux vecteurs + le nombre de zones pour validation future
-  saveRDS(
-    list(part_urbain = part_urbain, part_industriel = part_industriel,
-         n_warehouses = n_warehouses),
-    CACHE_LANDUSE
-  )
-  cat("  ✓ Cache landuse sauvegardé\n\n")
-}
-
-cat("✓ Composition landuse calculée\n\n")
-
-
-# ── Modification des profils selon la composition landuse ─────────────────────
-# Principe : plus une zone est industrielle, plus son profil d'offre favorise
-# l'Industrie et la Construction ; plus elle est urbaine, plus elle favorise
-# le Commerce et les Services.
-
-for (i in 1:n_warehouses) {
-  nom_zone  <- noeuds_entreposage$warehouse_name[i]
-  type_zone <- noeuds_entreposage$warehouse_type[i]
-  
-  # ── Tailles composites distinctes pour l'offre et la demande ────────────────
-  # taille_composite_offre   : basée sur l'emploi RPHC5 — capacité productive
-  # taille_composite_demande : basée sur la population  — capacité d'absorption
-  # Les deux ont été calculées dans la Transition IV.5→V.
-  taille_offre   <- taille_composite_offre[i]
-  taille_demande <- taille_composite_demande[i]
-  
-  # ── Profil d'offre : données empiriques RPHC5 (remplace PROFILS_OFFRE) ──────
-  # profil_offre_empirique[i, ] est la fusion (POIDS_PROFIL_EMPLOI_RPHC5)
-  # entre les parts d'emploi sectoriel RPHC5 et le profil qualitatif de base.
-  # Si RPHC5 était indisponible, il a été initialisé sur PROFILS_OFFRE en IV.4.F
-  # → ce code fonctionne identiquement dans les deux cas.
-  profil_o_base <- profil_offre_empirique[i, ]
-  
-  # ── Profil de demande : qualitatif par type de zone (inchangé) ──────────────
-  profil_d_base <- PROFILS_DEMANDE[[type_zone]]
-  
-  p_ind <- part_industriel[i]
-  p_urb <- part_urbain[i]
-  
-  # ── Modulation par les usages du sol ────────────────────────────────────────
-  # Côté OFFRE : l'influence du landuse est réduite proportionnellement au poids
-  # accordé aux données RPHC5 (POIDS_PROFIL_EMPLOI_RPHC5). En effet, le profil
-  # empirique RPHC5 capture déjà la structure sectorielle au niveau du district ;
-  # la correction landuse n'apporte qu'une nuance locale supplémentaire.
-  # Côté DEMANDE : la modulation landuse reste intacte (pas de données empiriques
-  # disponibles pour la consommation à ce niveau de détail).
-  p_ind_offre <- p_ind * (1 - POIDS_PROFIL_EMPLOI_RPHC5)
-  p_urb_offre <- p_urb * (1 - POIDS_PROFIL_EMPLOI_RPHC5)
-  
-  denominateur_o <- 1 + p_ind_offre + p_urb_offre
-  denominateur_d <- 1 + p_ind       + p_urb
-  
-  profil_o_final <- (profil_o_base                    * 1             +
-                       PROFIL_OFFRE_LANDUSE_INDUSTRIEL   * p_ind_offre  +
-                       PROFIL_OFFRE_LANDUSE_URBAIN       * p_urb_offre) / denominateur_o
-  
-  profil_d_final <- (profil_d_base                    * 1     +
-                       PROFIL_DEMANDE_LANDUSE_INDUSTRIEL * p_ind +
-                       PROFIL_DEMANDE_LANDUSE_URBAIN     * p_urb) / denominateur_d
-  
-  # ── Facteur de modulation landuse sur la part échangeable ───────────────────
-  # Une zone entourée d'industries ou de zones urbaines est plus intégrée au
-  # marché interzonal : sa part échangeable est augmentée proportionnellement
-  # à la part de ces usages du sol dans son buffer de 2 km.
-  # p_ind et p_urb ont été calculés dans la section "Composition landuse" ci-dessus.
-  facteur_lu_ech <- 1 +
-    p_ind * (FACTEUR_ECHANGEABLE_LANDUSE_INDUSTRIEL - 1) +
-    p_urb * (FACTEUR_ECHANGEABLE_LANDUSE_URBAIN     - 1)
-  
-  echelle <- echelle_par_secteur * facteur_lu_ech
-
-  # ── Volumes finaux avec tailles composites, échelle sectorielle et landuse ──
-  # echelle_par_secteur est un vecteur (N_SECTEURS) → multiplication élément par élément
-  # avec profil_o_final (N_SECTEURS) : chaque secteur porte son propre volume échangeable.
-  # facteur_lu_ech est un scalaire (propre à la zone i) qui amplifie uniformément
-  # tous les secteurs selon l'environnement landuse de la zone.
-  offre_zones[i,]   <- profil_o_final * taille_offre   * echelle / somme_tailles_offre
-  demande_zones[i,] <- profil_d_final * taille_demande * echelle / somme_tailles_demande
-}
-
-# ── Stockage dans DuckDB en format long ───────────────────────────────────────
-# Format long (1 ligne = 1 zone × 1 secteur) plus adapté aux jointures SQL
+# ── Stockage dans DuckDB des zones domestiques (format long) ─────────────────
+# Format long (1 ligne = 1 zone × 1 secteur) plus adapté aux jointures SQL.
+# Seules les zones domestiques (n_warehouses) sont stockées ici ; les lignes
+# RoW seront ajoutées ci-dessous dans une table séparée (offre_zones_row).
 offre_long_df <- as.data.frame(offre_zones) %>%
   rownames_to_column("zone") %>%
   pivot_longer(-zone, names_to = "secteur", values_to = "offre_musd")
@@ -905,90 +784,122 @@ recap_zones <- duck_query("
   ORDER BY offre_totale_musd DESC
 ")
 
-cat("✓ Offres et demandes par zone stockées dans DuckDB\n\n")
+cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
 
+# ==============================================================================
+# VII.2.C : Couche virtuelle RoW (Rest of World)
+#
+# PRINCIPE :
+#   Les pays frontaliers (Ouganda, Tanzanie, RDC, Burundi) sont représentés comme
+#   n_row = 4 nœuds virtuels ajoutés APRÈS les n_warehouses zones domestiques.
+#   Ils ne snappent pas au réseau routier : leur coût vers toute destination j est
+#   calculé comme le minimum sur les postes frontières b du pays :
+#
+#     C[RoW_pays, j, s] = min_b ( couts_prebordure[pays, s] + C_road[b, j] )
+#
+#   Ce minimum choisit automatiquement le poste frontière optimal pour chaque
+#   destination — permettant par exemple à l'Ouganda d'utiliser Gatuna OU
+#   Kagitumba selon la destination rwandaise.
+#
+#   Offre/demande des nœuds RoW : données de commerce extérieur NISR
+#     offre[RoW_pays, s]   = exports du pays vers le Rwanda   (M USD)
+#     demande[RoW_pays, s] = imports du pays depuis le Rwanda (M USD)
+#
+# AFFECTATION AUX ROUTES :
+#   Après le modèle gravitaire, les flux T[RoW_k, j] sont projetés sur le
+#   nœud frontière b*(j) = argmin_b C_road[b,j] avant l'affectation All-or-Nothing.
+#   Le segment pré-frontière (étranger) n'emprunte aucune route rwandaise.
+# ==============================================================================
+
+# ── Pays RoW et leurs postes frontières ──────────────────────────────────────
+# COMMERCE_EXTERIEUR_NISR définit les pays RoW (ordre canonique).
+# On récupère aussi les coûts pré-frontière depuis DuckDB.
+pays_row <- unique(COMMERCE_EXTERIEUR_NISR$pays)   # vecteur des pays RoW
+n_row    <- length(pays_row)                        # = 4
+
+# Récupérer le pays de chaque poste frontière (depuis entreposages_fictifs).
+# idx_frontiere_par_pays : tibble (idx = position dans noeuds_entreposage, pays)
+# Utilisé plus bas pour calculer C[RoW,j] et pour la projection des flux.
+idx_frontiere_par_pays <- noeuds_entreposage %>%
+  mutate(idx = seq_len(n())) %>%
+  left_join(
+    entreposages_fictifs %>% select(nom, pays),
+    by = c("warehouse_name" = "nom")
+  ) %>%
+  filter(warehouse_type == "frontiere", !is.na(pays)) %>%
+  select(idx, warehouse_name, pays)
+
+cat("  Postes frontières par pays :\n")
+print(idx_frontiere_par_pays %>% select(warehouse_name, pays))
+
+# Coûts pré-frontière depuis DuckDB (pays × secteur → cout_usd_tonne)
+couts_prebordure <- duck_query("SELECT * FROM couts_prebordure")
+
+# ── Extension des matrices offre/demande ──────────────────────────────────────
+# offre_total   : (n_warehouses + n_row) × N_SECTEURS
+# demande_total : (n_warehouses + n_row) × N_SECTEURS
+# Les lignes 1..n_warehouses = zones domestiques (MRIO)
+# Les lignes (n_warehouses+1)..(n_warehouses+n_row) = nœuds RoW (NISR commerce)
+noms_row   <- paste0("RoW_", pays_row)
+n_total    <- n_warehouses + n_row
+
+offre_total <- rbind(
+  offre_zones,
+  matrix(0, n_row, N_SECTEURS, dimnames = list(noms_row, SECTEURS))
+)
+demande_total <- rbind(
+  demande_zones,
+  matrix(0, n_row, N_SECTEURS, dimnames = list(noms_row, SECTEURS))
+)
+
+# Remplir les lignes RoW depuis COMMERCE_EXTERIEUR_NISR
+for (k in seq_along(pays_row)) {
+  pays_k     <- pays_row[k]
+  idx_k      <- n_warehouses + k
+  commerce_k <- COMMERCE_EXTERIEUR_NISR %>% filter(pays == pays_k)
+  for (s in SECTEURS) {
+    row_s <- commerce_k %>% filter(secteur == s)
+    # imports rwandais depuis le pays k = ce que le nœud RoW envoie vers le Rwanda
+    offre_total[idx_k, s]   <- if (nrow(row_s) > 0) row_s$imports_musd else 0
+    # exports rwandais vers le pays k = ce que le nœud RoW attire depuis le Rwanda
+    demande_total[idx_k, s] <- if (nrow(row_s) > 0) row_s$exports_musd else 0
+  }
+}
+
+# Stockage DuckDB des lignes RoW pour les visualisations
+offre_row_df <- as.data.frame(offre_total[(n_warehouses+1):n_total, , drop = FALSE]) %>%
+  rownames_to_column("zone") %>%
+  pivot_longer(-zone, names_to = "secteur", values_to = "offre_musd")
+duck_write(offre_row_df, "offre_zones_row")
+
+demande_row_df <- as.data.frame(demande_total[(n_warehouses+1):n_total, , drop = FALSE]) %>%
+  rownames_to_column("zone") %>%
+  pivot_longer(-zone, names_to = "secteur", values_to = "demande_musd")
+duck_write(demande_row_df, "demande_zones_row")
+
+cat("✓ Couche RoW construite :", n_row, "pays,", n_total, "nœuds au total\n\n")
 
 cat("Paramètres du modèle gravitaire:\n")
-
 for (s in SECTEURS) {
   cat("  β(", s, ") =", BETA_SECTEUR[s], "\n")
 }
 cat("\n")
 
-# ── Reconstruction de la matrice coûts en R carrée ────────────────────────────
+# ── Reconstruction de la matrice de coûts routiers (domestique) ───────────────
 # On passe de la matrice OD format long (DuckDB, 1 ligne = 1 paire OD)
-# au format matriciel carré (R, n_zones × n_zones) pour le calcul gravitaire.
-matrice_couts     <- matrix(0, n_warehouses, n_warehouses,
-                            dimnames = list(noeuds_entreposage$warehouse_name, noeuds_entreposage$warehouse_name))
-
+# au format matriciel carré (R, n_warehouses × n_warehouses) pour le calcul gravitaire.
+# Cette matrice C_ij est étendue à n_total dans la boucle gravitaire ci-dessous.
+matrice_couts <- matrix(0, n_warehouses, n_warehouses,
+                        dimnames = list(noeuds_entreposage$warehouse_name,
+                                        noeuds_entreposage$warehouse_name))
 for (r in seq_len(nrow(od_long))) {
   i <- od_long$id_origine[r]; j <- od_long$id_destination[r]
-  matrice_couts[i, j]     <- od_long$cout_usd[r]
+  matrice_couts[i, j] <- od_long$cout_usd[r]
 }
 
-# --- Préparation de la matrice de coûts ---
 C_ij <- matrice_couts
-diag(C_ij) <- NA          # Pas d'échange intrazone (une zone n'échange pas avec elle-même)
-C_ij[C_ij == 0] <- NA     # Zones non connectées → pas de flux
-
-# ── Récupération des coûts pré-frontière depuis DuckDB ────────────────────────
-couts_prebordure <- duck_query("SELECT * FROM couts_prebordure")
-
-# ── Identification des entrepôts frontière et de leur pays ────────────────────
-# left_join() : fusionne noeuds_entreposage avec entreposages_fictifs pour
-# récupérer le pays associé à chaque entrepôt frontière.
-entrepots_frontiere <- noeuds_entreposage %>%
-  filter(warehouse_type == "frontiere") %>%
-  left_join(
-    entreposages_fictifs %>% select(nom, pays),
-    by = c("warehouse_name" = "nom")
-  )
-
-cat("  Entrepôts frontière avec pays :\n")
-print(entrepots_frontiere %>% select(warehouse_name, pays))
-
-# ── Construction d'une matrice de coûts pré-frontière par secteur ─────────────
-# Dimensions : n_warehouses × n_warehouses × N_SECTEURS
-# C_prebordure[i, j, s] = coût pré-frontière si i est une frontière, 0 sinon
-# Note : le coût pré-frontière s'applique sur l'axe des origines (i)
-# car c'est la marchandise qui arrive de l'étranger vers le Rwanda
-# array() : crée un tableau à 3 dimensions (matrice × secteur).
-C_prebordure <- array(
-  0,
-  dim      = c(n_warehouses, n_warehouses, N_SECTEURS),
-  dimnames = list(
-    noeuds_entreposage$warehouse_name,
-    noeuds_entreposage$warehouse_name,
-    SECTEURS
-  )
-)
-
-for (i in seq_len(n_warehouses)) {
-  nom_zone  <- noeuds_entreposage$warehouse_name[i]
-  type_zone <- noeuds_entreposage$warehouse_type[i]
-  
-  if (type_zone != "frontiere") next  # next : passe directement à l'itération suivante
-  
-  # Récupérer le pays de ce point frontière
-  pays_zone <- entrepots_frontiere$pays[
-    entrepots_frontiere$warehouse_name == nom_zone
-  ]
-  if (length(pays_zone) == 0 || is.na(pays_zone)) next
-  
-  # Récupérer les coûts pré-frontière pour ce pays
-  couts_pays <- couts_prebordure %>%
-    filter(pays == pays_zone)
-  
-  for (s in SECTEURS) {
-    cout_s <- couts_pays$cout_usd_tonne[couts_pays$secteur == s]
-    if (length(cout_s) == 0) next
-    
-    # Affecter à toutes les destinations j depuis ce point frontière i
-    C_prebordure[i, , s] <- cout_s
-  }
-}
-
-cat("✓ Matrice de coûts pré-frontière construite\n\n")
+diag(C_ij) <- NA      # Pas d'échange intrazone
+C_ij[C_ij == 0] <- NA # Zones non connectées → pas de flux
 
 # ==============================================================================
 # VII.3 : Coût fixe de chargement/déchargement par véhicule
@@ -1106,8 +1017,8 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 #   500 M USD — ni plus, ni moins.
 #
 # COMPATIBILITÉ OFFRE / DEMANDE :
-#   offre_zones[i,s] et demande_zones[j,s] sont construits indépendamment
-#   (Partie VII.2) et leur somme totale n'est pas nécessairement égale.
+#   offre_total[i,s] et demande_total[j,s] (domestiques + RoW) sont construits
+#   indépendamment (Parties VII.2 et VII.2.C) ; leur somme n'est pas nécessairement égale.
 #   On normalise les deux cibles sur leur moyenne géométrique :
 #     S^s = sqrt(sum_i O_i^s × sum_j D_j^s)
 #   Cela préserve les distributions relatives tout en rendant les totaux compatibles.
@@ -1297,70 +1208,90 @@ cat("Calcul des flux gravitaires (modèle doublement contraint)...\n\n")
 
 flux_gravitaire <- list()   # Liste des matrices de flux par secteur (M USD)
 
-# Création de la matrice de flux total avec des noms de zones UNIQUES.
-# make.unique() évite les erreurs "must have unique names" dans pivot_longer()
-# si deux zones OSM portent le même nom dans noeuds_entreposage.
+# Création des noms de zones UNIQUES (make.unique évite les doublons OSM).
+# noms_zones_uniques : n_warehouses zones domestiques
+# noms_total         : n_total = n_warehouses + n_row (inclut les nœuds RoW)
 noms_zones_uniques <- make.unique(noeuds_entreposage$warehouse_name, sep = "_")
+noms_total         <- c(noms_zones_uniques, noms_row)
 
-flux_total <- matrix(0, nrow = n_warehouses, ncol = n_warehouses,
-                     dimnames = list(noms_zones_uniques, noms_zones_uniques))
+# flux_total : matrice (n_total × n_total) qui accumule tous les secteurs.
+# Les lignes/colonnes RoW représentent les flux import/export.
+flux_total <- matrix(0, nrow = n_total, ncol = n_total,
+                     dimnames = list(noms_total, noms_total))
 
 for (s in SECTEURS) {
-  
+
   beta_s <- BETA_SECTEUR[s]
-  
-  # ── Construction du coût effectif ij pour ce secteur ─────────────────────────
-  # C_ij_effectif intègre deux composantes :
-  #   C_ij           : coût de transport interne rwandais (matrice OD, Partie VI)
-  #   C_prebordure   : surcoût de transport depuis l'origine étrangère jusqu'à
-  #                    la frontière (non nul uniquement si i est un poste frontière)
-  # Pour une paire purement interne (i et j tous les deux dans le Rwanda),
-  # C_prebordure[i,j,s] = 0 et C_ij_effectif = C_ij.
-  # Pour une importation via la frontière de Gatuna (Ouganda → Rwanda),
-  # C_ij_effectif = C_ij + coût_transport_Kampala_Gatuna pour ce secteur.
-  C_ij_effectif <- C_ij + C_prebordure[, , s]
-  # Conserver les NA : une paire non connectée dans C_ij reste non connectée
-  # même avec un coût pré-frontière (on ne peut pas l'atteindre par le réseau)
-  C_ij_effectif[is.na(C_ij)] <- NA
-  
-  # ── Ajout du coût fixe de manutention à C_ij ─────────────────────────────────
-  # C_ij représente le coût variable du trajet (USD/tonne) : carburant, usure,
-  # temps du chauffeur. Il tend vers 0 quand la distance tend vers 0.
+
+  # ── Construction de la matrice de coûts totale (n_total × n_total) ───────────
+  # Bloc domestique-domestique (n_warehouses × n_warehouses) : coût routier C_ij.
+  # Lignes/colonnes RoW (n_row) : coût = min sur les postes frontières du pays.
   #
-  # On ajoute le coût fixe de manutention pour obtenir le coût généralisé total :
-  #   C_ij_total = C_ij_trajet + C_prebordure + cout_fixe_manutention
-  #
-  # L'addition avec un scalaire (cout_fixe_ref) préserve naturellement les NA :
-  #   NA + 6.7 = NA en R → les zones non connectées restent non connectées.
-  # C'est le comportement souhaité : on n'invente pas de connexion là où le
-  # réseau routier n'en a pas créé.
-  #
-  # Effet plancher automatique :
-  #   Même pour C_ij_trajet → 0 (zones quasi-colocalisées), C_ij_total ≥ cout_fixe_ref.
-  #   Avec cout_fixe_ref ≈ 6.7 USD/tonne, C_ij_total^(-2.5) ≤ 6.7^(-2.5) ≈ 0.009
-  #   → le terme de friction est borné sans aucun artifice numérique.
-  C_ij_total <- C_ij_effectif + cout_fixe_ref
-  # Note : les NA dans C_ij_effectif restent NA dans C_ij_total (addition avec NA = NA)
-  
+  # Pour un nœud RoW_k et une destination domestique j :
+  #   C_total[RoW_k, j, s] = min_b ( couts_prebordure[pays_k, s] + C_road[b, j] )
+  # Le minimum est pris sur tous les postes frontières b du pays k (ex. : Gatuna
+  # ET Kagitumba pour l'Ouganda), ce qui sélectionne le passage optimal.
+  # La matrice est symétrique : exporter coûte autant qu'importer (même route).
+  C_total_s <- matrix(NA_real_, n_total, n_total,
+                      dimnames = list(noms_total, noms_total))
+
+  # Bloc domestique (identique à l'ancien C_ij — pas de coût pré-frontière ici)
+  C_total_s[1:n_warehouses, 1:n_warehouses] <- C_ij
+
+  # Lignes/colonnes RoW : calculées par pays et par secteur
+  cout_pb_s <- couts_prebordure %>% filter(secteur == s)
+
+  for (k in seq_along(pays_row)) {
+    pays_k  <- pays_row[k]
+    idx_k   <- n_warehouses + k             # ligne/colonne RoW_k dans C_total_s
+    idxs_b  <- idx_frontiere_par_pays %>%
+      filter(pays == pays_k) %>%
+      pull(idx)                             # indices des postes frontières du pays k
+
+    if (length(idxs_b) == 0) next           # pays sans frontière connue : coût NA
+
+    cout_pb_ks <- cout_pb_s %>%
+      filter(pays == pays_k) %>%
+      pull(cout_usd_tonne)
+    if (length(cout_pb_ks) == 0) cout_pb_ks <- 0
+
+    # Pour chaque destination domestique j, prendre le min sur les frontières b
+    for (j in seq_len(n_warehouses)) {
+      couts_via_b <- C_ij[idxs_b, j] + cout_pb_ks  # vecteur de longueur |idxs_b|
+      couts_via_b <- couts_via_b[!is.na(couts_via_b)]
+      if (length(couts_via_b) > 0) {
+        C_total_s[idx_k, j] <- min(couts_via_b)
+        C_total_s[j, idx_k] <- C_total_s[idx_k, j]  # symétrique
+      }
+    }
+    # RoW ↔ RoW : non défini (NA) — le transit entre pays via le Rwanda est négligeable
+  }
+
+  # Diagonale NA (pas d'échange intrazone)
+  diag(C_total_s) <- NA
+
+  # ── Ajout du coût fixe de manutention ────────────────────────────────────────
+  # Le coût fixe crée un plancher empêchant l'explosion de C^(-beta) pour les
+  # paires très proches. Il s'additionne naturellement : NA + scalaire = NA.
+  #   C_total_s_final = C_route_ou_RoW + cout_fixe_manutention
+  C_total_s_final <- C_total_s + cout_fixe_ref
+
   # ── Calcul de la friction spatiale ───────────────────────────────────────────
-  friction                  <- C_ij_total^(-beta_s)
+  friction                  <- C_total_s_final^(-beta_s)
   friction[is.na(friction)] <- 0
   diag(friction)            <- 0
-  
-  # ── Appel à Furness ───────────────────────────────────────────────────────────
-  # offre_zones[, s]   : vecteur des offres de chaque zone pour le secteur s
-  #                      (déjà scalé par PART_ECHANGEABLE_SECTEUR[s] × facteur_lu_ech)
-  # demande_zones[, s] : vecteur des demandes de chaque zone pour le secteur s
-  #                      (déjà scalé par PART_ECHANGEABLE_SECTEUR[s] × facteur_lu_ech)
-  # La fonction normalise en interne sur la moyenne géométrique pour assurer
-  # la compatibilité sum(offre) ≈ sum(demande).
+
+  # ── Appel à Furness (doublement contraint) ────────────────────────────────────
+  # offre_total[, s] et demande_total[, s] : vecteurs de taille n_total.
+  # Les n_row dernières entrées sont les flux d'import/export NISR.
+  # La fonction normalise sur la moyenne géométrique pour assurer sum(O) = sum(D).
   flux_gravitaire[[s]] <- furness_gravity(
-    O_s      = offre_zones[, s],
-    D_s      = demande_zones[, s],
+    O_s      = offre_total[, s],
+    D_s      = demande_total[, s],
     friction = friction,
     secteur  = s
   )
-  
+
   # Accumulation dans la matrice de flux toutes-secteurs
   flux_total <- flux_total + flux_gravitaire[[s]]
 }
@@ -1369,14 +1300,15 @@ for (s in SECTEURS) {
 # On contrôle que les flux sortants de chaque zone correspondent bien à son
 # offre sectorielle, et idem pour les flux entrants et la demande.
 # Un écart > 0.1% signale un problème de convergence ou de données.
+# La vérification porte sur les n_total nœuds (domestiques + RoW).
 
 cat("\n── Vérification des contraintes de marges ─────────────────────────────\n")
 
 for (s in SECTEURS) {
-  
+
   T_s      <- flux_gravitaire[[s]]
-  O_s      <- offre_zones[, s]
-  D_s      <- demande_zones[, s]
+  O_s      <- offre_total[, s]
+  D_s      <- demande_total[, s]
   
   # Recalcul des cibles normalisées (même logique que dans furness_gravity)
   # pour comparer avec les marges effectives de la matrice obtenue
@@ -1441,6 +1373,81 @@ print(head(flux_total_long, 10))
 cat("\n")
 cat("✓ Flux total modélisé:", round(sum(flux_total), 1), "M USD\n")
 cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
+
+# ==============================================================================
+# VII.5 : Projection des flux RoW sur le réseau routier rwandais
+#
+# PRINCIPE :
+#   Les nœuds RoW sont virtuels (hors réseau routier). Pour l'affectation
+#   All-or-Nothing (Partie VIII), chaque flux T[RoW_k, j] (ou T[j, RoW_k])
+#   doit être attribué à un chemin physique. On l'injecte au poste frontière
+#   optimal b*(j) = argmin_b C_road[b, j] sur les frontières du pays k.
+#   Seul le segment rwandais b*(j) → j est affecté aux routes.
+#
+#   Remarque : le coût pré-frontière (segment étranger) est déjà intégré dans
+#   le modèle gravitaire (C_total_s) et ne génère aucun trafic sur les routes
+#   rwandaises.
+#
+# RÉSULTAT :
+#   flux_tonnes_total : matrice (n_warehouses × n_warehouses) pour l'affectation.
+#   Les flux RoW sont absorbés dans les lignes/colonnes des postes frontières.
+# ==============================================================================
+
+cat("── Projection des flux RoW sur les postes frontières ──────────────────\n")
+
+# Conversion M USD → tonnes par secteur, matrice n_total × n_total
+flux_tonnes_total_ext <- matrix(
+  0,
+  nrow = n_total, ncol = n_total,
+  dimnames = list(noms_total, noms_total)
+)
+for (s in SECTEURS) {
+  flux_tonnes_total_ext <- flux_tonnes_total_ext +
+    flux_gravitaire[[s]] * TONNES_PAR_musd[s]
+}
+
+# Projection des lignes/colonnes RoW sur les postes frontières correspondants.
+# Pour chaque pays k : b*(j) = argmin sur les frontières du pays de C_road[b, j].
+# Le même passage est utilisé pour les flux entrants (import) et sortants (export).
+# Note : C_ij est sector-independent → argmin b ne dépend pas du secteur.
+# Initialisation depuis le bloc domestique-domestique de la matrice étendue
+flux_tonnes_total <- flux_tonnes_total_ext[1:n_warehouses, 1:n_warehouses]
+
+for (k in seq_along(pays_row)) {
+  pays_k <- pays_row[k]
+  idx_k  <- n_warehouses + k
+  idxs_b <- idx_frontiere_par_pays %>% filter(pays == pays_k) %>% pull(idx)
+
+  if (length(idxs_b) == 0) next
+
+  for (j in seq_len(n_warehouses)) {
+    # Flux RoW_k → j (import)
+    vol_import <- flux_tonnes_total_ext[idx_k, j]
+    if (vol_import > 0) {
+      couts_b <- C_ij[idxs_b, j]
+      b_star  <- idxs_b[which.min(couts_b)]
+      if (!is.na(b_star)) {
+        flux_tonnes_total[b_star, j] <- flux_tonnes_total[b_star, j] + vol_import
+      }
+    }
+
+    # Flux j → RoW_k (export)
+    vol_export <- flux_tonnes_total_ext[j, idx_k]
+    if (vol_export > 0) {
+      couts_b <- C_ij[j, idxs_b]
+      b_star  <- idxs_b[which.min(couts_b)]
+      if (!is.na(b_star)) {
+        flux_tonnes_total[j, b_star] <- flux_tonnes_total[j, b_star] + vol_export
+      }
+    }
+  }
+}
+
+rm(flux_tonnes_total_ext)
+
+tonnage_total <- sum(flux_tonnes_total)
+cat("  Tonnage domestique après projection :",
+    format(round(tonnage_total), big.mark = " "), "tonnes\n\n")
 
 ################################################################################
 # PARTIE VIII — AFFECTATION DU FRET ET RÉSULTATS
@@ -1524,24 +1531,10 @@ invisible(gc(full = TRUE))
 invisible(gc(full = TRUE))
 afficher_ram("après nettoyage")
 
-# ── ÉTAPE 1 : Conversion des flux monétaires en tonnes ────────────────────────
-cat("\nConversion des flux en tonnes...\n")
-
-flux_tonnes_total <- matrix(
-  0,
-  nrow = n_warehouses, ncol = n_warehouses,
-  dimnames = list(noms_zones_uniques, noms_zones_uniques)
-)
-
-for (s in SECTEURS) {
-  flux_tonnes_total <- flux_tonnes_total + flux_gravitaire[[s]] * TONNES_PAR_musd[s]
-}
-
-tonnage_total <- sum(flux_tonnes_total)
-cat("  Tonnage total modélisé:",
-    format(round(tonnage_total), big.mark = " "), "tonnes\n\n")
-
-# ── ÉTAPE 2 : Pré-filtrage des paires OD à traiter ────────────────────────────
+# ── ÉTAPE 1 : Pré-filtrage des paires OD à traiter ───────────────────────────
+# flux_tonnes_total (n_warehouses × n_warehouses) a déjà été construit et projeté
+# en VII.5 (flux RoW injectés sur les postes frontières optimaux).
+# On filtre directement les paires actives à partir de cette matrice.
 # Plutôt que de boucler sur n_warehouses² paires puis de filtrer par seuil,
 # on construit d'abord la liste des paires pertinentes. Ça permet aussi
 # d'avoir une barre de progression exacte et de mieux répartir les gc().
@@ -1563,7 +1556,7 @@ if (!requireNamespace("digest", quietly = TRUE)) {
 
 empreinte_entrees <- digest::digest(
   list(
-    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, PART_ECHANGEABLE_SECTEUR
+    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, DEMANDE_FINALE_NISR, RoW
     seuil             = SEUIL_FLUX_TONNES,
     n_aretes          = n_aretes_physiques,
     n_warehouses      = n_warehouses,
@@ -2181,11 +2174,14 @@ cat("=== Sauvegarde des objets persistants (03_transport) ===\n")
 saveRDS(
   list(
     flux_gravitaire     = flux_gravitaire,
-    flux_total          = flux_total,
-    flux_tonnes_total   = flux_tonnes_total,
-    offre_zones         = offre_zones,
-    demande_zones       = demande_zones,
-    noms_zones_uniques  = noms_zones_uniques,
+    flux_total          = flux_total,          # n_total × n_total (inclut RoW)
+    flux_tonnes_total   = flux_tonnes_total,   # n_warehouses × n_warehouses (projeté)
+    offre_zones         = offre_zones,         # n_warehouses × N_SECTEURS (domestique)
+    demande_zones       = demande_zones,       # n_warehouses × N_SECTEURS (domestique)
+    offre_total         = offre_total,         # n_total × N_SECTEURS (domestique + RoW)
+    demande_total       = demande_total,       # n_total × N_SECTEURS (domestique + RoW)
+    noms_zones_uniques  = noms_zones_uniques,  # noms des n_warehouses zones domestiques
+    noms_total          = noms_total,          # noms des n_total nœuds (incl. RoW)
     flux_par_secteur_df = flux_par_secteur_df,
     recap_zones         = recap_zones,
     date_creation       = Sys.time()
@@ -2198,7 +2194,8 @@ cat("✓ persist_flux_fret.rds\n")
 # pour la sauvegarde du réseau qui suit. Sans ce rm(), ils resteraient en
 # mémoire et doubleraient le pic RAM lors du saveRDS suivant.
 rm(flux_gravitaire, flux_total, flux_tonnes_total,
-   offre_zones, demande_zones, flux_par_secteur_df, recap_zones)
+   offre_zones, demande_zones, offre_total, demande_total,
+   flux_par_secteur_df, recap_zones)
 invisible(gc(full = TRUE))
 invisible(gc(full = TRUE))
 afficher_ram("entre les deux sauvegardes")

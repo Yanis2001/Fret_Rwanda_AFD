@@ -1525,8 +1525,13 @@ cat("✓ Pentes intégrées dans le réseau\n\n")
 # ── Entrepôts manuels  ────────────────────────────────────────────────────────
 # Ces entrepôts ont été positionnés manuellement avec leurs coordonnées GPS
 # (lon = longitude, lat = latitude en degrés décimaux WGS84).
-# "pays" = NULL pour les zones internes au Rwanda, nom du pays pour les frontières
+# "pays" = NA pour les zones internes au Rwanda, nom du pays pour les frontières
 # (utilisé pour associer les coûts pré-frontière dans le modèle gravitaire).
+#
+# Les pays étrangers (RoW) sont représentés comme des nœuds virtuels dans
+# 03_transport.R, connectés à leurs postes-frontières par un arc fictif de coût
+# égal à couts_prebordure. Ils n'apparaissent pas ici car ils ne snappent pas
+# au réseau routier rwandais.
 entreposages_manuels <- tibble(
   nom  = c(
     "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
@@ -1544,7 +1549,7 @@ entreposages_manuels <- tibble(
     "frontiere","ville","ville","ville","ville",
     "sez","ville","ville","ville"
   ),
-  # pays = NULL pour les zones internes, nom du pays pour les frontières
+  # pays = NA pour les zones internes, nom du pays pour les frontières.
   # Utilisé pour associer les coûts pré-frontière en Partie 19
   pays = c(
     NA, NA, NA,
@@ -1554,12 +1559,12 @@ entreposages_manuels <- tibble(
     NA,
     NA, NA, NA
   ),
-  lon = c(30.0619, 30.1300, 30.0588, 30.0890, 
-          30.7850, 29.2600, 30.7500, 29.0200, 
+  lon = c(30.0619, 30.1300, 30.0588, 30.0890,
+          30.7850, 29.2600, 30.7500, 29.0200,
           29.7388, 29.6333, 29.2650, 29.0100,
           30.1500, 29.7400, 29.7550, 30.4300),
-  lat = c(-1.9536, -1.9000, -1.9700, -1.3800, 
-          -2.3800, -1.6667, -1.3100, -2.6200, 
+  lat = c(-1.9536, -1.9000, -1.9700, -1.3800,
+          -2.3800, -1.6667, -1.3100, -2.6200,
           -2.5965, -1.4992, -1.6750, -2.4900,
           -2.1000, -2.0850, -2.3500, -1.8700),
   source = "manuel"
@@ -2496,7 +2501,7 @@ cat("  • entreposages_fictifs (colonne population_zone)\n\n")
 #     - rwanda_boundary        (Partie II.3)
 #     - duck_write()           (Partie I.2)
 #   Alimente :
-#     - Transition IV.5 → V : variable p_rwi dans le calcul de taille_composite
+#     - Transition IV.5 → V : variable p_rwi (pour diagnostics RWI)
 #     - reseau_rwanda (attribut de nœud : rwi_moyen, p_rwi)
 #     - DuckDB (table richesse_entrepots)
 ################################################################################
@@ -2964,58 +2969,44 @@ cat("  • DuckDB         (table richesse_entrepots)\n")
 cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 
 ################################################################################
-# PARTIE IV.6 — EMPLOI SECTORIEL RPHC5 2022 ET PROFILS D'OFFRE EMPIRIQUES
+# PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022
 #
-# OBJECTIF : Produire deux outputs à partir du RPHC5 2022 :
+# OBJECTIF : Construire emploi_zone_secteur_all[i, s] — matrice
+#   nrow(entreposages_sf) × N_SECTEURS d'effectifs absolus par zone et secteur.
+#   Elle alimente le modèle MRIO (03_transport.R) :
+#     x[i,s] = production_totale[s] × (emploi_zone_secteur_all[i,s] / emploi_national[s])
 #
-#   (A) profil_offre_empirique_all[i, s] — matrice nrow(entreposages_sf) × N_SECTEURS
-#       Part du secteur s dans l'offre de la zone i, estimée par la part
-#       de l'emploi du secteur s dans le district contenant la zone i.
-#       Utilisé en VII.2 à la place de PROFILS_OFFRE[[type_zone]].
-#
-#   (B) emploi_total_par_entrepot[i] — vecteur de longueur nrow(entreposages_sf)
-#       Emploi total du district de la zone i.
-#       Utilisé dans la Transition IV.5→V pour calculer taille_composite_offre
-#       (remplace la population côté offre).
-#
-# LOGIQUE ÉCONOMIQUE :
-#   L'offre (ce qu'une zone peut exporter) est mieux captée par sa structure
-#   productive (emploi par secteur) que par un type qualitatif attribué à la main.
-#   Une zone taguée "marché" dans un district à fort emploi industriel devrait
-#   avoir un profil d'offre orienté Industrie, pas le profil générique "marche".
-#
-#   La demande (ce qu'une zone importe) reste liée à la population résidentielle
-#   et au niveau de richesse — justifiant deux tailles composites distinctes.
+#   Hypothèse : toutes les zones ont des données RPHC5 2022 — pas de fallback
+#   qualitatif. Le script s'arrête si le fichier est absent ou si la jointure
+#   GADM échoue.
 #
 # DÉPENDANCES :
 #   - entreposages_sf, entreposages_fictifs (Partie IV.3)
 #   - rwanda_districts_gadm         (Partie IV.4.C — rechargé si absent)
-#   - SECTEURS, N_SECTEURS, PROFILS_OFFRE (Paramètres)
-#   - noeuds_entreposage, n_warehouses    (Partie IV.3)
+#   - SECTEURS, N_SECTEURS, RPHC5_CORRESPONDANCE_SECTEURS (Paramètres)
 # ALIMENTE :
-#   - Transition IV.5→V   : emploi_total_par_entrepot, profil_offre_empirique_all
-#   - DuckDB              : tables "profils_offre_empiriques", "diag_emploi"
+#   - Transition IV.5→V   : emploi_zone_secteur_all
+#   - DuckDB              : table "diag_emploi"
 ################################################################################
 
 cat("==========================================================\n")
 cat("  PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022\n")
 cat("==========================================================\n\n")
 
-# ── Initialisation à des valeurs neutres (repli si RPHC5 indisponible) ────────
-# Si le fichier n'est pas chargé, ces deux objets sont remplis avec
-# les profils qualitatifs et la population — comportement identique à avant.
-profil_offre_empirique_all <- matrix(
-  NA_real_,
+# Matrice d'emploi absolu par zone et par secteur (n_zones × N_SECTEURS).
+emploi_zone_secteur_all <- matrix(
+  0,
   nrow     = nrow(entreposages_sf),
   ncol     = N_SECTEURS,
   dimnames = list(entreposages_fictifs$nom, SECTEURS)
 )
-emploi_total_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
-rphc5_emploi_ok           <- FALSE
 
-if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
-  
-  tryCatch({
+if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
+  stop("Fichier RPHC5 emploi introuvable : ", RPHC5_EMPLOI_CSV_PATH,
+       "\n  → Télécharger sur https://www.statistics.gov.rw/datasource/census-2022")
+}
+
+{
     
     # ── Chargement du CSV d'emploi RPHC5 ──────────────────────────────────────
     rphc5_emploi_raw <- read_csv(RPHC5_EMPLOI_CSV_PATH, show_col_types = FALSE)
@@ -3148,30 +3139,20 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
       cat("  Emploi total (après division) : min =", round(min(emploi_total_par_entrepot)),
           "| max =", round(max(emploi_total_par_entrepot)), "\n\n")
       
-      # ── Construction des profils d'offre empiriques ─────────────────────────
-      # Pour chaque zone i, le profil empirique est la part de l'emploi de
-      # chaque secteur du modèle dans l'emploi total du district.
-      # Il est ensuite fusionné avec le profil qualitatif de base via une
-      # interpolation convexe (POIDS_PROFIL_EMPLOI_RPHC5 détermine le dosage).
-      cat("  Construction des profils d'offre empiriques...\n")
-      
+      # ── Construction de l'emploi sectoriel absolu par zone ──────────────────
+      # emploi_zone_secteur_all[i, s] = effectifs bruts du RPHC5 pour la zone i
+      # et le secteur s, ventilés via RPHC5_CORRESPONDANCE_SECTEURS.
+      # Entrée directe du modèle MRIO : x[i,s] ∝ emploi_zone_secteur_all[i,s].
+      cat("  Construction de l'emploi sectoriel par zone...\n")
+
       for (i in seq_len(nrow(entreposages_sf))) {
-        
-        emploi_total_i <- emploi_total_par_entrepot[i]
-        if (is.na(emploi_total_i) || emploi_total_i == 0) next
-        
-        # Initialisation du vecteur d'emploi par secteur du modèle
+
         emploi_secteur_i <- numeric(N_SECTEURS)
         names(emploi_secteur_i) <- SECTEURS
-        
-        # Distribution de chaque colonne CSV vers les secteurs du modèle
-        # selon RPHC5_CORRESPONDANCE_SECTEURS
-        for (col_csv in intersect(cols_attendues,
-                                  names(entrepots_join_emploi))) {
+
+        for (col_csv in intersect(cols_attendues, names(entrepots_join_emploi))) {
           val_col <- as.numeric(entrepots_join_emploi[[col_csv]][i])
           if (is.na(val_col) || val_col == 0) next
-          
-          # Récupération des secteurs cibles et de leurs parts
           corresp <- RPHC5_CORRESPONDANCE_SECTEURS[[col_csv]]
           for (secteur_m in names(corresp)) {
             if (secteur_m %in% SECTEURS) {
@@ -3180,290 +3161,70 @@ if (file.exists(RPHC5_EMPLOI_CSV_PATH)) {
             }
           }
         }
-        
-        # Normalisation : les parts doivent sommer à 1 (profil de probabilité)
-        somme_emploi_i <- sum(emploi_secteur_i)
-        if (somme_emploi_i == 0) next
-        profil_empirique_brut <- emploi_secteur_i / somme_emploi_i
-        
-        # Fusion avec le profil qualitatif de base (interpolation convexe) :
-        #   profil_final = α × profil_empirique_RPHC5 + (1-α) × profil_qualitatif
-        # Cette fusion évite les profils dégénérés pour les zones dont le
-        # district a peu d'emplois formels recensés (ex : zones frontalières).
-        type_zone_i   <- entreposages_fictifs$type[i]
-        profil_base_i <- PROFILS_OFFRE[[type_zone_i]]
-        
-        profil_fusionne <- POIDS_PROFIL_EMPLOI_RPHC5 * profil_empirique_brut +
-          (1 - POIDS_PROFIL_EMPLOI_RPHC5) * profil_base_i
-        
-        # Renormalisation de sécurité (somme peut légèrement dériver de 1
-        # à cause de la virgule flottante)
-        profil_offre_empirique_all[i, ] <- profil_fusionne / sum(profil_fusionne)
+
+        emploi_zone_secteur_all[i, ] <- emploi_secteur_i
       }
-      
-      rphc5_emploi_ok <- TRUE
-      
+
+      # Vérification : aucune zone ne doit avoir un emploi total nul.
+      zones_nulles <- which(rowSums(emploi_zone_secteur_all) == 0)
+      if (length(zones_nulles) > 0) {
+        warning(length(zones_nulles), " zone(s) avec emploi nul après RPHC5 : ",
+                paste(entreposages_fictifs$nom[zones_nulles], collapse = ", "),
+                "\n  → Vérifier la jointure GADM ou le fichier ", RPHC5_EMPLOI_CSV_PATH)
+      }
+
     } else {
-      cat("  ⚠ GADM indisponible — profils qualitatifs conservés\n\n")
+      stop("GADM indisponible — impossible de construire emploi_zone_secteur_all.")
     }
-    
-  }, error = function(e) {
-    cat("  ⚠ Chargement RPHC5 emploi échoué :", conditionMessage(e), "\n")
-    cat("    → profils qualitatifs PROFILS_OFFRE conservés\n\n")
-  })
-  
-} else {
-  cat("  Fichier RPHC5 emploi non trouvé :", RPHC5_EMPLOI_CSV_PATH, "\n")
-  cat("  → Télécharger sur https://www.statistics.gov.rw/datasource/census-2022\n")
-  cat("  → Partie IV.4.F ignorée — profils qualitatifs conservés\n\n")
 }
 
-# ── Imputation des zones sans profil empirique (NA restants) ──────────────────
-# Garantit que profil_offre_empirique_all ne contient jamais de NA en VII.2.
-# Les zones non couvertes par le RPHC5 reçoivent leur profil qualitatif de base.
-for (i in seq_len(nrow(entreposages_sf))) {
-  if (any(is.na(profil_offre_empirique_all[i, ]))) {
-    type_zone_i <- entreposages_fictifs$type[i]
-    profil_offre_empirique_all[i, ] <- PROFILS_OFFRE[[type_zone_i]]
-  }
-}
+# Emploi total par zone : somme des secteurs (utile pour diagnostics)
+emploi_total_par_entrepot <- rowSums(emploi_zone_secteur_all)
 
 # ── Tableau de diagnostic et stockage dans DuckDB ─────────────────────────────
 diag_emploi <- tibble(
-  nom_zone      = entreposages_fictifs$nom,
-  type_zone     = entreposages_fictifs$type,
-  emploi_total  = emploi_total_par_entrepot,
-  source_emploi = if_else(rphc5_emploi_ok &
-                            !is.na(emploi_total_par_entrepot),
-                          "RPHC5_2022", "NA_non_disponible")
-)
-
-cat("Répartition des sources d'emploi :\n")
-print(diag_emploi %>%
-        count(source_emploi) %>%
-        mutate(pct = round(n / sum(n) * 100, 1)))
-
-duck_write(
-  as.data.frame(profil_offre_empirique_all) %>%
-    rownames_to_column("nom_zone") %>%
-    mutate(source = if_else(rphc5_emploi_ok, "RPHC5_empirique", "qualitatif")),
-  "profils_offre_empiriques"
+  nom_zone     = entreposages_fictifs$nom,
+  type_zone    = entreposages_fictifs$type,
+  emploi_total = emploi_total_par_entrepot
 )
 duck_write(diag_emploi, "diag_emploi")
 
-cat("✓ Partie IV.4.F terminée — deux outputs disponibles :\n")
-cat("  • profil_offre_empirique_all  [", nrow(entreposages_sf), "×", N_SECTEURS, "]\n")
-cat("  • emploi_total_par_entrepot   [", nrow(entreposages_sf), "]\n\n")
+cat("✓ Partie IV.4.F terminée\n")
+cat("  • emploi_zone_secteur_all [", nrow(entreposages_sf), "×", N_SECTEURS, "]\n\n")
 
 ################################################################################
-# TRANSITION IV.5 → V — CALCUL DES TAILLES COMPOSITES OFFRE ET DEMANDE
+# TRANSITION IV.5 → V — EXTRACTION DE POP_I ET EMPLOI_ZONE_SECTEUR
 #
-# ── TAILLE COMPOSITE OFFRE (taille_composite_offre) ───────────────────────────
-#   Capte la CAPACITÉ PRODUCTIVE d'une zone.
-#   Basée sur l'emploi total du district (RPHC5 2022) si disponible,
-#   sinon repli sur la population (comportement identique à l'ancienne version).
-#
-#   FORMULE :
-#     taille_brute_offre_i = log10(emploi_i + 1)^ALPHA_LOG_EMPLOI
-#                            × (1 + K_RWI_OFFRE × p_rwi_i)
-#     taille_composite_offre_i = taille_brute_offre_i / ref_kigali_offre
-#
-# ── TAILLE COMPOSITE DEMANDE (taille_composite_demande) ───────────────────────
-#   Capte la CAPACITÉ DE CONSOMMATION d'une zone.
-#   Basée sur la population résidentielle et le RWI — INCHANGÉ.
-#
-#   FORMULE (identique à l'ancienne taille_composite) :
-#     taille_brute_demande_i = log10(pop_i + 1)^ALPHA_LOG_POP
-#                              × (1 + K_RWI_TAILLE × p_rwi_i)
-#     taille_composite_demande_i = taille_brute_demande_i / ref_kigali_demande
-#
-# DÉPENDANCES :
-#   - diag_population            (IV.4.D) → pop_i côté demande
-#   - emploi_total_par_entrepot  (IV.4.F) → emploi_i côté offre
-#   - profil_offre_empirique_all (IV.4.F) → profils d'offre empiriques
-#   - diag_rwi                   (IV.5)   → p_rwi_i
+# Dans le modèle MRIO :
+#   - pop_i   : population par zone, pour la demande finale (d_finale ∝ pop_i)
+#   - emploi_zone_secteur : effectifs par zone × secteur, pour la production
+#     (x[i,s] = production_totale[s] × emploi_zone_secteur[i,s] / emploi_national[s])
 ################################################################################
 
-cat("── Calcul des tailles composites offre et demande (RPHC5) ─────────────\n\n")
-
-# ── Récupération de la population (côté demande) ──────────────────────────────
-# Identique à l'ancienne version : on extrait pop_i depuis diag_population
-# en faisant correspondre les noms de zones à noeuds_entreposage.
+# ── Population par zone active (noeuds_entreposage) ───────────────────────────
 pop_i <- diag_population$population_zone[
   match(noeuds_entreposage$warehouse_name, diag_population$nom_zone)
 ]
 pop_i <- replace_na(pop_i, median(pop_i, na.rm = TRUE))
 
-# ── Correction du double comptage pour les entrepôts sur le même nœud ─────────
-# [CONSERVER LE BLOC EXISTANT TEL QUEL — il corrige uniquement pop_i]
-# Le bloc de correction (if (nrow(doublons_noeuds) > 0) { ... }) reste ici.
-# Il n'a pas d'équivalent côté emploi (données districtuelles, pas raster).
+stopifnot(length(pop_i) == n_warehouses)
 
-# ── Récupération de l'emploi (côté offre) ─────────────────────────────────────
-# On extrait emploi_total_par_entrepot (construit en IV.4.F, indexé sur
-# entreposages_fictifs$nom) pour noeuds_entreposage, via le même match()
-# que pour pop_i — assurant un alignement parfait des deux vecteurs.
-if (rphc5_emploi_ok && !all(is.na(emploi_total_par_entrepot))) {
-  
-  emploi_i <- emploi_total_par_entrepot[
-    match(noeuds_entreposage$warehouse_name, entreposages_fictifs$nom)
-  ]
-  emploi_i <- replace_na(emploi_i, median(emploi_i, na.rm = TRUE))
-  emploi_i <- pmax(emploi_i, 1)   # Évite log10(0+1) = 0 qui annulerait la taille
-  
-  cat("  Source taille offre   : emploi RPHC5 2022\n")
-  cat("  Emploi : min =", round(min(emploi_i)),
-      "| max =", round(max(emploi_i)), "\n")
-  
-} else {
-  # Repli sur la population si RPHC5 emploi indisponible :
-  # taille_composite_offre ≈ taille_composite_demande (comportement avant RPHC5)
-  emploi_i <- pop_i
-  cat("  Source taille offre   : population (emploi RPHC5 non disponible)\n")
-}
-
-cat("  Source taille demande : population + RWI (inchangé)\n\n")
-
-# ── Récupération du score de richesse p_rwi_i ─────────────────────────────────
-# Utilisé des deux côtés (offre et demande) mais avec des coefficients différents :
-#   K_RWI_OFFRE  (0.5) < K_RWI_TAILLE (1.0) : la richesse amplifie davantage
-#   la consommation que la capacité productive.
-p_rwi_i <- diag_rwi$p_rwi[
-  match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
-]
-p_rwi_i <- replace_na(p_rwi_i, median(p_rwi_i, na.rm = TRUE))
-
-stopifnot(
-  length(pop_i)    == n_warehouses,
-  length(emploi_i) == n_warehouses,
-  length(p_rwi_i)  == n_warehouses
-)
-
-# ── Plafonnement de l'emploi pour les zones industrielles ─────────────────────
-# Même logique que CAP_POP_INDUSTRIE côté demande : les zones industrielles
-# dans Kigali héritent d'un emploi de district artificiellement élevé.
-types_warehouse      <- noeuds_entreposage$warehouse_type
-n_capees_emploi      <- sum(types_warehouse == "industrie" &
-                              emploi_i > CAP_EMPLOI_INDUSTRIE, na.rm = TRUE)
-if (n_capees_emploi > 0) {
-  cat("  Plafonnement emploi pour", n_capees_emploi,
-      "zones industrielles (cap =", CAP_EMPLOI_INDUSTRIE, ")\n")
-  emploi_i <- ifelse(
-    types_warehouse == "industrie" & emploi_i > CAP_EMPLOI_INDUSTRIE,
-    CAP_EMPLOI_INDUSTRIE, emploi_i
-  )
-}
-
-# ── Plafonnement de la population (côté demande — inchangé) ───────────────────
-n_capees <- sum(types_warehouse == "industrie" &
-                  pop_i > CAP_POP_INDUSTRIE, na.rm = TRUE)
-if (n_capees > 0) {
-  cat("  Plafonnement population pour", n_capees,
-      "zones industrielles (cap =", CAP_POP_INDUSTRIE, "hab.)\n")
-  pop_i <- ifelse(
-    types_warehouse == "industrie" & pop_i > CAP_POP_INDUSTRIE,
-    CAP_POP_INDUSTRIE, pop_i
-  )
-}
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAILLE COMPOSITE OFFRE (basée sur l'emploi RPHC5)
-# ══════════════════════════════════════════════════════════════════════════════
-
-# log10(emploi + 1) comprime les ordres de grandeur inter-districts.
-# L'exposant ALPHA_LOG_EMPLOI étire l'échelle log (même raisonnement qu'ALPHA_LOG_POP).
-# (1 + K_RWI_OFFRE × p_rwi) : amplificateur de richesse, plus faible côté offre
-# (les zones riches ne produisent pas proportionnellement plus, contrairement
-#  à leur consommation).
-taille_brute_offre <- log10(emploi_i + 1)^ALPHA_LOG_EMPLOI *
-  (1 + K_RWI_OFFRE * p_rwi_i)
-
-# ── Normalisation par le maximum de l'échantillon ─────────────────────────────
-ref_offre              <- max(taille_brute_offre, na.rm = TRUE)
-idx_ref_offre          <- which.max(taille_brute_offre)
-nom_ref_offre          <- noeuds_entreposage$warehouse_name[idx_ref_offre]
-taille_composite_offre <- taille_brute_offre / ref_offre
-
-cat("\n  Référence offre   (max) : '", nom_ref_offre,
-    "' (idx =", idx_ref_offre, ") — masse brute emploi =",
-    round(ref_offre, 3), "\n")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAILLE COMPOSITE DEMANDE (basée sur la population — formule inchangée)
-# ══════════════════════════════════════════════════════════════════════════════
-
-#   log10(pop + 1)^ALPHA_LOG_POP × (1 + K_RWI_TAILLE × p_rwi)
-taille_brute_demande <- log10(pop_i + 1)^ALPHA_LOG_POP *
-  (1 + K_RWI_TAILLE * p_rwi_i)
-
-# ── Normalisation par le maximum de l'échantillon ─────────────────────────────
-ref_demande              <- max(taille_brute_demande, na.rm = TRUE)
-idx_ref_demande          <- which.max(taille_brute_demande)
-nom_ref_demande          <- noeuds_entreposage$warehouse_name[idx_ref_demande]
-taille_composite_demande <- taille_brute_demande / ref_demande
-
-cat("  Référence demande (max) : '", nom_ref_demande,
-    "' (idx =", idx_ref_demande, ") — masse brute pop =",
-    round(ref_demande, 3), "\n\n")
-
-# ── Taille composite unifiée (rétrocompatibilité Parties VIII et IX) ──────────
-
-# ── Sommes de normalisation (une par côté) ────────────────────────────────────
-# Ces sommes sont utilisées dans VII.2 pour normer les volumes d'offre/demande.
-somme_tailles_offre   <- sum(taille_composite_offre)
-somme_tailles_demande <- sum(taille_composite_demande)
-
-# ── Extraction des profils d'offre empiriques pour noeuds_entreposage ─────────
-# profil_offre_empirique_all a nrow(entreposages_sf) lignes (toutes les zones).
-# On extrait ici la sous-matrice correspondant à noeuds_entreposage (zones actives
-# après déduplication), en garantissant l'alignement via les noms de zones.
-profil_offre_empirique <- profil_offre_empirique_all[
-  match(noeuds_entreposage$warehouse_name, rownames(profil_offre_empirique_all)),
+# ── Emploi sectoriel absolu pour noeuds_entreposage ───────────────────────────
+# Extraction de la sous-matrice des zones actives (après déduplication).
+# emploi_zone_secteur (n_warehouses × N_SECTEURS) est l'entrée directe du MRIO.
+emploi_zone_secteur <- emploi_zone_secteur_all[
+  match(noeuds_entreposage$warehouse_name, rownames(emploi_zone_secteur_all)),
   , drop = FALSE
 ]
-# profil_offre_empirique est maintenant n_warehouses × N_SECTEURS,
-# prêt à être utilisé directement dans la boucle de VII.2.
 
-# ── Mise à jour de entreposages_fictifs et DuckDB ─────────────────────────────
-taille_lookup <- tibble(
-  nom                      = noeuds_entreposage$warehouse_name,
-  taille_composite_offre   = taille_composite_offre,
-  taille_composite_demande = taille_composite_demande
-) %>% distinct(nom, .keep_all = TRUE)
+stopifnot(nrow(emploi_zone_secteur) == n_warehouses)
 
-entreposages_fictifs <- entreposages_fictifs %>%
-  select(-any_of(c("taille_composite_offre",
-                   "taille_composite_demande"))) %>%
-  left_join(taille_lookup, by = "nom")
-
-# ── Diagnostic et exclusion des zones sans taille composite ───────────────────
-# Un NA après le left_join signifie que la zone n'a pas de correspondant dans
-# noeuds_entreposage (zone dupliquée éliminée, zone hors réseau, etc.).
-# On les signale explicitement puis on les exclut
-zones_na_taille <- entreposages_fictifs %>%
-  filter(is.na(taille_composite_offre)) %>%
-  pull(nom)
-
-if (length(zones_na_taille) > 0) {
-  warning(length(zones_na_taille),
-          " zone(s) exclues faute de taille_composite_offre : ",
-          paste(zones_na_taille, collapse = ", "))
-  entreposages_fictifs <- entreposages_fictifs %>%
-    filter(!is.na(taille_composite_offre))
-}
-duck_write(
-  taille_lookup %>%
-    left_join(entreposages_fictifs %>% select(nom, type, pays), by = "nom"),
-  "tailles_composites"
-)
-
-cat("✓ Tailles composites calculées pour", n_warehouses, "zones\n")
-cat("  Offre   (emploi RPHC5) : min / max =",
-    round(min(taille_composite_offre),   3), "/",
-    round(max(taille_composite_offre),   3), "\n")
-cat("  Demande (population)   : min / max =",
-    round(min(taille_composite_demande), 3), "/",
-    round(max(taille_composite_demande), 3), "\n\n")
+cat("✓ pop_i et emploi_zone_secteur extraits pour", n_warehouses, "zones\n")
+cat("  Emploi total   : min =",
+    round(min(rowSums(emploi_zone_secteur))),
+    "| max =", round(max(rowSums(emploi_zone_secteur))), "\n")
+cat("  Population     : min =",
+    round(min(pop_i)), "| max =", round(max(pop_i)), "\n\n")
 
 # ── Indices des nœuds-entrepôts dans le graphe igraph ─────────────────────────
 # warehouse_nodes_base est un vecteur d'entiers : chaque valeur est la position
@@ -3524,15 +3285,13 @@ saveRDS(
     noeuds_entreposage            = noeuds_entreposage,
     n_warehouses                  = n_warehouses,
     warehouse_nodes_base          = warehouse_nodes_base,
-    nom_ref_offre                 = nom_ref_offre,   
-    nom_ref_demande               = nom_ref_demande,  
-    # Tailles composites
-    taille_composite_offre        = taille_composite_offre,
-    taille_composite_demande      = taille_composite_demande,
-    somme_tailles_offre           = somme_tailles_offre,
-    somme_tailles_demande         = somme_tailles_demande,
-    profil_offre_empirique        = profil_offre_empirique,
-    profil_offre_empirique_all    = profil_offre_empirique_all,
+    # Emploi sectoriel absolu pour le modèle MRIO
+    # emploi_zone_secteur[i,s] : effectifs bruts zone i × secteur s (n_warehouses × N_SECTEURS)
+    # emploi_zone_secteur_all  : même matrice sur l'ensemble entreposages_sf (avant dédup.)
+    # pop_i : population par zone (vecteur n_warehouses), pour la demande finale MRIO
+    emploi_zone_secteur           = emploi_zone_secteur,
+    emploi_zone_secteur_all       = emploi_zone_secteur_all,
+    pop_i                         = pop_i,
     # Données démographiques
     diag_population               = diag_population,
     diag_rwi                      = diag_rwi,

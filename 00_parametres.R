@@ -390,6 +390,23 @@ DEMANDE_FINALE_NISR <- c(
 # domestique rwandaise 2022 (PIB ~11 Md + importations nettes ~2 Md).
 stopifnot(all(names(DEMANDE_FINALE_NISR) %in% SECTEURS))
 
+# ── Pondération composite emploi × RWI dans le modèle MRIO ───────────────────
+#
+# ALPHA_EMPLOI_RWI : part de l'emploi dans le poids de production d'une zone.
+#   w[i,s] = ALPHA_EMPLOI_RWI × (emp[i,s] / emp_national[s])
+#           + (1 - ALPHA_EMPLOI_RWI) × (p_rwi[i] / Σ p_rwi)
+#   α = 1 → pur emploi (comportement original)
+#   α = 0 → pur RWI
+#   Valeur recommandée : 0.7 (l'emploi reste le driver principal ; le RWI
+#   corrige la productivité, mais ne varie pas par secteur).
+ALPHA_EMPLOI_RWI <- 0.7
+
+# EPSILON_RWI : décalage minimal appliqué à p_rwi avant le produit
+#   z[i] = pop[i] × (p_rwi[i] + EPSILON_RWI)
+#   Évite qu'une zone avec p_rwi ≈ 0 reçoive un poids nul en demande finale
+#   même si elle est densément peuplée. 0.05 = 5% du range [0,1].
+EPSILON_RWI <- 0.05
+
 # Paramètres de friction par secteur (beta du modèle gravitaire)
 # Beta élevé = très sensible au coût de transport (produits lourds/périssables)
 # Beta faible = peu sensible (haute valeur ajoutée, services quasi-immatériels)
