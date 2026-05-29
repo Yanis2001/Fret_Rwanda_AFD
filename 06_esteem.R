@@ -115,7 +115,7 @@ rm(.vuln, .fret, .ent)
 #
 # On calcule ici la production d'équilibre de Leontief : x* = (I-A)^{-1} y_f
 L           <- solve(diag(N_SECTEURS) - A)   # Inverse de Leontief
-x_equilibre <- as.vector(L %*% demande_finale)
+x_equilibre <- as.vector(L %*% DEMANDE_FINALE_NISR[SECTEURS])
 names(x_equilibre) <- SECTEURS
 
 cat("✓ Objets chargés — production d'équilibre calculée\n\n")
@@ -389,7 +389,7 @@ cat("  Secteur le plus affecté (coûts)   :", SECTEURS[which.max(delta_cout)],
 
 cat("── Section IV : Conditions initiales ──────────────────────────────────\n\n")
 
-y0    <- demande_finale                      # Demande finale de référence [M USD/an]
+y0    <- DEMANDE_FINALE_NISR[SECTEURS]       # Demande finale de référence [M USD/an]
 names(y0) <- SECTEURS
 
 v0    <- v_d_calibre                         # Inventaires initiaux = cibles

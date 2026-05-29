@@ -9,7 +9,7 @@
 #   → de nouvelles zones d'entrepôt ont été ajoutées / modifiées
 #   → les données WorldPop, NISR ou RPHC5 ont été mises à jour
 #   → les paramètres BUFFER_DEMO_M, BUFFER_RWI_M ou BUFFER_ENTREPOT_M ont changé
-#   → les paramètres K_RWI_TAILLE, K_RWI_OFFRE ou POIDS_PROFIL_EMPLOI_RPHC5 ont changé
+#   → les données RPHC5 d'emploi ont été mises à jour (emploi_zone_secteur_all)
 #
 # RELANCER 02_couts.R avant ce script si :
 #   → les paramètres de flotte (params_flotte, vitesses_flotte, facteurs_pente)

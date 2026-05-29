@@ -11,8 +11,7 @@
 #   → DEMANDE_FINALE_NISR ou COMMERCE_EXTERIEUR_NISR ont changé
 #   → SEUIL_FLUX_TONNES a changé (filtre affectation)
 #   → de nouvelles zones d'entrepôt ont été ajoutées ou retirées
-#   → PROFILS_OFFRE a été modifié (profil de fallback RPHC5)
-#   → POIDS_PROFIL_EMPLOI_RPHC5 ou K_RWI_OFFRE ont changé
+#   → les données RPHC5 d'emploi ont été mises à jour (emploi_zone_secteur_all)
 #
 # RELANCER uniquement 03_transport.R (sans 01 ni 02) si :
 #   → seuls les paramètres gravitaires (BETA, PART_*) ont changé
@@ -685,11 +684,10 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 # GRAPHIQUE 2 : Offre vs Demande par zone
 # ============================================================
 
-# ── Noms courts des zones de référence (mêmes règles de troncature que Zone_court) ──
-# str_trunc(28) est la troncature utilisée dans recap_zones → Zone_court.
-# On aligne les noms pour pouvoir les identifier sur l'axe Y du graphique.
-ref_offre_court   <- str_trunc(nom_ref_offre,   28)
-ref_demande_court <- str_trunc(nom_ref_demande, 28)
+# ── Zones au sommet d'offre / demande (pour mise en évidence sur le graphique) ──
+# str_trunc(28) est la troncature utilisée dans Zone_court ci-dessous.
+ref_offre_court   <- str_trunc(recap_zones$zone[which.max(recap_zones$offre_totale_musd)],   28)
+ref_demande_court <- str_trunc(recap_zones$zone[which.max(recap_zones$demande_totale_musd)], 28)
 
 g2 <- recap_zones %>%
   pivot_longer(
@@ -707,7 +705,7 @@ g2 <- recap_zones %>%
              y = Valeur,
              fill = Type_flux)) +
   geom_col(position = "dodge", width = 0.7) +
-  # Contour bleu sur la barre de la zone de référence offre (cohérent avec fill offre = bleu)
+  # Contour bleu sur la zone à la plus forte offre (cohérent avec fill offre = bleu)
   geom_col(
     data = ~ filter(., Zone_court == ref_offre_court, Type_flux == "offre"),
     aes(x = reorder(Zone_court, Valeur), y = Valeur),
@@ -715,7 +713,7 @@ g2 <- recap_zones %>%
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
   ) +
-  # Contour rouge sur la barre de la zone de référence demande (cohérent avec fill demande = rouge)
+  # Contour rouge sur la zone à la plus forte demande (cohérent avec fill demande = rouge)
   geom_col(
     data = ~ filter(., Zone_court == ref_demande_court, Type_flux == "demande"),
     aes(x = reorder(Zone_court, Valeur), y = Valeur),
@@ -728,9 +726,9 @@ g2 <- recap_zones %>%
   labs(
     title    = "Offre et Demande par zone économique",
     subtitle = paste0(
-      "Modèle gravitaire - Rwanda (données fictives réalistes)\n",
-      "Contour bleu = référence offre ('", nom_ref_offre, "') | ",
-      "Contour rouge = référence demande ('", nom_ref_demande, "')"
+      "Modèle gravitaire — Rwanda\n",
+      "Contour bleu = max offre ('", ref_offre_court, "') | ",
+      "Contour rouge = max demande ('", ref_demande_court, "')"
     ),
     x    = NULL,
     y    = "Valeur (millions USD)",
