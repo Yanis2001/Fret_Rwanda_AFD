@@ -676,6 +676,9 @@ demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
 #     PNAS) ; EPSILON_RWI évite qu'une zone très pauvre mais peuplée reçoive
 #     un poids nul.
 #
+#   Demande totale
+#     d[i,s] = d_finale[i,s] + d_inter[i,s]
+#
 #   Surplus exportable et besoin importé :
 #     offre_zones[i,s]   = max(0,  x[i,s] − d[i,s])
 #     demande_zones[i,s] = max(0,  d[i,s] − x[i,s])
@@ -685,7 +688,7 @@ demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
 #   Σ_i d[i,s] ≈ production_totale[s]  (identité ressources-emplois Leontief)
 #   → Σ_i offre[i,s] ≈ Σ_i demande[i,s] ; les résidus = commerce avec le RoW.
 #   La normalisation par moyenne géométrique dans furness_gravity() absorbe
-#   ces résidus résiduels d'économie ouverte.
+#   ces résidus d'économie ouverte.
 # ==============================================================================
 
 # Emploi national par secteur = somme sur toutes les zones actives.
