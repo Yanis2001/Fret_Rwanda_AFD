@@ -1000,24 +1000,11 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 # ==============================================================================
 # VII.4 : Modèle gravitaire DOUBLEMENT CONTRAINT (Wilson 1967 / Furness 1965)
 #
-# CHANGEMENT PAR RAPPORT AU MODÈLE PRÉCÉDENT :
-#   Avant : T_ij^s = K^s × O_i^s × D_j^s × C_ij^(-beta_s)
-#           → K^s est un scalaire global. Rien ne garantit que
-#             sum_j T_ij^s = O_i^s (les flux sortants peuvent être
-#             très différents de l'offre de la zone i).
-#
-#   Maintenant : T_ij^s = A_i^s × B_j^s × O_i^s × D_j^s × C_ij^(-beta_s)
+#       T_ij^s = A_i^s × B_j^s × O_i^s × D_j^s × C_ij^(-beta_s)
 #           → A_i^s et B_j^s sont des facteurs SPÉCIFIQUES à chaque zone,
 #             calculés pour satisfaire EXACTEMENT les deux contraintes :
 #               sum_j T_ij^s = O_i^s  (flux sortants = offre de i)
 #               sum_i T_ij^s = D_j^s  (flux entrants = demande de j)
-#
-# INTUITION ÉCONOMIQUE :
-#   Dans le modèle non contraint, une ville très bien connectée à un grand hub
-#   peut "aspirer" plus de flux qu'elle ne peut réellement absorber (D_j^s).
-#   Le doublement contraint corrige cela : si Kigali peut absorber 500 M USD
-#   de commerce, la somme de tous les flux arrivant à Kigali vaudra exactement
-#   500 M USD — ni plus, ni moins.
 #
 # COMPATIBILITÉ OFFRE / DEMANDE :
 #   offre_total[i,s] et demande_total[j,s] (domestiques + RoW) sont construits
@@ -1051,15 +1038,15 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 #   La convergence est garantie si friction > 0 partout (Sinkhorn & Knopp 1967).
 #
 # Paramètres :
-#   O_s      — vecteur n_warehouses des offres sectorielles (déjà scalées par
-#              PART_ECHANGEABLE_SECTEUR via echelle_par_secteur dans VII.2, donc en M USD)
-#   D_s      — vecteur n_warehouses des demandes sectorielles (même convention)
-#   friction — matrice n×n des termes C_ij^(-beta). Doit avoir des NA là où
-#              les zones ne sont pas connectées (diag inclus).
+#   O_s      — vecteur n_total des offres sectorielles en tonnes
+#              (= offre_total[, s] × TONNES_PAR_musd[s])
+#   D_s      — vecteur n_total des demandes sectorielles en tonnes (même convention)
+#   friction — matrice n×n des termes (C_ij × TONNES_PAR_musd[s])^(-beta). Doit
+#              avoir des NA là où les zones ne sont pas connectées (diag inclus).
 #   secteur  — chaîne de caractères pour les messages de log uniquement
 #
 # Retourne :
-#   Une matrice n×n de flux en M USD, dont les marges (sommes de lignes et
+#   Une matrice n×n de flux en tonnes, dont les marges (sommes de lignes et
 #   de colonnes) correspondent aux offres et demandes cibles dans la limite
 #   de la tolérance FURNESS_TOL.
 
@@ -1209,7 +1196,7 @@ furness_gravity <- function(O_s,
 
 cat("Calcul des flux gravitaires (modèle doublement contraint)...\n\n")
 
-flux_gravitaire <- list()   # Liste des matrices de flux par secteur (M USD)
+flux_gravitaire <- list()   # Liste des matrices de flux par secteur (tonnes)
 
 # Création des noms de zones UNIQUES (make.unique évite les doublons OSM).
 # noms_zones_uniques : n_warehouses zones domestiques
@@ -1291,12 +1278,14 @@ for (s in SECTEURS) {
   diag(friction)            <- 0
 
   # ── Appel à Furness (doublement contraint) ────────────────────────────────────
-  # offre_total[, s] et demande_total[, s] : vecteurs de taille n_total.
-  # Les n_row dernières entrées sont les flux d'import/export NISR.
+  # offre_total[, s] et demande_total[, s] sont en M USD ; on les convertit en
+  # tonnes via TONNES_PAR_musd[s] pour que les marges cibles soient en tonnes.
+  # La matrice résultante flux_gravitaire[[s]] est directement en tonnes.
+  # Les n_row dernières entrées sont les flux d'import/export NISR (convertis).
   # La fonction normalise sur la moyenne géométrique pour assurer sum(O) = sum(D).
   flux_gravitaire[[s]] <- furness_gravity(
-    O_s      = offre_total[, s],
-    D_s      = demande_total[, s],
+    O_s      = offre_total[, s]  * TONNES_PAR_musd[s],
+    D_s      = demande_total[, s] * TONNES_PAR_musd[s],
     friction = friction,
     secteur  = s
   )
@@ -1316,8 +1305,8 @@ cat("\n── Vérification des contraintes de marges ────────�
 for (s in SECTEURS) {
 
   T_s      <- flux_gravitaire[[s]]
-  O_s      <- offre_total[, s]
-  D_s      <- demande_total[, s]
+  O_s      <- offre_total[, s]  * TONNES_PAR_musd[s]
+  D_s      <- demande_total[, s] * TONNES_PAR_musd[s]
   
   # Recalcul des cibles normalisées (même logique que dans furness_gravity)
   # pour comparer avec les marges effectives de la matrice obtenue
@@ -1352,12 +1341,12 @@ for (s in SECTEURS) {
 
 # ── Résultats globaux ─────────────────────────────────────────────────────────
 flux_par_secteur_df <- tibble(
-  Secteur         = SECTEURS,
-  Beta            = unname(BETA_SECTEUR),
-  Flux_total_musd = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 1)),
-  Flux_moyen_musd = sapply(SECTEURS, function(s) {
+  Secteur           = SECTEURS,
+  Beta              = unname(BETA_SECTEUR),
+  Flux_total_tonnes = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 0)),
+  Flux_moyen_tonnes = sapply(SECTEURS, function(s) {
     f <- flux_gravitaire[[s]]
-    round(mean(f[f > 0]), 3)
+    round(mean(f[f > 0]), 1)
   })
 )
 
@@ -1373,14 +1362,14 @@ flux_total_long <- flux_total %>%
   as.data.frame() %>%
   setNames(make.unique(colnames(.), sep = "_")) %>%
   rownames_to_column("Origine") %>%
-  pivot_longer(-Origine, names_to = "Destination", values_to = "flux_musd") %>%
-  filter(flux_musd > 0.01) %>%
-  arrange(desc(flux_musd))
+  pivot_longer(-Origine, names_to = "Destination", values_to = "flux_tonnes") %>%
+  filter(flux_tonnes > 1) %>%
+  arrange(desc(flux_tonnes))
 
-cat("\nTop 10 des flux commerciaux bilatéraux (M USD):\n")
+cat("\nTop 10 des flux commerciaux bilatéraux (tonnes):\n")
 print(head(flux_total_long, 10))
 cat("\n")
-cat("✓ Flux total modélisé:", round(sum(flux_total), 1), "M USD\n")
+cat("✓ Flux total modélisé:", format(round(sum(flux_total)), big.mark = " "), "tonnes\n")
 cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 # ==============================================================================
@@ -1404,15 +1393,15 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 cat("── Projection des flux RoW sur les postes frontières ──────────────────\n")
 
-# Conversion M USD → tonnes par secteur, matrice n_total × n_total
+# flux_gravitaire[[s]] est déjà en tonnes (O_s et D_s ont été convertis avant
+# Furness) : on somme directement les secteurs sans conversion supplémentaire.
 flux_tonnes_total_ext <- matrix(
   0,
   nrow = n_total, ncol = n_total,
   dimnames = list(noms_total, noms_total)
 )
 for (s in SECTEURS) {
-  flux_tonnes_total_ext <- flux_tonnes_total_ext +
-    flux_gravitaire[[s]] * TONNES_PAR_musd[s]
+  flux_tonnes_total_ext <- flux_tonnes_total_ext + flux_gravitaire[[s]]
 }
 
 # Projection des lignes/colonnes RoW sur les postes frontières correspondants.
@@ -1460,9 +1449,8 @@ cat("  Tonnage domestique après projection :",
 
 ################################################################################
 # PARTIE VIII — AFFECTATION DU FRET ET RÉSULTATS
-# Convertit les flux monétaires (M USD) en tonnes, affecte chaque flux OD
-# au chemin optimal du graphe multi-modal (All-or-Nothing), puis produit
-# l'ensemble des visualisations et exports finaux.
+# Affecte chaque flux OD (déjà en tonnes) au chemin optimal du graphe
+# multi-modal (All-or-Nothing), puis produit les visualisations et exports.
 ################################################################################
 
 # ==============================================================================
@@ -1818,9 +1806,8 @@ if (!cache_affectation_valide) {
         idx_s <- match(s, SECTEURS)
         
         # Volume en tonnes pour ce secteur entre i et j
-        # flux_gravitaire[[s]] : matrice n_zones × n_zones des flux en M USD
-        # TONNES_PAR_musd[s]   : facteur de conversion M USD → tonnes pour ce secteur
-        flux_ij_s <- flux_gravitaire[[s]][i, j] * TONNES_PAR_musd[s]
+        # flux_gravitaire[[s]] est directement en tonnes (converti avant Furness)
+        flux_ij_s <- flux_gravitaire[[s]][i, j]
         
         # Si le flux sectoriel est négligeable, on passe au secteur suivant
         # pour ne pas alourdir inutilement les calculs
@@ -2122,7 +2109,7 @@ cat("✓ Transition VIII.1 → VIII.2 terminée\n\n")
 
 # ==============================================================================
 # VIII.3 : Exports finaux
-# Exporte toutes les matrices (flux M USD, flux tonnes, offre/demande, IO)
+# Exporte toutes les matrices (flux tonnes, offre/demande en M USD, IO)
 # en CSV et le réseau complet avec volumes fret en GeoPackage.
 # ==============================================================================
 
@@ -2135,7 +2122,7 @@ write.csv(recap_io,
           file.path(DIR_EXPORTS,"table_io_recap.csv"),
           row.names = FALSE)
 write.csv(as.data.frame(flux_total) %>% rownames_to_column("Zone"),
-          file.path(DIR_EXPORTS,"matrice_flux_gravitaire_musd.csv"),
+          file.path(DIR_EXPORTS,"matrice_flux_gravitaire_tonnes.csv"),
           row.names = FALSE)
 write.csv(as.data.frame(flux_tonnes_total) %>% rownames_to_column("Zone"),
           file.path(DIR_EXPORTS,"matrice_flux_fret_tonnes.csv"),

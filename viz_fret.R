@@ -652,11 +652,12 @@ cat("✓ Carte répartition modale sauvegardée\n")
 cat("Génération des graphiques statistiques...\n")
 
 g1 <- flux_par_secteur_df %>%
-  ggplot(aes(x = reorder(Secteur, Flux_total_musd),
-             y = Flux_total_musd,
+  ggplot(aes(x = reorder(Secteur, Flux_total_tonnes),
+             y = Flux_total_tonnes / 1000,
              fill = Secteur)) +
   geom_col(show.legend = FALSE, width = 0.75) +
-  geom_text(aes(label = paste0(Flux_total_musd, " M$")),
+  geom_text(aes(label = paste0(format(round(Flux_total_tonnes / 1000, 0),
+                                      big.mark = " "), " kt")),
             hjust = -0.1, size = 3.5, color = "#333333") +
   coord_flip(clip = "off") +
   scale_fill_manual(values = PALETTE_SECTEURS) +
@@ -665,7 +666,7 @@ g1 <- flux_par_secteur_df %>%
     title    = "Flux commerciaux interzonaux par secteur",
     subtitle = "Modèle gravitaire - Rwanda (données fictives réalistes)",
     x        = NULL,
-    y        = "Flux total inter-zones (millions USD)"
+    y        = "Flux total inter-zones (milliers de tonnes)"
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -742,9 +743,85 @@ g2 <- recap_zones %>%
     panel.grid.major.y = element_blank()
   )
 
-ggsave(file.path(DIR_CARTES,"graphique_offre_demande.png"),
+ggsave(file.path(DIR_CARTES, "graphique_offre_demande_musd.png"),
        g2, width = 13, height = 8, dpi = 300)
-cat("✓ Graphique offre/demande sauvegardé\n")
+cat("✓ Graphique offre/demande (M USD) sauvegardé\n")
+
+
+# ── Version en tonnes ─────────────────────────────────────────────────────────
+# Les tables offre_zones et demande_zones dans DuckDB sont en M USD par secteur.
+# On les convertit en tonnes via io_table.tonnes_par_musd (facteur sectoriel),
+# puis on somme sur les secteurs pour obtenir le tonnage total par zone.
+recap_zones_tonnes <- duck_query("
+  SELECT
+    o.zone,
+    ROUND(SUM(o.offre_musd   * t.tonnes_par_musd), 0) AS offre_totale_tonnes,
+    ROUND(SUM(d.demande_musd * t.tonnes_par_musd), 0) AS demande_totale_tonnes
+  FROM offre_zones  o
+  JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
+  JOIN io_table     t ON o.secteur = t.secteur
+  GROUP BY o.zone
+  ORDER BY offre_totale_tonnes DESC
+")
+
+ref_offre_t_court   <- str_trunc(recap_zones_tonnes$zone[which.max(recap_zones_tonnes$offre_totale_tonnes)],   28)
+ref_demande_t_court <- str_trunc(recap_zones_tonnes$zone[which.max(recap_zones_tonnes$demande_totale_tonnes)], 28)
+
+g2_tonnes <- recap_zones_tonnes %>%
+  pivot_longer(
+    cols      = c(offre_totale_tonnes, demande_totale_tonnes),
+    names_to  = "Type_flux",
+    values_to = "Valeur"
+  ) %>%
+  mutate(
+    Zone_court = str_trunc(zone, 28),
+    Type_flux  = recode(Type_flux,
+                        "offre_totale_tonnes"   = "offre",
+                        "demande_totale_tonnes" = "demande")
+  ) %>%
+  ggplot(aes(x = reorder(Zone_court, Valeur),
+             y = Valeur / 1000,
+             fill = Type_flux)) +
+  geom_col(position = "dodge", width = 0.7) +
+  geom_col(
+    data = ~ filter(., Zone_court == ref_offre_t_court, Type_flux == "offre"),
+    aes(x = reorder(Zone_court, Valeur), y = Valeur / 1000),
+    fill = NA, color = "#1976D2", linewidth = 1.3,
+    position = "dodge", width = 0.7,
+    inherit.aes = FALSE
+  ) +
+  geom_col(
+    data = ~ filter(., Zone_court == ref_demande_t_court, Type_flux == "demande"),
+    aes(x = reorder(Zone_court, Valeur), y = Valeur / 1000),
+    fill = NA, color = "#D32F2F", linewidth = 1.3,
+    position = "dodge", width = 0.7,
+    inherit.aes = FALSE
+  ) +
+  coord_flip() +
+  scale_fill_manual(values = c("offre" = "#1976D2", "demande" = "#D32F2F")) +
+  scale_y_continuous(labels = scales::label_number(suffix = " kt", big.mark = " ")) +
+  labs(
+    title    = "Offre et Demande par zone économique (tonnes)",
+    subtitle = paste0(
+      "Modèle gravitaire — Rwanda\n",
+      "Contour bleu = max offre ('", ref_offre_t_court, "') | ",
+      "Contour rouge = max demande ('", ref_demande_t_court, "')"
+    ),
+    x    = NULL,
+    y    = "Valeur (milliers de tonnes)",
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    plot.subtitle      = element_text(color = "#666666", size = 9),
+    legend.position    = "top",
+    panel.grid.major.y = element_blank()
+  )
+
+ggsave(file.path(DIR_CARTES, "graphique_offre_demande_tonnes.png"),
+       g2_tonnes, width = 13, height = 8, dpi = 300)
+cat("✓ Graphique offre/demande (tonnes) sauvegardé\n")
 
 
 # ============================================================
@@ -782,11 +859,11 @@ g3 <- ggplot(flux_heatmap,
     low      = "#FFF7EC",
     high     = "#7F0000",
     na.value = "#F5F5F5",
-    name     = "log₁₀\n(M USD)"
+    name     = "log₁₀\n(tonnes)"
   ) +
   labs(
     title    = "Matrice des flux commerciaux interzonaux",
-    subtitle = "Modèle gravitaire - Rwanda (log₁₀ M USD)",
+    subtitle = "Modèle gravitaire - Rwanda (log₁₀ tonnes)",
     x        = "Destination",
     y        = "Origine"
   ) +
@@ -855,7 +932,7 @@ cat("Génération du diagramme de Sankey...\n")
 # directement aux lignes de noeuds_entreposage (construit en IV.3).
 
 sankey_raw <- map_dfr(SECTEURS, function(s) {
-  mat_s <- flux_gravitaire[[s]] * TONNES_PAR_musd[s]
+  mat_s <- flux_gravitaire[[s]]   
   # which() avec arr.ind = TRUE retourne une matrice à 2 colonnes :
   # colonne 1 = indice de ligne (origine), colonne 2 = indice de colonne (destination)
   idx <- which(mat_s > 0 & row(mat_s) != col(mat_s), arr.ind = TRUE)
