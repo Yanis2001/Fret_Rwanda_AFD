@@ -1751,8 +1751,14 @@ reseau_rwanda <- reseau_rwanda %>%
 #   • noeuds_entreposage                     : n_warehouses nœuds du graphe (après dédup.)
 # N ≥ n_warehouses car plusieurs zones peuvent tomber sur le même nœud routier.
 # Les valeurs exactes sont affichées par les cat() ci-dessous à chaque run.
-# Les enrichissements (population, RWI) portent sur les N zones.
+# Les enrichissements (population, RWI, emploi) portent sur les N zones.
 # Les calculs sur le graphe (Dijkstra, OD, modèle gravitaire) portent sur les n_warehouses nœuds.
+#
+# LIMITE : lors du passage de N à n_warehouses, la zone "perdante" de chaque
+# paire dupliquée est supprimée par distinct() (ligne ~1713) sans que ses
+# données d'enrichissement soient sommées dans la zone conservée. L'emploi et
+# la population de ces zones sont donc calculés mais silencieusement abandonnés,
+# ce qui sous-estime le poids économique des nœuds concernés.
 noeuds_entreposage <- reseau_rwanda %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
