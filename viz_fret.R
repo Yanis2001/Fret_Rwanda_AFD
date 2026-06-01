@@ -759,7 +759,12 @@ noms_courts_raw <- noeuds_entreposage$warehouse_name %>%
 
 noms_courts <- make.unique(noms_courts_raw, sep = "_")  # Kigali, Kigali_1, Kigali_2
 
-flux_heatmap <- flux_total %>%
+# flux_total inclut les nœuds RoW (lignes/colonnes au-delà de n_warehouses).
+# On extrait uniquement le bloc domestique × domestique pour la heatmap.
+n_dom <- length(noms_courts)
+flux_dom <- flux_total[seq_len(n_dom), seq_len(n_dom), drop = FALSE]
+
+flux_heatmap <- flux_dom %>%
   as.data.frame() %>%
   setNames(noms_courts) %>%
   mutate(Origine = noms_courts) %>%
