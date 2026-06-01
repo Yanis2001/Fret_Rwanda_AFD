@@ -334,6 +334,11 @@ SEUIL_LONGUEUR_ARETE_M <- 0.5
 # trop petit → manque les zones périurbaines ; trop grand → chevauche les zones.
 BUFFER_DEMO_M <- 5000
 
+# Population minimale attribuée à une zone quand aucune des trois sources
+# (WorldPop, OSM, NISR) ne fournit de valeur. Évite les zones à population = 0
+# qui bloqueraient le modèle gravitaire (offre/demande nulle).
+POP_FALLBACK_MIN <- 1000
+
 # ── Zoom du raster WorldPop pour l'approche B ─────────────────────────────────
 # Résolution disponible sur le portail WorldPop :
 #   z=10 → ~100m/pixel (précis, fichier lourd ~200 Mo)

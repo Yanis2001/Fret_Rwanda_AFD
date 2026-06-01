@@ -1833,8 +1833,7 @@ if (any(!doublons_noeuds$meme_type)) {
 # OBJECTIF : Associer à chaque zone d'entrepôt un indicateur de population
 #            afin d'améliorer le calibrage du modèle gravitaire (Partie VII).
 #            Un hub desservant 800 000 habitants génère plus de demande
-#            qu'une petite ville de 20 000 habitants, indépendamment de son
-#            type de zone (hub, marché, SEZ…).
+#            qu'une petite ville de 20 000 habitants.
 #
 # TROIS APPROCHES SONT PROPOSÉES :
 #   A — Tags OSM du fichier PBF (rapide, intégré, mais couverture partielle)
@@ -2302,10 +2301,10 @@ if (file.exists(NISR_CSV_PATH)) {
 # On assemble maintenant les trois vecteurs de population (A, B, C)
 # en une seule colonne "population_zone" par entrepôt selon la hiérarchie :
 #
-#   Priorité 1 : WorldPop (B)        — disponible et non-NA  → utiliser
-#   Priorité 2 : OSM (A)             — si B absent ou NA     → utiliser
-#   Priorité 3 : NISR officiel (C)   — si A absent ou NA     → utiliser
-#   Priorité 0 : Population minimale — si tout est NA        → 1 000 hab (évite les divisions par zéro)
+#   Priorité 1 : WorldPop (B)        — disponible et non-NA      → utiliser
+#   Priorité 2 : OSM (A)             — si B absent ou NA         → utiliser
+#   Priorité 3 : NISR officiel (C)   — si A et B absents ou NA   → utiliser
+#   Priorité 0 : Population minimale — si tout est NA            → 1 000 hab (évite les divisions par zéro)
 #
 # La population finale est intégrée :
 #   - dans reseau_rwanda (attribut de nœud sfnetworks)
@@ -2329,7 +2328,7 @@ population_zone_finale <- coalesce(
   replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
   replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
   replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR
-  rep(1000, nrow(entreposages_sf))                  # Fallback : 1 000 hab. minimum
+  rep(POP_FALLBACK_MIN, nrow(entreposages_sf))      # Fallback : défini dans 00_parametres.R
 ) %>%
   round()   # Les populations sont des entiers
 
@@ -2340,7 +2339,7 @@ source_utilisee <- case_when(
   !is.na(pop_worldpop_par_entrepot) ~ "WorldPop_2020",
   !is.na(pop_osm_par_entrepot)      ~ "OSM",
   !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
-  TRUE                              ~ "Fallback_1000"
+  TRUE                              ~ paste0("Fallback_", POP_FALLBACK_MIN)
 )
 
 # Vérification de cohérence avant construction du tableau.
