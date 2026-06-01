@@ -286,7 +286,6 @@ cat("\n✓ Arêtes perturbées identifiées :", n_perturb, "\n")
 
 # Objet sf des arêtes perturbées — utilisé dans :
 #   - viz_vulnerabilite.R (cartes A, B, C, D : surlignage des routes coupées)
-#   - viz_ario.R (carte choroplèthe des pertes ARIO)
 # On le construit ici une seule fois et on le sauvegarde dans PERSIST_VULNERAB
 aretes_perturbees_sf <- aretes_reseau_sf %>%
   filter(arete_idx %in% indices_aretes_perturbees)
@@ -739,10 +738,7 @@ cat("\n")
 #   - surcoût de x%         → x/100 (élasticité-prix implicite = 1)
 #   - inchangé ou NA        → 0.0
 #
-# Cette matrice n_warehouses × n_warehouses est sauvegardée dans PERSIST_VULNERAB
-# pour être chargée directement par 05_ario.R, qui l'utilise pour calculer les
-# chocs de capacité (Delta_P) et d'inventaire. On évite ainsi une duplication de
-# la logique de conversion et une dépendance de 05_ario.R sur od_compare.
+# Cette matrice n_warehouses × n_warehouses est sauvegardée dans PERSIST_VULNERAB.
 od_lookup_perdu <- od_compare %>%
   select(id_origine, id_destination, type_impact, surcout_relatif_pct) %>%
   mutate(
@@ -1044,4 +1040,4 @@ rm(list = intersect(objets_a_liberer, ls()))
 invisible(gc(verbose = FALSE))
 invisible(gc(verbose = FALSE))
 
-cat("Lancer 05_ario.R pour la suite.\n")
+cat("Lancer un script viz_*.R pour la suite.\n")

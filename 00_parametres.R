@@ -750,79 +750,6 @@ PROP_ROUTES_INONDEES_RASTER <- 0.7
 SEED_INONDATION <- 42
 
 
-# ==============================================================================
-# Paramètres du modèle ARIO-inventory
-# ==============================================================================
-
-# ── Paramètres de surproduction ───────────────────────────────────────────────
-# α_base : surproduction initiale à l'équilibre (1.0 = pas de surproduction).
-# α_max  : plafond de surproduction. Hallegatte 2014 utilise 1.25 (+25%).
-# τ_α    : temps caractéristique d'ajustement de α (en jours).
-#   1 an = 365 jours dans Hallegatte 2014. C'est lent volontairement : la mise
-#   en place de capacités supplémentaires (heures sup, recrutement, imports)
-#   prend du temps dans la réalité.
-ARIO_ALPHA_BASE  <- 1.00
-ARIO_ALPHA_MAX   <- 1.25
-ARIO_TAU_ALPHA   <- 365
-
-# ── Niveaux d'inventaire cibles (en jours de consommation) ────────────────────
-# Hallegatte 2014 : 90 jours pour les biens stockables.
-# Pour les biens non-stockables (transport notamment), max 3 jours (sinon
-# instabilités numériques avec δt = 1 jour).
-# La Construction est traitée comme "quasi-infinie" (365 jours) car le
-# rationnement de ce secteur n'affecte pas immédiatement la production
-# des autres secteurs.
-ARIO_INV_DUREE_JOURS <- c(
-  Agriculture    = 30,    # Périssables : stocks limités (céréales, etc.)
-  Mines          = 90,    # Minerais : stockables longtemps
-  Agro_industrie = 60,    # Produits transformés : stocks intermédiaires
-  Industrie      = 90,    # Pièces, matériaux : stocks classiques
-  Construction   = 365,   # ≈ infini (rationnement sans impact immédiat)
-  Commerce       = 60,    # Biens de consommation : rotation moyenne
-  Transport      = 3,     # Service non stockable
-  Services       = 30     # Stocks de fournitures uniquement
-)
-
-# τ_s : temps caractéristique de restauration des inventaires (en jours).
-# C'est la vitesse à laquelle les industries passent leurs commandes pour
-# combler le déficit d'inventaire.
-ARIO_TAU_S <- c(
-  Agriculture    = 30,
-  Mines          = 30,
-  Agro_industrie = 30,
-  Industrie      = 30,
-  Construction   = 30,
-  Commerce       = 30,
-  Transport      = 1,     # Non-stockable
-  Services       = 30
-)
-
-# ── Paramètre d'hétérogénéité ψ ───────────────────────────────────────────────
-# ψ ∈ [0, 1] : sensibilité de la production aux ruptures d'inventaire.
-#   ψ = 0   : biens parfaitement substituables au sein d'un secteur
-#             → la production tient tant que le stock total > 0
-#   ψ = 0.8 : valeur recommandée par Hallegatte 2014 (cas central)
-#             → une baisse de stock de 20% commence à pénaliser la production
-#   ψ = 1.0 : biens totalement spécialisés (production très fragile)
-# Plus ψ est élevé, plus les pertes indirectes sont importantes.
-# C'est le paramètre le plus sensible du modèle (cf. analyses Hallegatte).
-ARIO_PSI <- 0.80
-
-# ── Horizon de simulation et pas de temps ─────────────────────────────────────
-# La perturbation dure DUREE_JOURS (paramètre Partie IX). On simule au-delà
-# pour observer la phase de rétablissement (surproduction, reconstitution
-# des stocks). Horizon par défaut : 2 × DUREE_JOURS, plafonné à 365 jours.
-# Modifier ARIO_HORIZON_JOURS ci-dessous pour personnaliser.
-ARIO_HORIZON_JOURS <- min(2 * DUREE_JOURS, 365)
-ARIO_DT            <- 1   # Pas de temps en jours (Hallegatte 2014)
-
-# ── Récupération exponentielle du choc de capacité Δ ──────────────────────────
-# Une fois la perturbation passée (t > DUREE_JOURS), Δ_P décroît
-# exponentiellement vers 0 avec un temps caractéristique τ_recup :
-#   Δ_P(t) = Δ_P(t_0) × exp(-(t - DUREE_JOURS) / τ_recup)
-# τ_recup = DUREE_JOURS/2 → récupération rapide une fois les routes rouvertes.
-ARIO_TAU_RECUP <- DUREE_JOURS / 2
-
 cat("✓ Paramètres globaux chargés\n\n")
 
 # ==============================================================================
@@ -1282,7 +1209,6 @@ PERSIST_MAPPING_MM   <- file.path(DIR_PERSIST, "persist_mapping_mm.rds")
 PERSIST_FLUX_FRET    <- file.path(DIR_PERSIST, "persist_flux_fret.rds")
 PERSIST_RESEAU_FRET  <- file.path(DIR_PERSIST, "persist_reseau_fret.rds")
 PERSIST_VULNERAB     <- file.path(DIR_PERSIST, "persist_vulnerabilite.rds")
-PERSIST_ARIO         <- file.path(DIR_PERSIST, "persist_ario.rds")
 PERSIST_DIAG_RES     <- file.path(DIR_PERSIST, "persist_diag_reseau.rds")
 
 cat("✓ 00_parametres.R chargé\n")

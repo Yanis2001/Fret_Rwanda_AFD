@@ -3265,7 +3265,7 @@ saveRDS(
     diag_emploi                   = if (exists("diag_emploi")) diag_emploi else NULL,
     rwi_ok                        = rwi_ok,
     rwi_sf                        = if (rwi_ok) rwi_sf else NULL,
-    zone_to_prov_placeholder      = NULL   # rempli dans 05_ario
+    zone_to_prov_placeholder      = NULL
   ),
   PERSIST_ENTREPOSAGES
 )
