@@ -456,8 +456,9 @@ ALPHA_EMPLOI_RWI <- 0.7
 EPSILON_RWI <- 0.05
 
 # Paramètres de friction par secteur (beta du modèle gravitaire)
-# Beta élevé = très sensible au coût de transport (produits lourds/périssables)
-# Beta faible = peu sensible (haute valeur ajoutée, services quasi-immatériels)
+#   Beta élevé = commerce très sensible au coût du transport rapporté à la valeur du bien
+#               (biens lourds à faible valeur unitaire : agriculture, construction)
+#   Beta faible = peu sensible (biens à haute valeur ajoutée, services)
 BETA_SECTEUR <- c(
   Agriculture    = 2.2,
   Mines          = 1.2,

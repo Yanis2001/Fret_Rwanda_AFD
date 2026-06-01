@@ -1280,7 +1280,13 @@ for (s in SECTEURS) {
   C_total_s_final <- C_total_s + cout_fixe_ref
 
   # ── Calcul de la friction spatiale ───────────────────────────────────────────
-  friction                  <- C_total_s_final^(-beta_s)
+  # On multiplie C_total_s_final (USD/tonne) par TONNES_PAR_musd[s] (tonnes/MUSD)
+  # pour obtenir un coût adimensionné : USD dépensés en transport par MUSD de biens.
+  # Ce rapport (coût de transport / valeur des biens) est la friction du modèle
+  # iceberg. Beta mesure alors l'élasticité du commerce à ce coût RELATIF,
+  # ce qui rend son interprétation cohérente entre secteurs et calibrable sur
+  # des données empiriques.
+  friction                  <- (C_total_s_final * TONNES_PAR_musd[s])^(-beta_s)
   friction[is.na(friction)] <- 0
   diag(friction)            <- 0
 
