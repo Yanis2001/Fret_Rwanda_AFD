@@ -42,13 +42,13 @@ if (nchar(token) > 0) {
 
 # Recalcul forcé de tous les caches (réseau, pentes, OD, affectation).
 # Remettre à FALSE après un reset pour bénéficier des caches (~3-5h gagnées).
-RESET_CACHES     <- TRUE  # ← passer à TRUE pour tout recalculer depuis zéro
+RESET_CACHES     <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
 
 RUN_PARAMETRES   <- TRUE   # 00 — toujours TRUE si on part de zéro
-RUN_RESEAU       <- TRUE   # 01 — long (~30 min, pentes + Worldpop)
-RUN_COUTS        <- TRUE   # 02 — moyen (~5 min)
-RUN_TRANSPORT    <- TRUE   # 03 — long (~1h, Dijkstra + gravitaire)
-RUN_VULNERAB     <- TRUE   # 04 — long (~2h, criticité)
+RUN_RESEAU       <- TRUE  # 01 — persist OK (14:23) — skip
+RUN_COUTS        <- TRUE  # 02 — persist OK (14:24) — skip
+RUN_TRANSPORT    <- TRUE   # 03 — crashé à 14:31 — reprise via od_checkpoint
+RUN_VULNERAB     <- TRUE   # 04 — pas encore tourné
 
 RUN_VIZ_RESEAU   <- TRUE   # viz — cartes réseau / coûts / pentes
 RUN_VIZ_FRET     <- TRUE   # viz — cartes fret / Sankey
