@@ -40,6 +40,10 @@ if (nchar(token) > 0) {
 # on peut les désactiver sans bloquer le reste.
 # ==============================================================================
 
+# Recalcul forcé de tous les caches (réseau, pentes, OD, affectation).
+# Remettre à FALSE après un reset pour bénéficier des caches (~3-5h gagnées).
+RESET_CACHES     <- TRUE  # ← passer à TRUE pour tout recalculer depuis zéro
+
 RUN_PARAMETRES   <- TRUE   # 00 — toujours TRUE si on part de zéro
 RUN_RESEAU       <- TRUE   # 01 — long (~30 min, pentes + Worldpop)
 RUN_COUTS        <- TRUE   # 02 — moyen (~5 min)
@@ -96,6 +100,36 @@ executer_module <- function(nom, fichier, actif) {
 }
 
 executer_module("00_parametres",   "00_parametres.R",   RUN_PARAMETRES)
+
+# ==============================================================================
+# RESET DES CACHES 
+# ==============================================================================
+
+if (!exists("RESET_CACHES")) RESET_CACHES <- FALSE
+
+if (RESET_CACHES) {
+  .dir_cache <- if (exists("DIR_CACHE")) DIR_CACHE else file.path("outputs", "cache")
+  .caches <- c(
+    file.path(.dir_cache, "reseau_corrige_cache.rds"),
+    file.path(.dir_cache, "pentes_cache.rds"),
+    file.path(.dir_cache, "landuse_cache.rds"),
+    file.path(.dir_cache, "od_cache.rds"),
+    file.path(.dir_cache, "affectation_cache.rds")
+  )
+  cat("=== RESET COMPLET DES CACHES ===\n")
+  for (.f in .caches) {
+    if (file.exists(.f)) {
+      file.remove(.f)
+      cat("  ✓ Supprimé :", basename(.f), "\n")
+    } else {
+      cat("  — Absent  :", basename(.f), "\n")
+    }
+  }
+  rm(.dir_cache, .caches, .f)
+  cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
+  cat("  Temps de recalcul estimé : 3-5h selon la machine\n\n")
+}
+
 executer_module("01_reseau",       "01_reseau.R",       RUN_RESEAU)
 executer_module("02_couts",        "02_couts.R",        RUN_COUTS)
 executer_module("03_transport",    "03_transport.R",    RUN_TRANSPORT)

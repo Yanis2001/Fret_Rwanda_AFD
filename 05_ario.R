@@ -351,9 +351,10 @@ cat("  Production initiale totale:",
 
 
 # ── Agrégation des flux gravitaires zone × zone → province × province ─────────
-# Pour chaque secteur s, flux_gravitaire[[s]] est une matrice n × n des flux
-# annuels en M USD entre paires de zones. On les agrège au niveau provincial
-# via la formule : flux_prov = M %*% flux %*% t(M).
+# Pour chaque secteur s, flux_gravitaire[[s]] est une matrice n_total × n_total
+# (zones domestiques + nœuds RoW). On ne conserve que les flux entre zones
+# domestiques (les n_warehouses premières lignes/colonnes) avant l'agrégation
+# provinciale via flux_prov = M %*% flux_dom %*% t(M).
 # Cette opération conserve les flux INTRA-PROVINCIAUX (zones de la même
 # province échangent entre elles) sur la diagonale.
 
@@ -362,8 +363,12 @@ names(flux_prov_par_secteur) <- SECTEURS
 
 for (s in seq_len(N_SECTEURS)) {
   nom_s <- SECTEURS[s]
+  # Extraire le bloc domestique : flux_gravitaire est n_total×n_total (inclut RoW),
+  # M_agg est n_provinces×n_warehouses → les dimensions ne sont compatibles que
+  # sur les n_warehouses premières lignes/colonnes (zones domestiques).
+  flux_dom <- flux_gravitaire[[nom_s]][seq_len(n_warehouses), seq_len(n_warehouses)]
   flux_prov_par_secteur[[nom_s]] <- as.matrix(
-    M_agg %*% flux_gravitaire[[nom_s]] %*% t(M_agg)
+    M_agg %*% flux_dom %*% t(M_agg)
   )
   dimnames(flux_prov_par_secteur[[nom_s]]) <- list(noms_provinces, noms_provinces)
 }

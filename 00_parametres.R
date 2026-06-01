@@ -329,12 +329,7 @@ RWI_DISTANCE_MIN_M <- 50
 # Paramètres RPHC5 — Emploi sectoriel (profils d'offre empiriques)
 # ==============================================================================
 
-# Chemin vers le fichier d'emploi sectoriel par district issu du RPHC5 2022.
-# PROCÉDURE :
-#   1. Aller sur https://www.statistics.gov.rw/datasource/census-2022
-#   2. Télécharger le tableau "Employment by district and sector"
-#   3. Exporter en CSV avec une ligne par district, une colonne par secteur
-#   4. Sauvegarder sous le chemin ci-dessous
+# Chemin vers le fichier d'emploi sectoriel par district.
 RPHC5_EMPLOI_CSV_PATH   <- "data/raw/rwa_emploi_district_secteur_2022.csv"
 
 # Nom de la colonne "district" dans le fichier d'emploi (à adapter si besoin)
@@ -462,16 +457,6 @@ A <- matrix(c(
   0.02, 0.02, 0.02, 0.03, 0.04, 0.06, 0.05, 0.08   # Services
 ), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
 dimnames = list(SECTEURS, SECTEURS))
-
-# ==============================================================================
-# Prix du carburant — Source : RURA (Rwanda Utilities Regulatory Authority)
-# RURA fixe le prix du diesel à la pompe chaque mois (www.rura.rw > Fuel Prices).
-# Q2 2022 : 1 291 RWF/L ÷ 1 033 RWF/USD ≈ 1.25 USD/L
-# Q4 2022 : 1 463 RWF/L ÷ 1 048 RWF/USD ≈ 1.40 USD/L  ← valeur retenue (moyenne annuelle)
-# Ce paramètre est utilisé dans params_flotte_df (I.5) pour tous les types de véhicules.
-# ==============================================================================
-
-PRIX_CARBURANT_USD_L <- 1.40  # Diesel Rwanda, source : RURA 2022
 
 # ==============================================================================
 # Production totale par secteur — Source : Banque Mondiale (wbstats)
@@ -609,21 +594,6 @@ TONNES_PAR_musd <- c(
   Services       = 35      # Quasi-immatériel (finance, conseil, éducation, santé)
 )
 
-
-# Chaque zone d'entreposage est caractérisée par :
-#   - un profil sectoriel d'offre (ce qu'elle produit/exporte vers les autres zones)
-#   - un profil sectoriel de demande (ce qu'elle consomme/importe des autres zones)
-#   - une taille économique relative (Kigali Hub = référence à 1.0)
-#
-# Profils par type de zone :
-#   hub       → fort en Commerce, Transport, Services (Kigali = centre économique)
-#   sez       → fort en Industrie, Agro-industrie (production concentrée)
-#   frontiere → fort en Commerce transfrontalier, Mines (export international)
-#   ville     → profil équilibré, Commerce local dominant
-#   marche    → fort en Agriculture et Agro-industrie locale (production agricole)
-
-
-
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
 # ==============================================================================
@@ -638,7 +608,7 @@ SEUIL_FLUX_TONNES <- 50
 # ==============================================================================
 
 # Paramètres du scénario de perturbation
-DESCRIPTION_SCENARIO  <- "Rupture de la RN1 entre Kigali et Huye suite à une inondation"
+DESCRIPTION_SCENARIO  <- "Scénario de test"
 DUREE_JOURS           <- 14
 TYPE_EVENEMENT        <- "inondation"
 
@@ -801,42 +771,6 @@ ARIO_DT            <- 1   # Pas de temps en jours (Hallegatte 2014)
 ARIO_TAU_RECUP <- DUREE_JOURS / 2
 
 cat("✓ Paramètres globaux chargés\n\n")
-
-# ==============================================================================
-# RESET COMPLET — Suppression de tous les caches
-# Mettre RESET_CACHES <- TRUE pour forcer un recalcul complet depuis zéro.
-# Remettre à FALSE ensuite pour bénéficier des caches au prochain lancement.
-# ==============================================================================
-
-RESET_CACHES <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
-
-if (RESET_CACHES) {
-  
-  caches <- c(
-    file.path(DIR_CACHE, "reseau_corrige_cache.rds"),
-    file.path(DIR_CACHE, "pentes_cache.rds"),
-    file.path(DIR_CACHE, "landuse_cache.rds"),
-    file.path(DIR_CACHE, "od_cache.rds"),
-    file.path(DIR_CACHE, "affectation_cache.rds")
-  )
-  
-  cat("=== RESET COMPLET DES CACHES ===\n")
-  
-  for (f in caches) {
-    if (file.exists(f)) {
-      file.remove(f)
-      cat("  ✓ Supprimé :", basename(f), "\n")
-    } else {
-      cat("  — Absent  :", basename(f), "\n")
-    }
-  }
-  
-  cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
-  cat("  Temps de recalcul estimé : 3-5h selon la machine\n\n")
-  
-} else {
-  cat("  Caches conservés (RESET_CACHES = FALSE)\n\n")
-}
 
 # ==============================================================================
 # I.2 : Environnement séparé pour les gros objets
@@ -1062,9 +996,9 @@ cat("✓ Palettes de couleurs définies\n\n")
 # chargement, et pénalité en zone urbaine (congestion, restrictions de tonnage).
 params_flotte_df <- tribble(
   ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_usd, ~cout_dechargement_usd,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  PRIX_CARBURANT_USD_L,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,                  15,                   15,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  PRIX_CARBURANT_USD_L,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,                  25,                   25,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  PRIX_CARBURANT_USD_L,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090,                  40,                   40
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,                  15,                   15,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,                  25,                   25,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090,                  40,                   40
 )
 duck_write(params_flotte_df, "params_flotte")
 
