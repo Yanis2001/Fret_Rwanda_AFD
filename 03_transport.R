@@ -805,8 +805,8 @@ cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
 #   Kagitumba selon la destination rwandaise.
 #
 #   Offre/demande des nœuds RoW : données de commerce extérieur NISR
-#     offre[RoW_pays, s]   = exports du pays vers le Rwanda   (M USD)
-#     demande[RoW_pays, s] = imports du pays depuis le Rwanda (M USD)
+#     offre[RoW_pays, s]   = importations du Rwanda   (M USD)
+#     demande[RoW_pays, s] = exportations Rwanda (M USD)
 #
 # AFFECTATION AUX ROUTES :
 #   Après le modèle gravitaire, les flux T[RoW_k, j] sont projetés sur le
