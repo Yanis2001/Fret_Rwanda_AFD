@@ -1747,10 +1747,12 @@ reseau_rwanda <- reseau_rwanda %>%
 # après le snapping et la déduplication par nœud (cf. entreposages_avec_snap).
 #
 # IMPORTANT : ne pas confondre les deux entités manipulées dans ce script :
-#   • entreposages_fictifs / entreposages_sf : 123 zones économiques modélisées
-#   • noeuds_entreposage                     : 120 nœuds du graphe (après dédup.)
-# Les enrichissements (population, RWI) portent sur les 123 zones.
-# Les calculs sur le graphe (Dijkstra, OD, modèle gravitaire) portent sur les 120 nœuds.
+#   • entreposages_fictifs / entreposages_sf : N zones économiques modélisées
+#   • noeuds_entreposage                     : n_warehouses nœuds du graphe (après dédup.)
+# N ≥ n_warehouses car plusieurs zones peuvent tomber sur le même nœud routier.
+# Les valeurs exactes sont affichées par les cat() ci-dessous à chaque run.
+# Les enrichissements (population, RWI) portent sur les N zones.
+# Les calculs sur le graphe (Dijkstra, OD, modèle gravitaire) portent sur les n_warehouses nœuds.
 noeuds_entreposage <- reseau_rwanda %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
@@ -2309,8 +2311,8 @@ cat("── Fusion et intégration des données de population ──────
 
 # ── Remise à l'état original d'entreposages_fictifs ───────────────────────────
 # Si le bloc IV.4 est re-exécuté, entreposages_fictifs peut avoir été gonflé
-# par des left_join() d'une exécution précédente. On le remet à ses 123
-# colonnes d'origine avant d'y ajouter les nouvelles variables.
+# par des left_join() d'une exécution précédente. On le remet à ses colonnes
+# d'origine avant d'y ajouter les nouvelles variables.
 entreposages_fictifs <- entreposages_fictifs %>%
   select(nom, type, pays, lon, lat, source) %>%
   distinct(lon, lat, .keep_all = TRUE)
@@ -2337,7 +2339,7 @@ source_utilisee <- case_when(
 
 # Vérification de cohérence avant construction du tableau.
 # Les trois vecteurs de population doivent avoir exactement autant de lignes
-# que entreposages_sf (la référence des 123 zones économiques).
+# que entreposages_sf (référence des zones économiques actives).
 stopifnot(
   length(pop_osm_par_entrepot)      == nrow(entreposages_sf),
   length(pop_worldpop_par_entrepot) == nrow(entreposages_sf),
@@ -2841,7 +2843,7 @@ cat("  Min :", round(min(p_rwi), 3), "| Max :", round(max(p_rwi), 3),
 
 # ── Vérification d'alignement avant construction du tableau ───────────────────
 # rwi_brut_par_entrepot doit avoir exactement autant d'éléments que entreposages_sf
-# (la référence des 123 zones économiques). Un désalignement ici provoquerait
+# (référence des zones économiques actives). Un désalignement ici provoquerait
 # une attribution erronée des scores RWI à des zones qui ne sont pas les leurs.
 # C'est le même contrat que celui utilisé en IV.4.D pour les vecteurs population.
 stopifnot(
