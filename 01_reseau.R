@@ -2932,8 +2932,12 @@ cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 #
 # OBJECTIF : Construire emploi_zone_secteur_all[i, s] — matrice
 #   nrow(entreposages_sf) × N_SECTEURS d'effectifs absolus par zone et secteur.
-#   Elle alimente le modèle MRIO (03_transport.R) :
-#     x[i,s] = production_totale[s] × (emploi_zone_secteur_all[i,s] / emploi_national[s])
+#   Elle alimente le modèle MRIO (03_transport.R) via le poids composite :
+#     w[i,s] = α × (emploi[i,s] / emploi_national[s])
+#            + (1-α) × (p_rwi[i] / Σ_j p_rwi[j])
+#     x[i,s] = production_totale[s] × w[i,s]
+#   où α = ALPHA_EMPLOI_RWI (00_parametres.R). Le RWI intervient donc comme
+#   correcteur de productivité uniforme sur tous les secteurs.
 #
 #   Hypothèse : toutes les zones ont des données RPHC5 2022 — pas de fallback
 #   qualitatif. Le script s'arrête si le fichier est absent ou si la jointure
@@ -2964,8 +2968,6 @@ if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
   stop("Fichier RPHC5 emploi introuvable : ", RPHC5_EMPLOI_CSV_PATH,
        "\n  → Télécharger sur https://www.statistics.gov.rw/datasource/census-2022")
 }
-
-{
     
     # ── Chargement du CSV d'emploi RPHC5 ──────────────────────────────────────
     rphc5_emploi_raw <- read_csv(RPHC5_EMPLOI_CSV_PATH, show_col_types = FALSE)
@@ -3101,7 +3103,9 @@ if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
       # ── Construction de l'emploi sectoriel absolu par zone ──────────────────
       # emploi_zone_secteur_all[i, s] = effectifs bruts du RPHC5 pour la zone i
       # et le secteur s, ventilés via RPHC5_CORRESPONDANCE_SECTEURS.
-      # Entrée directe du modèle MRIO : x[i,s] ∝ emploi_zone_secteur_all[i,s].
+      # Composante emploi du poids de production MRIO : x[i,s] dépend à la fois
+      # de emploi_zone_secteur_all[i,s] (pondéré par α) et de p_rwi[i] (pondéré
+      # par 1-α). Voir le poids composite w[i,s] dans 03_transport.R VII.2.B.
       cat("  Construction de l'emploi sectoriel par zone...\n")
 
       for (i in seq_len(nrow(entreposages_sf))) {
@@ -3135,7 +3139,7 @@ if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
     } else {
       stop("GADM indisponible — impossible de construire emploi_zone_secteur_all.")
     }
-}
+
 
 # Emploi total par zone : somme des secteurs (utile pour diagnostics)
 emploi_total_par_entrepot <- rowSums(emploi_zone_secteur_all)
@@ -3154,10 +3158,14 @@ cat("  • emploi_zone_secteur_all [", nrow(entreposages_sf), "×", N_SECTEURS, 
 ################################################################################
 # TRANSITION IV.5 → V — EXTRACTION DE POP_I ET EMPLOI_ZONE_SECTEUR
 #
-# Dans le modèle MRIO :
-#   - pop_i   : population par zone, pour la demande finale (d_finale ∝ pop_i)
-#   - emploi_zone_secteur : effectifs par zone × secteur, pour la production
-#     (x[i,s] = production_totale[s] × emploi_zone_secteur[i,s] / emploi_national[s])
+# Dans le modèle MRIO (formules complètes dans 03_transport.R VII.2.B) :
+#   - pop_i   : population par zone — entre dans la demande finale de façon
+#               multiplicative avec le RWI :
+#               d_finale[i,s] ∝ pop_i[i] × (p_rwi[i] + EPSILON_RWI)
+#   - emploi_zone_secteur : effectifs par zone × secteur — entre dans la
+#               production via un poids composite emploi + RWI :
+#               x[i,s] = production_totale[s] × (α × emploi[i,s]/emploi_nat[s]
+#                        + (1-α) × p_rwi[i]/Σ p_rwi)
 ################################################################################
 
 # ── Population par zone active (noeuds_entreposage) ───────────────────────────

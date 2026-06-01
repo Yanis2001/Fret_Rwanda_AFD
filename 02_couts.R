@@ -557,7 +557,7 @@ mapping_aretes_mm <- bind_rows(
 # Indexés par idx_mm → accès en O(1) au lieu de O(n) par recherche dans le tibble
 # Taille = n_vehicules × n_aretes_physiques + n_transbordements
 
-# Initialisation à la bonne taille des vecteur lookup
+# Initialisation à la bonne taille des vecteurs lookup
 max_idx_mm <- max(mapping_aretes_mm$idx_mm)
 lookup_type     <- character(max_idx_mm)
 lookup_physique <- integer(max_idx_mm)
