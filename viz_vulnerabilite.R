@@ -64,9 +64,7 @@ od_ref_map <- setNames(
   paste0(od_compare$id_origine, "_", od_compare$id_destination)
 )
 
-if (!exists("surcout_moyen_detour")) {
-  surcout_moyen_detour <- surcout_pondere_arete / pmax(volume_detourne_arete, 1)
-}
+surcout_moyen_detour <- surcout_pondere_arete / pmax(volume_detourne_arete, 1)
 
 ################################################################################
 # PARTIE IX.5 — CARTES ET EXPORTS
@@ -344,8 +342,8 @@ cat("  Paires reroutées traitées (toutes) :", n_paires_reroutees_total, "\n")
 # routes (hors zone de choc) sont affichées.
 aretes_detour_sf <- aretes_reseau_sf %>%
   mutate(
-    surcout_moyen   = surcout_moyen_detour,
-    vol_detourne_t  = volume_detourne_arete
+    surcout_moyen   = surcout_moyen_detour[arete_idx],
+    vol_detourne_t  = volume_detourne_arete[arete_idx]
   ) %>%
   filter(
     vol_detourne_t > 0,
