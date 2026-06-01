@@ -268,6 +268,54 @@ DISTANCE_DEDUP_RETAIL_M     <- 1000
 # Buffer autour de la frontière nationale pour inclure les villes frontalières (m)
 BUFFER_FRONTIERE_VILLES_M <- 5000
 
+# ── Entrepôts manuels ─────────────────────────────────────────────────────────
+# Zones économiques positionnées manuellement par leurs coordonnées GPS
+# (lon = longitude, lat = latitude en degrés décimaux WGS84).
+# Ces zones sont les origines/destinations prioritaires du modèle de fret :
+# hubs logistiques, postes frontières, villes structurantes, SEZ.
+#
+# pays = NA pour les zones internes au Rwanda, nom du pays pour les frontières.
+# Utilisé en 03_transport.R pour associer les coûts pré-frontière.
+# Les nœuds RoW (Rest of World) sont ajoutés séparément dans 03_transport.R
+# et ne figurent pas ici car ils ne s'accrochent pas au réseau routier rwandais.
+entreposages_manuels <- tibble(
+  nom  = c(
+    "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
+    "Frontière Gatuna (Ouganda)", "Frontière Rusumo (Tanzanie)",
+    "Frontière Rubavu/Goma (RDC)", "Frontière Kagitumba (Ouganda)",
+    "Frontière Bugarama (Burundi)",
+    "Huye (Butare) - Centre Sud", "Musanze - Centre Nord",
+    "Rubavu - Centre Ouest", "Rusizi - Centre Sud-Ouest",
+    "Bugesera SEZ (Agro-industrie)",
+    "Muhanga", "Nyanza", "Rwamagana"
+  ),
+  type = c(
+    "hub","sez","marche",
+    "frontiere","frontiere","frontiere","frontiere",
+    "frontiere","ville","ville","ville","ville",
+    "sez","ville","ville","ville"
+  ),
+  # pays = NA pour les zones internes, nom du pays pour les frontières.
+  # Utilisé pour associer les coûts pré-frontière en Partie 19
+  pays = c(
+    NA, NA, NA,
+    "Ouganda", "Tanzanie", "RDC", "Ouganda",
+    "Burundi",
+    NA, NA, NA, NA,
+    NA,
+    NA, NA, NA
+  ),
+  lon = c(30.0619, 30.1300, 30.0588, 30.0890,
+          30.7850, 29.2600, 30.7500, 29.0200,
+          29.7388, 29.6333, 29.2650, 29.0100,
+          30.1500, 29.7400, 29.7550, 30.4300),
+  lat = c(-1.9536, -1.9000, -1.9700, -1.3800,
+          -2.3800, -1.6667, -1.3100, -2.6200,
+          -2.5965, -1.4992, -1.6750, -2.4900,
+          -2.1000, -2.0850, -2.3500, -1.8700),
+  source = "manuel"
+)
+
 # ==============================================================================
 # Paramètres du graphe et de Dijkstra
 # ==============================================================================

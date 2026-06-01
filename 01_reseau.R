@@ -1522,54 +1522,6 @@ cat("✓ Pentes intégrées dans le réseau\n\n")
 # Les nœuds d'entreposage sont les origines/destinations du modèle de fret.
 # Ils représentent des zones économiques importantes (hub, SEZ, frontières…).
 
-# ── Entrepôts manuels  ────────────────────────────────────────────────────────
-# Ces entrepôts ont été positionnés manuellement avec leurs coordonnées GPS
-# (lon = longitude, lat = latitude en degrés décimaux WGS84).
-# "pays" = NA pour les zones internes au Rwanda, nom du pays pour les frontières
-# (utilisé pour associer les coûts pré-frontière dans le modèle gravitaire).
-#
-# Les pays étrangers (RoW) sont représentés comme des nœuds virtuels dans
-# 03_transport.R, connectés à leurs postes-frontières par un arc fictif de coût
-# égal à couts_prebordure. Ils n'apparaissent pas ici car ils ne snappent pas
-# au réseau routier rwandais.
-entreposages_manuels <- tibble(
-  nom  = c(
-    "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
-    "Frontière Gatuna (Ouganda)", "Frontière Rusumo (Tanzanie)",
-    "Frontière Rubavu/Goma (RDC)", "Frontière Kagitumba (Ouganda)",
-    "Frontière Bugarama (Burundi)",
-    "Huye (Butare) - Centre Sud", "Musanze - Centre Nord",
-    "Rubavu - Centre Ouest", "Rusizi - Centre Sud-Ouest",
-    "Bugesera SEZ (Agro-industrie)",
-    "Muhanga", "Nyanza", "Rwamagana"
-  ),
-  type = c(
-    "hub","sez","marche",
-    "frontiere","frontiere","frontiere","frontiere",
-    "frontiere","ville","ville","ville","ville",
-    "sez","ville","ville","ville"
-  ),
-  # pays = NA pour les zones internes, nom du pays pour les frontières.
-  # Utilisé pour associer les coûts pré-frontière en Partie 19
-  pays = c(
-    NA, NA, NA,
-    "Ouganda", "Tanzanie", "RDC", "Ouganda",
-    "Burundi",
-    NA, NA, NA, NA,
-    NA,
-    NA, NA, NA
-  ),
-  lon = c(30.0619, 30.1300, 30.0588, 30.0890,
-          30.7850, 29.2600, 30.7500, 29.0200,
-          29.7388, 29.6333, 29.2650, 29.0100,
-          30.1500, 29.7400, 29.7550, 30.4300),
-  lat = c(-1.9536, -1.9000, -1.9700, -1.3800,
-          -2.3800, -1.6667, -1.3100, -2.6200,
-          -2.5965, -1.4992, -1.6750, -2.4900,
-          -2.1000, -2.0850, -2.3500, -1.8700),
-  source = "manuel"
-)
-
 # Conversion des entrepôts manuels en sf pour la comparaison spatiale
 manuels_sf <- entreposages_manuels %>%
   st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
