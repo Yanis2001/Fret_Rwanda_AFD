@@ -23,9 +23,12 @@ token <- Sys.getenv("GITHUB_PAT")
 if (nchar(token) > 0) {
   # Credential helper : transmet le token à Git sans mot de passe interactif
   system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
-  # Remotes : dépôt principal + miroir GEMMES-AFD
+  # Remotes : dépôt principal + miroir GEMMES-AFD.
+  # set-url --push (sans --add) réinitialise la liste des push URLs à une seule
+  # entrée, puis --add --push ajoute le miroir. Cela évite l'accumulation de
+  # doublons à chaque relance de run_all.R.
   system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-  system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+  system("git remote set-url --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
   system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
   system("git remote -v")
 } else {
@@ -41,18 +44,18 @@ if (nchar(token) > 0) {
 # ==============================================================================
 
 # Recalcul forcé de tous les caches (réseau, pentes, OD, affectation).
-# Remettre à FALSE après un reset pour bénéficier des caches (~3-5h gagnées).
+# Remettre à FALSE après un reset pour bénéficier des caches (~30 min gagnés).
 RESET_CACHES     <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
 
-RUN_PARAMETRES   <- TRUE   # 00 — toujours TRUE si on part de zéro
-RUN_RESEAU       <- TRUE  # 01 — persist OK (14:23) — skip
-RUN_COUTS        <- TRUE  # 02 — persist OK (14:24) — skip
-RUN_TRANSPORT    <- TRUE   # 03 — crashé à 14:31 — reprise via od_checkpoint
-RUN_VULNERAB     <- TRUE   # 04 — pas encore tourné
+RUN_PARAMETRES   <- TRUE   # 00 — < 1 min  — packages, DuckDB, palettes
+RUN_RESEAU       <- TRUE   # 01 — ~20 min  — réseau OSM, pentes, démographie
+RUN_COUTS        <- TRUE   # 02 — < 1 min  — coûts, graphe multi-modal
+RUN_TRANSPORT    <- TRUE   # 03 — ~15 min  — OD, gravitaire, affectation
+RUN_VULNERAB     <- TRUE   # 04 — ~13 min  — vulnérabilité, criticité
 
-RUN_VIZ_RESEAU   <- TRUE   # viz — cartes réseau / coûts / pentes
-RUN_VIZ_FRET     <- TRUE   # viz — cartes fret / Sankey
-RUN_VIZ_VULNERAB <- TRUE   # viz — cartes vulnérabilité / détours
+RUN_VIZ_RESEAU   <- TRUE   # viz — ~3 min  — cartes réseau / coûts / pentes
+RUN_VIZ_FRET     <- TRUE   # viz — ~2 min  — cartes fret / Sankey
+RUN_VIZ_VULNERAB <- TRUE   # viz — ~3 min  — cartes vulnérabilité / détours
 
 
 # ==============================================================================
@@ -124,7 +127,7 @@ if (RESET_CACHES) {
   }
   rm(.dir_cache, .caches, .f)
   cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
-  cat("  Temps de recalcul estimé : 3-5h selon la machine\n\n")
+  cat("  Temps de recalcul estimé : ~50 min selon la machine\n\n")
 }
 
 executer_module("01_reseau",       "01_reseau.R",       RUN_RESEAU)
