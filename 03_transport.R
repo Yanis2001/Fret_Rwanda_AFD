@@ -1225,7 +1225,7 @@ for (s in SECTEURS) {
   C_total_s <- matrix(NA_real_, n_total, n_total,
                       dimnames = list(noms_total, noms_total))
 
-  # Bloc domestique (identique à l'ancien C_ij — pas de coût pré-frontière ici)
+  # Bloc domestique 
   C_total_s[1:n_warehouses, 1:n_warehouses] <- C_ij
 
   # Lignes/colonnes RoW : calculées par pays et par secteur
