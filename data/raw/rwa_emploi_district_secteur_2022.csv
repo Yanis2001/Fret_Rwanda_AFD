@@ -1,31 +1,31 @@
-District,Province,Emploi_Agriculture,Emploi_Mines,Emploi_Industrie,Emploi_Construction,Emploi_Commerce,Emploi_Transport,Emploi_Services
-Nyarugenge,City of Kigali,75291,1924,6756,9874,12682,5821,28595
-Gasabo,City of Kigali,166286,4250,14922,21811,28007,12859,63220
-Kicukiro,City of Kigali,99437,2542,8925,13046,16748,7689,37787
-Nyanza,Southern Province,50498,1291,4532,6623,8506,3905,19208
-Gisagara,Southern Province,53170,1359,4773,6972,8956,4112,20205
-Nyaruguru,Southern Province,35521,908,3188,4658,5983,2747,13497
-Huye,Southern Province,56030,1432,5026,7347,9435,4332,21286
-Nyamagabe,Southern Province,55804,1426,5006,7317,9396,4314,21200
-Ruhango,Southern Province,47123,1204,4228,6179,7935,3644,17911
-Muhanga,Southern Province,48960,1251,4394,6420,8244,3786,18600
-Kamonyi,Southern Province,68545,1752,6150,8989,11542,5299,26030
-Karongi,Western Province,43263,1106,3882,5675,7284,3345,16433
-Rutsiro,Western Province,51432,1315,4615,6747,8661,3977,19535
-Rubavu,Western Province,81157,2075,7285,10649,13671,6278,30838
-Nyabihu,Western Province,46352,1185,4160,6079,7808,3584,17609
-Ngororero,Western Province,39764,1016,3569,5216,6698,3075,15113
-Rusizi,Western Province,62047,1586,5567,8139,10452,4797,23568
-Nyamasheke,Western Province,56421,1442,5061,7401,9501,4362,21428
-Rulindo,Northern Province,45921,1174,4121,6022,7735,3551,17449
-Gakenke,Northern Province,53575,1369,4806,7024,9022,4142,20352
-Musanze,Northern Province,73012,1866,6551,9575,12294,5644,27727
-Burera,Northern Province,53705,1372,4818,7041,9044,4152,20401
-Gicumbi,Northern Province,60098,1535,5392,7879,10122,4646,22832
-Rwamagana,Eastern Province,79981,2044,7178,10494,13475,6185,30391
-Nyagatare,Eastern Province,103046,2633,9249,13513,17354,7966,39137
-Gatsibo,Eastern Province,83584,2135,7500,10961,14072,6460,31742
-Kayonza,Eastern Province,64138,1638,5753,8409,10799,4958,24362
-Kirehe,Eastern Province,62772,1604,5630,8231,10571,4852,23847
-Ngoma,Eastern Province,57970,1481,5200,7601,9762,4482,22018
-Bugesera,Eastern Province,80280,2052,7205,10533,13525,6208,30505
+"District","Province","Emploi_Agriculture","Emploi_Mines","Emploi_Industrie","Emploi_Construction","Emploi_Commerce","Emploi_Transport","Emploi_Services"
+"Nyarugenge","City of Kigali",15128,38,13772,18286,22563,9367,61789
+"Gasabo","City of Kigali",33404,86,30413,40382,49814,20686,136570
+"Kicukiro","City of Kigali",19976,50,18191,24156,29793,12371,81637
+"Nyanza","Southern Province",67726,202,2643,4584,5657,2669,11082
+"Gisagara","Southern Province",71304,212,2783,4826,5956,2810,11656
+"Nyaruguru","Southern Province",43161,2808,2339,3478,4292,2025,8399
+"Huye","Southern Province",39202,834,6826,9476,12526,5517,30507
+"Nyamagabe","Southern Province",67806,4409,3673,5463,6740,3180,13192
+"Ruhango","Southern Province",63194,188,2465,4277,5277,2491,10332
+"Muhanga","Southern Province",34255,729,5968,8280,10945,4821,26657
+"Kamonyi","Southern Province",83284,5417,4513,6711,8279,3906,16197
+"Karongi","Western Province",52567,3420,2848,4237,5225,2466,10225
+"Rutsiro","Western Province",62493,4066,3387,5037,6212,2932,12155
+"Rubavu","Western Province",56779,1209,9894,13734,18148,7994,44195
+"Nyabihu","Western Province",56321,3664,3053,4539,5601,2642,10957
+"Ngororero","Western Province",48319,3142,2619,3894,4805,2267,9405
+"Rusizi","Western Province",43411,924,7561,10497,13876,6109,33778
+"Nyamasheke","Western Province",68554,4459,3714,5525,6815,3216,13333
+"Rulindo","Northern Province",55799,3630,3024,4496,5548,2618,10858
+"Gakenke","Northern Province",65097,4233,3527,5244,6471,3054,12664
+"Musanze","Northern Province",51085,1087,8898,12349,16322,7188,39740
+"Burera","Northern Province",65256,4242,3535,5257,6487,3061,12695
+"Gicumbi","Northern Province",80590,240,3144,5453,6731,3175,13171
+"Rwamagana","Eastern Province",106864,102,4010,6958,9811,5207,16796
+"Nyagatare","Eastern Province",137673,131,5166,8960,12634,6706,21628
+"Gatsibo","Eastern Province",111668,107,4189,7267,10244,5438,17541
+"Kayonza","Eastern Province",85688,82,3213,5576,7862,4173,13463
+"Kirehe","Eastern Province",83866,80,3145,5458,7696,4084,13178
+"Ngoma","Eastern Province",77449,74,2904,5040,7107,3773,12167
+"Bugesera","Eastern Province",107264,102,4025,6985,9847,5226,16859
