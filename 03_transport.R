@@ -561,7 +561,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 
 # ==============================================================================
 # VII.1 : Table Input-Output de Leontief
-# Définit les 8 secteurs, la matrice des coefficients techniques A,
+# Définit les 11 secteurs, la matrice des coefficients techniques A,
 # les productions totales et les facteurs de conversion valeur → tonnes.
 # Calcule les multiplicateurs de Leontief (I-A)^(-1) et stocke dans DuckDB.
 # NOTE : données fictives calibrées sur le Rwanda 2022. Pour utiliser les
@@ -589,10 +589,10 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 conso_interm   <- as.vector(A %*% production_totale)
 # Valeur ajoutée = production - consommations intermédiaires
 valeur_ajoutee <- production_totale - conso_interm
-# Demande finale calibrée sur les comptes nationaux NISR (Supply-Use Tables 2022).
-# DEMANDE_FINALE_NISR est un vecteur par secteur en M USD, défini dans 00_parametres.R.
+# Demande finale extraite de la SAM IFPRI Rwanda 2021 (cf. 00_parametres.R).
+# DEMANDE_FINALE_SAM est un vecteur par secteur en MILLIARDS DE RWF.
 # On réordonne selon l'ordre canonique SECTEURS pour garantir l'alignement des indices.
-demande_finale <- DEMANDE_FINALE_NISR[SECTEURS]
+demande_finale <- DEMANDE_FINALE_SAM[SECTEURS]
 
 # ── Stockage dans DuckDB ──────────────────────────────────────────────────────
 io_table <- tibble(
@@ -601,7 +601,7 @@ io_table <- tibble(
   conso_interm_musd   = conso_interm,
   valeur_ajoutee_musd = valeur_ajoutee,
   demande_finale_musd = demande_finale,
-  tonnes_par_musd     = TONNES_PAR_musd
+  tonnes_par_mrd_rwf     = TONNES_PAR_mrd_RWF
 )
 duck_write(io_table, "io_table")
 
@@ -863,9 +863,9 @@ for (k in seq_along(pays_row)) {
   for (s in SECTEURS) {
     row_s <- commerce_k %>% filter(secteur == s)
     # imports rwandais depuis le pays k = ce que le nœud RoW envoie vers le Rwanda
-    offre_total[idx_k, s]   <- if (nrow(row_s) > 0) row_s$imports_musd else 0
+    offre_total[idx_k, s]   <- if (nrow(row_s) > 0) row_s$imports_mrd_rwf else 0
     # exports rwandais vers le pays k = ce que le nœud RoW attire depuis le Rwanda
-    demande_total[idx_k, s] <- if (nrow(row_s) > 0) row_s$exports_musd else 0
+    demande_total[idx_k, s] <- if (nrow(row_s) > 0) row_s$exports_mrd_rwf else 0
   }
 }
 
@@ -1039,9 +1039,9 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 #
 # Paramètres :
 #   O_s      — vecteur n_total des offres sectorielles en tonnes
-#              (= offre_total[, s] × TONNES_PAR_musd[s])
+#              (= offre_total[, s] × TONNES_PAR_mrd_RWF[s])
 #   D_s      — vecteur n_total des demandes sectorielles en tonnes (même convention)
-#   friction — matrice n×n des termes (C_ij × TONNES_PAR_musd[s])^(-beta). Doit
+#   friction — matrice n×n des termes (C_ij × TONNES_PAR_mrd_RWF[s])^(-beta). Doit
 #              avoir des NA là où les zones ne sont pas connectées (diag inclus).
 #   secteur  — chaîne de caractères pour les messages de log uniquement
 #
@@ -1267,25 +1267,25 @@ for (s in SECTEURS) {
   C_total_s_final <- C_total_s + cout_fixe_ref
 
   # ── Calcul de la friction spatiale ───────────────────────────────────────────
-  # On multiplie C_total_s_final (USD/tonne) par TONNES_PAR_musd[s] (tonnes/MUSD)
+  # On multiplie C_total_s_final (USD/tonne) par TONNES_PAR_mrd_RWF[s] (tonnes/MUSD)
   # pour obtenir un coût adimensionné : USD dépensés en transport par MUSD de biens.
   # Ce rapport (coût de transport / valeur des biens) est la friction du modèle
   # iceberg. Beta mesure alors l'élasticité du commerce à ce coût RELATIF,
   # ce qui rend son interprétation cohérente entre secteurs et calibrable sur
   # des données empiriques.
-  friction                  <- (C_total_s_final * TONNES_PAR_musd[s])^(-beta_s)
+  friction                  <- (C_total_s_final * TONNES_PAR_mrd_RWF[s])^(-beta_s)
   friction[is.na(friction)] <- 0
   diag(friction)            <- 0
 
   # ── Appel à Furness (doublement contraint) ────────────────────────────────────
   # offre_total[, s] et demande_total[, s] sont en M USD ; on les convertit en
-  # tonnes via TONNES_PAR_musd[s] pour que les marges cibles soient en tonnes.
+  # tonnes via TONNES_PAR_mrd_RWF[s] pour que les marges cibles soient en tonnes.
   # La matrice résultante flux_gravitaire[[s]] est directement en tonnes.
   # Les n_row dernières entrées sont les flux d'import/export NISR (convertis).
   # La fonction normalise sur la moyenne géométrique pour assurer sum(O) = sum(D).
   flux_gravitaire[[s]] <- furness_gravity(
-    O_s      = offre_total[, s]  * TONNES_PAR_musd[s],
-    D_s      = demande_total[, s] * TONNES_PAR_musd[s],
+    O_s      = offre_total[, s]  * TONNES_PAR_mrd_RWF[s],
+    D_s      = demande_total[, s] * TONNES_PAR_mrd_RWF[s],
     friction = friction,
     secteur  = s
   )
@@ -1305,8 +1305,8 @@ cat("\n── Vérification des contraintes de marges ────────�
 for (s in SECTEURS) {
 
   T_s      <- flux_gravitaire[[s]]
-  O_s      <- offre_total[, s]  * TONNES_PAR_musd[s]
-  D_s      <- demande_total[, s] * TONNES_PAR_musd[s]
+  O_s      <- offre_total[, s]  * TONNES_PAR_mrd_RWF[s]
+  D_s      <- demande_total[, s] * TONNES_PAR_mrd_RWF[s]
   
   # Recalcul des cibles normalisées (même logique que dans furness_gravity)
   # pour comparer avec les marges effectives de la matrice obtenue
@@ -1553,7 +1553,7 @@ if (!requireNamespace("digest", quietly = TRUE)) {
 
 empreinte_entrees <- digest::digest(
   list(
-    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, DEMANDE_FINALE_NISR, RoW
+    flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, DEMANDE_FINALE_SAM, RoW
     seuil             = SEUIL_FLUX_TONNES,
     n_aretes          = n_aretes_physiques,
     n_warehouses      = n_warehouses,
@@ -1800,9 +1800,9 @@ if (!cache_affectation_valide) {
         # Le tableau volume_trafic_mm_s a pour dimensions :
         #   [arête physique, véhicule, secteur]
         # Pour l'indexer efficacement, on a besoin de l'indice ENTIER du secteur
-        # (1 pour "Agriculture", 2 pour "Mines", etc.) et pas de son nom texte.
+        # (1 pour "Agriculture", 2 pour "Cultures_export", etc.) et pas de son nom texte.
         # match(s, SECTEURS) retourne la position de s dans le vecteur SECTEURS.
-        # Exemple : match("Industrie", SECTEURS) → 4
+        # Exemple : match("Mines", SECTEURS) → 3
         idx_s <- match(s, SECTEURS)
         
         # Volume en tonnes pour ce secteur entre i et j
