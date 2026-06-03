@@ -1,6 +1,6 @@
 # Modèle de Réseau Fret Rwanda — AFD
 
-Modélisation du transport de fret routier au Rwanda : construction du réseau routier, calcul des coûts de transport, modèle gravitaire doublement contraint, analyse de vulnérabilité et modèle économique ARIO.
+Modélisation du transport de fret routier au Rwanda : construction du réseau routier, calcul des coûts de transport, modèle gravitaire doublement contraint, analyse de vulnérabilité et modèle économique.
 
 ---
 
