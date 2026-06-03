@@ -14,7 +14,7 @@
 # RELANCER 02_couts.R avant ce script si :
 #   → les paramètres de flotte (params_flotte, vitesses_flotte, facteurs_pente)
 #     ont changé
-#   → les valeurs VEHICULE_REFERENCE ou TONNES_PAR_musd ont changé
+#   → les valeurs VEHICULE_REFERENCE ou TONNES_PAR_mrd_RWF ont changé
 #   → le DEM (pentes) a été recalculé
 #
 # FICHIERS LUS : persist_geodata.rds, persist_reseau_base.rds (pour carte III),

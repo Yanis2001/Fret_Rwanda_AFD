@@ -8,7 +8,7 @@
 # RELANCER 01_reseau.R + 02_couts.R + 03_transport.R avant ce script si :
 #   → les paramètres BETA_SECTEUR ont changé (sensibilité gravitaire)
 #   → la matrice A ou production_totale ont changé (table IO)
-#   → DEMANDE_FINALE_NISR ou COMMERCE_EXTERIEUR_NISR ont changé
+#   → DEMANDE_FINALE_SAM ou COMMERCE_EXTERIEUR_NISR ont changé
 #   → SEUIL_FLUX_TONNES a changé (filtre affectation)
 #   → de nouvelles zones d'entrepôt ont été ajoutées ou retirées
 #   → les données RPHC5 d'emploi ont été mises à jour (emploi_zone_secteur_all)
@@ -750,13 +750,13 @@ cat("✓ Graphique offre/demande (M USD) sauvegardé\n")
 
 # ── Version en tonnes ─────────────────────────────────────────────────────────
 # Les tables offre_zones et demande_zones dans DuckDB sont en M USD par secteur.
-# On les convertit en tonnes via io_table.tonnes_par_musd (facteur sectoriel),
+# On les convertit en tonnes via io_table.tonnes_par_mrd_rwf (facteur sectoriel),
 # puis on somme sur les secteurs pour obtenir le tonnage total par zone.
 recap_zones_tonnes <- duck_query("
   SELECT
     o.zone,
-    ROUND(SUM(o.offre_musd   * t.tonnes_par_musd), 0) AS offre_totale_tonnes,
-    ROUND(SUM(d.demande_musd * t.tonnes_par_musd), 0) AS demande_totale_tonnes
+    ROUND(SUM(o.offre_musd   * t.tonnes_par_mrd_rwf), 0) AS offre_totale_tonnes,
+    ROUND(SUM(d.demande_musd * t.tonnes_par_mrd_rwf), 0) AS demande_totale_tonnes
   FROM offre_zones  o
   JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
   JOIN io_table     t ON o.secteur = t.secteur
