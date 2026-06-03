@@ -60,7 +60,7 @@ rm(.vuln)
 # Reconstruit depuis od_compare (disponible via list2env) pour éviter de
 # recharger od_cache.rds 
 od_ref_map <- setNames(
-  od_compare$cout_usd,
+  od_compare$cout_rwf,
   paste0(od_compare$id_origine, "_", od_compare$id_destination)
 )
 
@@ -112,12 +112,12 @@ impact_par_zone_sf <- reseau_rwanda %>%
   st_as_sf() %>%
   left_join(
     surcouts_par_zone %>%
-      select(Zone, pct_surcout_moyen, n_deconnexions, surcout_total_usd),
+      select(Zone, pct_surcout_moyen, n_deconnexions, surcout_total_rwf),
     by = c("warehouse_name" = "Zone")
   ) %>%
   mutate(
     pct_surcout_moyen = replace_na(pct_surcout_moyen, 0),
-    surcout_total_usd = replace_na(surcout_total_usd, 0)
+    surcout_total_rwf = replace_na(surcout_total_rwf, 0)
   )
 
 # ── CARTE A : Réseau dégradé et zones d'impact ────────────────────────────────
@@ -222,7 +222,7 @@ cat("  ✓ Carte B sauvegardée\n")
 cat("  Génération Carte C — vulnérabilité des zones...\n")
 
 # Vérification : y a-t-il des surcoûts à représenter ?
-has_surcouts <- any(impact_par_zone_sf$surcout_total_usd > 0, na.rm = TRUE)
+has_surcouts <- any(impact_par_zone_sf$surcout_total_rwf > 0, na.rm = TRUE)
 has_deconnex <- any(impact_par_zone_sf$n_deconnexions   > 0, na.rm = TRUE)
 
 if (!has_surcouts) {
@@ -247,9 +247,9 @@ carte_vulnerabilite <- fond_carte() +
           values = c("#2166AC", "#FEE08B", "#F46D43", "#A50026")
         ),
         fill.legend = tm_legend(title = "Nb de destinations\ncoupées"),
-        size        = "surcout_total_usd",
+        size        = "surcout_total_rwf",
         size.scale  = tm_scale(values.range = c(0.3, 2.5)),
-        size.legend = tm_legend(title = "Surcoût total\n(USD)")
+        size.legend = tm_legend(title = "Surcoût total\n(RWF)")
       ) 
     } else {
       # Version dégradée : taille fixe, couleur selon type de zone

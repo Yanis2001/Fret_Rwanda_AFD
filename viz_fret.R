@@ -687,20 +687,20 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 
 # ── Zones au sommet d'offre / demande (pour mise en évidence sur le graphique) ──
 # str_trunc(28) est la troncature utilisée dans Zone_court ci-dessous.
-ref_offre_court   <- str_trunc(recap_zones$zone[which.max(recap_zones$offre_totale_musd)],   28)
-ref_demande_court <- str_trunc(recap_zones$zone[which.max(recap_zones$demande_totale_musd)], 28)
+ref_offre_court   <- str_trunc(recap_zones$zone[which.max(recap_zones$offre_totale_mrd_rwf)],   28)
+ref_demande_court <- str_trunc(recap_zones$zone[which.max(recap_zones$demande_totale_mrd_rwf)], 28)
 
 g2 <- recap_zones %>%
   pivot_longer(
-    cols      = c(offre_totale_musd, demande_totale_musd),
+    cols      = c(offre_totale_mrd_rwf, demande_totale_mrd_rwf),
     names_to  = "Type_flux",
     values_to = "Valeur"
   ) %>%
   mutate(
     Zone_court = str_trunc(zone, 28),
     Type_flux  = recode(Type_flux,
-                        "offre_totale_musd"   = "offre",
-                        "demande_totale_musd" = "demande")
+                        "offre_totale_mrd_rwf"   = "offre",
+                        "demande_totale_mrd_rwf" = "demande")
   ) %>%
   ggplot(aes(x = reorder(Zone_court, Valeur),
              y = Valeur,
@@ -732,7 +732,7 @@ g2 <- recap_zones %>%
       "Contour rouge = max demande ('", ref_demande_court, "')"
     ),
     x    = NULL,
-    y    = "Valeur (millions USD)",
+    y    = "Valeur (milliards RWF)",
     fill = NULL
   ) +
   theme_minimal(base_size = 12) +
@@ -743,20 +743,20 @@ g2 <- recap_zones %>%
     panel.grid.major.y = element_blank()
   )
 
-ggsave(file.path(DIR_CARTES, "graphique_offre_demande_musd.png"),
+ggsave(file.path(DIR_CARTES, "graphique_offre_demande_mrd_rwf.png"),
        g2, width = 13, height = 8, dpi = 300)
-cat("✓ Graphique offre/demande (M USD) sauvegardé\n")
+cat("✓ Graphique offre/demande (mrd RWF) sauvegardé\n")
 
 
 # ── Version en tonnes ─────────────────────────────────────────────────────────
-# Les tables offre_zones et demande_zones dans DuckDB sont en M USD par secteur.
+# Les tables offre_zones et demande_zones dans DuckDB sont en mrd RWF par secteur.
 # On les convertit en tonnes via io_table.tonnes_par_mrd_rwf (facteur sectoriel),
 # puis on somme sur les secteurs pour obtenir le tonnage total par zone.
 recap_zones_tonnes <- duck_query("
   SELECT
     o.zone,
-    ROUND(SUM(o.offre_musd   * t.tonnes_par_mrd_rwf), 0) AS offre_totale_tonnes,
-    ROUND(SUM(d.demande_musd * t.tonnes_par_mrd_rwf), 0) AS demande_totale_tonnes
+    ROUND(SUM(o.offre_mrd_rwf   * t.tonnes_par_mrd_rwf), 0) AS offre_totale_tonnes,
+    ROUND(SUM(d.demande_mrd_rwf * t.tonnes_par_mrd_rwf), 0) AS demande_totale_tonnes
   FROM offre_zones  o
   JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
   JOIN io_table     t ON o.secteur = t.secteur
@@ -888,14 +888,14 @@ cat("✓ Heatmap flux OD sauvegardée\n")
 
 offre_long <- as.data.frame(offre_zones) %>%
   rownames_to_column("Zone") %>%
-  pivot_longer(-Zone, names_to = "Secteur", values_to = "Offre_musd") %>%
+  pivot_longer(-Zone, names_to = "Secteur", values_to = "Offre_mrd_rwf") %>%
   mutate(Zone_court = str_trunc(str_remove(Zone, " - .*"), 22))
 
 g4 <- offre_long %>%
   group_by(Zone_court) %>%
-  mutate(Part_pct = Offre_musd / sum(Offre_musd) * 100) %>%
+  mutate(Part_pct = Offre_mrd_rwf / sum(Offre_mrd_rwf) * 100) %>%
   ungroup() %>%
-  ggplot(aes(x = reorder(Zone_court, -Offre_musd),
+  ggplot(aes(x = reorder(Zone_court, -Offre_mrd_rwf),
              y = Part_pct,
              fill = Secteur)) +
   geom_col(width = 0.8) +
@@ -1041,45 +1041,45 @@ cat("Génération du graphique production vs demande (bilan MRIO)...\n")
 bilan_mrio <- duck_query("
   SELECT
     o.secteur,
-    ROUND(SUM(o.offre_musd),   2) AS surplus_total_musd,
-    ROUND(SUM(d.demande_musd), 2) AS deficit_total_musd
+    ROUND(SUM(o.offre_mrd_rwf),   2) AS surplus_total_mrd_rwf,
+    ROUND(SUM(d.demande_mrd_rwf), 2) AS deficit_total_mrd_rwf
   FROM offre_zones  o
   JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
   GROUP BY o.secteur
-  ORDER BY surplus_total_musd DESC
+  ORDER BY surplus_total_mrd_rwf DESC
 ")
 
 df_mrio <- bilan_mrio %>%
   mutate(
-    Secteur = factor(secteur, levels = secteur[order(surplus_total_musd)]),
+    Secteur = factor(secteur, levels = secteur[order(surplus_total_mrd_rwf)]),
     # Solde net = surplus agrégé − déficit agrégé : positif = exportateur net
-    Solde_musd = surplus_total_musd - deficit_total_musd
+    Solde_mrd_rwf = surplus_total_mrd_rwf - deficit_total_mrd_rwf
   )
 
 # ── Format long pour ggplot ───────────────────────────────────────────────────
 df_mrio_long <- df_mrio %>%
   pivot_longer(
-    c(surplus_total_musd, deficit_total_musd),
+    c(surplus_total_mrd_rwf, deficit_total_mrd_rwf),
     names_to  = "Type",
-    values_to = "Valeur_musd"
+    values_to = "Valeur_mrd_rwf"
   ) %>%
   mutate(
     Type = recode(Type,
-      "surplus_total_musd" = "Offre (surplus exportable)",
-      "deficit_total_musd" = "Demande (besoin importé)"
+      "surplus_total_mrd_rwf" = "Offre (surplus exportable)",
+      "deficit_total_mrd_rwf" = "Demande (besoin importé)"
     )
   )
 
 # ── Graphique ─────────────────────────────────────────────────────────────────
 g_prod_ech <- ggplot(df_mrio_long,
-                     aes(x = Secteur, y = Valeur_musd, fill = Type)) +
+                     aes(x = Secteur, y = Valeur_mrd_rwf, fill = Type)) +
   geom_col(position = "dodge", width = 0.72) +
   # Annotation du solde net
   geom_text(
     data        = df_mrio,
     aes(x       = Secteur,
-        y       = pmax(surplus_total_musd, deficit_total_musd),
-        label   = paste0(ifelse(Solde_musd >= 0, "+", ""), round(Solde_musd))),
+        y       = pmax(surplus_total_mrd_rwf, deficit_total_mrd_rwf),
+        label   = paste0(ifelse(Solde_mrd_rwf >= 0, "+", ""), round(Solde_mrd_rwf))),
     hjust       = -0.12,
     size        = 3.2,
     color       = "#555555",
@@ -1093,7 +1093,7 @@ g_prod_ech <- ggplot(df_mrio_long,
     name   = NULL
   ) +
   scale_y_continuous(
-    labels = scales::label_number(suffix = " M USD", scale = 1),
+    labels = scales::label_number(suffix = " mrd RWF", scale = 1),
     expand = expansion(mult = c(0, 0.22))
   ) +
   labs(
@@ -1101,10 +1101,10 @@ g_prod_ech <- ggplot(df_mrio_long,
     subtitle = paste0(
       "Bleu = offre agrégée (surplus x[i,s] − d[i,s] > 0 sommé sur toutes les zones) — ",
       "Rouge = demande agrégée (déficit d[i,s] − x[i,s] > 0).\n",
-      "Annotation = solde net (M USD) ; positif = le secteur est exportateur net au Rwanda."
+      "Annotation = solde net (mrd RWF) ; positif = le secteur est exportateur net au Rwanda."
     ),
     x = NULL,
-    y = "Volume agrégé (M USD)"
+    y = "Volume agrégé (mrd RWF)"
   ) +
   theme_minimal(base_size = 12) +
   theme(

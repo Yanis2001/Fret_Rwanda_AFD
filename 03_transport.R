@@ -102,7 +102,7 @@ cache_od_valide <- FALSE
 # Colonnes attendues dans od_long — à mettre à jour si la structure change
 OD_COLONNES_ATTENDUES <- c(
   "id_origine", "id_destination", "nom_origine", "nom_destination",
-  "cout_usd", "distance_km", "temps_h",
+  "cout_rwf", "distance_km", "temps_h",
   "vehicule_depart", "vehicule_arrivee", "n_transbordements",
   "co2_kg_trajet", "nox_g_trajet", "pm25_g_trajet"
 )
@@ -209,7 +209,7 @@ if (!cache_od_valide) {
     id_destination    = integer(n_paires_max),
     nom_origine       = character(n_paires_max),
     nom_destination   = character(n_paires_max),
-    cout_usd          = numeric(n_paires_max),
+    cout_rwf          = numeric(n_paires_max),
     distance_km       = numeric(n_paires_max),
     temps_h           = numeric(n_paires_max),
     vehicule_depart   = character(n_paires_max),
@@ -335,7 +335,7 @@ if (!cache_od_valide) {
       od_long$id_destination[idx]    <- j
       od_long$nom_origine[idx]       <- noeuds_entreposage$warehouse_name[i]
       od_long$nom_destination[idx]   <- noeuds_entreposage$warehouse_name[j]
-      od_long$cout_usd[idx]          <- min_cout
+      od_long$cout_rwf[idx]          <- min_cout
       
       # Distance, temps et émissions cumulées sur le chemin optimal.
       # On utilise les vecteurs pré-extraits (e_length_km, etc.) au lieu
@@ -439,7 +439,7 @@ duck_write(od_long, "matrice_od")
 od_stats <- duck_query("
   SELECT
     COUNT(*)                          AS n_paires,
-    ROUND(AVG(cout_usd), 2)           AS cout_moyen_usd,
+    ROUND(AVG(cout_rwf), 2)           AS cout_moyen_rwf,
     ROUND(AVG(distance_km), 1)        AS dist_moyenne_km,
     SUM(n_transbordements > 0)        AS paires_avec_transbordement,
     ROUND(AVG(n_transbordements), 2)  AS transbordements_moyens
@@ -451,7 +451,7 @@ cat("  Paires connectées            :", od_stats$n_paires, "(sur ",
     n_warehouses * (n_warehouses - 1),"paires possibles",
     round(od_stats$n_paires / (n_warehouses * (n_warehouses - 1)) * 100, 1),
     "% de connectivité)\n")
-cat("  Coût moyen                   :", od_stats$cout_moyen_usd, "USD\n")
+cat("  Coût moyen                   :", od_stats$cout_moyen_rwf, "RWF\n")
 cat("  Paires avec transbordement   :", od_stats$paires_avec_transbordement, "\n")
 cat("  Transbordements moyens/trajet:", od_stats$transbordements_moyens, "\n\n")
 
@@ -575,9 +575,9 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 #
 # Interprétation de (I - A)^(-1) :
 #   Un élément [i,j] donne l'augmentation de production du secteur i nécessaire
-#   pour satisfaire une augmentation de 1 USD de demande finale dans le secteur j.
+#   pour satisfaire une augmentation de 1 RWF de demande finale dans le secteur j.
 #
-# En termes concrets : si les ménages rwandais dépensent 1 USD de plus en
+# En termes concrets : si les ménages rwandais dépensent 1 RWF de plus en
 # produits alimentaires (Agro_industrie), combien cela génère-t-il de production
 # supplémentaire dans l'Agriculture (pour fournir les matières premières) ?
 # C'est ce que calcule la matrice de Leontief.
@@ -597,10 +597,10 @@ demande_finale <- DEMANDE_FINALE_SAM[SECTEURS]
 # ── Stockage dans DuckDB ──────────────────────────────────────────────────────
 io_table <- tibble(
   secteur             = SECTEURS,
-  production_musd     = production_totale,
-  conso_interm_musd   = conso_interm,
-  valeur_ajoutee_musd = valeur_ajoutee,
-  demande_finale_musd = demande_finale,
+  production_mrd_rwf     = production_totale,
+  conso_interm_mrd_rwf   = conso_interm,
+  valeur_ajoutee_mrd_rwf = valeur_ajoutee,
+  demande_finale_mrd_rwf = demande_finale,
   tonnes_par_mrd_rwf     = TONNES_PAR_mrd_RWF
 )
 duck_write(io_table, "io_table")
@@ -619,7 +619,7 @@ duck_write(A_long, "matrice_a_long")
 
 # ── Multiplicateurs de Leontief ───────────────────────────────────────────────
 # L = (I - A)^(-1) : la matrice inverse de Leontief
-# L[i,j] = augmentation de production du secteur i nécessaire pour fournir 1 USD
+# L[i,j] = augmentation de production du secteur i nécessaire pour fournir 1 RWF
 # de demande finale supplémentaire dans le secteur j (effets directs + indirects)
 # diag(N_SECTEURS) : matrice identité de taille N×N (1 sur la diagonale, 0 ailleurs).
 # solve() : calcule l'inverse d'une matrice carrée.
@@ -737,7 +737,7 @@ for (i in seq_len(n_warehouses)) {
   part_emp_i <- emp_i / emploi_national            # part d'emploi par secteur (Σ_i = 1)
   part_rwi_i <- p_rwi_zones[i] / rwi_total         # part RWI scalaire (Σ_i = 1)
   w_i        <- ALPHA_EMPLOI_RWI * part_emp_i + (1 - ALPHA_EMPLOI_RWI) * part_rwi_i
-  x_i        <- production_totale * w_i            # vecteur N_SECTEURS (M USD)
+  x_i        <- production_totale * w_i            # vecteur N_SECTEURS (mrd RWF)
 
   # ── Demande intermédiaire d_inter[i,s] ──────────────────────────────────────
   # Pour chaque secteur s, quantité consommée comme intrant par la production
@@ -749,15 +749,15 @@ for (i in seq_len(n_warehouses)) {
   # ── Demande finale d_finale[i,s] ────────────────────────────────────────────
   # Pondération multiplicative z[i] = pop[i] × (p_rwi[i] + ε), calculée hors boucle.
   # Capture la masse monétaire locale (population × pouvoir d'achat).
-  d_finale_i <- demande_finale * (z_demande[i] / z_totale)  # vecteur N_SECTEURS (M USD)
+  d_finale_i <- demande_finale * (z_demande[i] / z_totale)  # vecteur N_SECTEURS (mrd RWF)
 
   # ── Demande totale et surplus/déficit ───────────────────────────────────────
   d_i <- d_inter_i + d_finale_i
 
   # pmax(0, ...) : max élément par élément entre 0 et le vecteur → remplace les
   # valeurs négatives par 0 (une zone ne peut pas avoir d'offre négative).
-  offre_zones[i, ]   <- pmax(0, x_i - d_i)   # surplus exportable (M USD)
-  demande_zones[i, ] <- pmax(0, d_i - x_i)   # besoin importé     (M USD)
+  offre_zones[i, ]   <- pmax(0, x_i - d_i)   # surplus exportable (mrd RWF)
+  demande_zones[i, ] <- pmax(0, d_i - x_i)   # besoin importé     (mrd RWF)
 }
 
 # ── Stockage dans DuckDB des zones domestiques (format long) ─────────────────
@@ -766,25 +766,25 @@ for (i in seq_len(n_warehouses)) {
 # RoW seront ajoutées ci-dessous dans une table séparée (offre_zones_row).
 offre_long_df <- as.data.frame(offre_zones) %>%
   rownames_to_column("zone") %>%
-  pivot_longer(-zone, names_to = "secteur", values_to = "offre_musd")
+  pivot_longer(-zone, names_to = "secteur", values_to = "offre_mrd_rwf")
 duck_write(offre_long_df, "offre_zones")
 
 demande_long_df <- as.data.frame(demande_zones) %>%
   rownames_to_column("zone") %>%
-  pivot_longer(-zone, names_to = "secteur", values_to = "demande_musd")
+  pivot_longer(-zone, names_to = "secteur", values_to = "demande_mrd_rwf")
 duck_write(demande_long_df, "demande_zones")
 
 # Bilan par zone calculé directement en SQL
 recap_zones <- duck_query("
   SELECT
     o.zone,
-    ROUND(SUM(o.offre_musd), 2)                  AS offre_totale_musd,
-    ROUND(SUM(d.demande_musd), 2)                AS demande_totale_musd,
-    ROUND(SUM(o.offre_musd - d.demande_musd), 2) AS solde_musd
+    ROUND(SUM(o.offre_mrd_rwf), 2)                  AS offre_totale_mrd_rwf,
+    ROUND(SUM(d.demande_mrd_rwf), 2)                AS demande_totale_mrd_rwf,
+    ROUND(SUM(o.offre_mrd_rwf - d.demande_mrd_rwf), 2) AS solde_mrd_rwf
   FROM offre_zones o
   JOIN demande_zones d ON o.zone = d.zone AND o.secteur = d.secteur
   GROUP BY o.zone
-  ORDER BY offre_totale_musd DESC
+  ORDER BY offre_totale_mrd_rwf DESC
 ")
 
 cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
@@ -805,8 +805,8 @@ cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
 #   Kagitumba selon la destination rwandaise.
 #
 #   Offre/demande des nœuds RoW : données de commerce extérieur NISR
-#     offre[RoW_pays, s]   = importations du Rwanda   (M USD)
-#     demande[RoW_pays, s] = exportations Rwanda (M USD)
+#     offre[RoW_pays, s]   = importations du Rwanda   (mrd RWF)
+#     demande[RoW_pays, s] = exportations Rwanda (mrd RWF)
 #
 # AFFECTATION AUX ROUTES :
 #   Après le modèle gravitaire, les flux T[RoW_k, j] sont projetés sur le
@@ -835,7 +835,7 @@ idx_frontiere_par_pays <- noeuds_entreposage %>%
 cat("  Postes frontières par pays :\n")
 print(idx_frontiere_par_pays %>% select(warehouse_name, pays))
 
-# Coûts pré-frontière depuis DuckDB (pays × secteur → cout_usd_tonne)
+# Coûts pré-frontière depuis DuckDB (pays × secteur → cout_rwf_tonne)
 couts_prebordure <- duck_query("SELECT * FROM couts_prebordure")
 
 # ── Extension des matrices offre/demande ──────────────────────────────────────
@@ -872,12 +872,12 @@ for (k in seq_along(pays_row)) {
 # Stockage DuckDB des lignes RoW pour les visualisations
 offre_row_df <- as.data.frame(offre_total[(n_warehouses+1):n_total, , drop = FALSE]) %>%
   rownames_to_column("zone") %>%
-  pivot_longer(-zone, names_to = "secteur", values_to = "offre_musd")
+  pivot_longer(-zone, names_to = "secteur", values_to = "offre_mrd_rwf")
 duck_write(offre_row_df, "offre_zones_row")
 
 demande_row_df <- as.data.frame(demande_total[(n_warehouses+1):n_total, , drop = FALSE]) %>%
   rownames_to_column("zone") %>%
-  pivot_longer(-zone, names_to = "secteur", values_to = "demande_musd")
+  pivot_longer(-zone, names_to = "secteur", values_to = "demande_mrd_rwf")
 duck_write(demande_row_df, "demande_zones_row")
 
 cat("✓ Couche RoW construite :", n_row, "pays,", n_total, "nœuds au total\n\n")
@@ -897,7 +897,7 @@ matrice_couts <- matrix(0, n_warehouses, n_warehouses,
                                         noeuds_entreposage$warehouse_name))
 for (r in seq_len(nrow(od_long))) {
   i <- od_long$id_origine[r]; j <- od_long$id_destination[r]
-  matrice_couts[i, j] <- od_long$cout_usd[r]
+  matrice_couts[i, j] <- od_long$cout_rwf[r]
 }
 
 C_ij <- matrice_couts
@@ -924,11 +924,11 @@ C_ij[C_ij == 0] <- NA # Zones non connectées → pas de flux
 #          coût variable      coût fixe (présent même si distance → 0)
 #
 # CALCUL :
-#   cout_fixe_par_tonne[v] = (cout_chargement_usd[v] + cout_dechargement_usd[v])
+#   cout_fixe_par_tonne[v] = (cout_chargement_rwf[v] + cout_dechargement_rwf[v])
 #                            / capacite_tonnes[v]
 #
-#   La division par la capacité convertit un coût par trajet (USD/trajet) en
-#   coût par tonne transportée (USD/tonne) — l'unité attendue par C_ij.
+#   La division par la capacité convertit un coût par trajet (RWF/trajet) en
+#   coût par tonne transportée (RWF/tonne) — l'unité attendue par C_ij.
 #
 #   Ce coût par tonne décroît avec la capacité du véhicule : un camion lourd
 #   (20t) a un coût de manutention par tonne plus faible qu'une camionnette
@@ -936,9 +936,9 @@ C_ij[C_ij == 0] <- NA # Zones non connectées → pas de flux
 #   l'économie d'échelle à la manutention.
 #
 #   Exemple numérique :
-#     Camionnette  (3.5t)  : (15 + 15) / 3.5  ≈  8.6 USD/tonne
-#     Camion moyen (7.5t)  : (25 + 25) / 7.5  ≈  6.7 USD/tonne
-#     Camion lourd  (20t)  : (40 + 40) / 20.0 =  4.0 USD/tonne
+#     Camionnette  (3.5t)  : (14820 + 14820) / 3.5  ≈  8469 RWF/tonne
+#     Camion moyen (7.5t)  : (24700 + 24700) / 7.5  ≈  6587 RWF/tonne
+#     Camion lourd  (20t)  : (39520 + 39520) / 20.0 =  3952 RWF/tonne
 #
 # VÉHICULE DE RÉFÉRENCE :
 #   Le modèle gravitaire utilise une seule matrice C_ij (celle du véhicule de
@@ -956,14 +956,14 @@ cout_fixe_par_vehicule <- duck_query("
     vehicule_id,
     nom,
     capacite_tonnes,
-    cout_chargement_usd,
-    cout_dechargement_usd,
-    -- Coût fixe total par trajet (USD) = chargement + déchargement
-    (cout_chargement_usd + cout_dechargement_usd)
-      AS cout_fixe_trajet_usd,
-    -- Coût fixe par tonne (USD/tonne) = coût par trajet / capacité
+    cout_chargement_rwf,
+    cout_dechargement_rwf,
+    -- Coût fixe total par trajet (RWF) = chargement + déchargement
+    (cout_chargement_rwf + cout_dechargement_rwf)
+      AS cout_fixe_trajet_rwf,
+    -- Coût fixe par tonne (RWF/tonne) = coût par trajet / capacité
     -- C'est cette valeur qui s'ajoute à C_ij dans le modèle gravitaire
-    (cout_chargement_usd + cout_dechargement_usd) / capacite_tonnes
+    (cout_chargement_rwf + cout_dechargement_rwf) / capacite_tonnes
       AS cout_fixe_par_tonne
   FROM params_flotte
   ORDER BY capacite_tonnes
@@ -972,16 +972,16 @@ cout_fixe_par_vehicule <- duck_query("
 cat("── Coûts fixes de manutention par véhicule ─────────────────────────────\n")
 print(
   cout_fixe_par_vehicule %>%
-    select(nom, capacite_tonnes, cout_fixe_trajet_usd, cout_fixe_par_tonne) %>%
+    select(nom, capacite_tonnes, cout_fixe_trajet_rwf, cout_fixe_par_tonne) %>%
     mutate(
-      cout_fixe_trajet_usd = round(cout_fixe_trajet_usd, 1),
+      cout_fixe_trajet_rwf = round(cout_fixe_trajet_rwf, 1),
       cout_fixe_par_tonne  = round(cout_fixe_par_tonne,  2)
     ) %>%
     rename(
       Véhicule             = nom,
       `Capacité (t)`       = capacite_tonnes,
-      `Coût trajet (USD)`  = cout_fixe_trajet_usd,
-      `Coût/tonne (USD/t)` = cout_fixe_par_tonne
+      `Coût trajet (RWF)`  = cout_fixe_trajet_rwf,
+      `Coût/tonne (RWF/t)` = cout_fixe_par_tonne
     )
 )
 
@@ -993,7 +993,7 @@ cout_fixe_ref <- cout_fixe_par_vehicule$cout_fixe_par_tonne[
 ]
 
 cat("\n  Coût fixe de référence (", VEHICULE_REFERENCE, ") :",
-    round(cout_fixe_ref, 2), "USD/tonne\n")
+    round(cout_fixe_ref, 2), "RWF/tonne\n")
 cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 
 
@@ -1242,7 +1242,7 @@ for (s in SECTEURS) {
 
     cout_pb_ks <- cout_pb_s %>%
       filter(pays == pays_k) %>%
-      pull(cout_usd_tonne)
+      pull(cout_rwf_tonne)
     if (length(cout_pb_ks) == 0) cout_pb_ks <- 0
 
     # Pour chaque destination domestique j, prendre le min sur les frontières b
@@ -1267,8 +1267,8 @@ for (s in SECTEURS) {
   C_total_s_final <- C_total_s + cout_fixe_ref
 
   # ── Calcul de la friction spatiale ───────────────────────────────────────────
-  # On multiplie C_total_s_final (USD/tonne) par TONNES_PAR_mrd_RWF[s] (tonnes/MUSD)
-  # pour obtenir un coût adimensionné : USD dépensés en transport par MUSD de biens.
+  # On multiplie C_total_s_final (RWF/tonne) par TONNES_PAR_mrd_RWF[s] (tonnes/mrd RWF)
+  # pour obtenir un coût adimensionné : RWF dépensés en transport par mrd RWF de biens.
   # Ce rapport (coût de transport / valeur des biens) est la friction du modèle
   # iceberg. Beta mesure alors l'élasticité du commerce à ce coût RELATIF,
   # ce qui rend son interprétation cohérente entre secteurs et calibrable sur
@@ -1278,7 +1278,7 @@ for (s in SECTEURS) {
   diag(friction)            <- 0
 
   # ── Appel à Furness (doublement contraint) ────────────────────────────────────
-  # offre_total[, s] et demande_total[, s] sont en M USD ; on les convertit en
+  # offre_total[, s] et demande_total[, s] sont en mrd RWF ; on les convertit en
   # tonnes via TONNES_PAR_mrd_RWF[s] pour que les marges cibles soient en tonnes.
   # La matrice résultante flux_gravitaire[[s]] est directement en tonnes.
   # Les n_row dernières entrées sont les flux d'import/export NISR (convertis).
@@ -2109,7 +2109,7 @@ cat("✓ Transition VIII.1 → VIII.2 terminée\n\n")
 
 # ==============================================================================
 # VIII.3 : Exports finaux
-# Exporte toutes les matrices (flux tonnes, offre/demande en M USD, IO)
+# Exporte toutes les matrices (flux tonnes, offre/demande en mrd RWF, IO)
 # en CSV et le réseau complet avec volumes fret en GeoPackage.
 # ==============================================================================
 

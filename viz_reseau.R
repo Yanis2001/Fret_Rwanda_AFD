@@ -477,7 +477,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     tm_lines(
       col       = "cost_per_tkm",
       col.scale = tm_scale_intervals(style="quantile", n=4, values=PALETTE_COUTS),
-      col.legend = tm_legend(title = "Coût (USD/tkm)"),
+      col.legend = tm_legend(title = "Coût (RWF/tkm)"),
       lwd = 1.5
     ) +
     tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
@@ -525,7 +525,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     tm_lines(
       col        = "cost_per_tkm",
       col.scale  = tm_scale_intervals(style="quantile", n=5, values="brewer.yl_or_rd"),
-      col.legend = tm_legend(title = "Coût (USD/km)"),
+      col.legend = tm_legend(title = "Coût (RWF/km)"),
       lwd = 1.5
     ) +
     tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +

@@ -340,14 +340,14 @@ volume_detourne_arete  <- numeric(n_aretes_physiques)
 # un vecteur nommé qui permet un accès direct en O(1) via la clé "i_j".
 # paste0(i, "_", j) est la clé unique pour chaque paire OD.
 od_ref_map <- setNames(
-  od_long$cout_usd,
+  od_long$cout_rwf,
   paste0(od_long$id_origine, "_", od_long$id_destination)
 )
 cat("  Table de référence OD pré-chargée (", length(od_ref_map), "paires)\n\n")
 
 # ── Récupération des poids originaux du graphe multi-modal ────────────────────
 # igraph::E() : accède aux arêtes (edges) du graphe.
-# $weight : attribut "weight" de chaque arête (coût de transport en USD).
+# $weight : attribut "weight" de chaque arête (coût de transport en RWF).
 poids_originaux <- igraph::E(recuperer_lourd("graphe_multimodal"))$weight
 
 # On travaille sur une COPIE du graphe multi-modal pour ne pas altérer l'original.
@@ -560,7 +560,7 @@ cat("✓ Matrice OD dégradée calculée\n\n")
 # PARTIE IX.3 — CALCUL DES SURCOÛTS ET CLASSIFICATION DES IMPACTS
 #
 # On compare les deux matrices OD (avant / après perturbation) pour calculer :
-#   - Le surcoût absolu (USD supplémentaires par trajet)
+#   - Le surcoût absolu (RWF supplémentaires par trajet)
 #   - Le surcoût relatif (% d'augmentation)
 #   - Le type d'impact (détour, déconnexion, inchangé)
 #   - Les zones les plus touchées en cumulant leurs surcoûts
@@ -585,17 +585,17 @@ od_compare <- od_long %>%
     # Surcoût absolu : différence de coût entre la situation dégradée et normale.
     # Si la route est coupée (cout_degrade = Inf), le surcoût est NA
     # (on le traite séparément dans la variable "type_impact").
-    surcout_absolu_usd  = if_else(
+    surcout_absolu_rwf  = if_else(
       connecte,
-      cout_degrade - cout_usd,
+      cout_degrade - cout_rwf,
       NA_real_
     ),
     
     # Surcoût relatif : augmentation en % par rapport au coût de référence.
-    # NULLIF équivalent en R : on évite la division par zéro si cout_usd = 0.
+    # NULLIF équivalent en R : on évite la division par zéro si cout_rwf = 0.
     surcout_relatif_pct = if_else(
-      connecte & cout_usd > 0,
-      round((cout_degrade - cout_usd) / cout_usd * 100, 1),
+      connecte & cout_rwf > 0,
+      round((cout_degrade - cout_rwf) / cout_rwf * 100, 1),
       NA_real_
     ),
     
@@ -604,7 +604,7 @@ od_compare <- od_long %>%
     # L'ordre des conditions compte : la première condition vraie est retenue.
     type_impact = case_when(
       is.na(connecte) | !connecte   ~ "deconnecte",   # Plus aucun chemin possible
-      surcout_absolu_usd  == 0      ~ "inchange",     # Le chemin optimal ne passe pas par la zone perturbée
+      surcout_absolu_rwf  == 0      ~ "inchange",     # Le chemin optimal ne passe pas par la zone perturbée
       surcout_relatif_pct < 10      ~ "faible",       # Détour minime (< 10%)
       surcout_relatif_pct < 50      ~ "modere",       # Détour notable (10-50%)
       surcout_relatif_pct < 100     ~ "fort",         # Détour majeur (50-100%)
@@ -688,8 +688,8 @@ stats_impact <- od_compare %>%
   summarise(
     n_paires       = n(),
     pct_paires     = round(n() / nrow(od_compare) * 100, 1),
-    surcout_moy    = round(mean(surcout_absolu_usd,  na.rm = TRUE), 2),
-    surcout_median = round(median(surcout_absolu_usd, na.rm = TRUE), 2),
+    surcout_moy    = round(mean(surcout_absolu_rwf,  na.rm = TRUE), 2),
+    surcout_median = round(median(surcout_absolu_rwf, na.rm = TRUE), 2),
     .groups        = "drop"
   )
 
@@ -703,14 +703,14 @@ surcouts_par_zone <- od_compare %>%
   filter(type_impact != "inchange") %>%
   group_by(Zone = nom_origine) %>%
   summarise(
-    surcout_total_usd  = round(sum(surcout_absolu_usd,  na.rm = TRUE), 1),
-    surcout_moyen_usd  = round(mean(surcout_absolu_usd, na.rm = TRUE), 2),
+    surcout_total_rwf  = round(sum(surcout_absolu_rwf,  na.rm = TRUE), 1),
+    surcout_moyen_rwf  = round(mean(surcout_absolu_rwf, na.rm = TRUE), 2),
     n_paires_touchees  = n(),
     n_deconnexions     = sum(type_impact == "deconnecte"),
     pct_surcout_moyen  = round(mean(surcout_relatif_pct, na.rm = TRUE), 1),
     .groups            = "drop"
   ) %>%
-  arrange(desc(surcout_total_usd))
+  arrange(desc(surcout_total_rwf))
 
 cat("\nTop 10 des zones les plus touchées (en tant qu'origine) :\n")
 print(head(surcouts_par_zone, 10))
@@ -721,11 +721,11 @@ surcouts_par_destination <- od_compare %>%
   filter(type_impact != "inchange") %>%
   group_by(Zone = nom_destination) %>%
   summarise(
-    surcout_total_usd = round(sum(surcout_absolu_usd,  na.rm = TRUE), 1),
+    surcout_total_rwf = round(sum(surcout_absolu_rwf,  na.rm = TRUE), 1),
     n_deconnexions    = sum(type_impact == "deconnecte"),
     .groups           = "drop"
   ) %>%
-  arrange(desc(surcout_total_usd))
+  arrange(desc(surcout_total_rwf))
 
 cat("Top 5 des zones les plus isolées (en tant que destination) :\n")
 print(head(surcouts_par_destination, 5))
@@ -803,7 +803,7 @@ cat("  Arêtes candidates :", length(aretes_candidates),
 #   - Prend un vecteur d'indices d'arêtes physiques à supprimer
 #   - Construit un graphe temporaire avec ces arêtes bloquées (poids = Inf)
 #   - Recalcule les distances OD pour les paires les plus importantes
-#   - Retourne le surcoût total agrégé (en USD)
+#   - Retourne le surcoût total agrégé (en RWF)
 calculer_surcout_total <- function(indices_a_supprimer, graphe_ref, paires_imp) {
 
   # Blocage des arêtes perturbées dans toutes les couches véhicule.
@@ -908,7 +908,7 @@ criticite_df <- criticite_df %>%
   mutate(
     rang              = row_number(),
     longueur_km       = round(longueur_m / 1000, 2),
-    surcout_pondere_k = round(surcout_pondere / 1000, 1)   # En milliers USD×tonnes
+    surcout_pondere_k = round(surcout_pondere / 1000, 1)   # En milliers RWF×tonnes
   )
 
 # ── Sauvegarde de la table de criticité dans DuckDB ───────────────────────────
@@ -980,7 +980,7 @@ cat("  Paires déconnectées       :",
     sum(od_compare$type_impact == "deconnecte", na.rm = TRUE), "\n\n")
 
 cat("SURCOÛT MOYEN (paires affectées) :",
-    round(mean(od_compare$surcout_absolu_usd, na.rm = TRUE), 2), "USD\n")
+    round(mean(od_compare$surcout_absolu_rwf, na.rm = TRUE), 2), "RWF\n")
 cat("SURCOÛT RELATIF MOYEN            :",
     round(mean(od_compare$surcout_relatif_pct, na.rm = TRUE), 1), "%\n\n")
 

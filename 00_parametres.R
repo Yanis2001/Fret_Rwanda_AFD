@@ -43,7 +43,7 @@ packages_requis <- c(
   "ggrepel",       # Étiquettes ggplot2 sans chevauchement (graphiques RWI, démographie)
   "ggalluvial",    # Diagrammes de Sankey pour les flux de fret (viz_fret.R)
   "RColorBrewer",  # Palettes de couleurs pour les cartes et graphiques sectoriels
-  "wbstats"        # Accès à l'API Banque Mondiale 
+  "readxl"         # Lecture des fichiers Excel (.xlsx) — utilisé pour la SAM IFPRI 2021
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
@@ -391,17 +391,20 @@ RPHC5_COL_DISTRICT_EMPLOI <- "District"
 # Correspondance entre colonnes du CSV RPHC5 et secteurs du modèle.
 # Format : "Nom_colonne_CSV" = list(Secteur_modele = part, ...)
 # Les parts de chaque groupe doivent sommer à 1.
-# Justification des parts Manufacturing → Agro_industrie/Industrie :
-#   dans le RPHC5, "Manufacturing" regroupe l'agroalimentaire (~45%)
-#   et l'industrie manufacturière au sens strict (~55%).
+#
+# Le RPHC5 ne distingue que 7 grands groupes d'emploi ; le modèle en utilise 11.
+# Ventilation appliquée :
+#   - Emploi_Agriculture → Agriculture vivrière + Cultures d'exportation (café/thé/tabac)
+#   - Emploi_Industrie   → Agro-industrie + Manufactures + Chimie/pétrole + Énergie/eau
 RPHC5_CORRESPONDANCE_SECTEURS <- list(
-  Emploi_Agriculture  = list(Agriculture    = 1.0),
-  Emploi_Mines        = list(Mines          = 1.0),
-  Emploi_Industrie    = list(Agro_industrie = 0.45, Industrie = 0.55),
-  Emploi_Construction = list(Construction   = 1.0),
-  Emploi_Commerce     = list(Commerce       = 1.0),
-  Emploi_Transport    = list(Transport      = 1.0),
-  Emploi_Services     = list(Services       = 1.0)
+  Emploi_Agriculture  = list(Agriculture = 0.92, Cultures_export = 0.08),
+  Emploi_Mines        = list(Mines = 1.0),
+  Emploi_Industrie    = list(Agro_industrie = 0.45, Manufactures = 0.45,
+                             Chimie_petrole = 0.05, Energie_eau = 0.05),
+  Emploi_Construction = list(Construction = 1.0),
+  Emploi_Commerce     = list(Commerce = 1.0),
+  Emploi_Transport    = list(Transport = 1.0),
+  Emploi_Services     = list(Services = 1.0)
 )
 
 
@@ -410,33 +413,159 @@ RPHC5_CORRESPONDANCE_SECTEURS <- list(
 # Paramètres du modèle économique
 # ==============================================================================
 
-# Secteurs économiques modélisés (ordre fixe — ne pas modifier sans recalculer A)
-SECTEURS <- c("Agriculture", "Mines", "Agro_industrie", "Industrie",
-              "Construction", "Commerce", "Transport", "Services")
+# Secteurs économiques modélisés (découpage orienté FRET, dérivé de la SAM).
+# Ordre fixe. La matrice A et les agrégats sont recalculés automatiquement depuis
+# la SAM via SAM_MAPPING_SECTEURS, donc changer cette liste impose seulement de
+# maintenir cohérents : SAM_MAPPING_SECTEURS, BETA_SECTEUR, TONNES_PAR_mrd_RWF,
+# RPHC5_CORRESPONDANCE_SECTEURS, COMMERCE_EXTERIEUR_NISR, couts_prebordure_df.
+SECTEURS <- c("Agriculture", "Cultures_export", "Mines", "Agro_industrie",
+              "Chimie_petrole", "Manufactures", "Construction", "Commerce",
+              "Transport", "Energie_eau", "Services")
 
 N_SECTEURS <- length(SECTEURS)
 
-# Demande finale nationale par secteur (M USD), calibrée sur les tables
-# Ressources-Emplois NISR Rwanda 2022 (Supply-Use Tables, publication NISR 2023).
-# Définition : F[s] = consommation finale des ménages + consommation publique
-#              + formation brute de capital fixe (FBCF), par secteur.
-# NOTE : les exportations et importations sont exclues ici — elles sont traitées
-#        explicitement via les entrepôts RoW et leurs offre/demande sectorielles.
-# Source : NISR, National Accounts 2022, Table 3 (Use at purchasers' prices).
-# À mettre à jour lorsque les SUT 2023/2024 seront publiés par le NISR.
-DEMANDE_FINALE_NISR <- c(
-  Agriculture    = 3500,  # Forte consommation domestique (vivrières, café, thé)
-  Mines          =   80,  # Quasi-totalité exportée (3T) ; très faible usage domestique
-  Agro_industrie =  850,  # Produits transformés (farine, boissons, huile, sucre)
-  Industrie      =  700,  # Manufactures, biens de consommation (importés en partie)
-  Construction   = 1300,  # FBCF dominante (investissement bâtiment et BTP)
-  Commerce       = 1100,  # Marges commerciales et services de gros/détail
-  Transport      =  900,  # Services de transport de personnes et marchandises
-  Services       = 4500   # ICT, finances, éducation, santé, administration publique
+
+# Chemin et feuille du fichier SAM
+SAM_XLSX_PATH <- "data/raw/IFPRI_SAM_RWA_2021.xlsx"
+SAM_FEUILLE   <- "SAM_2021"
+
+# ── Correspondance des 41 comptes sectoriels de la SAM vers les 11 secteurs du modèle
+# La clé est le suffixe à 4 lettres du code SAM (ex : « maiz » pour amaiz/cmaiz),
+# commun aux comptes d'activités (préfixe « a ») et de commodités (préfixe « c »).
+# Choix méthodologiques validés :
+#   - Café/thé/cacao (coff) et Tabac (toba) → Cultures_export (cultures de rente).
+#   - Chimie + pétrole (chem) → Chimie_petrole (vrac pétrolier importé).
+#   - Textile/bois/minéraux non métalliques/métaux/machines/autres → Manufactures.
+#   - Électricité/gaz (elec) et Eau/assainissement (watr) → Energie_eau (fret nul).
+#   - Aliments transformés (food) et Boissons (beve) → Agro_industrie.
+SAM_MAPPING_SECTEURS <- c(
+  maiz = "Agriculture", rice = "Agriculture", ocer = "Agriculture", puls = "Agriculture",
+  oils = "Agriculture", root = "Agriculture", vege = "Agriculture", sugr = "Agriculture",
+  frui = "Agriculture", ocrp = "Agriculture", catt = "Agriculture", poul = "Agriculture",
+  oliv = "Agriculture", fore = "Agriculture", fish = "Agriculture",
+  coff = "Cultures_export", toba = "Cultures_export",
+  mine = "Mines",
+  food = "Agro_industrie", beve = "Agro_industrie",
+  chem = "Chimie_petrole",
+  text = "Manufactures", wood = "Manufactures", nmet = "Manufactures",
+  metl = "Manufactures", mach = "Manufactures", oman = "Manufactures",
+  cons = "Construction",
+  trad = "Commerce",
+  tran = "Transport",
+  elec = "Energie_eau", watr = "Energie_eau",
+  hotl = "Services", comm = "Services", fsrv = "Services", real = "Services",
+  bsrv = "Services", padm = "Services", educ = "Services", heal = "Services",
+  osrv = "Services"
 )
-# Vérification de cohérence : total ≈ 12 930 M USD, proche de l'absorption
-# domestique rwandaise 2022 (PIB ~11 Md + importations nettes ~2 Md).
-stopifnot(all(names(DEMANDE_FINALE_NISR) %in% SECTEURS))
+
+# Comptes de la SAM lus en COLONNE et agrégés comme DEMANDE FINALE :
+# consommation des 10 catégories de ménages + consommation publique (gov)
+# + compte capital « s-i ».
+# Avec s-i = FBCF + variation de stocks
+# Les exportations (compte « row ») sont volontairement exclues — traitées via
+# les entrepôts RoW (03_transport.R).
+SAM_COMPTES_DEMANDE_FINALE <- c(
+  "hhd-r1", "hhd-r2", "hhd-r3", "hhd-r4", "hhd-r5",
+  "hhd-u1", "hhd-u2", "hhd-u3", "hhd-u4", "hhd-u5",
+  "gov", "s-i"
+)
+
+# Comptes de facteurs de la SAM (lignes) dont la somme = valeur ajoutée d'une activité :
+# 3 niveaux : travail (non qualifié, hautement qualifié et semi-qualifié) + terre agricole + capital.
+SAM_COMPTES_FACTEURS <- c("flab-n", "flab-p", "flab-s", "flnd", "fcap")
+
+# ── Fonction d'extraction de la SAM ───────────────────────────────────────────
+# Lit le fichier Excel et agrège la matrice 110×110 vers les 11 secteurs du modèle.
+# Retourne une liste contenant (toutes les valeurs en milliards de RWF) :
+#   A              : matrice 11×11 des coefficients techniques a_ij = z_ij / output_j
+#                    (z_ij = conso. intermédiaire de la commodité i par l'activité j)
+#   output         : production brute par secteur (cellule [activité, total])
+#   va             : valeur ajoutée par secteur (somme des paiements aux facteurs)
+#   demande_finale : demande finale par secteur (cf. SAM_COMPTES_DEMANDE_FINALE)
+#   imports        : importations par secteur (flux compte « row » → commodité)
+#   exports        : exportations par secteur (flux commodité → compte « row »)
+lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
+  if (!file.exists(chemin)) {
+    stop("Fichier SAM introuvable : ", chemin,
+         "\n  → Le modèle économique exige la SAM. Placez le fichier dans data/raw/.")
+  }
+  # Lecture brute sans en-têtes : on récupère la grille telle quelle.
+  brut <- as.data.frame(readxl::read_excel(chemin, sheet = feuille,
+                                           col_names = FALSE, .name_repair = "minimal"))
+
+  # Codes des comptes : 1re ligne = codes de colonne ; 2e colonne = codes de ligne.
+  codes_col <- as.character(unlist(brut[1, ], use.names = FALSE))
+  codes_row <- as.character(brut[[2]])
+
+  # Helpers : position d'un compte par son code, et lecture numérique sécurisée
+  # (les cellules vides ou textuelles sont traitées comme des zéros).
+  idx_col <- function(code) which(codes_col == code)[1]
+  idx_row <- function(code) which(codes_row == code)[1]
+  num <- function(r, c) {
+    if (is.na(r) || is.na(c)) return(0)
+    v <- suppressWarnings(as.numeric(brut[r, c]))
+    if (is.na(v)) 0 else v
+  }
+
+  SEC      <- SECTEURS
+  suffixes <- names(SAM_MAPPING_SECTEURS)
+  zero_sec <- function() setNames(numeric(length(SEC)), SEC)
+
+  output <- zero_sec(); va <- zero_sec(); demande_finale <- zero_sec()
+  imports <- zero_sec(); exports <- zero_sec()
+
+  # Index des comptes spéciaux réutilisés dans la boucle.
+  ir_row   <- idx_row("row")     # ligne « Rest of world » (importations)
+  ic_row   <- idx_col("row")     # colonne « Rest of world » (exportations)
+  ic_total <- idx_col("total")   # colonne des totaux (production brute des activités)
+
+  # Boucle 1 : grandeurs par secteur (output, VA, demande finale, imports, exports).
+  for (sf in suffixes) {
+    s_grp  <- SAM_MAPPING_SECTEURS[[sf]]
+    ra <- idx_row(paste0("a", sf)); ca <- idx_col(paste0("a", sf))
+    rc <- idx_row(paste0("c", sf)); cc <- idx_col(paste0("c", sf))
+
+    output[s_grp] <- output[s_grp] + num(ra, ic_total)
+    for (fc in SAM_COMPTES_FACTEURS)         va[s_grp]             <- va[s_grp]             + num(idx_row(fc), ca)
+    for (dc in SAM_COMPTES_DEMANDE_FINALE)   demande_finale[s_grp] <- demande_finale[s_grp] + num(rc, idx_col(dc))
+    imports[s_grp] <- imports[s_grp] + num(ir_row, cc)
+    exports[s_grp] <- exports[s_grp] + num(rc, ic_row)
+  }
+
+  # Boucle 2 : consommations intermédiaires Z[i,j] = commodité i (ligne) achetée
+  # par l'activité j (colonne), agrégées aux 11 secteurs.
+  Z <- matrix(0, length(SEC), length(SEC), dimnames = list(SEC, SEC))
+  for (sf_i in suffixes) {
+    si <- SAM_MAPPING_SECTEURS[[sf_i]]; rc_i <- idx_row(paste0("c", sf_i))
+    for (sf_j in suffixes) {
+      sj <- SAM_MAPPING_SECTEURS[[sf_j]]; ca_j <- idx_col(paste0("a", sf_j))
+      Z[si, sj] <- Z[si, sj] + num(rc_i, ca_j)
+    }
+  }
+
+  # Coefficients techniques : a_ij = z_ij / output_j (division par la production
+  # de l'activité consommatrice j). La somme d'une colonne = part des conso.
+  # intermédiaires dans l'output ; (1 - somme) = part de valeur ajoutée.
+  A_sam <- matrix(0, length(SEC), length(SEC), dimnames = list(SEC, SEC))
+  for (sj in SEC) if (output[sj] > 0) A_sam[, sj] <- Z[, sj] / output[sj]
+
+  list(A = A_sam, output = output[SEC], va = va[SEC],
+       demande_finale = demande_finale[SEC],
+       imports = imports[SEC], exports = exports[SEC])
+}
+
+cat("  → Lecture de la SAM IFPRI Rwanda 2021…\n")
+sam_rwanda <- lire_sam_rwanda()
+cat("  ✓ SAM lue :", sum(sam_rwanda$va), "mrd RWF de VA totale (",
+    nrow(sam_rwanda$A), "secteurs)\n")
+
+# Demande finale nationale par secteur (MILLIARDS DE RWF), extraite de la SAM.
+# Définition : F[s] = consommation des ménages + consommation publique
+#              + investissement I (colonne « s-i » = FBCF + var. stocks, PAS l'épargne).
+# NOTE : exportations/importations exclues — traitées via les entrepôts RoW et
+#        leurs offre/demande sectorielles (03_transport.R).
+DEMANDE_FINALE_SAM <- sam_rwanda$demande_finale[SECTEURS]
+stopifnot(all(names(DEMANDE_FINALE_SAM) %in% SECTEURS))
 
 # ── Pondération composite emploi × RWI dans le modèle MRIO ───────────────────
 #
@@ -459,15 +588,21 @@ EPSILON_RWI <- 0.05
 #   Beta élevé = commerce très sensible au coût du transport rapporté à la valeur du bien
 #               (biens lourds à faible valeur unitaire : agriculture, construction)
 #   Beta faible = peu sensible (biens à haute valeur ajoutée, services)
+# Pour les secteurs sans fret physique (Transport, Energie_eau, Services), beta est
+# sans effet (offre/demande en tonnes nulles → matrice de flux vide), on conserve
+# une valeur basse par cohérence.
 BETA_SECTEUR <- c(
-  Agriculture    = 2.2,
-  Mines          = 1.2,
-  Agro_industrie = 1.8,
-  Industrie      = 1.6,
-  Construction   = 2.5,
-  Commerce       = 1.7,
-  Transport      = 1.3,
-  Services       = 0.9
+  Agriculture     = 2.3,   # Vivrier pondéreux, faible valeur unitaire → très sensible
+  Cultures_export = 1.4,   # Café/thé/tabac : forte valeur → peu sensible au coût
+  Mines           = 1.2,   # Minerai dense, forte valeur → peu sensible
+  Agro_industrie  = 1.8,   # Produits transformés, valeur moyenne
+  Chimie_petrole  = 1.5,   # Vrac pétrolier : lourd mais valeur élevée
+  Manufactures    = 1.6,   # Mix textile/métaux/machines, valeur moyenne/haute
+  Construction    = 2.5,   # Agrégats/ciment : très lourds, très faible valeur → très sensible
+  Commerce        = 1.7,   # Redistribution de biens
+  Transport       = 1.3,   # Service (fret nul) — valeur conservée par cohérence
+  Energie_eau     = 0.9,   # Service en réseau (fret nul)
+  Services        = 0.9    # Immatériel (fret nul)
 )
 
 # ── Paramètres du modèle gravitaire doublement contraint ──────────────────────
@@ -489,164 +624,37 @@ FURNESS_MAX_ITER <- 200
 FURNESS_TOL <- 1e-6
 
 # Matrice des coefficients techniques A 
-# a[i,j] = proportion de la production du secteur j (colonne)
-# consommée comme intrant par le secteur i (ligne)
-#
-# Exemple de lecture :
-#   A["Agriculture","Agro_industrie"] = 0.45 → 45% des intrants de l'Agro-industrie
-#   proviennent de l'Agriculture (grains, fruits, légumes pour transformation)
-# matrix() crée une matrice à partir d'un vecteur de valeurs.
-# nrow/ncol : dimensions. byrow = TRUE : remplit ligne par ligne (pas colonne par colonne).
-# dimnames : noms des lignes et colonnes.
-A <- matrix(c(
-  # ← Secteur fournisseur (lignes) / Secteur consommateur (colonnes) →
-  # Agri  Mines AgroI Indus Const Comm  Trans Serv
-  0.08, 0.00, 0.45, 0.05, 0.01, 0.05, 0.02, 0.03,  # Agriculture
-  0.00, 0.05, 0.01, 0.08, 0.05, 0.00, 0.01, 0.00,  # Mines
-  0.05, 0.00, 0.08, 0.02, 0.00, 0.06, 0.03, 0.04,  # Agro-industrie
-  0.02, 0.03, 0.03, 0.06, 0.15, 0.03, 0.04, 0.02,  # Industrie
-  0.01, 0.02, 0.01, 0.02, 0.08, 0.02, 0.03, 0.05,  # Construction
-  0.04, 0.05, 0.06, 0.08, 0.05, 0.06, 0.05, 0.06,  # Commerce
-  0.03, 0.06, 0.04, 0.05, 0.06, 0.07, 0.06, 0.04,  # Transport
-  0.02, 0.02, 0.02, 0.03, 0.04, 0.06, 0.05, 0.08   # Services
-), nrow=N_SECTEURS, ncol=N_SECTEURS, byrow=TRUE,
-dimnames = list(SECTEURS, SECTEURS))
+A <- sam_rwanda$A[SECTEURS, SECTEURS]
 
-# ==============================================================================
-# Production totale par secteur — Source : Banque Mondiale (wbstats)
-# production_totale = production BRUTE (output brut), calculée en divisant la
-# valeur ajoutée (VA) sectorielle par la fraction de VA dans l'output :
-#   output_j = VA_j / (1 - Σ_i A[i,j])
-# Cette formule assure la cohérence avec la matrice A dans le modèle de Leontief :
-#   A %*% output_brut donne les consommations intermédiaires attendues.
-#
-# Téléchargement automatique via wbstats (nécessite une connexion internet).
-# En cas d'échec, les valeurs WB_VA_FALLBACK (BM Rwanda 2022 pré-calculées) sont utilisées.
-#
-# Indicateurs BM utilisés :
-#   NV.AGR.TOTL.CD  : VA Agriculture, sylviculture, pêche (USD courants)
-#   NV.IND.MANF.CD  : VA Industrie manufacturière (USD courants)
-#   NV.IND.TOTL.CD  : VA Industrie totale incl. construction (USD courants)
-#   NV.SRV.TOTL.CD  : VA Services (USD courants)
-#   NY.GDP.MKTP.CD  : PIB (USD courants)
-#
-# Désagrégation appliquée (la BM ne publie pas ce niveau de détail) :
-#   Manufacturier     → Agro_industrie (45%) + Industrie (55%) [parts RPHC5 2022]
-#   Industrie_non_mfg → Mines (34%) + Construction (66%)
-#     [parts calées sur Rwanda 2022 : Mines 245 M USD, Construction 474 M USD]
-#   Services          → Commerce (22%) + Transport (12%) + Services_résiduel (66%)
-#     [parts calées sur la structure EAC, Rwanda Economic Update 2022]
-# ==============================================================================
+production_totale <- sam_rwanda$output[SECTEURS]
+cat("  ✓ production_totale : SAM IFPRI Rwanda 2021 (",
+    round(sum(production_totale)), "mrd RWF d'output total )\n")
 
-# Chemin du cache local (évite de re-télécharger à chaque session)
-WB_CACHE_PATH <- file.path(DIR_CACHE, "wb_rwanda_secteurs.rds")
-
-# Valeurs de repli VA en M USD (Rwanda 2022, Banque Mondiale)
-# Utilisées si wbstats est indisponible ou si le téléchargement échoue.
-WB_VA_FALLBACK <- c(
-  Agriculture    = 3294,  # NV.AGR.TOTL.CD Rwanda 2022
-  Mines          =  245,  # (NV.IND.TOTL.CD − NV.IND.MANF.CD) × 0.34
-  Agro_industrie =  340,  # NV.IND.MANF.CD (756 M USD) × 0.45 (RPHC5)
-  Industrie      =  416,  # NV.IND.MANF.CD (756 M USD) × 0.55 (RPHC5)
-  Construction   =  474,  # (NV.IND.TOTL.CD − NV.IND.MANF.CD) × 0.66
-  Commerce       = 1399,  # NV.SRV.TOTL.CD (6 358 M USD) × 0.22 (structure EAC)
-  Transport      =  763,  # NV.SRV.TOTL.CD × 0.12 (structure EAC)
-  Services       = 4196   # NV.SRV.TOTL.CD × 0.66 (résiduel)
+# ── Facteurs de conversion valeur économique → masse de fret ──────────────────
+# Unité : TONNES PAR MILLIARD DE RWF (les flux du modèle — production, demande —
+# sont en milliards de RWF).
+#
+# Logique : densité physique = tonnes par unité de valeur. Plus le bien est lourd
+# et bon marché (agrégats, vivrier), plus le facteur est élevé ; plus il est léger
+# et cher (café, machines), plus il est faible. Les SERVICES et l'ÉNERGIE/EAU ne
+# génèrent AUCUN fret routier (mis à 0) : le secteur Transport est mis à 0 car il
+# produit un service (déplacer les biens des autres), déjà capturé par les flux
+# physiques des autres secteurs ; ses propres intrants (carburant, pièces) sont
+# comptés via la matrice A (demande intermédiaire), pas via son output.
+TONNES_PAR_mrd_RWF <- c(
+  Agriculture     = 1700,  # Vivrier pondéreux : racines, bananes, céréales (FAOSTAT)
+  Cultures_export = 280,   # Café/thé/tabac : valeur unitaire élevée → faible tonnage
+  Mines           = 2300,  # Minerai dense (3T) + carrières (RMB Annual Report 2022)
+  Agro_industrie  = 1800,  # Farine, boissons, huiles, sucre transformés
+  Chimie_petrole  = 1600,  # Produits pétroliers (vrac lourd) dominants à l'import
+  Manufactures    = 1100,  # Mix : ciment/verre (nmet) lourds, machines/textile plus légers
+  Construction    = 9000,  # Agrégats, ciment, acier : très lourds / très faible valeur
+  Commerce        = 760,   # Biens redistribués, valeur unitaire plus élevée
+  Transport       = 0,     # Service (cf. supra) — fret nul pour éviter le double comptage
+  Energie_eau     = 0,     # Électricité + eau : aucun fret routier
+  Services        = 0      # Immatériel (finance, ICT, éducation, santé, administration)
 )
-
-# Télécharge (ou recharge depuis le cache) les données VA sectorielles BM Rwanda.
-# Retourne un data.frame avec une ligne par année, colonnes = indicateurs nommés.
-telecharger_wb_va <- function() {
-  if (file.exists(WB_CACHE_PATH)) {
-    age_j <- as.numeric(difftime(Sys.time(), file.mtime(WB_CACHE_PATH), units = "days"))
-    if (age_j < 90) {
-      cat("    Cache BM utilisé (", round(age_j, 0), "j)\n", sep = "")
-      return(readRDS(WB_CACHE_PATH))
-    }
-  }
-  cat("    Téléchargement Banque Mondiale Rwanda…\n")
-  res <- tryCatch(
-    wbstats::wb_data(
-      indicator  = c(
-        agri  = "NV.AGR.TOTL.CD",
-        manuf = "NV.IND.MANF.CD",
-        indus = "NV.IND.TOTL.CD",
-        serv  = "NV.SRV.TOTL.CD",
-        gdp   = "NY.GDP.MKTP.CD"
-      ),
-      country    = "RWA",
-      start_date = 2020, end_date = 2023
-    ),
-    error = function(e) { message("    ⚠ wbstats : ", conditionMessage(e)); NULL }
-  )
-  if (is.null(res)) return(NULL)
-  res_ok <- res[!is.na(res$gdp), ]
-  if (nrow(res_ok) == 0) return(NULL)
-  res_ok <- res_ok[order(-res_ok$date), ][1L, ]
-  saveRDS(res_ok, WB_CACHE_PATH)
-  cat("    ✓ Rwanda ", res_ok$date, " — PIB ", round(res_ok$gdp / 1e9, 1), " Md USD\n", sep = "")
-  res_ok
-}
-
-# Calcule l'output brut à partir des VA sectorielles via l'inverse de Leontief.
-# Formule : output = (I - A)^{-1} × va
-# Justification : le modèle (03_transport.R) calcule conso_interm = A %*% output
-# et valeur_ajoutee = output - conso_interm = (I - A) × output.
-# En posant (I - A) × output = va_cible, on obtient output = (I - A)^{-1} × va_cible,
-# ce qui garantit que la BM et le modèle donnent exactement les mêmes VA sectorielles.
-calculer_output_brut <- function(va) {
-  leontief_inv <- solve(diag(N_SECTEURS) - A)
-  setNames(round(as.vector(leontief_inv %*% va)), SECTEURS)
-}
-
-cat("  → Données Banque Mondiale (production_totale)…\n")
-wb_rwa <- telecharger_wb_va()
-
-if (!is.null(wb_rwa)) {
-  agri_m       <- wb_rwa$agri[1]  / 1e6
-  manuf_m      <- wb_rwa$manuf[1] / 1e6
-  indus_m      <- wb_rwa$indus[1] / 1e6
-  serv_m       <- wb_rwa$serv[1]  / 1e6
-
-  # Industrie hors manufacturier = Mines + Construction + Utilities (résidu)
-  # Parts calées sur Rwanda 2022 : Mines 34%, Construction 66%
-  non_manuf_m  <- max(0, indus_m - manuf_m)
-  mines_m      <- non_manuf_m * 0.34
-  const_m      <- non_manuf_m * 0.66
-
-  va_wb <- c(
-    Agriculture    = agri_m,
-    Mines          = mines_m,
-    Agro_industrie = manuf_m * 0.45,
-    Industrie      = manuf_m * 0.55,
-    Construction   = const_m,
-    Commerce       = serv_m * 0.22,
-    Transport      = serv_m * 0.12,
-    Services       = serv_m * 0.66
-  )
-  production_totale <- calculer_output_brut(va_wb)
-  cat("  ✓ production_totale : Banque Mondiale", wb_rwa$date, "\n")
-} else {
-  production_totale <- calculer_output_brut(WB_VA_FALLBACK)
-  cat("  ✓ production_totale : valeurs de repli BM Rwanda 2022\n")
-}
-
-# Facteurs de conversion output brut → masse de fret (tonnes par million USD)
-# Calibrés sur :
-#   Agriculture    : FAOSTAT Rwanda 2022 — ~7,2 Mt production totale / ~4 390 M USD output
-#   Mines          : RMB Annual Report 2022 — ~730 kt (3T + carrières) / ~318 M USD output
-#   Autres secteurs: rescaling cohérent avec les nouveaux outputs bruts BM 2022,
-#                    visant à conserver une masse totale de fret plausible (~20 Mt/an).
-TONNES_PAR_musd <- c(
-  Agriculture    = 1600,   # FAOSTAT 2022 : ~7,2 Mt / ~4 390 M USD (bananes, céréales, café, thé)
-  Mines          = 2300,   # RMB 2022 : ~730 kt (coltan, cassitérite, wolfram + carrières)
-  Agro_industrie = 1800,   # Transformation alimentaire (farine, boissons, huiles, sucre)
-  Industrie      = 1100,   # Manufactures légères (textiles, emballages, matériaux)
-  Construction   = 9000,   # Agrégats, ciment, acier : matériaux très lourds / faible valeur
-  Commerce       = 750,    # Mix de biens distribués ; valeur unitaire plus élevée que bruts
-  Transport      = 130,    # Secteur de services : fret physique marginal
-  Services       = 35      # Quasi-immatériel (finance, conseil, éducation, santé)
-)
+stopifnot(setequal(names(TONNES_PAR_mrd_RWF), SECTEURS))
 
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
@@ -947,11 +955,13 @@ PALETTE_CLASSE_TRAFIC <- c(
 # Vert  = route peu émettrice (plat, bitumée, camion léger)
 PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 
-# ── Secteurs économiques (Set2, dans l'ordre de SECTEURS) ─────────────────────
+# ── Secteurs économiques (dans l'ordre de SECTEURS) ───────────────────────────
 # Centralisé ici pour garantir que chaque secteur a toujours la même couleur
 # dans tous les graphiques et cartes (barres, trajectoires, Sankey, carte dominante).
+# La palette « Set2 » de RColorBrewer plafonne à 8 couleurs ; on l'interpole donc
+# avec colorRampPalette() pour couvrir les N_SECTEURS secteurs (11 actuellement).
 PALETTE_SECTEURS <- setNames(
-  RColorBrewer::brewer.pal(N_SECTEURS, "Set2"),
+  colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(N_SECTEURS),
   SECTEURS
 )
 
@@ -975,11 +985,13 @@ cat("✓ Palettes de couleurs définies\n\n")
 # type de véhicule : consommation de carburant, prix du carburant, valeur
 # du temps du chauffeur, coûts d'usure selon le type de route, capacité de
 # chargement, et pénalité en zone urbaine (congestion, restrictions de tonnage).
+# UNITÉS MONÉTAIRES : toutes en RWF (prix_carburant en RWF/L, valeur_temps en
+# RWF/h, usure_* en RWF/km, chargement/déchargement en RWF).
 params_flotte_df <- tribble(
-  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_usd, ~cout_dechargement_usd,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1.40,            4.5,           0.02,         0.04,          0.07,            3.0,              1.05,            2.68,                  0.25,                  0.040,                  15,                   15,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1.40,            7.5,           0.05,         0.08,          0.12,            7.5,              1.25,            2.68,                  0.50,                  0.065,                  25,                   25,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1.40,            10.0,          0.08,         0.14,          0.22,            20.0,             1.60,            2.68,                  0.80,                  0.090,                  40,                   40
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_rwf, ~cout_dechargement_rwf,
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1383.2,          4446,          19.76,        39.52,         69.16,          3.0,              1.05,            2.68,                  0.25,                  0.040,                  14820,                14820,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1383.2,          7410,          49.40,        79.04,         118.56,         7.5,              1.25,            2.68,                  0.50,                  0.065,                  24700,                24700,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1383.2,          9880,          79.04,        138.32,        217.36,         20.0,             1.60,            2.68,                  0.80,                  0.090,                  39520,                39520
 )
 duck_write(params_flotte_df, "params_flotte")
 
@@ -1055,20 +1067,20 @@ facteurs_pente_df <- tribble(
 duck_write(facteurs_pente_df, "facteurs_pente_flotte")
 
 # ── Table 4 : coûts de transbordement entre véhicules ─────────────────────────
-# Coût fixe en USD pour transférer la cargaison d'un type de véhicule à un autre
+# Coût fixe en RWF pour transférer la cargaison d'un type de véhicule à un autre
 # dans un entrepôt (manutention, attente, administration).
 # Pour ajouter une combinaison : ajouter une ligne dans ce tribble.
 # Ces coûts servent dans le graphe multi-modal (Partie V.2) pour décider
 # si le surcoût du changement de véhicule est compensé par un itinéraire plus
 # économique avec un autre type de camion.
 couts_transbordement_df <- tribble(
-  ~vehicule_origine,  ~vehicule_destination, ~cout_usd_fixe,
-  "camion_lourd",     "camion_moyen",          25.0,
-  "camion_lourd",     "camionnette",           40.0,
-  "camion_moyen",     "camion_lourd",          25.0,
-  "camion_moyen",     "camionnette",           15.0,
-  "camionnette",      "camion_moyen",          15.0,
-  "camionnette",      "camion_lourd",          40.0
+  ~vehicule_origine,  ~vehicule_destination, ~cout_rwf_fixe,
+  "camion_lourd",     "camion_moyen",          24700,
+  "camion_lourd",     "camionnette",           39520,
+  "camion_moyen",     "camion_lourd",          24700,
+  "camion_moyen",     "camionnette",           14820,
+  "camionnette",      "camion_moyen",          14820,
+  "camionnette",      "camion_lourd",          39520
 )
 duck_write(couts_transbordement_df, "couts_transbordement")
 
@@ -1078,113 +1090,196 @@ duck_write(couts_transbordement_df, "couts_transbordement")
 # Ils s'ajoutent au coût de transport interne rwandais dans le modèle gravitaire.
 # Source : estimations calibrées sur les données de coût de transport régional
 # (Banque Mondiale, CPCS, données COMESA).
-# Unité : USD par tonne
+# Unité : RWF par tonne
 # La logique est simple : faire venir du café de Kampala (Ouganda) coûte moins
 # cher que faire venir de l'acier de Dar es Salaam (Tanzanie) car la distance
 # est bien plus courte et les routes sont meilleures.
-
+#
+# Ces coûts (comme le commerce extérieur) ne figurent PAS dans la SAM et sont issues
+# de Claude. Ils sont saisis directement sur les 11 secteurs du
+# modèle (un coût par tonne ne se « répartit » pas : Chimie_petrole, Manufactures
+# et Energie_eau partagent le même niveau « industriel », et Cultures_export
+# s'aligne sur Agriculture).
 couts_prebordure_df <- tribble(
-  ~pays,       ~secteur,         ~cout_usd_tonne,
+  ~pays,       ~secteur,          ~cout_rwf_tonne,
   # ── Ouganda (corridors Nord : Kampala → Gatuna/Kagitumba) ───────────────────
   # Distance moyenne Kampala-frontière Rwanda : ~500km, routes bitumées
-  "Ouganda",   "Agriculture",     35.0,   
-  "Ouganda",   "Mines",           25.0,
-  "Ouganda",   "Agro_industrie",  30.0,
-  "Ouganda",   "Industrie",       28.0,
-  "Ouganda",   "Construction",    42.0,
-  "Ouganda",   "Commerce",        26.0,
-  "Ouganda",   "Transport",       18.0,
-  "Ouganda",   "Services",         8.0,
+  "Ouganda",   "Agriculture",      34580,
+  "Ouganda",   "Cultures_export",  34580,
+  "Ouganda",   "Mines",            24700,
+  "Ouganda",   "Agro_industrie",   29640,
+  "Ouganda",   "Chimie_petrole",   27664,
+  "Ouganda",   "Manufactures",     27664,
+  "Ouganda",   "Construction",     41496,
+  "Ouganda",   "Commerce",         25688,
+  "Ouganda",   "Transport",        17784,
+  "Ouganda",   "Energie_eau",      27664,
+  "Ouganda",   "Services",          7904,
   # ── Tanzanie (corridor Est : Dar es Salaam → Rusumo) ────────────────────────
   # Distance moyenne port Dar-frontière Rwanda : ~1300km
   # Coûts plus élevés car corridor plus long et qualité route variable
-  "Tanzanie",  "Agriculture",     90.0,  
-  "Tanzanie",  "Mines",           55.0,
-  "Tanzanie",  "Agro_industrie",  75.0,
-  "Tanzanie",  "Industrie",       70.0,
-  "Tanzanie",  "Construction",   110.0,
-  "Tanzanie",  "Commerce",        65.0,
-  "Tanzanie",  "Transport",       45.0,
-  "Tanzanie",  "Services",        12.0,
+  "Tanzanie",  "Agriculture",      88920,
+  "Tanzanie",  "Cultures_export",  88920,
+  "Tanzanie",  "Mines",            54340,
+  "Tanzanie",  "Agro_industrie",   74100,
+  "Tanzanie",  "Chimie_petrole",   69160,
+  "Tanzanie",  "Manufactures",     69160,
+  "Tanzanie",  "Construction",    108680,
+  "Tanzanie",  "Commerce",         64220,
+  "Tanzanie",  "Transport",        44460,
+  "Tanzanie",  "Energie_eau",      69160,
+  "Tanzanie",  "Services",         11856,
   # ── RDC (corridor Ouest : Goma → Rubavu) ────────────────────────────────────
   # Distance courte mais infrastructure très dégradée
   # Coûts élevés malgré la proximité géographique
-  "RDC",       "Agriculture",     28.0,
-  "RDC",       "Mines",           20.0,
-  "RDC",       "Agro_industrie",  25.0,
-  "RDC",       "Industrie",       30.0,
-  "RDC",       "Construction",    38.0,
-  "RDC",       "Commerce",        22.0,
-  "RDC",       "Transport",       14.0,
-  "RDC",       "Services",         5.0,
+  "RDC",       "Agriculture",      27664,
+  "RDC",       "Cultures_export",  27664,
+  "RDC",       "Mines",            19760,
+  "RDC",       "Agro_industrie",   24700,
+  "RDC",       "Chimie_petrole",   29640,
+  "RDC",       "Manufactures",     29640,
+  "RDC",       "Construction",     37544,
+  "RDC",       "Commerce",         21736,
+  "RDC",       "Transport",        13832,
+  "RDC",       "Energie_eau",      29640,
+  "RDC",       "Services",          4940,
   # ── Burundi (corridor Sud : Bujumbura → Bugarama/Rusizi) ────────────────────
   # Distance moyenne Bujumbura-frontière Rwanda : ~150km
   # Infrastructure correcte sur axe principal
-  "Burundi",   "Agriculture",     12.0,
-  "Burundi",   "Mines",            9.0,
-  "Burundi",   "Agro_industrie",  10.0,
-  "Burundi",   "Industrie",       11.0,
-  "Burundi",   "Construction",    16.0,
-  "Burundi",   "Commerce",         9.0,
-  "Burundi",   "Transport",        6.0,
-  "Burundi",   "Services",         2.0
-)
+  "Burundi",   "Agriculture",      11856,
+  "Burundi",   "Cultures_export",  11856,
+  "Burundi",   "Mines",             8892,
+  "Burundi",   "Agro_industrie",    9880,
+  "Burundi",   "Chimie_petrole",   10868,
+  "Burundi",   "Manufactures",     10868,
+  "Burundi",   "Construction",     15808,
+  "Burundi",   "Commerce",          8892,
+  "Burundi",   "Transport",         5928,
+  "Burundi",   "Energie_eau",      10868,
+  "Burundi",   "Services",          1976
+) %>%
+  arrange(pays, secteur)
 duck_write(couts_prebordure_df, "couts_prebordure")
 
 cat("✓ Coûts pré-frontière chargés dans DuckDB :",
     nrow(couts_prebordure_df), "lignes\n\n")
 
 # ==============================================================================
-# Commerce extérieur Rwanda par pays frontalier et par secteur (M USD, 2022)
-# Source : NISR External Trade Statistics 2022 + RDB Investment Report 2022.
+# Commerce extérieur Rwanda par pays frontalier et par secteur (MILLIARDS DE RWF)
 # Définitions :
-#   imports_musd : ce que Rwanda importe du pays (= offre de l'entrepôt RoW
-#                  vers les zones internes — fret entrant au Rwanda)
-#   exports_musd : ce que Rwanda exporte vers le pays (= demande de l'entrepôt
-#                  RoW sur la production rwandaise — fret sortant du Rwanda)
-# Ces valeurs alimentent directement les offre_zones / demande_zones des
-# entrepôts RoW dans le modèle MRIO (03_transport.R, section VII.2).
-# À mettre à jour avec les données NISR annuelles.
+#   imports_mrd_rwf : ce que Rwanda importe du pays (= offre de l'entrepôt RoW
+#                     vers les zones internes — fret entrant au Rwanda)
+#   exports_mrd_rwf : ce que Rwanda exporte vers le pays (= demande de l'entrepôt
+#                     RoW sur la production rwandaise — fret sortant du Rwanda)
+# Ces valeurs alimentent les offre_zones / demande_zones des entrepôts RoW dans
+# le modèle MRIO (03_transport.R, section VII.2).
+#
+# CONSTRUCTION (magnitude SAM × clé de répartition par pays) :
+#   • MAGNITUDE : totaux imports/exports par secteur issus de la SAM IFPRI 2021
+#                 (sam_rwanda$imports / $exports, en mrd RWF). C'est la source de
+#                 vérité sur les VOLUMES échangés — désormais cohérente en unité
+#                 avec les flux internes (tout est exprimé en mrd RWF).
+#   • CLÉ PAYS  : la SAM ne ventile PAS par pays. On répartit donc chaque total
+#                 sectoriel entre les 4 corridors frontaliers au prorata de la
+#                 STRUCTURE géographique des estimations d'expert ci-dessous
+#                 (NISR External Trade 2022 + RDB 2022). Concrètement :
+#                   valeur[pays, s] = total_SAM[s] × part_pays[pays, s]
+#                 où part_pays = (commerce du pays) / (commerce total du secteur),
+#                 calculée séparément pour imports et exports, directement sur les
+#                 11 secteurs du modèle.
+# Pour changer la clé pays, il suffit de modifier les poids relatifs de la table
+# CLE_REPARTITION_PAYS ci-dessous (les niveaux absolus n'ont pas d'importance,
+# seules comptent les proportions entre pays au sein d'un secteur).
 # ==============================================================================
-COMMERCE_EXTERIEUR_NISR <- tribble(
-  ~pays,      ~secteur,         ~imports_musd, ~exports_musd,
-  # ── Ouganda (corridor Nord — 1er partenaire commercial régional) ─────────────
-  "Ouganda",  "Agriculture",         110,           35,
-  "Ouganda",  "Mines",                12,           55,
-  "Ouganda",  "Agro_industrie",       90,           25,
-  "Ouganda",  "Industrie",            65,           12,
-  "Ouganda",  "Construction",         22,            2,
-  "Ouganda",  "Commerce",             45,           18,
-  "Ouganda",  "Transport",            10,            8,
-  "Ouganda",  "Services",              5,            4,
-  # ── Tanzanie (corridor Est — transit port Dar es Salaam) ─────────────────────
-  "Tanzanie", "Agriculture",          55,           22,
-  "Tanzanie", "Mines",                35,          105,
-  "Tanzanie", "Agro_industrie",      110,           12,
-  "Tanzanie", "Industrie",           215,            9,
-  "Tanzanie", "Construction",         32,            1,
-  "Tanzanie", "Commerce",             85,           12,
-  "Tanzanie", "Transport",            22,            6,
-  "Tanzanie", "Services",             12,            2,
-  # ── RDC (corridor Ouest — Rubavu/Goma) ───────────────────────────────────────
-  "RDC",      "Agriculture",          42,           18,
-  "RDC",      "Mines",                32,           85,
-  "RDC",      "Agro_industrie",       22,            9,
-  "RDC",      "Industrie",            12,            6,
-  "RDC",      "Construction",          5,            1,
-  "RDC",      "Commerce",             18,            9,
-  "RDC",      "Transport",             5,            3,
-  "RDC",      "Services",              2,            1,
-  # ── Burundi (corridor Sud — faibles volumes) ─────────────────────────────────
-  "Burundi",  "Agriculture",          32,           12,
-  "Burundi",  "Mines",                 6,           30,
-  "Burundi",  "Agro_industrie",       18,            6,
-  "Burundi",  "Industrie",             9,            3,
-  "Burundi",  "Construction",          3,            1,
-  "Burundi",  "Commerce",             12,            5,
-  "Burundi",  "Transport",             3,            2,
-  "Burundi",  "Services",              1,            1
+
+# Note : les poids des secteurs « industriels » (Chimie_petrole, Manufactures,
+# Energie_eau) partagent une même structure pays, et Cultures_export s'aligne sur
+# Agriculture — faute d'estimations d'expert plus fines par pays.
+# Lecture des grands équilibres encodés ici :
+#   - Ouganda : 1er partenaire régional (corridor Nord) ; poids fort sur la plupart
+#               des biens de consommation et agricoles.
+#   - Tanzanie: corridor Est via Dar es Salaam → dominant pour le vrac industriel
+#               importé (pétrole, machines) et l'export de minerais.
+#   - RDC     : corridor Ouest (Rubavu/Goma) → débouché d'export notable (minerais,
+#               agro, manufactures de réexport).
+#   - Burundi : corridor Sud, volumes faibles.
+CLE_REPARTITION_PAYS <- tribble(
+  ~pays,      ~secteur,          ~poids_import, ~poids_export,
+  # ── Ouganda ──────────────────────────────────────────────────────────────────
+  "Ouganda",  "Agriculture",          110,           35,
+  "Ouganda",  "Cultures_export",      110,           35,
+  "Ouganda",  "Mines",                 12,           55,
+  "Ouganda",  "Agro_industrie",        90,           25,
+  "Ouganda",  "Chimie_petrole",        65,           12,
+  "Ouganda",  "Manufactures",          65,           12,
+  "Ouganda",  "Construction",          22,            2,
+  "Ouganda",  "Commerce",              45,           18,
+  "Ouganda",  "Transport",             10,            8,
+  "Ouganda",  "Energie_eau",           65,           12,
+  "Ouganda",  "Services",               5,            4,
+  # ── Tanzanie ─────────────────────────────────────────────────────────────────
+  "Tanzanie", "Agriculture",           55,           22,
+  "Tanzanie", "Cultures_export",       55,           22,
+  "Tanzanie", "Mines",                 35,          105,
+  "Tanzanie", "Agro_industrie",       110,           12,
+  "Tanzanie", "Chimie_petrole",       215,            9,
+  "Tanzanie", "Manufactures",         215,            9,
+  "Tanzanie", "Construction",          32,            1,
+  "Tanzanie", "Commerce",              85,           12,
+  "Tanzanie", "Transport",             22,            6,
+  "Tanzanie", "Energie_eau",          215,            9,
+  "Tanzanie", "Services",              12,            2,
+  # ── RDC ──────────────────────────────────────────────────────────────────────
+  "RDC",      "Agriculture",           42,           18,
+  "RDC",      "Cultures_export",       42,           18,
+  "RDC",      "Mines",                 32,           85,
+  "RDC",      "Agro_industrie",        22,            9,
+  "RDC",      "Chimie_petrole",        12,            6,
+  "RDC",      "Manufactures",          12,            6,
+  "RDC",      "Construction",           5,            1,
+  "RDC",      "Commerce",              18,            9,
+  "RDC",      "Transport",              5,            3,
+  "RDC",      "Energie_eau",           12,            6,
+  "RDC",      "Services",               2,            1,
+  # ── Burundi ──────────────────────────────────────────────────────────────────
+  "Burundi",  "Agriculture",           32,           12,
+  "Burundi",  "Cultures_export",       32,           12,
+  "Burundi",  "Mines",                  6,           30,
+  "Burundi",  "Agro_industrie",        18,            6,
+  "Burundi",  "Chimie_petrole",         9,            3,
+  "Burundi",  "Manufactures",           9,            3,
+  "Burundi",  "Construction",           3,            1,
+  "Burundi",  "Commerce",              12,            5,
+  "Burundi",  "Transport",              3,            2,
+  "Burundi",  "Energie_eau",            9,            3,
+  "Burundi",  "Services",               1,            1
 )
+
+# 1) Parts pays = proportions normalisées à 1 par secteur (imports/exports).
+parts_pays <- CLE_REPARTITION_PAYS %>%
+  group_by(secteur) %>%
+  mutate(part_import = poids_import / sum(poids_import),
+         part_export = poids_export / sum(poids_export)) %>%
+  ungroup() %>%
+  select(pays, secteur, part_import, part_export)
+
+# 2) Totaux sectoriels SAM (mrd RWF) par secteur fin.
+totaux_commerce_sam <- tibble(
+  secteur     = SECTEURS,
+  imports_sam = as.numeric(sam_rwanda$imports[SECTEURS]),
+  exports_sam = as.numeric(sam_rwanda$exports[SECTEURS])
+)
+
+# 3) Application : magnitude SAM (secteur) × part pays (secteur).
+COMMERCE_EXTERIEUR_NISR <- totaux_commerce_sam %>%
+  inner_join(parts_pays, by = "secteur", relationship = "many-to-many") %>%
+  transmute(
+    pays,
+    secteur,
+    imports_mrd_rwf = imports_sam * part_import,
+    exports_mrd_rwf = exports_sam * part_export
+  ) %>%
+  arrange(pays, secteur)
 
 # VEHICULE_REFERENCE : le type de camion utilisé par défaut pour calculer
 # la matrice OD et alimenter le modèle gravitaire quand on n'a pas besoin

@@ -27,7 +27,7 @@ cat("✓ Objets chargés\n\n")
 
 ################################################################################
 # PARTIE V — CALCUL DES COÛTS DE TRANSPORT
-# Calcule les coûts généralisés (USD/tkm) pour chaque arête × véhicule via
+# Calcule les coûts généralisés (RWF/tkm) pour chaque arête × véhicule via
 # une requête SQL DuckDB, puis assemble le graphe multi-modal à 3 couches
 # (une par véhicule) avec arêtes de transbordement aux entrepôts.
 # Dépend de la Partie IV complète. Les Parties VI et VII en dépendent.
@@ -45,10 +45,10 @@ cat("✓ Objets chargés\n\n")
 #   speed_kmh     = vitesse_base × facteur_pente
 #   conso (L/100km) = conso_base × facteur_surface × (1 + slope × FACTEUR / 100)
 #   cost_fuel     = (length_km × conso/100) × prix_carburant
-#   cost_wear     = length_km × usure_usd_km
+#   cost_wear     = length_km × usure_rwf_km
 #   cost_time     = (length_km / speed_kmh) × valeur_temps
 #
-# L'unité finale (USD/tkm) permet de comparer des routes de longueurs différentes.
+# L'unité finale (RWF/tkm) permet de comparer des routes de longueurs différentes.
 
 # st_drop_geometry() : nécessaire car DuckDB ne peut pas stocker des colonnes
 # géométriques sf. On extrait uniquement les attributs tabulaires.
@@ -103,7 +103,7 @@ duck_query("
         WHEN 'gravel'  THEN f.usure_gravel
         WHEN 'unpaved' THEN f.usure_unpaved
         ELSE f.usure_unpaved
-      END AS usure_usd_km,
+      END AS usure_rwf_km,
       -- ── Facteurs d'émission récupérés depuis params_flotte ─────────────────
       -- Ces trois colonnes alimenteront les calculs des étapes suivantes.
       -- Le CO2 est une constante physique (combustion du gazole).
@@ -193,15 +193,15 @@ duck_query("
     speed_kmh,
     conso_L_per_100km,
     fuel_consumption_L,
-    fuel_consumption_L * prix_carburant             AS cost_fuel_usd,
-    length_km * usure_usd_km                        AS cost_wear_usd,
-    travel_time_h * valeur_temps                    AS cost_time_usd,
+    fuel_consumption_L * prix_carburant             AS cost_fuel_rwf,
+    length_km * usure_rwf_km                        AS cost_wear_rwf,
+    travel_time_h * valeur_temps                    AS cost_time_rwf,
     travel_time_h,
     -- Coût par tkm avec pénalité urbaine sur le temps et l'usure
     -- Formule : (carburant + usure_pénalisée + temps_pénalisé) / distance / capacité
-    (cost_fuel_usd
-      + cost_wear_usd * facteur_urbain_applique
-      + cost_time_usd * facteur_urbain_applique)
+    (cost_fuel_rwf
+      + cost_wear_rwf * facteur_urbain_applique
+      + cost_time_rwf * facteur_urbain_applique)
       / (NULLIF(length_km, 0)
       * NULLIF(capacite_tonnes, 0))                           AS cost_per_tkm,
     -- ── Émissions absolues par arête (pour un trajet chargé) ─────────────────
@@ -232,9 +232,9 @@ stats_flotte <- duck_query("
     vehicule_id,
     vehicule_nom,
     ROUND(AVG(cost_per_tkm), 3) AS cout_par_tkm_moyen,
-    ROUND(AVG(cost_fuel_usd / NULLIF(cost_fuel_usd + cost_wear_usd + cost_time_usd, 0)) * 100, 1) AS part_carburant_pct,
-    ROUND(AVG(cost_time_usd / NULLIF(cost_fuel_usd + cost_wear_usd + cost_time_usd, 0)) * 100, 1) AS part_temps_pct,
-    ROUND(AVG(cost_wear_usd / NULLIF(cost_fuel_usd + cost_wear_usd + cost_time_usd, 0)) * 100, 1) AS part_usure_pct
+    ROUND(AVG(cost_fuel_rwf / NULLIF(cost_fuel_rwf + cost_wear_rwf + cost_time_rwf, 0)) * 100, 1) AS part_carburant_pct,
+    ROUND(AVG(cost_time_rwf / NULLIF(cost_fuel_rwf + cost_wear_rwf + cost_time_rwf, 0)) * 100, 1) AS part_temps_pct,
+    ROUND(AVG(cost_wear_rwf / NULLIF(cost_fuel_rwf + cost_wear_rwf + cost_time_rwf, 0)) * 100, 1) AS part_usure_pct
   FROM aretes_couts_tous
   GROUP BY vehicule_id, vehicule_nom
   ORDER BY cout_par_tkm_moyen
@@ -271,9 +271,9 @@ reseau_rwanda <- reseau_rwanda %>%
     travel_time_h        = aretes_ref$travel_time_h,
     conso_L_per_100km    = aretes_ref$conso_L_per_100km,
     fuel_consumption_L   = aretes_ref$fuel_consumption_L,
-    cost_fuel_usd        = aretes_ref$cost_fuel_usd,
-    cost_wear_usd        = aretes_ref$cost_wear_usd,
-    cost_time_usd        = aretes_ref$cost_time_usd,
+    cost_fuel_rwf        = aretes_ref$cost_fuel_rwf,
+    cost_wear_rwf        = aretes_ref$cost_wear_rwf,
+    cost_time_rwf        = aretes_ref$cost_time_rwf,
     cost_per_tkm         = aretes_ref$cost_per_tkm
   )
 
@@ -493,7 +493,7 @@ for (wh_node in warehouse_nodes_base) {
     edges_transb[[k]] <- tibble(
       from          = node_multi(v_orig, wh_node),
       to            = node_multi(v_dest, wh_node),
-      weight        = couts_transb$cout_usd_fixe[r],
+      weight        = couts_transb$cout_rwf_fixe[r],
       length_km     = 0,    # Pas de distance physique au transbordement
       travel_time_h = 0,    # Temps de manutention non modélisé ici
       vehicule_id   = paste0(couts_transb$vehicule_origine[r],
