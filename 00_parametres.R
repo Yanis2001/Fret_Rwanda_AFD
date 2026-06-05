@@ -474,16 +474,54 @@ SAM_COMPTES_DEMANDE_FINALE <- c(
 # 3 niveaux : travail (non qualifié, hautement qualifié et semi-qualifié) + terre agricole + capital.
 SAM_COMPTES_FACTEURS <- c("flab-n", "flab-p", "flab-s", "flnd", "fcap")
 
+# Compte des MARGES de commerce et de transport de la SAM.
+# Dans la SAM, l'offre d'une commodité (sa colonne) inclut une marge versée au
+# compte « trc » ; ce compte reverse l'intégralité de ces marges à la commodité
+# de Commerce (ctrad). Autrement dit, les marges = demande pour le secteur
+# Commerce, et non pour la commodité sur laquelle elles portent.
+SAM_COMPTE_MARGES <- "trc"
+
+# Comptes de TAXES SUR LES PRODUITS de la SAM (lignes lues dans la colonne d'une
+# commodité = taxe acquittée sur cette commodité). « stax » = taxe sur les ventes
+# (TVA, accises), « mtax » = droits de douane à l'importation. Ces taxes sont un
+# prélèvement fiscal (versé au gouvernement), pas un flux physique : elles sont
+# exclues des flux de fret (cf. ramener la demande au prix de base ci-dessous).
+SAM_COMPTES_TAXES_PRODUITS <- c("stax", "mtax")
+
 # ── Fonction d'extraction de la SAM ───────────────────────────────────────────
 # Lit le fichier Excel et agrège la matrice 110×110 vers les 11 secteurs du modèle.
+#
+# MÉTHODE (extraction sur le COMPTE COMMODITÉ, au prix de base) :
+#   La SAM équilibre chaque commodité c entre son OFFRE (colonne) et sa
+#   DEMANDE (ligne) :
+#     OFFRE   = production domestique (activité→commodité) + imports
+#               + marges de commerce/transport (trc) + taxes sur produits (stax+mtax)
+#     DEMANDE = conso. intermédiaire (activités) + demande finale (ménages, gov, s-i)
+#               + exports + marges reçues (uniquement le secteur Commerce)
+#   Choix de modélisation (pour cohérence avec un modèle de FRET physique) :
+#     1) La production retenue est l'offre du compte COMMODITÉ (activité→commodité),
+#        et NON le total du compte activité. Cela exclut automatiquement
+#        l'auto-consommation de subsistance (ventes directes activité→ménages,
+#        ex. agriculture vivrière), qui ne circule pas sur les routes.
+#     2) Les marges (trc) sont réaffectées en demande du secteur Commerce (service
+#        réel), pas à la commodité sur laquelle elles portent.
+#     3) Les taxes sur produits (stax, mtax) sont un prélèvement fiscal non
+#        physique : on ramène la demande au PRIX DE BASE en retirant le « coin »
+#        marges+taxes de chaque commodité, réparti au prorata de ses usages
+#        physiques (intermédiaire + demande finale + exports).
+#   Conséquence : par secteur, output + imports = conso_interm + demande_finale
+#   + exports (bilan ressources-emplois équilibré, résidu ≈ 0).
+#
 # Retourne une liste contenant (toutes les valeurs en milliards de RWF) :
 #   A              : matrice 11×11 des coefficients techniques a_ij = z_ij / output_j
-#                    (z_ij = conso. intermédiaire de la commodité i par l'activité j)
-#   output         : production brute par secteur (cellule [activité, total])
-#   va             : valeur ajoutée par secteur (somme des paiements aux facteurs)
-#   demande_finale : demande finale par secteur (cf. SAM_COMPTES_DEMANDE_FINALE)
+#                    (z_ij = conso. intermédiaire de la commodité i par l'activité j,
+#                     ramenée au prix de base)
+#   output         : production domestique commercialisée par secteur (prix de base)
+#   va             : valeur ajoutée par secteur (output − intrants intermédiaires)
+#   demande_finale : demande finale par secteur, au prix de base, marges du
+#                    Commerce incluses
 #   imports        : importations par secteur (flux compte « row » → commodité)
-#   exports        : exportations par secteur (flux commodité → compte « row »)
+#   exports        : exportations par secteur (prix de base)
 lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   if (!file.exists(chemin)) {
     stop("Fichier SAM introuvable : ", chemin,
@@ -511,25 +549,40 @@ lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   suffixes <- names(SAM_MAPPING_SECTEURS)
   zero_sec <- function() setNames(numeric(length(SEC)), SEC)
 
-  output <- zero_sec(); va <- zero_sec(); demande_finale <- zero_sec()
-  imports <- zero_sec(); exports <- zero_sec()
+  # Composantes brutes lues dans la SAM, avant retraitement (cf. méthode supra).
+  dom       <- zero_sec()   # OFFRE : production domestique commercialisée (activité→commodité)
+  imp       <- zero_sec()   # OFFRE : importations
+  marg_paye <- zero_sec()   # OFFRE : marges trc portées par la commodité
+  tax_paye  <- zero_sec()   # OFFRE : taxes sur produits (stax+mtax) sur la commodité
+  fdem      <- zero_sec()   # DEMANDE : demande finale brute (ménages, gov, s-i)
+  exp_brut  <- zero_sec()   # DEMANDE : exports bruts (prix d'acquisition)
+  marg_recu <- zero_sec()   # DEMANDE : marges reçues (≠ 0 uniquement pour le Commerce)
 
   # Index des comptes spéciaux réutilisés dans la boucle.
-  ir_row   <- idx_row("row")     # ligne « Rest of world » (importations)
-  ic_row   <- idx_col("row")     # colonne « Rest of world » (exportations)
-  ic_total <- idx_col("total")   # colonne des totaux (production brute des activités)
+  ir_row   <- idx_row("row")                       # ligne « Rest of world » (importations)
+  ic_row   <- idx_col("row")                       # colonne « Rest of world » (exportations)
+  ir_marg  <- idx_row(SAM_COMPTE_MARGES)           # ligne « trc » (marges payées par une commodité)
+  ic_marg  <- idx_col(SAM_COMPTE_MARGES)           # colonne « trc » (marges reversées à une commodité)
 
-  # Boucle 1 : grandeurs par secteur (output, VA, demande finale, imports, exports).
+  # Boucle 1 : grandeurs par commodité (offre et demande), agrégées aux secteurs.
   for (sf in suffixes) {
     s_grp  <- SAM_MAPPING_SECTEURS[[sf]]
-    ra <- idx_row(paste0("a", sf)); ca <- idx_col(paste0("a", sf))
-    rc <- idx_row(paste0("c", sf)); cc <- idx_col(paste0("c", sf))
+    ra <- idx_row(paste0("a", sf))   # ligne de l'activité a{sf}
+    rc <- idx_row(paste0("c", sf))   # ligne de la commodité c{sf} (demande)
+    cc <- idx_col(paste0("c", sf))   # colonne de la commodité c{sf} (offre)
 
-    output[s_grp] <- output[s_grp] + num(ra, ic_total)
-    for (fc in SAM_COMPTES_FACTEURS)         va[s_grp]             <- va[s_grp]             + num(idx_row(fc), ca)
-    for (dc in SAM_COMPTES_DEMANDE_FINALE)   demande_finale[s_grp] <- demande_finale[s_grp] + num(rc, idx_col(dc))
-    imports[s_grp] <- imports[s_grp] + num(ir_row, cc)
-    exports[s_grp] <- exports[s_grp] + num(rc, ic_row)
+    # OFFRE (colonne de la commodité)
+    dom[s_grp]       <- dom[s_grp]       + num(ra, cc)        # production domestique commercialisée
+    imp[s_grp]       <- imp[s_grp]       + num(ir_row, cc)    # importations
+    marg_paye[s_grp] <- marg_paye[s_grp] + num(ir_marg, cc)  # marges de commerce/transport
+    for (tx in SAM_COMPTES_TAXES_PRODUITS)
+      tax_paye[s_grp] <- tax_paye[s_grp] + num(idx_row(tx), cc)
+
+    # DEMANDE (ligne de la commodité)
+    for (dc in SAM_COMPTES_DEMANDE_FINALE)
+      fdem[s_grp] <- fdem[s_grp] + num(rc, idx_col(dc))
+    exp_brut[s_grp]  <- exp_brut[s_grp]  + num(rc, ic_row)    # exports
+    marg_recu[s_grp] <- marg_recu[s_grp] + num(rc, ic_marg)  # marges reçues (Commerce)
   }
 
   # Boucle 2 : consommations intermédiaires Z[i,j] = commodité i (ligne) achetée
@@ -542,12 +595,42 @@ lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
       Z[si, sj] <- Z[si, sj] + num(rc_i, ca_j)
     }
   }
+  inter <- rowSums(Z)   # conso. intermédiaire totale de chaque commodité i
 
-  # Coefficients techniques : a_ij = z_ij / output_j (division par la production
-  # de l'activité consommatrice j). La somme d'une colonne = part des conso.
-  # intermédiaires dans l'output ; (1 - somme) = part de valeur ajoutée.
+  # ── Retraitement : passage au PRIX DE BASE ──────────────────────────────────
+  # Le « coin » marges + taxes (wedge) gonfle la demande au prix d'acquisition
+  # par rapport à l'offre physique au prix de base. On le retire au prorata des
+  # usages physiques de chaque commodité (intermédiaire + demande finale + exports),
+  # via un facteur k ∈ ]0,1]. Les marges reçues (Commerce) ne sont PAS un usage
+  # physique : on les ajoute telles quelles à la demande finale du Commerce.
+  usages_phys <- inter + fdem + exp_brut          # usages physiques au prix d'acquisition
+  wedge       <- marg_paye + tax_paye             # coin marges + taxes à retirer
+  k <- ifelse(usages_phys > 0, 1 - wedge / usages_phys, 1)
+  names(k) <- SEC
+
+  output         <- dom                            # production = offre domestique commercialisée
+  imports        <- imp
+  exports        <- exp_brut * k                   # exports ramenés au prix de base
+  demande_finale <- fdem * k + marg_recu           # demande finale au prix de base + marges Commerce
+
+  # Z au prix de base : on multiplie chaque LIGNE i (commodité vendue) par k[i].
+  Z_base <- Z * k                                  # recyclage par ligne (k recyclé sur les colonnes)
+  conso_interm <- rowSums(Z_base)                  # = inter * k (cohérent avec A %*% output)
+
+  # Valeur ajoutée = production − intrants intermédiaires consommés (somme colonne).
+  va <- output - colSums(Z_base)
+
+  # Coefficients techniques : a_ij = z_ij / output_j (au prix de base).
   A_sam <- matrix(0, length(SEC), length(SEC), dimnames = list(SEC, SEC))
-  for (sj in SEC) if (output[sj] > 0) A_sam[, sj] <- Z[, sj] / output[sj]
+  for (sj in SEC) if (output[sj] > 0) A_sam[, sj] <- Z_base[, sj] / output[sj]
+
+  # Garde-fous : le bilan doit être équilibré et les grandeurs économiquement valides.
+  residu <- output + imports - conso_interm - demande_finale - exports
+  stopifnot(
+    all(k > 0 & k <= 1 + 1e-9),          # facteur prix de base valide
+    all(demande_finale >= -1e-6),        # pas de demande finale négative
+    max(abs(residu)) < 1e-6              # bilan ressources-emplois équilibré (résidu ≈ 0)
+  )
 
   list(A = A_sam, output = output[SEC], va = va[SEC],
        demande_finale = demande_finale[SEC],

@@ -1050,59 +1050,102 @@ bilan_mrio <- duck_query("
   ORDER BY surplus_total_mrd_rwf DESC
 ")
 
+# Imports et exports SAM par secteur (mrd RWF), issus de sam_rwanda calculé dans
+# 00_parametres.R. Les imports entrent dans l'offre totale (supply-side), les
+# exports dans la demande totale (demand-side) : avec cette convention, les deux
+# colonnes sont égales par construction (équilibre comptable de la SAM).
+commerce_sam <- tibble(
+  secteur     = SECTEURS,
+  imports_sam = as.numeric(sam_rwanda$imports[SECTEURS]),
+  exports_sam = as.numeric(sam_rwanda$exports[SECTEURS])
+)
+
 df_mrio <- bilan_mrio %>%
+  left_join(commerce_sam, by = "secteur") %>%
   mutate(
-    Secteur = factor(secteur, levels = secteur[order(surplus_total_mrd_rwf)]),
-    # Solde net = surplus agrégé − déficit agrégé : positif = exportateur net
-    Solde_mrd_rwf = surplus_total_mrd_rwf - deficit_total_mrd_rwf
+    # Offre totale = surplus domestique inter-zones + imports internationaux
+    offre_totale_mrd_rwf   = surplus_total_mrd_rwf + imports_sam,
+    # Demande totale = déficit domestique inter-zones + exports internationaux
+    demande_totale_mrd_rwf = deficit_total_mrd_rwf + exports_sam,
+    # Écart résiduel : doit être ≈ 0 pour chaque secteur si la SAM est équilibrée
+    ecart_mrd_rwf = offre_totale_mrd_rwf - demande_totale_mrd_rwf,
+    Secteur = factor(secteur, levels = secteur[order(offre_totale_mrd_rwf)])
   )
 
-# ── Format long pour ggplot ───────────────────────────────────────────────────
-df_mrio_long <- df_mrio %>%
+# ── Format long pour ggplot : 4 composantes ───────────────────────────────────
+# Chaque secteur donne 4 lignes (surplus, imports, déficit, exports).
+# On calcule une position X décalée manuellement pour grouper les deux barres
+# côte à côte (offre à gauche, demande à droite) tout en les empilant :
+# ggplot2 ne supporte pas nativement stacked+grouped, d'où le décalage manuel.
+DEMI_LARGEUR <- 0.2  # demi-écart entre les deux barres (en unités d'axe)
+
+df_mrio_comp <- df_mrio %>%
+  select(Secteur, ecart_mrd_rwf, offre_totale_mrd_rwf, demande_totale_mrd_rwf,
+         surplus_total_mrd_rwf, imports_sam, deficit_total_mrd_rwf, exports_sam) %>%
   pivot_longer(
-    c(surplus_total_mrd_rwf, deficit_total_mrd_rwf),
-    names_to  = "Type",
-    values_to = "Valeur_mrd_rwf"
+    c(surplus_total_mrd_rwf, imports_sam, deficit_total_mrd_rwf, exports_sam),
+    names_to = "composante", values_to = "valeur"
   ) %>%
   mutate(
-    Type = recode(Type,
-      "surplus_total_mrd_rwf" = "Offre (surplus exportable)",
-      "deficit_total_mrd_rwf" = "Demande (besoin importé)"
-    )
+    cote = if_else(composante %in% c("surplus_total_mrd_rwf", "imports_sam"),
+                   "Offre", "Demande"),
+    composante = recode(composante,
+      "surplus_total_mrd_rwf" = "Surplus inter-zones",
+      "imports_sam"           = "Imports SAM",
+      "deficit_total_mrd_rwf" = "Déficit inter-zones",
+      "exports_sam"           = "Exports SAM"
+    ),
+    # Ordre d'empilement : composante domestique en bas, commerce en haut
+    composante = factor(composante,
+      levels = c("Surplus inter-zones", "Imports SAM",
+                 "Déficit inter-zones", "Exports SAM")),
+    x_num = as.numeric(Secteur),
+    x_pos = x_num + if_else(cote == "Offre", -DEMI_LARGEUR, DEMI_LARGEUR)
   )
 
+# Couleurs : bleu foncé / bleu clair pour l'offre, rouge foncé / orange pour la demande
+COULEURS_COMPOSANTES <- c(
+  "Surplus inter-zones" = "#1565C0",
+  "Imports SAM"         = "#90CAF9",
+  "Déficit inter-zones" = "#C62828",
+  "Exports SAM"         = "#FFAB91"
+)
+
 # ── Graphique ─────────────────────────────────────────────────────────────────
-g_prod_ech <- ggplot(df_mrio_long,
-                     aes(x = Secteur, y = Valeur_mrd_rwf, fill = Type)) +
-  geom_col(position = "dodge", width = 0.72) +
-  # Annotation du solde net
+g_prod_ech <- ggplot(df_mrio_comp,
+                     aes(x = x_pos, y = valeur, fill = composante)) +
+  geom_col(width = DEMI_LARGEUR * 2 * 0.9, position = "stack") +
+  # Annotation de l'écart résiduel au bout de la barre demande (côté droit).
+  # Doit être ≈ 0 ; un écart non nul signale un déséquilibre de calibration.
   geom_text(
-    data        = df_mrio,
-    aes(x       = Secteur,
-        y       = pmax(surplus_total_mrd_rwf, deficit_total_mrd_rwf),
-        label   = paste0(ifelse(Solde_mrd_rwf >= 0, "+", ""), round(Solde_mrd_rwf))),
-    hjust       = -0.12,
-    size        = 3.2,
+    data = df_mrio %>% mutate(x_pos = as.numeric(Secteur) + DEMI_LARGEUR),
+    aes(x     = x_pos,
+        y     = demande_totale_mrd_rwf,
+        label = paste0(ifelse(ecart_mrd_rwf >= 0, "+", ""),
+                       round(ecart_mrd_rwf, 1))),
+    hjust       = -0.15,
+    size        = 3.0,
     color       = "#555555",
     fontface    = "italic",
     inherit.aes = FALSE
   ) +
-  coord_flip(clip = "off") +
-  scale_fill_manual(
-    values = c("Offre (surplus exportable)" = "#2171B5",
-               "Demande (besoin importé)"   = "#D32F2F"),
-    name   = NULL
+  # Axe Y converti en axe X après coord_flip : labels = noms des secteurs
+  scale_x_continuous(
+    breaks = seq_len(nlevels(df_mrio$Secteur)),
+    labels = levels(df_mrio$Secteur)
   ) +
+  coord_flip(clip = "off") +
+  scale_fill_manual(values = COULEURS_COMPOSANTES, name = NULL) +
   scale_y_continuous(
     labels = scales::label_number(suffix = " mrd RWF", scale = 1),
-    expand = expansion(mult = c(0, 0.22))
+    expand = expansion(mult = c(0, 0.20))
   ) +
   labs(
-    title    = "Bilan MRIO par secteur — surplus exportable vs besoin importé",
+    title    = "Bilan MRIO complet par secteur — offre vs demande totales",
     subtitle = paste0(
-      "Bleu = offre agrégée (surplus x[i,s] − d[i,s] > 0 sommé sur toutes les zones) — ",
-      "Rouge = demande agrégée (déficit d[i,s] − x[i,s] > 0).\n",
-      "Annotation = solde net (mrd RWF) ; positif = le secteur est exportateur net au Rwanda."
+      "Gauche : surplus inter-zones (bleu foncé) + imports SAM (bleu clair)  —  ",
+      "Droite : déficit inter-zones (rouge) + exports SAM (orange).\n",
+      "Annotation = écart résiduel (mrd RWF) ; doit être ≈ 0 si la SAM est équilibrée."
     ),
     x = NULL,
     y = "Volume agrégé (mrd RWF)"
