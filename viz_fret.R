@@ -586,7 +586,8 @@ g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
   # facet_wrap() : une sous-figure par secteur. scales = "free_y" permet à
   # chaque sous-figure d'avoir sa propre échelle Y (certains secteurs ont
   # beaucoup moins d'arêtes actives que d'autres).
-  facet_wrap(~ Secteur, scales = "free_y", ncol = 4) +
+  # ncol calculé pour obtenir une grille la plus carrée possible
+  facet_wrap(~ Secteur, scales = "free_y", ncol = ceiling(sqrt(N_SECTEURS))) +
   scale_x_log10(
     labels = scales::label_number(big.mark = " "),
     breaks = c(1, 10, 100, 1000, 10000, 100000)
