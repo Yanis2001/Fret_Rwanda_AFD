@@ -470,10 +470,6 @@ SAM_COMPTES_DEMANDE_FINALE <- c(
   "gov", "s-i"
 )
 
-# Comptes de facteurs de la SAM (lignes) dont la somme = valeur ajoutée d'une activité :
-# 3 niveaux : travail (non qualifié, hautement qualifié et semi-qualifié) + terre agricole + capital.
-SAM_COMPTES_FACTEURS <- c("flab-n", "flab-p", "flab-s", "flnd", "fcap")
-
 # Compte des MARGES de commerce et de transport de la SAM.
 # Dans la SAM, l'offre d'une commodité (sa colonne) inclut une marge versée au
 # compte « trc » ; ce compte reverse l'intégralité de ces marges à la commodité
