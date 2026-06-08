@@ -257,10 +257,18 @@ AIRE_MIN_ENTREPOT_INDUSTRIEL_KM2 <- 0.05
 # Seuil d'aire minimale pour les zones retail retenues comme entrepôts (km²)
 AIRE_MIN_ENTREPOT_RETAIL_KM2 <- 0.01
 
-# Rayon du buffer autour de chaque entrepôt pour le calcul de la composition landuse (m)
-BUFFER_ENTREPOT_M <- 2000
+# ── Rayon d'agglomération des entrepôts (m) ──────────────────────────────────
+# Sert à DEUX usages :
+#   (a) calcul de la population TEMPORAIRE de chaque point candidat (somme des
+#       habitants dans un cercle de ce rayon) — utilisée uniquement pour classer
+#       les points lors de la fusion ;
+#   (b) seuil de FUSION : deux entrepôts distants de moins de ce rayon sont
+#       agglomérés (priorité donnée à l'entrepôt le plus peuplé).
+RAYON_AGGLO_ENTREPOT_M <- 4000
 
-# Distance maximale pour considérer deux entrepôts comme doublons (m)
+# Distance maximale pour écarter un point OSM trop proche d'un entrepôt déjà
+# retenu LORS DE LA CONSTRUCTION du jeu de candidats (Partie II/IV.3). Distinct
+# de RAYON_AGGLO_ENTREPOT_M, qui agit plus tard sur le jeu déjà assemblé.
 DISTANCE_DEDUP_VILLES_M     <- 3000
 DISTANCE_DEDUP_INDUSTRIEL_M <- 2000
 DISTANCE_DEDUP_RETAIL_M     <- 1000
@@ -325,14 +333,8 @@ entreposages_manuels <- tibble(
 SEUIL_LONGUEUR_ARETE_M <- 0.5
 
 # ==============================================================================
-# Paramètres démographiques 
+# Paramètres démographiques
 # ==============================================================================
-
-# ── Rayon du buffer pour l'agrégation de population autour d'un entrepôt ──────
-# On calcule la population dans un cercle de ce rayon autour de chaque nœud.
-# 5 km est un compromis raisonnable au Rwanda (densité ~400 hab/km²) :
-# trop petit → manque les zones périurbaines ; trop grand → chevauche les zones.
-BUFFER_DEMO_M <- 5000
 
 # Population minimale attribuée à une zone quand aucune des trois sources
 # (WorldPop, OSM, NISR) ne fournit de valeur. Évite les zones à population = 0
@@ -356,27 +358,14 @@ NISR_COL_POP_TOTAL <- "T_TL"      # Population totale
 # Paramètres RWI
 # ==============================================================================
 
-# ── Rayon du buffer pour l'agrégation IDW ─────────────────────────────────────
-# On réutilise BUFFER_ENTREPOT_M = 2000m (défini en Partie IV.3) pour rester
-# cohérent avec le calcul des parts d'usage des sols.
-# Si on veut un rayon différent pour le RWI, le décommenter :
-# BUFFER_RWI_M <- 5000
-
-# Pour l'instant on garde la même valeur que le landuse
-BUFFER_RWI_M <- BUFFER_ENTREPOT_M   # 2000m par défaut
-
-# ── Paramètre de l'interpolation IDW (inverse distance weighting) ─────────────
-# La pondération de chaque cellule RWI vaut 1 / distance^RWI_IDW_PUISSANCE.
-# Puissance = 1 : décroissance linéaire (lisse mais peu discriminante)
-# Puissance = 2 : décroissance quadratique (standard en géostatistique)
-# Puissance = 3 : décroissance cubique (très locale, amplifier les pôles proches)
-# On recommande 2 pour être cohérent avec la littérature géostatistique.
-RWI_IDW_PUISSANCE <- 2
-
-# Distance minimale utilisée dans l'IDW pour éviter la division par zéro.
-# Si un point RWI est exactement sur le centroïde de l'entrepôt (rare mais
-# possible avec les données grillées), on le plafonne à 50m.
-RWI_DISTANCE_MIN_M <- 50
+# ── Rayon d'estimation de la population d'une cellule RWI (m) ──────────────────
+# Le RWI d'un nœud-entrepôt est désormais la moyenne des cellules RWI tombant
+# dans son polygone de Voronoï, PONDÉRÉE par la population de chaque cellule
+# (cf. 01_reseau.R IV.5). Pour estimer cette population, on somme les pixels
+# WorldPop dans un petit cercle autour de chaque point RWI. La maille RWI fait
+# ~2,4 km ; on prend la demi-maille (~1,2 km) pour approcher la cellule sans
+# empiéter sur les voisines.
+BUFFER_POIDS_RWI_M <- 1200
 
 # ==============================================================================
 # Paramètres RPHC5 — Emploi sectoriel (profils d'offre empiriques)
@@ -1342,7 +1331,7 @@ parts_pays <- CLE_REPARTITION_PAYS %>%
   ungroup() %>%
   select(pays, secteur, part_import, part_export)
 
-# 2) Totaux sectoriels SAM (mrd RWF) par secteur fin.
+# 2) Totaux sectoriels SAM (mrd RWF) par secteur 
 totaux_commerce_sam <- tibble(
   secteur     = SECTEURS,
   imports_sam = as.numeric(sam_rwanda$imports[SECTEURS]),
