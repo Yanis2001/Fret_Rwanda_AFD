@@ -8,8 +8,8 @@
 #   → le fichier PBF a changé (nouveau téléchargement OSM)
 #   → de nouvelles zones d'entrepôt ont été ajoutées / modifiées
 #   → les données WorldPop, NISR ou RPHC5 ont été mises à jour
-#   → les paramètres BUFFER_DEMO_M, BUFFER_RWI_M ou BUFFER_ENTREPOT_M ont changé
-#   → les données RPHC5 d'emploi ont été mises à jour (emploi_zone_secteur_all)
+#   → les paramètres RAYON_AGGLO_ENTREPOT_M ou BUFFER_POIDS_RWI_M ont changé
+#   → les données RPHC5 d'emploi ont été mises à jour (emploi_zone_secteur)
 #
 # RELANCER 02_couts.R avant ce script si :
 #   → les paramètres de flotte (params_flotte, vitesses_flotte, facteurs_pente)
@@ -289,8 +289,8 @@ carte_rwi <- fond_carte() +
   
   tm_title(paste0(
     "Richesse relative des zones d'entrepôt\n",
-    "Relative Wealth Index — Meta / CIESIN (IDW dans buffer ",
-    BUFFER_RWI_M / 1000, " km)"
+    "Relative Wealth Index — Meta / CIESIN ",
+    "(moyenne par cellule de Voronoï, pondérée population)"
   )) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +

@@ -1167,3 +1167,201 @@ ggsave(
 )
 cat("✓ graphique_bilan_mrio.png\n\n")
 
+################################################################################
+# VIII.9 — Validation SAM : coût de transport impliqué par le modèle vs trc
+#
+# Principe (issu de la discussion méthodologique sur les prix de base) :
+#   Si le modèle est cohérent avec la comptabilité nationale, alors :
+#   Σ_ij T_ij × c_ij ≈ trc_SAM
+#   où T_ij = flux en tonnes entre zones i et j (modèle gravitaire),
+#        c_ij = coût routier Dijkstra en RWF/tonne (matrice_od DuckDB),
+#     trc_SAM = marges de distribution de la SAM IFPRI 2021 (mrd RWF).
+#
+#   Le modèle ne captant que les coûts de transport routier domestique,
+#   on attend coût_modèle < trc_SAM. L'écart représente :
+#     - les marges de commerce (grossiste, détail) — non modélisées,
+#     - les coûts logistiques import/export (hors réseau domestique).
+#   Le ratio coût_modèle / trc_SAM est un indicateur de cohérence interne.
+#
+# Produit deux graphiques :
+#   graphique_validation_trc.png          — comparaison globale modèle vs SAM
+#   graphique_validation_trc_secteurs.png — décomposition sectorielle du coût
+################################################################################
+
+cat("=== VIII.9 : Validation SAM (coût transport vs trc) ===\n")
+
+# ── Coûts O-D depuis DuckDB ──────────────────────────────────────────────────
+# cout_rwf = coût Dijkstra en RWF par tonne transportée entre les zones i et j.
+# Calculé dans 03_transport.R pour le véhicule optimal (plus court chemin).
+od_couts_val <- duck_query("
+  SELECT nom_origine, nom_destination, cout_rwf
+  FROM matrice_od
+  WHERE cout_rwf > 0
+")
+
+# ── Valeur trc depuis la SAM ──────────────────────────────────────────────────
+# trc = compte « Transaction costs » de la SAM IFPRI 2021.
+# Il agrège TOUTES les marges versées entre producteur et acheteur :
+# transport routier + grossiste + détail. C'est la borne supérieure naturelle
+# du coût de transport modélisable.
+.brut_val      <- as.data.frame(readxl::read_excel(
+  SAM_XLSX_PATH, sheet = SAM_FEUILLE, col_names = FALSE, .name_repair = "minimal"
+))
+.codes_col_val <- as.character(unlist(.brut_val[1, ], use.names = FALSE))
+.codes_row_val <- as.character(.brut_val[[2]])
+.num_val       <- function(r, c) {
+  v <- suppressWarnings(as.numeric(.brut_val[r, c]))
+  if (is.na(v)) 0 else v
+}
+trc_sam_mrd <- .num_val(
+  which(.codes_row_val == SAM_COMPTE_MARGES)[1],
+  which(.codes_col_val == "total")[1]
+)
+rm(.brut_val, .codes_col_val, .codes_row_val, .num_val)
+cat("  trc SAM IFPRI 2021 :", round(trc_sam_mrd, 1), "mrd RWF\n")
+
+# ── Coût de transport modélisé, décomposé par secteur ────────────────────────
+# Pour chaque secteur s avec fret physique (TONNES_PAR_mrd_RWF[s] > 0) :
+#   T_s[i,j] est directement en tonnes (flux_gravitaire contient des tonnes,
+#   la conversion mrd RWF → tonnes est effectuée dans 03_transport.R avant
+#   la persistance — ne pas multiplier à nouveau par TONNES_PAR_mrd_RWF).
+#   Coût_s (mrd RWF) = Σ_ij T_s[i,j] (t) × c_ij (RWF/t) / 1e9
+# Les paires O-D sans route connue (RoW, zones non connectées) sont exclues
+# par le filtre !is.na(cout_rwf) après la jointure gauche.
+flux_sec_val <- dplyr::bind_rows(lapply(SECTEURS, function(s) {
+  if (TONNES_PAR_mrd_RWF[s] == 0) return(NULL)
+  mat <- flux_gravitaire[[s]]   # déjà en tonnes
+  as.data.frame(as.table(mat), stringsAsFactors = FALSE) %>%
+    rename(nom_origine = Var1, nom_destination = Var2, flux_t = Freq) %>%
+    filter(flux_t > 0, nom_origine != nom_destination) %>%
+    mutate(secteur = s)
+})) %>%
+  left_join(od_couts_val, by = c("nom_origine", "nom_destination")) %>%
+  filter(!is.na(cout_rwf)) %>%
+  mutate(cout_mrd = flux_t * cout_rwf / 1e9)
+
+# Agrégation par secteur, triée par coût décroissant pour lecture du graphique
+cout_sec_df <- flux_sec_val %>%
+  group_by(secteur) %>%
+  summarise(cout_mrd = sum(cout_mrd, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(cout_mrd)) %>%
+  mutate(secteur = factor(secteur, levels = secteur))
+
+cout_model_mrd  <- sum(cout_sec_df$cout_mrd)
+part_transport  <- cout_model_mrd / trc_sam_mrd * 100
+cat("  Coût transport modélisé :", round(cout_model_mrd, 1), "mrd RWF\n")
+cat("  Part du trc SAM         :", round(part_transport, 1), "%\n\n")
+
+# ── Graphique 1 — Comparaison globale : modèle vs trc SAM ────────────────────
+# Deux barres côte à côte montrant le coût total modélisé (bleu) et le trc SAM
+# (rouge). L'écart visuel illustre la part non modélisée (marges de commerce).
+df_compar_val <- tibble(
+  source = factor(
+    c("trc SAM\n(transport + commerce)", "Coût transport\nréseau modélisé"),
+    levels = c("trc SAM\n(transport + commerce)", "Coût transport\nréseau modélisé")
+  ),
+  valeur  = c(trc_sam_mrd, cout_model_mrd),
+  couleur = c("#E57373", "#42A5F5")
+)
+
+g_valid_compar <- ggplot(df_compar_val, aes(x = source, y = valeur, fill = source)) +
+  geom_col(width = 0.5, show.legend = FALSE) +
+  geom_text(
+    aes(label = paste0(round(valeur, 0), " mrd RWF")),
+    vjust = -0.5, size = 4.5, fontface = "bold"
+  ) +
+  # Ligne de référence horizontale au niveau du coût modélisé,
+  # pour lire visuellement la part qu'il représente dans le trc SAM.
+  geom_hline(
+    yintercept = cout_model_mrd,
+    linetype   = "dashed",
+    color      = "#42A5F5",
+    linewidth  = 0.6
+  ) +
+  annotate(
+    "text",
+    x     = 0.55,
+    y     = cout_model_mrd * 1.08,
+    label = paste0(round(part_transport, 1), "% du trc"),
+    color = "#1565C0",
+    size  = 3.8,
+    fontface = "italic",
+    hjust = 0
+  ) +
+  scale_fill_manual(values = c("#E57373", "#42A5F5")) +
+  scale_y_continuous(
+    labels = scales::label_number(suffix = " mrd RWF"),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    title    = "Validation SAM : coût de transport impliqué vs marges trc",
+    subtitle = paste0(
+      "trc SAM IFPRI 2021 = marges de distribution totales ",
+      "(transport routier + marges grossiste/détail).\n",
+      "Le modèle ne capturant que le transport routier domestique, ",
+      "coût modélisé < trc est attendu."
+    ),
+    x = NULL,
+    y = "Valeur (mrd RWF)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(color = "#666666", size = 9),
+    axis.text.x   = element_text(size = 11)
+  )
+
+ggsave(
+  file.path(DIR_CARTES, "graphique_validation_trc.png"),
+  g_valid_compar,
+  width  = 8,
+  height = 6,
+  dpi    = 300
+)
+cat("✓ graphique_validation_trc.png\n")
+
+# ── Graphique 2 — Décomposition sectorielle du coût modélisé ─────────────────
+# Barres horizontales montrant la contribution de chaque secteur au coût total.
+# Utilise PALETTE_SECTEURS (défini dans 00_parametres.R) pour la cohérence
+# visuelle avec les autres graphiques du projet.
+g_valid_sec <- ggplot(cout_sec_df,
+                      aes(x = secteur, y = cout_mrd,
+                          fill = as.character(secteur))) +
+  geom_col(show.legend = FALSE) +
+  geom_text(
+    aes(label = paste0(round(cout_mrd, 1), " mrd")),
+    hjust = -0.1,
+    size  = 3.5
+  ) +
+  coord_flip(clip = "off") +
+  scale_fill_manual(values = PALETTE_SECTEURS) +
+  scale_y_continuous(
+    labels = scales::label_number(suffix = " mrd RWF"),
+    expand = expansion(mult = c(0, 0.22))
+  ) +
+  labs(
+    title    = "Décomposition sectorielle du coût de transport modélisé",
+    subtitle = paste0(
+      "Total modélisé : ", round(cout_model_mrd, 1), " mrd RWF",
+      "  (", round(part_transport, 1), "% du trc SAM).\n",
+      "Secteurs sans fret physique (Transport, Énergie_eau, Services) exclus."
+    ),
+    x = NULL,
+    y = "Coût de transport (mrd RWF)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    plot.subtitle      = element_text(color = "#666666", size = 9),
+    panel.grid.major.y = element_blank()
+  )
+
+ggsave(
+  file.path(DIR_CARTES, "graphique_validation_trc_secteurs.png"),
+  g_valid_sec,
+  width  = 10,
+  height = 6,
+  dpi    = 300
+)
+cat("✓ graphique_validation_trc_secteurs.png\n\n")
+
