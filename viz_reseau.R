@@ -35,6 +35,55 @@ rm(.ent, .res)
 routes_rwanda <- .base$routes_rwanda
 rm(.base)
 
+# ==============================================================================
+# Correction du device PNG pour tmap sur macOS sans XQuartz
+# tmap v4 force type="cairo-png" en dur dans sa fonction interne plot_device.
+# Sur macOS sans XQuartz installé, cairo n'est pas disponible : tmap_save()
+# échoue silencieusement (avertissement "failed to load cairo DLL", aucun fichier
+# créé, pas d'erreur levée). Ce bloc détecte l'absence de cairo et remplace
+# automatiquement le device par type="quartz" (rendu natif macOS).
+# Sur les systèmes où cairo fonctionne (Linux, macOS + XQuartz), le patch est
+# silencieusement ignoré.
+# ==============================================================================
+local({
+  # Test réel : tente d'ouvrir un device cairo-png et guette le warning d'échec.
+  # withCallingHandlers intercepte l'avertissement sans interrompre l'exécution,
+  # contrairement à tryCatch qui stopperait après le premier warning.
+  .f      <- tempfile(fileext = ".png")
+  .echec  <- FALSE
+  withCallingHandlers(
+    grDevices::png(.f, type = "cairo-png", width = 10, height = 10,
+                   res = 72, units = "px"),
+    warning = function(w) {
+      .echec <<- TRUE
+      invokeRestart("muffleWarning")   # Supprime l'affichage du warning
+    }
+  )
+  try(dev.off(), silent = TRUE)
+  unlink(.f, force = TRUE)
+  
+  if (.echec) {
+    # cairo-png indisponible : patch de plot_device dans le namespace de tmap.
+    # On capture la fonction originale dans .orig pour ne patcher que le cas PNG
+    # et déléguer tous les autres formats (pdf, svg, tiff…) à l'implémentation
+    # officielle, garantissant la compatibilité lors des mises à jour de tmap.
+    .orig <- tmap:::plot_device
+    .patched <- function(device, ext, filename, dpi, units_target) {
+      if (is.null(device) && identical(ext, "png")) {
+        force(dpi)
+        force(units_target)
+        return(function(..., width, height) {
+          grDevices::png(..., type = "quartz", width = width, height = height,
+                         res = dpi, units = units_target)
+        })
+      }
+      .orig(device, ext, filename, dpi, units_target)
+    }
+    assignInNamespace("plot_device", .patched, ns = "tmap")
+    cat("✓ tmap : device PNG patché (quartz au lieu de cairo-png, XQuartz absent)\n\n")
+  }
+})
+
 # ── Carte 1 : vérification post-nettoyage ─────────────────────────────────────
 # Cette carte est générée pour vérifier visuellement que le réseau routier
 # a été correctement chargé et nettoyé. Chaque type de route apparaît dans
@@ -135,10 +184,15 @@ entrepots_pop_sf <- reseau_rwanda %>%
   st_as_sf() 
 
 carte_population <- fond_carte() +
-  
+
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.4) +
-  
+
+  # Contours des cellules de Voronoï : chaque zone d'entrepôt correspond à une
+  # cellule dont les frontières délimitent l'espace rattaché à cet entrepôt.
+  tm_shape(zones_voronoi) +
+  tm_borders(col = "#999999", lwd = 0.7, lty = "dashed") +
+
   tm_shape(entrepots_pop_sf) +
   tm_dots(
     fill        = "population_zone",
@@ -150,7 +204,7 @@ carte_population <- fond_carte() +
     fill.legend = tm_legend(title = "Population\n(habitants)"),
     size        = 0.3
   ) +
-  
+
   tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020 / OSM") +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
@@ -269,10 +323,15 @@ PALETTE_RWI <- c(
 )
 
 carte_rwi <- fond_carte() +
-  
+
   tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.4) +
-  
+
+  # Contours des cellules de Voronoï : chaque zone d'entrepôt correspond à une
+  # cellule dont les frontières délimitent l'espace rattaché à cet entrepôt.
+  tm_shape(zones_voronoi) +
+  tm_borders(col = "#999999", lwd = 0.7, lty = "dashed") +
+
   tm_shape(entrepots_rwi_sf) +
   tm_dots(
     fill        = "p_rwi",
