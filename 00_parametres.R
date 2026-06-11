@@ -95,55 +95,6 @@ set.seed(123)
 
 cat("✓ Tous les packages sont chargés\n\n")
 
-# ==============================================================================
-# I.2 : Correction du device PNG pour tmap sur macOS sans XQuartz
-# tmap v4 force type="cairo-png" en dur dans sa fonction interne plot_device.
-# Sur macOS sans XQuartz installé, cairo n'est pas disponible : tmap_save()
-# échoue silencieusement (avertissement "failed to load cairo DLL", aucun fichier
-# créé, pas d'erreur levée). Ce bloc détecte l'absence de cairo et remplace
-# automatiquement le device par type="quartz" (rendu natif macOS).
-# Sur les systèmes où cairo fonctionne (Linux, macOS + XQuartz), le patch est
-# silencieusement ignoré.
-# ==============================================================================
-local({
-  # Test réel : tente d'ouvrir un device cairo-png et guette le warning d'échec.
-  # withCallingHandlers intercepte l'avertissement sans interrompre l'exécution,
-  # contrairement à tryCatch qui stopperait après le premier warning.
-  .f      <- tempfile(fileext = ".png")
-  .echec  <- FALSE
-  withCallingHandlers(
-    grDevices::png(.f, type = "cairo-png", width = 10, height = 10,
-                   res = 72, units = "px"),
-    warning = function(w) {
-      .echec <<- TRUE
-      invokeRestart("muffleWarning")   # Supprime l'affichage du warning
-    }
-  )
-  try(dev.off(), silent = TRUE)
-  unlink(.f, force = TRUE)
-
-  if (.echec) {
-    # cairo-png indisponible : patch de plot_device dans le namespace de tmap.
-    # On capture la fonction originale dans .orig pour ne patcher que le cas PNG
-    # et déléguer tous les autres formats (pdf, svg, tiff…) à l'implémentation
-    # officielle, garantissant la compatibilité lors des mises à jour de tmap.
-    .orig <- tmap:::plot_device
-    .patched <- function(device, ext, filename, dpi, units_target) {
-      if (is.null(device) && identical(ext, "png")) {
-        force(dpi)
-        force(units_target)
-        return(function(..., width, height) {
-          grDevices::png(..., type = "quartz", width = width, height = height,
-                         res = dpi, units = units_target)
-        })
-      }
-      .orig(device, ext, filename, dpi, units_target)
-    }
-    assignInNamespace("plot_device", .patched, ns = "tmap")
-    cat("✓ tmap : device PNG patché (quartz au lieu de cairo-png, XQuartz absent)\n\n")
-  }
-})
-
 ################################################################################
 # PARAMÈTRES GLOBAUX DU MODÈLE
 # Tous les paramètres hard-codés du script sont centralisés ici.
@@ -345,7 +296,6 @@ POP_FALLBACK_MIN <- 1000
 # Résolution disponible sur le portail WorldPop :
 #   z=10 → ~100m/pixel (précis, fichier lourd ~200 Mo)
 #   z=8  → ~400m/pixel (moins précis, fichier léger ~15 Mo)
-# Pour le Rwanda entier, z=9 (~200m) est le meilleur compromis.
 WORLDPOP_ZOOM <- 9
 
 # Noms attendus des colonnes dans le CSV NISR (à adapter selon le fichier réel)
@@ -359,7 +309,7 @@ NISR_COL_POP_TOTAL <- "T_TL"      # Population totale
 # ==============================================================================
 
 # ── Rayon d'estimation de la population d'une cellule RWI (m) ──────────────────
-# Le RWI d'un nœud-entrepôt est désormais la moyenne des cellules RWI tombant
+# Le RWI d'un nœud-entrepôt est la moyenne des cellules RWI tombant
 # dans son polygone de Voronoï, PONDÉRÉE par la population de chaque cellule
 # (cf. 01_reseau.R IV.5). Pour estimer cette population, on somme les pixels
 # WorldPop dans un petit cercle autour de chaque point RWI. La maille RWI fait
@@ -543,12 +493,6 @@ lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   exp_brut  <- zero_sec()   # DEMANDE : exports bruts (prix d'acquisition)
   marg_recu <- zero_sec()   # DEMANDE : marges reçues (≠ 0 uniquement pour le Commerce)
 
-  # Index des comptes spéciaux réutilisés dans la boucle.
-  ir_row   <- idx_row("row")                       # ligne « Rest of world » (importations)
-  ic_row   <- idx_col("row")                       # colonne « Rest of world » (exportations)
-  ir_marg  <- idx_row(SAM_COMPTE_MARGES)           # ligne « trc » (marges payées par une commodité)
-  ic_marg  <- idx_col(SAM_COMPTE_MARGES)           # colonne « trc » (marges reversées à une commodité)
-
   # Boucle 1 : grandeurs par commodité (offre et demande), agrégées aux secteurs.
   for (sf in suffixes) {
     s_grp  <- SAM_MAPPING_SECTEURS[[sf]]
@@ -557,17 +501,17 @@ lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
     cc <- idx_col(paste0("c", sf))   # colonne de la commodité c{sf} (offre)
 
     # OFFRE (colonne de la commodité)
-    dom[s_grp]       <- dom[s_grp]       + num(ra, cc)        # production domestique commercialisée
-    imp[s_grp]       <- imp[s_grp]       + num(ir_row, cc)    # importations
-    marg_paye[s_grp] <- marg_paye[s_grp] + num(ir_marg, cc)  # marges de commerce/transport
+    dom[s_grp]       <- dom[s_grp]       + num(ra, cc)                           # production domestique commercialisée
+    imp[s_grp]       <- imp[s_grp]       + num(idx_row("row"), cc)               # importations
+    marg_paye[s_grp] <- marg_paye[s_grp] + num(idx_row(SAM_COMPTE_MARGES), cc)   # marges de commerce/transport
     for (tx in SAM_COMPTES_TAXES_PRODUITS)
       tax_paye[s_grp] <- tax_paye[s_grp] + num(idx_row(tx), cc)
 
     # DEMANDE (ligne de la commodité)
     for (dc in SAM_COMPTES_DEMANDE_FINALE)
       fdem[s_grp] <- fdem[s_grp] + num(rc, idx_col(dc))
-    exp_brut[s_grp]  <- exp_brut[s_grp]  + num(rc, ic_row)    # exports
-    marg_recu[s_grp] <- marg_recu[s_grp] + num(rc, ic_marg)  # marges reçues (Commerce)
+    exp_brut[s_grp]  <- exp_brut[s_grp]  + num(rc, idx_col("row"))              # exports
+    marg_recu[s_grp] <- marg_recu[s_grp] + num(rc, idx_col(SAM_COMPTE_MARGES))  # marges reçues (Commerce)
   }
 
   # Boucle 2 : consommations intermédiaires Z[i,j] = commodité i (ligne) achetée
@@ -751,34 +695,49 @@ TYPE_EVENEMENT        <- "inondation"
 # Mettre l'identifiant OSM de la ou des routes affectées
 OSM_IDS_PERTURBES_MANUEL <- c(479687569)
 
-# Nom du scénario — généré automatiquement depuis les noms OSM des arêtes perturbées.
-# Pour forcer un nom différent, remplacer NULL par une chaîne entre guillemets.
-# Exemple : NOM_SCENARIO <- "Mon_scenario_custom"
+# Nom du scénario de vulnérabilité.
+# Deux modes disponibles — choisir en modifiant uniquement NOM_SCENARIO_MANUEL :
 #
-# Fallback "Scenario_default" si DuckDB n'est pas encore disponible (session fraîche
-# avant le premier lancement de 01_reseau.R).
-NOM_SCENARIO <- tryCatch({
-  if (!file.exists(DB_PATH)) stop("DuckDB absent")
-  con_tmp <- DBI::dbConnect(duckdb::duckdb(), dbdir = DB_PATH, read_only = TRUE)
-  # Pas de shutdown = TRUE ici : on ferme uniquement cette connexion temporaire,
-  # sans arrêter l'instance DuckDB (con sera ouvert ensuite).
-  on.exit(try(DBI::dbDisconnect(con_tmp), silent = TRUE), add = TRUE)
-  noms <- DBI::dbGetQuery(
-    con_tmp,
-    sprintf(
-      "SELECT DISTINCT name FROM routes_attrs_raw
-       WHERE CAST(osm_id AS BIGINT) IN (%s) AND name IS NOT NULL AND name <> ''",
-      paste(OSM_IDS_PERTURBES_MANUEL, collapse = ", ")
-    )
-  )$name
-  DBI::dbDisconnect(con_tmp)
-  if (length(noms) == 0) stop("aucun nom OSM trouvé")
-  noms_clean <- gsub("[^[:alnum:]_]", "", gsub("\\s+", "_", trimws(noms)))
-  paste(c(TYPE_EVENEMENT, noms_clean), collapse = "_")
-}, error = function(e) "Scenario_default")
+#   Mode automatique (défaut) : laisser NOM_SCENARIO_MANUEL <- NULL
+#     → le nom est construit depuis les noms OSM des arêtes perturbées
+#       (ex. "inondation_RN1_Kigali") ; fallback "Scenario_default" si DuckDB
+#       n'est pas encore disponible (session fraîche avant 01_reseau.R).
+#
+#   Mode manuel : renseigner une chaîne de caractères
+#     → NOM_SCENARIO_MANUEL <- "Mon_scenario_custom"
+NOM_SCENARIO_MANUEL <- NULL   
+
+NOM_SCENARIO <- if (!is.null(NOM_SCENARIO_MANUEL)) {
+  NOM_SCENARIO_MANUEL
+} else {
+  # Mode automatique : interroge DuckDB pour récupérer les noms OSM des arêtes
+  # perturbées (table routes_attrs_raw, filtrée sur OSM_IDS_PERTURBES_MANUEL),
+  # puis les concatène avec TYPE_EVENEMENT en un identifiant propre (sans espaces
+  # ni caractères spéciaux). En cas d'échec (DuckDB absent, aucun nom trouvé),
+  # bascule sur le fallback "Scenario_default".
+  tryCatch({
+    if (!file.exists(DB_PATH)) stop("DuckDB absent")
+    con_tmp <- DBI::dbConnect(duckdb::duckdb(), dbdir = DB_PATH, read_only = TRUE)
+    # Pas de shutdown = TRUE ici : on ferme uniquement cette connexion temporaire,
+    # sans arrêter l'instance DuckDB (con sera ouvert ensuite).
+    on.exit(try(DBI::dbDisconnect(con_tmp), silent = TRUE), add = TRUE)
+    noms <- DBI::dbGetQuery(
+      con_tmp,
+      sprintf(
+        "SELECT DISTINCT name FROM routes_attrs_raw
+         WHERE CAST(osm_id AS BIGINT) IN (%s) AND name IS NOT NULL AND name <> ''",
+        paste(OSM_IDS_PERTURBES_MANUEL, collapse = ", ")
+      )
+    )$name
+    DBI::dbDisconnect(con_tmp)
+    if (length(noms) == 0) stop("aucun nom OSM trouvé")
+    noms_clean <- gsub("[^[:alnum:]_]", "", gsub("\\s+", "_", trimws(noms)))
+    paste(c(TYPE_EVENEMENT, noms_clean), collapse = "_")
+  }, error = function(e) "Scenario_default")
+}
 # Pour les activer : mettre TRUE, sinon : mettre FALSE
 UTILISER_MODE_BUFFER        <- FALSE  
-UTILISER_MODE_RASTER        <- FALSE
+UTILISER_MODE_RASTER        <- TRUE
 
 # Coordonnées du centre de la zone perturbée du mode buffer 
 CENTRE_PERTURBATION_LON <- 29.950   # Est-Ouest
