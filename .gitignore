@@ -1,0 +1,27 @@
+# Outputs recalculables — exclus sauf les cartes PNG
+outputs/*
+!outputs/cartes/
+outputs/cartes/*
+!outputs/cartes/*.png
+
+# Base DuckDB (recalculable)
+*.duckdb
+*.duckdb.wal
+
+# Fichiers PBF (gros, téléchargés depuis Geofabrik)
+*.pbf
+
+# Rasters (gros, téléchargés automatiquement)
+*.tif
+
+# Fichiers macOS (métadonnées Finder, spécifiques à la machine)
+.DS_Store
+
+# Fichiers R temporaires
+.Rhistory
+.RData
+.Rproj.user/
+.positai
+
+# Variables d'environnement (tokens, secrets — ne jamais committer)
+.Renviron
