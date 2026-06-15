@@ -20,7 +20,7 @@ cat("=== Chargement des objets de 01_reseau + 02_couts ===\n")
 .map  <- readRDS(PERSIST_MAPPING_MM)
 
 list2env(.ent, envir = .GlobalEnv)
-reseau_rwanda      <- .res$reseau_rwanda
+reseau      <- .res$reseau
 n_noeuds           <- .mm$n_noeuds
 n_vehicules        <- .mm$n_vehicules
 n_aretes_physiques <- length(.map$lookup_type[.map$lookup_type == "route"]) / .mm$n_vehicules
@@ -68,7 +68,7 @@ cat("✓ Objets chargés\n\n")
 # ── Préparation du graphe igraph pour Dijkstra ────────────────────────────────
 # as_tbl_graph() convertit sfnetworks en tidygraph/igraph tout en conservant
 # les attributs des nœuds et des arêtes.
-graphe_igraph      <- reseau_rwanda %>%
+graphe_igraph      <- reseau %>%
   activate("edges") %>%
   mutate(weight = cost_per_tkm * length_km) %>%   # weight = métrique de coût pour Dijkstra
   as_tbl_graph()
@@ -486,7 +486,7 @@ couts_wide <- duck_query("
 ")
 
 # ── Construction de la table des arêtes finales enrichie ──────────────────────
-aretes_finales <- reseau_rwanda %>%
+aretes_finales <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   mutate(
@@ -505,14 +505,14 @@ duck_write(aretes_finales %>% st_drop_geometry(), "aretes_finales")
 # Il peut contenir des géométries (points, lignes, polygones) + leurs attributs.
 # Compatible avec QGIS (logiciel SIG libre) et ArcGIS (logiciel SIG commercial).
 # Seul st_write() peut exporter des géométries (DuckDB ne les supporte pas encore)
-st_write(aretes_finales, file.path(DIR_EXPORTS,"reseau_rwanda_aretes.gpkg"),
+st_write(aretes_finales, file.path(DIR_EXPORTS,"reseau_aretes.gpkg"),
          delete_dsn=TRUE, quiet=TRUE)
 
-noeuds_finaux <- reseau_rwanda %>%
+noeuds_finaux <- reseau %>%
   activate("nodes") %>%
   st_as_sf() %>%
   select(node_id, is_warehouse, warehouse_name, warehouse_type)
-st_write(noeuds_finaux, file.path(DIR_EXPORTS, "reseau_rwanda_noeuds.gpkg"),
+st_write(noeuds_finaux, file.path(DIR_EXPORTS, "reseau_noeuds.gpkg"),
          delete_dsn=TRUE, quiet=TRUE)
 
 # Exports CSV depuis DuckDB via COPY TO
@@ -564,8 +564,8 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # Définit les 11 secteurs, la matrice des coefficients techniques A,
 # les productions totales et les facteurs de conversion valeur → tonnes.
 # Calcule les multiplicateurs de Leontief (I-A)^(-1) et stocke dans DuckDB.
-# NOTE : données fictives calibrées sur le Rwanda 2022. Pour utiliser les
-# données NISR réelles, remplacer A et production_totale ici uniquement.
+# NOTE : données fictives de démonstration. Pour utiliser les données réelles,
+# remplacer A et production_totale ici uniquement.
 # ==============================================================================
 
 # La table Input-Output de Leontief modélise les interdépendances sectorielles :
@@ -577,7 +577,7 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 #   Un élément [i,j] donne l'augmentation de production du secteur i nécessaire
 #   pour satisfaire une augmentation de 1 RWF de demande finale dans le secteur j.
 #
-# En termes concrets : si les ménages rwandais dépensent 1 RWF de plus en
+# En termes concrets : si les ménages dépensent 1 RWF de plus en
 # produits alimentaires (Agro_industrie), combien cela génère-t-il de production
 # supplémentaire dans l'Agriculture (pour fournir les matières premières) ?
 # C'est ce que calcule la matrice de Leontief.
@@ -587,9 +587,11 @@ cat("✓ Exports CSV + Parquet via DuckDB COPY TO\n\n")
 # A %*% x donne le vecteur des consommations intermédiaires : pour chaque secteur i,
 # la somme de a_ij × production_j sur tous les secteurs j fournisseurs.
 conso_interm   <- as.vector(A %*% production_totale)
-# Valeur ajoutée = production - consommations intermédiaires
-valeur_ajoutee <- production_totale - conso_interm
-# Demande finale extraite de la SAM IFPRI Rwanda 2021 (cf. 00_parametres.R).
+
+# Valeur ajoutée par secteur : reprise directe de lire_sam() (00_parametres.R)
+valeur_ajoutee <- sam$va[SECTEURS]
+
+# Demande finale extraite de la SAM IFPRI (cf. 00_parametres.R).
 # DEMANDE_FINALE_SAM est un vecteur par secteur en MILLIARDS DE RWF.
 # On réordonne selon l'ordre canonique SECTEURS pour garantir l'alignement des indices.
 demande_finale <- DEMANDE_FINALE_SAM[SECTEURS]
@@ -650,6 +652,17 @@ offre_zones   <- matrix(0, n_warehouses, N_SECTEURS,
 demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
                         dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
 
+# prod_zones / dem_zones : production locale x[i,s] et demande totale d[i,s] en
+# BRUT (avant tout netting). offre_zones/demande_zones n'en gardent que le solde
+# net (max(0, x−d)), ce qui efface la production d'un secteur importateur net et
+# l'empêche d'alimenter ses exports. On conserve donc ici les valeurs brutes :
+# elles servent à décomposer le commerce extérieur (export tiré de la production
+# brute, import couvrant la demande brute) dans la partie gravitaire VII.4.
+prod_zones <- matrix(0, n_warehouses, N_SECTEURS,
+                     dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
+dem_zones  <- matrix(0, n_warehouses, N_SECTEURS,
+                     dimnames=list(noeuds_entreposage$warehouse_name, SECTEURS))
+
 # ==============================================================================
 # VII.2.B : Modèle MRIO — allocation de la production et de la demande
 #
@@ -683,12 +696,23 @@ demande_zones <- matrix(0, n_warehouses, N_SECTEURS,
 #     offre_zones[i,s]   = max(0,  x[i,s] − d[i,s])
 #     demande_zones[i,s] = max(0,  d[i,s] − x[i,s])
 #
-# ÉQUILIBRE AGRÉGÉ :
+# ÉQUILIBRE AGRÉGÉ (prix de base) :
 #   Σ_i x[i,s] = production_totale[s]  (par construction : Σ_i w[i,s] = 1)
-#   Σ_i d[i,s] ≈ production_totale[s]  (identité ressources-emplois Leontief)
-#   → Σ_i offre[i,s] ≈ Σ_i demande[i,s] ; les résidus = commerce avec le RoW.
-#   La normalisation par moyenne géométrique dans furness_gravity() absorbe
-#   ces résidus d'économie ouverte.
+#   Σ_i d[i,s] = conso_interm[s] + demande_finale[s]
+#              = production_totale[s] + imports[s] − exports[s]  (bilan SAM)
+#   → Σ_i offre[i,s] − Σ_i demande[i,s] = exports[s] − imports[s]
+#   → Σ_i offre[i,s] + imports[s] = Σ_i demande[i,s] + exports[s]  ✓
+#
+#   Le résidu (exports − imports) n'est PAS négligeable pour les secteurs à
+#   fort déséquilibre commercial (ex. Chimie_petrole : imports >> production).
+#   Il est absorbé par les nœuds RoW (offre_row = imports, demande_row = exports)
+#   ajoutés dans VII.2.C, et NON par la normalisation du Furness.
+#
+#   Les grandeurs production_totale, demande_finale, A sont toutes issues de
+#   lire_sam() (00_parametres.R), au PRIX DE BASE : trc (marges de
+#   distribution), stax et mtax (taxes sur produits) ont été retirés via le
+#   facteur k = 1 − wedge / usages_acquisition. Le bilan est vérifié
+#   explicitement ci-dessous après construction de offre_zones / demande_zones.
 # ==============================================================================
 
 # Emploi national par secteur = somme sur toutes les zones actives.
@@ -758,6 +782,11 @@ for (i in seq_len(n_warehouses)) {
   # valeurs négatives par 0 (une zone ne peut pas avoir d'offre négative).
   offre_zones[i, ]   <- pmax(0, x_i - d_i)   # surplus exportable (mrd RWF)
   demande_zones[i, ] <- pmax(0, d_i - x_i)   # besoin importé     (mrd RWF)
+
+  # Conservation des grandeurs brutes (non nettées) pour la décomposition
+  # du commerce extérieur en VII.4.
+  prod_zones[i, ] <- x_i                     # production locale brute (mrd RWF)
+  dem_zones[i, ]  <- d_i                     # demande totale brute    (mrd RWF)
 }
 
 # ── Stockage dans DuckDB des zones domestiques (format long) ─────────────────
@@ -790,6 +819,54 @@ recap_zones <- duck_query("
 cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
 
 # ==============================================================================
+# VII.2.B.2 : Vérification du bilan ressources-emplois au prix de base
+#
+# Principe (Approche prix de base, cf. discussion méthodologique) :
+#   Toutes les grandeurs (production, demande finale, coefficients A, imports,
+#   exports) proviennent de lire_sam() au prix de base, après retrait du
+#   « coin » marges (trc) + taxes (stax, mtax) via le facteur k.
+#
+#   On vérifie ici que le bilan ressources-emplois tient par secteur :
+#     Σ_i offre_zones[i,s] + imports[s] ≈ Σ_i demande_zones[i,s] + exports[s]
+#
+#   Ce bilan est garanti mathématiquement (cf. commentaire VII.2.B), mais la
+#   vérification explicite permet de détecter toute dérive numérique ou
+#   incohérence entre les données SAM et les données d'emploi/population.
+#
+#   Note : les coûts de transport (c_ij) sont capturés par la fonction de coût
+#   du graphe routier (02_couts.R) et non par la SAM — intégrer trc dans les
+#   masses du modèle gravitaire constituerait un double comptage.
+# ==============================================================================
+
+cat("── Vérification bilan ressources-emplois au prix de base ──────────────\n")
+
+offre_dom_nat  <- colSums(offre_zones)    # Σ_i offre_zones[i,s]  (mrd RWF)
+demande_dom_nat <- colSums(demande_zones) # Σ_i demande_zones[i,s] (mrd RWF)
+imports_s      <- sam$imports[SECTEURS]
+exports_s      <- sam$exports[SECTEURS]
+
+# Résidu = (offre_dom + imports) − (demande_dom + exports) doit être ≈ 0
+residu_bilan <- (offre_dom_nat + imports_s) - (demande_dom_nat + exports_s)
+
+bilan_pb_df <- tibble(
+  Secteur      = SECTEURS,
+  Offre_dom    = round(offre_dom_nat,   1),
+  Imports_SAM  = round(imports_s,       1),
+  Demande_dom  = round(demande_dom_nat, 1),
+  Exports_SAM  = round(exports_s,       1),
+  Residu       = round(residu_bilan,    4)
+)
+print(bilan_pb_df, n = Inf)
+
+residu_max <- max(abs(residu_bilan))
+if (residu_max < 0.01) {
+  cat("  ✓ Bilan prix de base vérifié — résidu max :", round(residu_max, 6), "mrd RWF\n\n")
+} else {
+  warning("⚠ Bilan prix de base déséquilibré (résidu max : ", round(residu_max, 2),
+          " mrd RWF) — vérifier la cohérence entre lire_sam() et les données MRIO.")
+}
+
+# ==============================================================================
 # VII.2.C : Couche virtuelle RoW (Rest of World)
 #
 # PRINCIPE :
@@ -802,16 +879,16 @@ cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
 #
 #   Ce minimum choisit automatiquement le poste frontière optimal pour chaque
 #   destination — permettant par exemple à l'Ouganda d'utiliser Gatuna OU
-#   Kagitumba selon la destination rwandaise.
+#   Kagitumba selon la destination interne.
 #
 #   Offre/demande des nœuds RoW : données de commerce extérieur NISR
-#     offre[RoW_pays, s]   = importations du Rwanda   (mrd RWF)
-#     demande[RoW_pays, s] = exportations Rwanda (mrd RWF)
+#     offre[RoW_pays, s]   = importations du pays étudié (mrd RWF)
+#     demande[RoW_pays, s] = exportations du pays étudié (mrd RWF)
 #
 # AFFECTATION AUX ROUTES :
 #   Après le modèle gravitaire, les flux T[RoW_k, j] sont projetés sur le
 #   nœud frontière b*(j) = argmin_b C_road[b,j] avant l'affectation All-or-Nothing.
-#   Le segment pré-frontière (étranger) n'emprunte aucune route rwandaise.
+#   Le segment pré-frontière (étranger) n'emprunte aucune route du pays étudié.
 # ==============================================================================
 
 # ── Pays RoW et leurs postes frontières ──────────────────────────────────────
@@ -862,9 +939,9 @@ for (k in seq_along(pays_row)) {
   commerce_k <- COMMERCE_EXTERIEUR_NISR %>% filter(pays == pays_k)
   for (s in SECTEURS) {
     row_s <- commerce_k %>% filter(secteur == s)
-    # imports rwandais depuis le pays k = ce que le nœud RoW envoie vers le Rwanda
+    # imports du pays depuis le pays k = ce que le nœud RoW envoie vers le pays
     offre_total[idx_k, s]   <- if (nrow(row_s) > 0) row_s$imports_mrd_rwf else 0
-    # exports rwandais vers le pays k = ce que le nœud RoW attire depuis le Rwanda
+    # exports du pays vers le pays k = ce que le nœud RoW attire depuis le pays
     demande_total[idx_k, s] <- if (nrow(row_s) > 0) row_s$exports_mrd_rwf else 0
   }
 }
@@ -1188,7 +1265,79 @@ furness_gravity <- function(O_s,
   # Remise à zéro de la diagonale par sécurité (peut avoir reçu un résidu
   # numérique lors des multiplications ligne/colonne successives)
   diag(T_mat) <- 0
-  
+
+  T_mat
+}
+
+# ── Variante RECTANGULAIRE de Furness (commerce extérieur) ────────────────────
+#
+# furness_rect() applique le même algorithme d'équilibrage biproportionnel (IPF)
+# mais à une matrice RECTANGULAIRE nO × nD, sans notion de diagonale.
+# Elle sert aux deux jambes du commerce extérieur, où origines et destinations
+# sont des ensembles de nœuds DISJOINTS :
+#   - jambe EXPORT : origines = zones domestiques (nO), destinations = nœuds RoW (nD)
+#   - jambe IMPORT : origines = nœuds RoW (nO),        destinations = zones (nD)
+#
+# Contrairement à furness_gravity (carrée, échanges intra-zone interdits via la
+# diagonale), ici aucune cellule n'est exclue : tout couple (origine, destination)
+# du bloc est un échange potentiel.
+#
+# Paramètres :
+#   O_s      — vecteur nO des offres (origines), en tonnes
+#   D_s      — vecteur nD des demandes (destinations), en tonnes
+#   friction — matrice nO × nD des termes (C_ij × TONNES)^(-beta), NA mis à 0
+#   secteur  — chaîne pour les messages d'avertissement uniquement
+#
+# Retourne : matrice nO × nD de flux en tonnes respectant les deux marges.
+# Par construction (sum(O) = sum(D), cf. VII.4), la normalisation est neutre.
+furness_rect <- function(O_s, D_s, friction, secteur = "") {
+
+  nO <- length(O_s); nD <- length(D_s)
+  stopifnot(nrow(friction) == nO, ncol(friction) == nD)
+
+  total_O <- sum(O_s, na.rm = TRUE)
+  total_D <- sum(D_s, na.rm = TRUE)
+
+  # Cas dégénéré : secteur sans export (ou sans import) → bloc de flux nul.
+  if (total_O < 1e-12 || total_D < 1e-12) return(matrix(0, nO, nD))
+
+  # Cibles normalisées sur la moyenne géométrique (identique à furness_gravity ;
+  # ici total_O == total_D par construction, donc S = total et les cibles sont
+  # inchangées — la normalisation ne fait que sécuriser d'éventuels arrondis).
+  S_cible  <- sqrt(total_O * total_D)
+  target_O <- O_s * (S_cible / total_O)
+  target_D <- D_s * (S_cible / total_D)
+
+  # Matrice initiale T_ij = O_i × D_j × friction_ij, NA/Inf remis à 0.
+  T_mat <- outer(O_s, D_s) * friction
+  T_mat[is.na(T_mat) | is.nan(T_mat) | is.infinite(T_mat)] <- 0
+
+  for (iter in seq_len(FURNESS_MAX_ITER)) {
+    # Étape A : équilibrage des lignes (origines)
+    A_i <- target_O / pmax(rowSums(T_mat), 1e-12)
+    A_i[target_O < 1e-12] <- 0
+    T_mat <- T_mat * A_i
+    # Étape B : équilibrage des colonnes (destinations)
+    B_j <- target_D / pmax(colSums(T_mat), 1e-12)
+    B_j[target_D < 1e-12] <- 0
+    T_mat <- t(t(T_mat) * B_j)
+
+    # Test de convergence sur les marges à cible non nulle
+    err_O <- if (any(target_O > 1e-12)) max(
+      abs(rowSums(T_mat)[target_O > 1e-12] - target_O[target_O > 1e-12]) /
+        target_O[target_O > 1e-12]) else 0
+    err_D <- if (any(target_D > 1e-12)) max(
+      abs(colSums(T_mat)[target_D > 1e-12] - target_D[target_D > 1e-12]) /
+        target_D[target_D > 1e-12]) else 0
+    if (max(err_O, err_D) < FURNESS_TOL) break
+
+    if (iter == FURNESS_MAX_ITER) {
+      warning("  [", secteur, "] Furness rectangulaire non convergé après ",
+              FURNESS_MAX_ITER, " itérations. Erreur finale : ",
+              round(max(err_O, err_D) * 100, 4), "%")
+    }
+  }
+
   T_mat
 }
 
@@ -1208,6 +1357,66 @@ noms_total         <- c(noms_zones_uniques, noms_row)
 # Les lignes/colonnes RoW représentent les flux import/export.
 flux_total <- matrix(0, nrow = n_total, ncol = n_total,
                      dimnames = list(noms_total, noms_total))
+
+# ==============================================================================
+# VII.4-bis : Décomposition brut/net des marges (commerce extérieur en brut)
+#
+# PROBLÈME RÉSOLU :
+#   La formulation NETTE (offre_zones = max(0, x−d)) annule, zone par zone, toute
+#   la production d'un secteur importateur net (ex. Chimie, Manufactures : x < d
+#   partout → offre = 0). Les exports de ces secteurs, portés par les nœuds RoW,
+#   n'ont alors plus aucune origine domestique pour les alimenter → le Furness
+#   doublement contraint devient infaisable (marge destination à 100 %).
+#
+# SOLUTION (piste « découplage import/export ») :
+#   On sépare trois flux physiquement distincts et on les résout séparément :
+#     1. EXPORT      : zones (production brute) → nœuds RoW
+#     2. IMPORT      : nœuds RoW → zones (demande brute)
+#     3. DOMESTIQUE  : zone → zone, sur le solde net après commerce extérieur
+#
+# HYPOTHÈSE D'EXPOSITION UNIFORME AU COMMERCE EXTÉRIEUR :
+#   Chaque zone exporte la même fraction τ_E de sa production et importe la même
+#   fraction τ_M de sa demande, où :
+#       τ_E[s] = exports[s]  / production_totale[s]   (propension à exporter)
+#       τ_M[s] = imports[s]  / Σ_i d[i,s]             (pénétration des imports)
+#   Comme exports[s] ≤ production_totale[s] pour tous les secteurs (vérifié sur la
+#   SAM 2021), τ_E ∈ [0,1] : les exports proviennent de la production domestique
+#   (pas de ré-export). De même τ_M ∈ [0,1].
+#
+#   Marges par zone qui en découlent :
+#       e_zones[i,s]     = τ_E[s] × x[i,s]                (origine de la jambe export)
+#       m_zones[i,s]     = τ_M[s] × d[i,s]                (destination jambe import)
+#       o_dom_zones[i,s] = max(0, x[i,s](1−τ_E) − d[i,s](1−τ_M))  (surplus domestique)
+#       q_dom_zones[i,s] = max(0, d[i,s](1−τ_M) − x[i,s](1−τ_E))  (déficit domestique)
+#
+# ÉQUILIBRE DE CHAQUE JAMBE (condition de faisabilité du biproportionnel) :
+#   Σ_i e_zones[i,s] = τ_E × X = exports[s] = Σ_k exports_RoW[k]   (export équilibré)
+#   Σ_i m_zones[i,s] = τ_M × D = imports[s] = Σ_k imports_RoW[k]   (import équilibré)
+#   Σ_i o_dom_zones  = Σ_i q_dom_zones = X − exports = D − imports (domestique équil.)
+#   La dernière égalité découle du bilan SAM (X + imports = D + exports).
+# ==============================================================================
+
+# Propensions sectorielles (uniformes entre zones)
+tau_E <- ifelse(production_totale[SECTEURS] > 1e-12,
+                exports_s / production_totale[SECTEURS], 0)
+D_nat <- colSums(dem_zones)                          # demande domestique totale par secteur
+tau_M <- ifelse(D_nat > 1e-12, imports_s / D_nat, 0)
+names(tau_E) <- SECTEURS; names(tau_M) <- SECTEURS
+
+# Matrices de marges (zone × secteur), en mrd RWF — sweep multiplie chaque
+# colonne s par le scalaire tau correspondant (recyclage par colonne).
+e_zones     <- sweep(prod_zones, 2, tau_E,     `*`)  # production exportée
+m_zones     <- sweep(dem_zones,  2, tau_M,     `*`)  # demande couverte par import
+prod_dom    <- sweep(prod_zones, 2, 1 - tau_E, `*`)  # production restant au marché domestique
+dem_dom     <- sweep(dem_zones,  2, 1 - tau_M, `*`)  # demande restant au marché domestique
+# pmax(M, 0) — la matrice est passée en PREMIER : pmax copie les attributs
+# (dim, dimnames) de son premier argument ; un scalaire en premier les effacerait.
+o_dom_zones <- pmax(prod_dom - dem_dom, 0)           # surplus domestique (origine domestique)
+q_dom_zones <- pmax(dem_dom - prod_dom, 0)           # déficit domestique (destination domestique)
+
+# Indices des blocs domestique / RoW dans les matrices n_total × n_total
+idx_dom <- 1:n_warehouses
+idx_row <- (n_warehouses + 1):n_total
 
 for (s in SECTEURS) {
 
@@ -1254,7 +1463,7 @@ for (s in SECTEURS) {
         C_total_s[j, idx_k] <- C_total_s[idx_k, j]  # symétrique
       }
     }
-    # RoW ↔ RoW : non défini (NA) — le transit entre pays via le Rwanda est négligeable
+    # RoW ↔ RoW : non défini (NA) — le transit entre pays via le pays étudié est négligeable
   }
 
   # Diagonale NA (pas d'échange intrazone)
@@ -1277,62 +1486,92 @@ for (s in SECTEURS) {
   friction[is.na(friction)] <- 0
   diag(friction)            <- 0
 
-  # ── Appel à Furness (doublement contraint) ────────────────────────────────────
-  # offre_total[, s] et demande_total[, s] sont en mrd RWF ; on les convertit en
-  # tonnes via TONNES_PAR_mrd_RWF[s] pour que les marges cibles soient en tonnes.
-  # La matrice résultante flux_gravitaire[[s]] est directement en tonnes.
-  # Les n_row dernières entrées sont les flux d'import/export NISR (convertis).
-  # La fonction normalise sur la moyenne géométrique pour assurer sum(O) = sum(D).
-  flux_gravitaire[[s]] <- furness_gravity(
-    O_s      = offre_total[, s]  * TONNES_PAR_mrd_RWF[s],
-    D_s      = demande_total[, s] * TONNES_PAR_mrd_RWF[s],
-    friction = friction,
-    secteur  = s
+  # ── Découpage de la friction en blocs ────────────────────────────────────────
+  # friction est n_total × n_total. On en extrait trois blocs correspondant aux
+  # trois jambes. Le bloc RoW↔RoW (transit) n'est volontairement pas utilisé.
+  Tcoef <- TONNES_PAR_mrd_RWF[s]              # facteur mrd RWF → tonnes
+  F_dom <- friction[idx_dom, idx_dom, drop = FALSE]  # zone → zone
+  F_exp <- friction[idx_dom, idx_row, drop = FALSE]  # zone → frontière (export)
+  F_imp <- friction[idx_row, idx_dom, drop = FALSE]  # frontière → zone (import)
+
+  # ── Trois sous-problèmes biproportionnels (marges converties en tonnes) ───────
+  # 1. DOMESTIQUE — carré, échanges intra-zone interdits (diagonale nulle) :
+  #    origine = surplus domestique, destination = déficit domestique.
+  flux_dom <- furness_gravity(
+    O_s      = o_dom_zones[, s] * Tcoef,
+    D_s      = q_dom_zones[, s] * Tcoef,
+    friction = F_dom,
+    secteur  = paste0(s, " · dom.")
+  )
+  # 2. EXPORT — rectangulaire : origine = production exportée des zones,
+  #    destination = exports par poste-pays (lignes RoW de demande_total).
+  flux_exp <- furness_rect(
+    O_s      = e_zones[, s]            * Tcoef,
+    D_s      = demande_total[idx_row, s] * Tcoef,
+    friction = F_exp,
+    secteur  = paste0(s, " · exp.")
+  )
+  # 3. IMPORT — rectangulaire : origine = imports par poste-pays (lignes RoW
+  #    d'offre_total), destination = demande des zones couverte par import.
+  flux_imp <- furness_rect(
+    O_s      = offre_total[idx_row, s] * Tcoef,
+    D_s      = m_zones[, s]            * Tcoef,
+    friction = F_imp,
+    secteur  = paste0(s, " · imp.")
   )
 
+  # ── Assemblage de la matrice de flux n_total × n_total (tonnes) ───────────────
+  # Le bloc RoW↔RoW reste nul (pas de transit). Structure compatible avec la
+  # projection des flux RoW (VII.5) et l'affectation (VIII).
+  T_s <- matrix(0, n_total, n_total, dimnames = list(noms_total, noms_total))
+  T_s[idx_dom, idx_dom] <- flux_dom
+  T_s[idx_dom, idx_row] <- flux_exp
+  T_s[idx_row, idx_dom] <- flux_imp
+  flux_gravitaire[[s]] <- T_s
+
   # Accumulation dans la matrice de flux toutes-secteurs
-  flux_total <- flux_total + flux_gravitaire[[s]]
+  flux_total <- flux_total + T_s
 }
 
 # ── Vérification des contraintes de marges ────────────────────────────────────
-# On contrôle que les flux sortants de chaque zone correspondent bien à son
-# offre sectorielle, et idem pour les flux entrants et la demande.
-# Un écart > 0.1% signale un problème de convergence ou de données.
-# La vérification porte sur les n_total nœuds (domestiques + RoW).
+# On contrôle que les flux sortants/entrants de chaque nœud correspondent bien
+# à ses marges cibles, désormais décomposées (cf. VII.4-bis) :
+#   - nœud domestique i : sortie attendue = surplus domestique + production exportée
+#                         entrée  attendue = déficit domestique + demande importée
+#   - nœud RoW k         : sortie attendue = imports du pays k
+#                         entrée  attendue = exports vers le pays k
+# Les cibles étant équilibrées par jambe (Σ origines = Σ destinations), chaque
+# marge doit être respectée exactement : un écart > 0.01 % signale un défaut de
+# convergence. La vérification porte sur les n_total nœuds (domestiques + RoW).
 
 cat("\n── Vérification des contraintes de marges ─────────────────────────────\n")
 
 for (s in SECTEURS) {
 
-  T_s      <- flux_gravitaire[[s]]
-  O_s      <- offre_total[, s]  * TONNES_PAR_mrd_RWF[s]
-  D_s      <- demande_total[, s] * TONNES_PAR_mrd_RWF[s]
-  
-  # Recalcul des cibles normalisées (même logique que dans furness_gravity)
-  # pour comparer avec les marges effectives de la matrice obtenue
-  total_O  <- sum(O_s, na.rm = TRUE)
-  total_D  <- sum(D_s, na.rm = TRUE)
-  
-  if (total_O < 1e-12 || total_D < 1e-12) next
-  
-  S_cible  <- sqrt(total_O * total_D)
-  target_O <- O_s * (S_cible / total_O)
-  target_D <- D_s * (S_cible / total_D)
-  
-  # Erreur relative maximale : max sur toutes les zones non-nulles
-  zones_O_actives <- target_O > 1e-12
-  zones_D_actives <- target_D > 1e-12
-  
+  T_s   <- flux_gravitaire[[s]]
+  Tcoef <- TONNES_PAR_mrd_RWF[s]
+
+  # Cibles complètes par nœud (tonnes) : on concatène le bloc domestique et le
+  # bloc RoW. Origine = ce qui doit sortir du nœud ; destination = ce qui entre.
+  target_O <- c(o_dom_zones[, s] + e_zones[, s],          # zones : surplus + export
+                offre_total[idx_row, s]) * Tcoef          # RoW   : imports
+  target_D <- c(q_dom_zones[, s] + m_zones[, s],          # zones : déficit + import
+                demande_total[idx_row, s]) * Tcoef        # RoW   : exports
+
+  # Erreur relative maximale sur les seules marges non nulles
+  zones_O_actives <- target_O > 1e-9
+  zones_D_actives <- target_D > 1e-9
+
   err_O <- if (any(zones_O_actives)) {
     max(abs(rowSums(T_s)[zones_O_actives] - target_O[zones_O_actives]) /
           target_O[zones_O_actives]) * 100
   } else 0
-  
+
   err_D <- if (any(zones_D_actives)) {
     max(abs(colSums(T_s)[zones_D_actives] - target_D[zones_D_actives]) /
           target_D[zones_D_actives]) * 100
   } else 0
-  
+
   statut <- if (max(err_O, err_D) < 0.01) "✓" else "⚠"
   cat("  ", statut, "[", formatC(s, width = 14), "]",
       "err. origine :", formatC(err_O, format = "f", digits = 4), "%",
@@ -1478,11 +1717,11 @@ objets_a_supprimer <- c(
   "noeuds_sf", "composantes_finales", "comp_lisse",
   
   # Données brutes OSM
-  "routes_rwanda_raw", "routes_attrs_raw", "routes_rwanda_clean",
+  "routes_raw", "routes_attrs_raw", "routes_clean",
   "attrs_df", "attrs_clean", "landuse_test", "place_test", "villes_raw",
   
   # Couches géographiques lourdes
-  "dem_rwanda", "zones_urbaines_union",
+  "dem", "zones_urbaines_union",
   "zones_urbaines", "zones_industrielles", "zones_retail",
   "centroides_indus", "centroides_indus_sf", "centroides_retail",
   "centroides_retail_sf", "tous_existants", "tous_existants2",
@@ -1915,15 +2154,15 @@ colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
 #   Émissions_arête = intensité_par_tkm × volume_tonnes × length_km
 #
 # co2_kg_par_tkm, nox_g_par_tkm et pm25_g_par_tkm sont les intensités
-# unitaires calculées en Partie V.1 et intégrées dans reseau_rwanda.
+# unitaires calculées en Partie V.1 et intégrées dans reseau.
 # volume_trafic est le vecteur de tonnes affectées par arête (calculé juste
 # au-dessus via rowSums()).
 # length_km est la longueur de chaque arête en kilomètres.
 
 # Récupération des attributs d'émissions et de longueur pour toutes les arêtes.
-# On extrait ces trois colonnes depuis reseau_rwanda en un seul appel pour
+# On extrait ces trois colonnes depuis reseau en un seul appel pour
 # éviter de réactiver le réseau plusieurs fois.
-aretes_emissions_base <- reseau_rwanda %>%
+aretes_emissions_base <- reseau %>%
   activate("edges") %>%
   as_tibble() %>%
   select(length_km, co2_kg_par_tkm, nox_g_par_tkm, pm25_g_par_tkm)
@@ -1946,7 +2185,7 @@ emissions_pm25_aretes <- replace_na(aretes_emissions_base$pm25_g_par_tkm,  0) *
   volume_trafic *
   replace_na(aretes_emissions_base$length_km, 0)
 
-# Intégration dans reseau_rwanda comme attributs des arêtes.
+# Intégration dans reseau comme attributs des arêtes.
 # Les unités sont converties pour rester lisibles dans les exports :
 #   CO2  : kg → tonnes  (÷ 1 000) — ordre de grandeur typique : quelques t/arête
 #   NOx  : g  → kg      (÷ 1 000) — ordre de grandeur typique : quelques kg/arête
@@ -1954,7 +2193,7 @@ emissions_pm25_aretes <- replace_na(aretes_emissions_base$pm25_g_par_tkm,  0) *
 #     (les PM2.5 sont émises en quantités bien inférieures au NOx,
 #      d'où l'importance de garder la colonne en kg et non en tonnes
 #      pour ne pas afficher des valeurs trop proches de zéro)
-reseau_rwanda <- reseau_rwanda %>%
+reseau <- reseau %>%
   activate("edges") %>%
   mutate(
     emissions_co2_t    = emissions_co2_aretes  / 1000,
@@ -1998,7 +2237,7 @@ cat("  Ratio moyen (≈ longueur moyenne de chemin en arêtes) :",
 # ── Statistiques de répartition modale ────────────────────────────────────────
 cat("Répartition modale du trafic (tonnes × km) :\n")
 
-longueurs_km <- reseau_rwanda %>%
+longueurs_km <- reseau %>%
   activate("edges") %>%
   as_tibble() %>%
   pull(length_km)
@@ -2015,7 +2254,7 @@ for (v in seq_len(n_vehicules)) {
 cat("\n")
 
 # ── Étape 6 : Intégration des volumes au réseau ───────────────────────────────
-reseau_rwanda <- reseau_rwanda %>%
+reseau <- reseau %>%
   activate("edges") %>%
   mutate(
     volume_tonnes       = volume_trafic,
@@ -2045,7 +2284,7 @@ invisible(gc(full = TRUE))
 cat("✓ Partie VIII.1 terminée\n\n")
 
 # Identification des arêtes les plus empruntées
-reseau_rwanda %>%
+reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   mutate(arete_idx = row_number()) %>%
@@ -2068,7 +2307,7 @@ reseau_rwanda %>%
 # ==============================================================================
 
 # ── Statistiques de trafic sur le réseau ──────────────────────────────────────
-stats_trafic <- reseau_rwanda %>%
+stats_trafic <- reseau %>%
   activate("edges") %>%
   as_tibble() %>%
   filter(volume_tonnes > 0) %>%
@@ -2132,7 +2371,7 @@ write.csv(recap_zones,
           row.names = FALSE)
 
 # ── Export complémentaire : réseau avec volumes fret ──────────────────────────
-aretes_fret_export <- reseau_rwanda %>%
+aretes_fret_export <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   select(osm_id, name, road_type, surface,
@@ -2142,7 +2381,7 @@ aretes_fret_export <- reseau_rwanda %>%
          part_camion_lourd)
 
 st_write(aretes_fret_export,
-         file.path(DIR_EXPORTS, "reseau_rwanda_avec_fret.gpkg"),
+         file.path(DIR_EXPORTS, "reseau_avec_fret.gpkg"),
          delete_dsn = TRUE, quiet = TRUE)
 cat("✓ GeoPackage avec volumes fret exporté\n")
 
@@ -2201,10 +2440,10 @@ afficher_ram("entre les deux sauvegardes")
 # (viz_fret.R, viz_vulnerabilite.R, 04_vulnerabilite.R).
 # volume_trafic_mm_s / volume_trafic / volume_trafic_mm sont intentionnellement
 # exclus : aucun script en aval ne les lit depuis ce fichier (ils sont déjà
-# intégrés dans les arêtes de reseau_rwanda ou disponibles via affectation_cache).
+# intégrés dans les arêtes de reseau ou disponibles via affectation_cache).
 saveRDS(
   list(
-    reseau_rwanda         = reseau_rwanda,
+    reseau         = reseau,
     volume_par_secteur    = volume_par_secteur,
     volume_par_secteur_df = volume_par_secteur_df,
     volumes_par_zone      = volumes_par_zone,
@@ -2222,7 +2461,7 @@ cat("✓ persist_reseau_fret.rds\n\n")
 cat("── Nettoyage final ─────────────────────────────────────────────────────\n")
 
 objets_fin <- c(
-  "reseau_rwanda", "volume_trafic_mm_s", "volume_trafic",
+  "reseau", "volume_trafic_mm_s", "volume_trafic",
   "volume_trafic_mm", "volume_par_secteur", "volume_par_secteur_df",
   "volumes_par_zone", "paires_actives", "aretes_fret_export",
   "aretes_fret_sectoriel", "aretes_emissions_base", "longueurs_km",

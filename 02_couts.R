@@ -19,7 +19,7 @@ cat("=== Chargement des objets de 01_reseau ===\n")
 # Réhydratation des variables dans l'environnement courant
 list2env(.geo, envir = .GlobalEnv)
 list2env(.ent, envir = .GlobalEnv)
-reseau_rwanda      <- .res$reseau_rwanda
+reseau      <- .res$reseau
 n_aretes_physiques <- .res$n_aretes_physiques
 rm(.geo, .ent, .res)
 
@@ -52,7 +52,7 @@ cat("✓ Objets chargés\n\n")
 
 # st_drop_geometry() : nécessaire car DuckDB ne peut pas stocker des colonnes
 # géométriques sf. On extrait uniquement les attributs tabulaires.
-aretes_df <- reseau_rwanda %>%
+aretes_df <- reseau %>%
   activate("edges") %>% st_as_sf() %>% st_drop_geometry() %>%
   mutate(arete_id = row_number())
 duck_write(aretes_df, "aretes_base")
@@ -263,7 +263,7 @@ aretes_ref <- duck_query(glue::glue("
   ORDER BY arete_id
 "))
 
-reseau_rwanda <- reseau_rwanda %>%
+reseau <- reseau %>%
   activate("edges") %>%
   mutate(
     length_km            = aretes_ref$length_km,
@@ -284,7 +284,7 @@ cat("  Lignes :", duck_query("SELECT COUNT(*) AS n FROM aretes_couts_tous")$n,
 # ── Réintégration des émissions dans sfnetworks pour le véhicule de référence ─
 # Même logique que pour les coûts : on récupère les valeurs depuis DuckDB
 # pour le camion_moyen et on les ajoute comme attributs des arêtes du réseau.
-# Cela permet de cartographier les émissions directement depuis reseau_rwanda
+# Cela permet de cartographier les émissions directement depuis reseau
 # sans requêter DuckDB à chaque fois.
 aretes_ref_emissions <- duck_query(glue::glue("
   SELECT arete_id, co2_kg, nox_g, pm25_g, co2_kg_par_tkm, nox_g_par_tkm, pm25_g_par_tkm 
@@ -293,7 +293,7 @@ aretes_ref_emissions <- duck_query(glue::glue("
   ORDER BY arete_id
 "))
 
-reseau_rwanda <- reseau_rwanda %>%
+reseau <- reseau %>%
   activate("edges") %>%
   mutate(
     co2_kg         = aretes_ref_emissions$co2_kg,
@@ -304,14 +304,14 @@ reseau_rwanda <- reseau_rwanda %>%
     pm25_g_par_tkm = aretes_ref_emissions$pm25_g_par_tkm
   )
 
-cat("✓ Émissions intégrées dans reseau_rwanda (véhicule de référence)\n\n")
+cat("✓ Émissions intégrées dans reseau (véhicule de référence)\n\n")
 
 # ── Vérification finale des colonnes critiques pour Dijkstra ──────────────────
 # Un NA ou un Inf dans les poids de Dijkstra provoquerait des résultats erronés
 # (chemins infinis, nœuds non atteignables). On vérifie ici qu'il n'y en a pas.
 # is.nan() : Not a Number — résultat de 0/0 ou Inf - Inf par exemple.
 # is.infinite() : valeur infinie (comme Inf ou -Inf en R).
-aretes_check <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+aretes_check <- reseau %>% activate("edges") %>% st_as_sf()
 
 verif <- tibble(
   colonne = c("length_km", "speed_kmh", "travel_time_h", "cost_per_tkm"),
@@ -331,7 +331,7 @@ cat("  Total arêtes pathologiques :", sum(verif$n_na), "(doit être 0)\n\n")
 # la table DuckDB. Un désalignement (nombre d'arêtes différent) causerait
 # une réintégration incorrecte des coûts dans le réseau.
 
-aretes_diag <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+aretes_diag <- reseau %>% activate("edges") %>% st_as_sf()
 
 cat("=== Diagnostic désalignement indices ===\n\n")
 
@@ -341,7 +341,7 @@ n_duckdb <- duck_query(glue::glue(
   "SELECT COUNT(*) AS n FROM aretes_couts_tous WHERE vehicule_id = '{VEHICULE_REFERENCE}'"
 ))$n
 
-cat("Arêtes dans reseau_rwanda :", n_reseau, "\n")
+cat("Arêtes dans reseau :", n_reseau, "\n")
 cat("Arêtes dans DuckDB        :", n_duckdb, "\n")
 cat("Écart                     :", n_duckdb - n_reseau, "\n\n")
 
@@ -358,8 +358,8 @@ cat("longueur_m = 0 ou NA (stockée)  :",
 cat("longueur_geom = 0 ou NA (géométrie):", 
     sum(is.na(aretes_diag$longueur_geom)  | aretes_diag$longueur_geom  == 0), "\n\n")
 
-# 3. Vérifier si length_km dans reseau_rwanda correspond à longueur_m / 1000
-cat("length_km NA dans reseau_rwanda  :", 
+# 3. Vérifier si length_km dans reseau correspond à longueur_m / 1000
+cat("length_km NA dans reseau  :", 
     sum(is.na(aretes_diag$length_km)), "\n")
 
 # 4. Chercher si aretes_base dans DuckDB a des longueur_m = 0
@@ -412,7 +412,7 @@ cat("Correspondance parfaite  :", max(arete_ids_duckdb$arete_id) == n_reseau, "\
 
 # ── Paramètres de base ────────────────────────────────────────────────────────
 n_vehicules <- nrow(VEHICULES_IDS)
-graphe_base <- reseau_rwanda %>% as_tbl_graph()
+graphe_base <- reseau %>% as_tbl_graph()
 n_noeuds    <- igraph::vcount(graphe_base)
 
 # Fonction de remappage : nœud n dans la couche du véhicule v_idx.
@@ -428,7 +428,7 @@ cat("  Véhicules     :", n_vehicules, "\n")
 cat("  Nœuds total   :", n_noeuds * n_vehicules, "\n\n")
 
 # ── Récupération des arêtes de base (from/to = indices igraph) ────────────────
-aretes_base_tbl <- reseau_rwanda %>%
+aretes_base_tbl <- reseau %>%
   activate("edges") %>%
   as_tibble() %>%
   mutate(arete_id = row_number())
@@ -620,7 +620,7 @@ cat("=== Sauvegarde des objets persistants (02_couts) ===\n")
 
 saveRDS(
   list(
-    reseau_rwanda     = reseau_rwanda,   # avec coûts + émissions intégrés
+    reseau     = reseau,   # avec coûts + émissions intégrés
     date_creation     = Sys.time()
   ),
   PERSIST_RESEAU_COUTS

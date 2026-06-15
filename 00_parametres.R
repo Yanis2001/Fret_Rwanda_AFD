@@ -84,7 +84,7 @@ invisible(lapply(packages_requis, charger_package))
 
 # options(timeout = 600) : donne 600 secondes (10 minutes) au lieu des 60 secondes
 # par défaut avant d'abandonner un téléchargement. Utile pour les gros fichiers
-# géographiques comme le DEM (modèle d'élévation) ou le PBF (données OSM Rwanda).
+# géographiques comme le DEM (modèle d'élévation) ou le PBF (données OSM du pays).
 options(timeout = 600)
 
 # set.seed(123) : fixe le "germe" du générateur de nombres aléatoires.
@@ -102,10 +102,17 @@ cat("✓ Tous les packages sont chargés\n\n")
 ################################################################################
 
 # ==============================================================================
+# Pays étudié
+# Utilisé dans les titres de cartes et messages console.
+# ==============================================================================
+
+NOM_PAYS <- "Rwanda"
+
+# ==============================================================================
 # Chemins et fichiers
 # ==============================================================================
 
-DB_PATH        <- "reseau_rwanda.duckdb"   # Fichier DuckDB persistant
+DB_PATH        <- "reseau.duckdb"   # Fichier DuckDB persistant
 DIR_OUTPUT     <- "outputs"                # Dossier de sortie de tous les fichiers
 # Sous-dossiers de sortie
 DIR_CACHE   <- file.path(DIR_OUTPUT, "cache")
@@ -144,8 +151,8 @@ WORLDPOP_URLS_CANDIDATES <- c(
          "RWA_population_v1_0_gridded.tif")
 )
 
-# Chemin local du raster WorldPop si déjà téléchargé 
-WORLDPOP_LOCAL_PATH <- file.path(DIR_RASTERS, "worldpop_rwanda_100m.tif")
+# Chemin local du raster WorldPop si déjà téléchargé
+WORLDPOP_LOCAL_PATH <- file.path(DIR_RASTERS, "worldpop_100m.tif")
 
 # Chemin du fichier NISR
 NISR_CSV_PATH <- "data/raw/rwa_admpop_adm2_2023.csv"
@@ -159,8 +166,8 @@ RWI_ZIP_URL <- paste0(
   "relative-wealth-index-april-2021.zip"
 )
 
-# Nom du fichier Rwanda dans le ZIP (convention ISO3 en majuscules)
-RWI_FICHIER_RWANDA <- "RWA_relative_wealth_index.csv"
+# Nom du fichier pays dans le ZIP (convention ISO3 en majuscules — à adapter selon le pays)
+RWI_FICHIER <- "RWA_relative_wealth_index.csv"
 
 # Chemin local du ZIP et du CSV
 RWI_CSV_LOCAL  <- "data/raw/rwa_relative_wealth_index.csv"   
@@ -172,7 +179,7 @@ RWI_ZIP_LOCAL  <- "data/raw/rwi_all_countries.zip"
 #   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
 #   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
 #   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
-CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables_rwanda.tif"  # À modifier
+CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables.tif"  # À remplacer par le fichier du pays étudié
 
 # ==============================================================================
 # Paramètres DEM (Modèle Numérique de Terrain)
@@ -180,8 +187,8 @@ CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables_rwanda.tif"  # À modi
 
 DEM_ZOOM          <- 9      # Niveau de zoom elevatr (~300 m/pixel) 
 DEM_ESPACEMENT_M  <- 100    # Pas d'échantillonnage le long des arêtes (mètres)
-DEM_ALTITUDE_MIN  <- 800    # Altitude minimale réaliste au Rwanda (m)
-DEM_ALTITUDE_MAX  <- 4600   # Altitude maximale réaliste au Rwanda (m)
+DEM_ALTITUDE_MIN  <- 800    # Altitude minimale réaliste dans le pays (m) — à adapter
+DEM_ALTITUDE_MAX  <- 4600   # Altitude maximale réaliste dans le pays (m) — à adapter
 
 # Paramètres du DEM fictif (utilisé si le téléchargement SRTM échoue)
 DEM_FICTIF_ALT_EST      <- 1500   # Altitude de base côté Est (m)
@@ -233,10 +240,10 @@ BUFFER_FRONTIERE_VILLES_M <- 5000
 # Ces zones sont les origines/destinations prioritaires du modèle de fret :
 # hubs logistiques, postes frontières, villes structurantes, SEZ.
 #
-# pays = NA pour les zones internes au Rwanda, nom du pays pour les frontières.
+# pays = NA pour les zones internes au pays étudié, nom du pays pour les frontières.
 # Utilisé en 03_transport.R pour associer les coûts pré-frontière.
 # Les nœuds RoW (Rest of World) sont ajoutés séparément dans 03_transport.R
-# et ne figurent pas ici car ils ne s'accrochent pas au réseau routier rwandais.
+# et ne figurent pas ici car ils ne s'accrochent pas au réseau routier du pays.
 entreposages_manuels <- tibble(
   nom  = c(
     "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
@@ -457,7 +464,7 @@ SAM_COMPTES_TAXES_PRODUITS <- c("stax", "mtax")
 #                    Commerce incluses
 #   imports        : importations par secteur (flux compte « row » → commodité)
 #   exports        : exportations par secteur (prix de base)
-lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
+lire_sam <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   if (!file.exists(chemin)) {
     stop("Fichier SAM introuvable : ", chemin,
          "\n  → Le modèle économique exige la SAM. Placez le fichier dans data/raw/.")
@@ -566,17 +573,17 @@ lire_sam_rwanda <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
        imports = imports[SEC], exports = exports[SEC])
 }
 
-cat("  → Lecture de la SAM IFPRI Rwanda 2021…\n")
-sam_rwanda <- lire_sam_rwanda()
-cat("  ✓ SAM lue :", sum(sam_rwanda$va), "mrd RWF de VA totale (",
-    nrow(sam_rwanda$A), "secteurs)\n")
+cat("  → Lecture de la SAM…\n")
+sam <- lire_sam()
+cat("  ✓ SAM lue :", sum(sam$va), "mrd RWF de VA totale (",
+    nrow(sam$A), "secteurs)\n")
 
 # Demande finale nationale par secteur (MILLIARDS DE RWF), extraite de la SAM.
 # Définition : F[s] = consommation des ménages + consommation publique
 #              + investissement I (colonne « s-i » = FBCF + var. stocks, PAS l'épargne).
 # NOTE : exportations/importations exclues — traitées via les entrepôts RoW et
 #        leurs offre/demande sectorielles (03_transport.R).
-DEMANDE_FINALE_SAM <- sam_rwanda$demande_finale[SECTEURS]
+DEMANDE_FINALE_SAM <- sam$demande_finale[SECTEURS]
 stopifnot(all(names(DEMANDE_FINALE_SAM) %in% SECTEURS))
 
 # ── Pondération composite emploi × RWI dans le modèle MRIO ───────────────────
@@ -636,10 +643,10 @@ FURNESS_MAX_ITER <- 200
 FURNESS_TOL <- 1e-6
 
 # Matrice des coefficients techniques A 
-A <- sam_rwanda$A[SECTEURS, SECTEURS]
+A <- sam$A[SECTEURS, SECTEURS]
 
-production_totale <- sam_rwanda$output[SECTEURS]
-cat("  ✓ production_totale : SAM IFPRI Rwanda 2021 (",
+production_totale <- sam$output[SECTEURS]
+cat("  ✓ production_totale : SAM IFPRI (",
     round(sum(production_totale)), "mrd RWF d'output total )\n")
 
 # ── Facteurs de conversion valeur économique → masse de fret ──────────────────
@@ -867,8 +874,8 @@ cat("✓ Environnement env_lourds créé (objets non visibles dans RStudio)\n\n"
 # DuckDB est une base de données SQL embarquée : elle fonctionne directement
 # dans R sans avoir besoin d'un serveur séparé. On peut lui envoyer des requêtes 
 # SQL pour manipuler des tableaux de données très efficacement — plus vite que 
-# des boucles R sur de grands volumes. Le fichier "reseau_rwanda.duckdb" stocke 
-# toutes les tables sur le disque, ce qui permet de reprendre le travail sans 
+# des boucles R sur de grands volumes. Le fichier "reseau.duckdb" stocke
+# toutes les tables sur le disque, ce qui permet de reprendre le travail sans
 # recalculer depuis zéro.
 
 # Fermeture propre de la connexion à DuckDB afin de la rouvrir ensuite proprement.
@@ -1113,8 +1120,8 @@ duck_write(couts_transbordement_df, "couts_transbordement")
 
 # ── Table 5 : coûts de transport pré-frontière par pays et par secteur ────────
 # Ces coûts représentent le coût moyen de transport d'une marchandise
-# depuis son point d'origine dans le pays étranger jusqu'à la frontière rwandaise.
-# Ils s'ajoutent au coût de transport interne rwandais dans le modèle gravitaire.
+# depuis son point d'origine dans le pays étranger jusqu'à la frontière du pays étudié.
+# Ils s'ajoutent au coût de transport interne dans le modèle gravitaire.
 # Source : estimations calibrées sur les données de coût de transport régional
 # (Banque Mondiale, CPCS, données COMESA).
 # Unité : RWF par tonne
@@ -1130,7 +1137,7 @@ duck_write(couts_transbordement_df, "couts_transbordement")
 couts_prebordure_df <- tribble(
   ~pays,       ~secteur,          ~cout_rwf_tonne,
   # ── Ouganda (corridors Nord : Kampala → Gatuna/Kagitumba) ───────────────────
-  # Distance moyenne Kampala-frontière Rwanda : ~500km, routes bitumées
+  # Distance moyenne Kampala-frontière du pays : ~500km, routes bitumées
   "Ouganda",   "Agriculture",      34580,
   "Ouganda",   "Cultures_export",  34580,
   "Ouganda",   "Mines",            24700,
@@ -1143,7 +1150,7 @@ couts_prebordure_df <- tribble(
   "Ouganda",   "Energie_eau",      27664,
   "Ouganda",   "Services",          7904,
   # ── Tanzanie (corridor Est : Dar es Salaam → Rusumo) ────────────────────────
-  # Distance moyenne port Dar-frontière Rwanda : ~1300km
+  # Distance moyenne port Dar-frontière du pays : ~1300km
   # Coûts plus élevés car corridor plus long et qualité route variable
   "Tanzanie",  "Agriculture",      88920,
   "Tanzanie",  "Cultures_export",  88920,
@@ -1171,7 +1178,7 @@ couts_prebordure_df <- tribble(
   "RDC",       "Energie_eau",      29640,
   "RDC",       "Services",          4940,
   # ── Burundi (corridor Sud : Bujumbura → Bugarama/Rusizi) ────────────────────
-  # Distance moyenne Bujumbura-frontière Rwanda : ~150km
+  # Distance moyenne Bujumbura-frontière du pays : ~150km
   # Infrastructure correcte sur axe principal
   "Burundi",   "Agriculture",      11856,
   "Burundi",   "Cultures_export",  11856,
@@ -1192,18 +1199,18 @@ cat("✓ Coûts pré-frontière chargés dans DuckDB :",
     nrow(couts_prebordure_df), "lignes\n\n")
 
 # ==============================================================================
-# Commerce extérieur Rwanda par pays frontalier et par secteur (MILLIARDS DE RWF)
+# Commerce extérieur du pays étudié par pays frontalier et par secteur (MILLIARDS DE RWF)
 # Définitions :
-#   imports_mrd_rwf : ce que Rwanda importe du pays (= offre de l'entrepôt RoW
-#                     vers les zones internes — fret entrant au Rwanda)
-#   exports_mrd_rwf : ce que Rwanda exporte vers le pays (= demande de l'entrepôt
-#                     RoW sur la production rwandaise — fret sortant du Rwanda)
+#   imports_mrd_rwf : ce que le pays importe (= offre de l'entrepôt RoW
+#                     vers les zones internes — fret entrant)
+#   exports_mrd_rwf : ce que le pays exporte (= demande de l'entrepôt
+#                     RoW sur la production locale — fret sortant)
 # Ces valeurs alimentent les offre_zones / demande_zones des entrepôts RoW dans
 # le modèle MRIO (03_transport.R, section VII.2).
 #
 # CONSTRUCTION (magnitude SAM × clé de répartition par pays) :
-#   • MAGNITUDE : totaux imports/exports par secteur issus de la SAM IFPRI 2021
-#                 (sam_rwanda$imports / $exports, en mrd RWF). C'est la source de
+#   • MAGNITUDE : totaux imports/exports par secteur issus de la SAM IFPRI
+#                 (sam$imports / $exports, en mrd RWF). C'est la source de
 #                 vérité sur les VOLUMES échangés — désormais cohérente en unité
 #                 avec les flux internes (tout est exprimé en mrd RWF).
 #   • CLÉ PAYS  : la SAM ne ventile PAS par pays. On répartit donc chaque total
@@ -1293,8 +1300,8 @@ parts_pays <- CLE_REPARTITION_PAYS %>%
 # 2) Totaux sectoriels SAM (mrd RWF) par secteur 
 totaux_commerce_sam <- tibble(
   secteur     = SECTEURS,
-  imports_sam = as.numeric(sam_rwanda$imports[SECTEURS]),
-  exports_sam = as.numeric(sam_rwanda$exports[SECTEURS])
+  imports_sam = as.numeric(sam$imports[SECTEURS]),
+  exports_sam = as.numeric(sam$exports[SECTEURS])
 )
 
 # 3) Application : magnitude SAM (secteur) × part pays (secteur).

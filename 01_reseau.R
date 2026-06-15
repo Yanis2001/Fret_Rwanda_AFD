@@ -52,7 +52,7 @@ if (!file.exists(chemin_pbf)) stop("Fichier PBF introuvable.")
 # pertinents sont chargés en mémoire (gain mémoire important sur un pays entier).
 # "highway IN ('motorway', ...)" : dans OSM, l'attribut "highway" classe le type
 # de route. On ne garde que les routes sur lesquelles un camion peut circuler.
-routes_rwanda_raw <- st_read(
+routes_raw <- st_read(
   chemin_pbf,
   layer = "lines",
   query = "SELECT * FROM lines
@@ -61,7 +61,7 @@ routes_rwanda_raw <- st_read(
   quiet = FALSE  # Afficher les informations de chargement
 )
 
-cat("✓ Données chargées :", nrow(routes_rwanda_raw), "segments\n\n")
+cat("✓ Données chargées :", nrow(routes_raw), "segments\n\n")
 
 # Vérification des landuse disponibles
 # "landuse" est un attribut OSM qui décrit l'utilisation du sol :
@@ -320,7 +320,7 @@ print(names(villes_raw))
 # On charge maintenant les villes/bourgs en objet sf exploitable :
 # st_as_sf() : s'assure que c'est bien un objet géospatial R.
 # st_transform(crs = 32735) : reprojette en UTM Zone 35S (coordonnées métriques
-# adaptées au Rwanda, permettant de mesurer des distances en mètres).
+# adaptées au pays, permettant de mesurer des distances en mètres).
 # filter(!is.na(name)) : supprime les lieux sans nom dans OSM.
 # mutate(type = ...) : crée une colonne "type" — les villes (city) deviennent
 # des "hub", les bourgs (town) deviennent des "ville".
@@ -368,7 +368,7 @@ extraire_tag <- function(other_tags, cle) {
 #   maxspeed : vitesse maximale autorisée (en km/h)
 #   lanes    : nombre de voies
 #   oneway   : sens unique ("yes" ou "no")
-routes_attrs_raw <- routes_rwanda_raw %>%
+routes_attrs_raw <- routes_raw %>%
   rename(geometry = `_ogr_geometry_`) %>%    # Normalisation du nom de la colonne géométrie
   mutate(
     surface  = sapply(other_tags, extraire_tag, cle = "surface"),
@@ -393,8 +393,8 @@ duck_write(attrs_df, "routes_attrs_raw")
 # La requête CASE WHEN harmonise les valeurs OSM hétérogènes de "surface"
 # (ex : "asphalt", "concrete", "paved" → tous ramenés à "paved")
 # puis impute les valeurs manquantes selon le type de route :
-#   - Les routes nationales (trunk, primary) sont supposées bitumées au Rwanda
-#   - Les routes secondaires : gravier (fréquent hors Kigali)
+#   - Les routes nationales (trunk, primary) sont supposées bitumées dans le pays
+#   - Les routes secondaires : gravier (fréquent hors des grandes villes)
 #   - Les routes tertiaires et non classées : piste en terre par défaut
 # CASE WHEN en SQL est l'équivalent du "si...alors...sinon" dans d'autres langages.
 # La structure est : CASE WHEN condition THEN résultat WHEN ... ELSE résultat_par_défaut END
@@ -430,15 +430,15 @@ attrs_clean <- duck_query("
 # left_join() : fusionne deux tableaux en conservant toutes les lignes du tableau
 # de gauche (routes_attrs_raw) et en y ajoutant les colonnes du tableau de droite
 # (attrs_clean), en faisant correspondre les lignes via la colonne osm_id.
-routes_rwanda <- routes_attrs_raw %>%
+routes <- routes_attrs_raw %>%
   select(osm_id, geometry) %>%
   left_join(attrs_clean, by = "osm_id") %>%
   st_as_sf() %>%
-  # CRS 32735 = WGS 84 / UTM Zone 35S : projection métrique adaptée au Rwanda
+  # CRS 32735 = WGS 84 / UTM Zone 35S : projection métrique adaptée à l'Afrique de l'Est
   # Nécessaire pour calculer des longueurs en mètres et des pentes en %
   st_transform(crs = 32735)
 
-cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmonisée via DuckDB\n\n")
+cat("✓ Nettoyage terminé :", nrow(routes), "segments — surface harmonisée via DuckDB\n\n")
 
 # ==============================================================================
 # II.3 : Couches administratives et fond de carte
@@ -449,8 +449,8 @@ cat("✓ Nettoyage terminé :", nrow(routes_rwanda), "segments — surface harmo
 # ── Frontière nationale (admin_level = 2) ─────────────────────────────────────
 # Dans OSM, admin_level = 2 désigne les frontières nationales.
 # st_union() fusionne tous les polygones de la couche en un seul polygone,
-# ce qui est utile pour tracer la frontière du Rwanda d'un seul tenant.
-rwanda_boundary <- st_read(
+# ce qui est utile pour tracer la frontière nationale d'un seul tenant.
+pays_boundary <- st_read(
   chemin_pbf, layer = "multipolygons",
   query = "SELECT * FROM multipolygons WHERE admin_level = '2'",
   quiet = TRUE
@@ -460,16 +460,16 @@ rwanda_boundary <- st_read(
   st_make_valid() %>%
   st_transform(crs = 32735)
 
-rwanda_national <- rwanda_boundary %>%
+pays_national <- pays_boundary %>%
   st_union() %>%
   st_as_sf() %>%
   st_make_valid()
 
 # ── Provinces (admin_level = 4) ───────────────────────────────────────────────
 # Dans OSM, admin_level = 4 correspond aux subdivisions de premier niveau
-# (provinces au Rwanda). On filtre ensuite pour ne garder que les géométries
+# (régions de premier niveau). On filtre ensuite pour ne garder que les géométries
 # de type POLYGON ou MULTIPOLYGON (et non des lignes ou des points).
-rwanda_provinces <- st_read(
+pays_provinces <- st_read(
   chemin_pbf, layer = "multipolygons",
   query = "SELECT * FROM multipolygons WHERE admin_level = '4'",
   quiet = TRUE
@@ -481,7 +481,7 @@ rwanda_provinces <- st_read(
   st_transform(crs = 32735)
 
 # Fallback : utiliser la frontière nationale si les provinces sont absentes du PBF
-if (nrow(rwanda_provinces) == 0) rwanda_provinces <- rwanda_national
+if (nrow(pays_provinces) == 0) pays_provinces <- pays_national
 
 cat("✓ Couches administratives extraites\n")
 
@@ -554,15 +554,15 @@ tryCatch({
   cat("  ⚠ Parcs non disponibles dans le PBF :", conditionMessage(e), "\n")
 })
 
-# ── Zone d'affichage (bbox 250km × 250km centrée sur le Rwanda) ───────────────
+# ── Zone d'affichage (bbox 250km × 250km centrée sur le pays) ────────────────
 # Buffer de 125km de chaque côté du centroïde pour afficher les frontières voisines
-# Cette zone d'affichage légèrement plus grande que le Rwanda permet de voir
-# les pays voisins sur les cartes (Ouganda, Tanzanie, RDC, Burundi).
+# Cette zone d'affichage légèrement plus grande que le pays permet de voir
+# les pays voisins sur les cartes.
 
-# 1. Calcul du centroïde du Rwanda (point central)
-centre_rwanda <- rwanda_national %>% st_centroid() %>% st_coordinates()
-centre_x      <- centre_rwanda[1, "X"]  # Coordonnée X (Est-Ouest) du centroïde
-centre_y      <- centre_rwanda[1, "Y"]  # Coordonnée Y (Nord-Sud) du centroïde
+# 1. Calcul du centroïde du pays (point central)
+centre_pays <- pays_national %>% st_centroid() %>% st_coordinates()
+centre_x      <- centre_pays[1, "X"]  # Coordonnée X (Est-Ouest) du centroïde
+centre_y      <- centre_pays[1, "Y"]  # Coordonnée Y (Nord-Sud) du centroïde
 
 # 2. Définition du buffer de 125 km 
 buffer_km <- 125000 
@@ -614,14 +614,14 @@ fond_carte <- function() {
   # fill = "#F5F5F0" : couleur de remplissage (gris très pâle pour le fond).
   # col = "#AAAAAA" : couleur des bordures (gris moyen pour les limites de provinces).
   # lwd : épaisseur du trait de bordure.
-  carte <- tm_shape(rwanda_provinces, bbox = bbox_carto) +
+  carte <- tm_shape(pays_provinces, bbox = bbox_carto) +
     tm_polygons(
       fill = "#F5F5F0",
       col  = "#AAAAAA",
       lwd  = 0.8,
       fill.legend = tm_legend(show = FALSE)
     ) +
-    tm_shape(rwanda_national) +
+    tm_shape(pays_national) +
     tm_borders(col = "#222222", lwd = 2.5)
   
   # ── Parcs naturels (sous les lacs pour ne pas les masquer) ──────────────────
@@ -652,7 +652,7 @@ fond_carte <- function() {
 # ==============================================================================
 # II.4 : Modèle Numérique de Terrain (DEM) 
 # Télécharge le DEM SRTM depuis AWS via elevatr. En cas d'échec, génère 
-# un DEM fictif calibré sur la topographie réelle du Rwanda. 
+# un DEM fictif de substitution.
 # Utilisé uniquement en Partie IV.2 pour le calcul des pentes.
 # ==============================================================================
 
@@ -660,12 +660,10 @@ fond_carte <- function() {
 # représente l'altitude en mètres au-dessus du niveau de la mer.
 # Il sera utilisé pour calculer la pente de chaque segment routier
 # (ratio dénivelé/longueur × 100 = pourcentage de pente).
-# Le Rwanda est très montagneux (surnommé "le pays des mille collines"),
-# ce qui rend ce calcul crucial pour estimer les coûts de transport.
 
 # Créer l'emprise géographique à partir de la bbox des routes
-# pour ne télécharger que la zone d'intérêt (Rwanda uniquement)
-bbox_routes <- st_bbox(routes_rwanda)
+# pour ne télécharger que la zone d'intérêt
+bbox_routes <- st_bbox(routes)
 emprise_points <- data.frame(
   x = c(bbox_routes["xmin"], bbox_routes["xmax"]),
   y = c(bbox_routes["ymin"], bbox_routes["ymax"])
@@ -679,38 +677,35 @@ emprise_sf <- st_as_sf(emprise_points, coords = c("x","y"), crs = 32735) %>%
 
 tryCatch({
   # clip = "locations" : on ne récupère les données que dans l'emprise fournie
-  dem_rwanda <- get_elev_raster(emprise_sf, z = DEM_ZOOM, clip = "locations")
-  dem_rwanda <- rast(dem_rwanda)   # Conversion raster R → terra SpatRaster
+  dem <- get_elev_raster(emprise_sf, z = DEM_ZOOM, clip = "locations")
+  dem <- rast(dem)   # Conversion raster R → terra SpatRaster
   # Reprojection en UTM 35S pour cohérence avec les routes
   # method = "bilinear" : interpolation bilinéaire (meilleure qualité que "nearest")
   # L'interpolation bilinéaire calcule la valeur d'un pixel en faisant une
   # moyenne pondérée de ses 4 voisins les plus proches, ce qui donne des
   # transitions d'altitude plus douces que le simple voisin le plus proche.
-  dem_rwanda <- project(dem_rwanda, "EPSG:32735", method = "bilinear")
+  dem <- project(dem, "EPSG:32735", method = "bilinear")
   cat("✓ DEM téléchargé et reprojeté\n")
   
 }, error = function(e) {
   cat("⚠ Téléchargement DEM échoué — création d'un DEM fictif réaliste\n")
   
-  # DEM fictif calibré sur la réalité physique du Rwanda :
-  # - Altitude min : ~950m (vallées de l'Est et du Sud)
-  # - Altitude max : ~2 500m (région volcanique non modélisée intégralement)
-  # - Gradient Ouest-Est : le Rwanda est plus élevé à l'Ouest (dorsale Congo-Nil)
+  # DEM fictif de substitution (gradient Ouest→Est + bruit gaussien) :
   ext_utm <- ext(bbox_routes["xmin"], bbox_routes["xmax"],
                  bbox_routes["ymin"], bbox_routes["ymax"])
   
   # Raster vide avec résolution ~90m (comparable au SRTM niveau 3)
-  dem_rwanda <<- rast(ext_utm, resolution = DEM_FICTIF_RESOLUTION_M, crs = "EPSG:32735")
+  dem <<- rast(ext_utm, resolution = DEM_FICTIF_RESOLUTION_M, crs = "EPSG:32735")
   
   set.seed(123)   # Graine pour reproductibilité du bruit aléatoire
-  n_cells    <- ncell(dem_rwanda)  # Nombre total de pixels dans le raster
+  n_cells    <- ncell(dem)  # Nombre total de pixels dans le raster
   
   # xFromCell() retourne la coordonnée X (longitude UTM) du centre de chaque cellule
-  x_coords <- xFromCell(dem_rwanda, 1:n_cells)
+  x_coords <- xFromCell(dem, 1:n_cells)
   
   # Gradient d'élévation : 1 500m à l'Est → 2 300m à l'Ouest
   # La formule normalise x_coords entre 0 (Est) et 1 (Ouest) puis multiplie par 800m
-  # Cette formule simule la dorsale Congo-Nil qui traverse le Rwanda du Nord au Sud.
+  # Cette formule produit un gradient d'altitude Ouest→Est.
   base_elevation <- DEM_FICTIF_ALT_EST + (max(x_coords) - x_coords) /
     (max(x_coords) - min(x_coords)) * (DEM_FICTIF_ALT_OUEST - DEM_FICTIF_ALT_EST)
   
@@ -718,35 +713,35 @@ tryCatch({
   # rnorm(n, 0, 150) génère n valeurs aléatoires suivant une loi normale
   # de moyenne 0 et d'écart-type 150m.
   # pmax/pmin bornent les valeurs entre 950m et 2 500m
-  values(dem_rwanda) <<- pmax(950, pmin(2500, base_elevation + rnorm(n_cells, 0, 150)))
+  values(dem) <<- pmax(950, pmin(2500, base_elevation + rnorm(n_cells, 0, 150)))
   
   cat("✓ DEM fictif créé\n")
 })
 
 
-# Découpe le raster dem_rwanda pour ne garder que la zone qui chevauche le 
-# polygone rwanda_boundary pour éviter de traiter des données hors de la zone d'intérêt
+# Découpe le raster dem pour ne garder que la zone qui chevauche le 
+# polygone pays_boundary pour éviter de traiter des données hors de la zone d'intérêt
 # crop() : réduit le raster à l'emprise rectangulaire d'un polygone.
-dem_rwanda <- crop(dem_rwanda, vect(rwanda_boundary)) 
+dem <- crop(dem, vect(pays_boundary)) 
 
-# Masque les pixels du raster qui ne sont pas à l'intérieur du polygone rwanda_boundary
+# Masque les pixels du raster qui ne sont pas à l'intérieur du polygone pays_boundary
 # définis comme NA
 # mask() : met à NA tous les pixels hors du polygone. Ainsi les pixels
 # des pays voisins (Ouganda, RDC…) sont exclus du calcul des pentes.
-dem_rwanda <- mask(dem_rwanda, vect(rwanda_boundary))
+dem <- mask(dem, vect(pays_boundary))
 
 # Limite les valeurs du raster à un intervalle donné et remplace les valeurs hors seuil par NA
-# Valeurs < 800m ou > 4600m sont irréalistes pour le Rwanda : on les supprime.
-dem_rwanda <- clamp(dem_rwanda, lower = 800, upper = 4600, values = NA)
+# Valeurs hors de [DEM_ALTITUDE_MIN, DEM_ALTITUDE_MAX] sont considérées irréalistes : on les supprime.
+dem <- clamp(dem, lower = 800, upper = 4600, values = NA)
 
-cat("  Élévation min :", round(global(dem_rwanda, "min", na.rm = TRUE)[,1]), "m\n")
-cat("  Élévation max :", round(global(dem_rwanda, "max", na.rm = TRUE)[,1]), "m\n\n")
+cat("  Élévation min :", round(global(dem, "min", na.rm = TRUE)[,1]), "m\n")
+cat("  Élévation max :", round(global(dem, "max", na.rm = TRUE)[,1]), "m\n\n")
 
 # Cartographier rapidement pour identifier visuellement les anomalies
 # plot() (de terra) affiche le raster en nuances de couleur dans la fenêtre R.
 # add = TRUE superpose la frontière en rouge par-dessus le raster.
-plot(dem_rwanda, main = "DEM Rwanda — vérification")
-plot(st_geometry(rwanda_boundary), add = TRUE, border = "red")
+plot(dem, main = paste("DEM", NOM_PAYS, "— vérification"))
+plot(st_geometry(pays_boundary), add = TRUE, border = "red")
 
 
 ################################################################################
@@ -773,7 +768,7 @@ cache_reseau_valide <- FALSE
 # Pour une validation plus stricte, on pourrait utiliser digest::digest(file = ...)
 # mais ça prendrait ~1s pour un PBF de 50 Mo, ce qui n'apporte rien en pratique.
 pbf_size_actuelle     <- file.size(chemin_pbf)
-n_segments_entree_act <- nrow(routes_rwanda)
+n_segments_entree_act <- nrow(routes)
 
 # ── Tentative de chargement du cache ──────────────────────────────────────────
 if (file.exists(CACHE_RESEAU)) {
@@ -789,12 +784,12 @@ if (file.exists(CACHE_RESEAU)) {
       cache_reseau$pbf_size          == pbf_size_actuelle &&
       cache_reseau$n_segments_entree == n_segments_entree_act) {
     
-    reseau_rwanda       <- cache_reseau$reseau_rwanda
+    reseau       <- cache_reseau$reseau
     cache_reseau_valide <- TRUE
     
     cat("  ✓ Cache réseau valide\n")
-    cat("    Nœuds  :", igraph::vcount(reseau_rwanda), "\n")
-    cat("    Arêtes :", igraph::ecount(reseau_rwanda), "\n")
+    cat("    Nœuds  :", igraph::vcount(reseau), "\n")
+    cat("    Arêtes :", igraph::ecount(reseau), "\n")
     cat("    → Corrections topologiques ignorées (~3-5 min gagnées)\n\n")
     
   } else {
@@ -829,7 +824,7 @@ if (!cache_reseau_valide) {
   # Un MULTILINESTRING est un groupe de plusieurs lignes, comme si une route
   # était découpée en morceaux non contigus — sfnetworks ne peut pas en faire
   # un segment de graphe cohérent.
-  routes_rwanda_clean <- routes_rwanda %>%
+  routes_clean <- routes %>%
     st_cast("LINESTRING", warn = FALSE) %>%
     filter(st_geometry_type(.) == "LINESTRING") %>%  # Supprimer les types non conformes
     st_make_valid()
@@ -837,10 +832,10 @@ if (!cache_reseau_valide) {
   # as_sfnetwork() convertit le sf en réseau non orienté (directed = FALSE):
   # un segment peut être parcouru dans les deux sens (routes bidirectionnelles).
   # Les routes à sens unique seraient gérées avec directed = TRUE + attribut oneway.
-  reseau_rwanda <- as_sfnetwork(routes_rwanda_clean, directed = FALSE) 
+  reseau <- as_sfnetwork(routes_clean, directed = FALSE) 
   
-  cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau_rwanda),
-      "— arêtes :", igraph::ecount(reseau_rwanda), "\n\n")
+  cat("✓ Réseau initial — nœuds :", igraph::vcount(reseau),
+      "— arêtes :", igraph::ecount(reseau), "\n\n")
   
   
   # ==============================================================================
@@ -865,7 +860,7 @@ if (!cache_reseau_valide) {
   
   cat("  Étape 1/3 : subdivision aux intersections...\n")
 
-  reseau_lisse <- reseau_rwanda %>%
+  reseau_lisse <- reseau %>%
     convert(to_spatial_subdivision)
 
   cat("  → ", igraph::count_components(reseau_lisse), "composantes après subdivision\n")
@@ -875,7 +870,7 @@ if (!cache_reseau_valide) {
     # ── Étape 2 : snapping ciblé post-topologie ─────────────────────────────────
     # Maintenant que la topologie est propre, un snapping léger (5m seulement)
     # connecte les extrémités quasi-jointives.
-    # Les gaps < 5m sont rarissimes dans les PBF OSM Rwanda bien maintenus.
+    # Les gaps < 5m sont rarissimes dans les PBF OSM bien maintenus.
     # La subdivision (étape 1) règle déjà l'essentiel des problèmes de connectivité.
     # À réactiver uniquement sur un sous-réseau local si des composantes isolées
     # persistent après l'étape 4.
@@ -981,9 +976,9 @@ if (!cache_reseau_valide) {
   # de diagnostic, puis filtre le réseau sur la composante géante uniquement.
   # ==============================================================================
   
-  # Vérifier les colonnes disponibles dans rwanda_provinces
-  cat("Colonnes de rwanda_provinces :\n")
-  print(names(rwanda_provinces))
+  # Vérifier les colonnes disponibles dans pays_provinces
+  cat("Colonnes de pays_provinces :\n")
+  print(names(pays_provinces))
   
   # ── Récupérer les arêtes du réseau AVANT filtrage (reseau_lisse) ──────────────
   # activate("edges") : dans sfnetworks, le réseau a deux "tables" — une pour les
@@ -1091,11 +1086,11 @@ if (!cache_reseau_valide) {
   
   # ── 4. Localisation géographique (province la plus touchée) ───────────────────
   # On spatialise les arêtes perdues et on les intersecte avec les provinces
-  if (nrow(aretes_perdues) > 0 && nrow(rwanda_provinces) > 0) {
+  if (nrow(aretes_perdues) > 0 && nrow(pays_provinces) > 0) {
     
     # Renommage AVANT la jointure pour éviter le conflit avec la colonne
     # "name" des arêtes (nom de route OSM)
-    provinces_join <- rwanda_provinces %>%
+    provinces_join <- pays_provinces %>%
       select(nom_province = name)
     
     # st_centroid() calcule le point central de chaque arête.
@@ -1135,7 +1130,7 @@ if (!cache_reseau_valide) {
   # row_number() génère les indices 1, 2, 3, ... pour chaque nœud.
   # %in% vérifie l'appartenance : row_number() %in% noeuds_geante = TRUE si ce nœud
   # fait partie de la composante géante.
-  reseau_rwanda <- reseau_lisse %>%
+  reseau <- reseau_lisse %>%
     activate("nodes") %>%
     filter({
       pb_geante$tick()
@@ -1145,12 +1140,12 @@ if (!cache_reseau_valide) {
   
   # st_length() : calcule la longueur de chaque arête en mètres à partir de sa géométrie.
   # as.numeric() : convertit le résultat (objet "units") en nombre ordinaire.
-  reseau_rwanda <- reseau_rwanda %>%
+  reseau <- reseau %>%
     activate("edges") %>%
     mutate(longueur_m = as.numeric(st_length(geometry)))
   
   # Vérification immédiate
-  n_na_longueur <- reseau_rwanda %>%
+  n_na_longueur <- reseau %>%
     activate("edges") %>% st_as_sf() %>%
     pull(longueur_m) %>%
     { sum(is.na(.) | . == 0) }
@@ -1161,29 +1156,29 @@ if (!cache_reseau_valide) {
   # to_spatial_subdivision() crée des fragments de longueur nulle aux intersections
   # quand deux nœuds sont géométriquement confondus. On les élimine ici pour éviter 
   # toute propagation de NA en aval.
-  n_avant_filtre <- igraph::ecount(reseau_rwanda)
+  n_avant_filtre <- igraph::ecount(reseau)
   
-  reseau_rwanda <- reseau_rwanda %>%
+  reseau <- reseau %>%
     activate("edges") %>%
     mutate(longueur_m_brute = as.numeric(st_length(geometry))) %>%
     filter(longueur_m_brute > SEUIL_LONGUEUR_ARETE_M) %>%         # Seuil 0.5m
     select(-longueur_m_brute)                  # Colonne temporaire, on la retire
   
-  n_apres_filtre <- igraph::ecount(reseau_rwanda)
+  n_apres_filtre <- igraph::ecount(reseau)
   cat("Arêtes dégénérées supprimées :", n_avant_filtre - n_apres_filtre,
       "(", round((n_avant_filtre - n_apres_filtre)/n_avant_filtre*100, 1), "% du réseau)\n")
   cat("Arêtes conservées            :", n_apres_filtre, "\n\n")
   
   cat("✓ Réseau corrigé —",
-      igraph::vcount(reseau_rwanda), "nœuds,",
-      igraph::ecount(reseau_rwanda), "arêtes\n\n")
+      igraph::vcount(reseau), "nœuds,",
+      igraph::ecount(reseau), "arêtes\n\n")
   
   
   # ── Diagnostic complet de la fragmentation ────────────────────────────────────
   # On recalcule les composantes connexes sur le réseau final pour vérifier
   # qu'il est bien dominé par une seule grande composante.
   
-  composantes_finales <- igraph::components(reseau_rwanda %>% as_tbl_graph())
+  composantes_finales <- igraph::components(reseau %>% as_tbl_graph())
   sizes <- sort(composantes_finales$csize, decreasing = TRUE) # trie les tailles des composantes connexes du réseau par ordre décroissant
   
   cat("=== Diagnostic de fragmentation ===\n\n")
@@ -1195,8 +1190,8 @@ if (!cache_reseau_valide) {
   cat("  2–9    noeuds  :", sum(sizes >= 2   & sizes < 10),   "composantes\n")
   cat("  1      noeud   :", sum(sizes == 1),                  "composantes\n")
   
-  cat("Nombre de nœuds dans reseau_rwanda :", igraph::vcount(reseau_rwanda), "\n")
-  cat("Nombre d'arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n")
+  cat("Nombre de nœuds dans reseau :", igraph::vcount(reseau), "\n")
+  cat("Nombre d'arêtes dans reseau :", igraph::ecount(reseau), "\n")
   
   rm(composantes_finales)
   
@@ -1208,11 +1203,11 @@ if (!cache_reseau_valide) {
   
   saveRDS(
     list(
-      reseau_rwanda      = reseau_rwanda,
+      reseau      = reseau,
       pbf_size           = pbf_size_actuelle,
       n_segments_entree  = n_segments_entree_act,
-      n_noeuds           = igraph::vcount(reseau_rwanda),
-      n_aretes           = igraph::ecount(reseau_rwanda),
+      n_noeuds           = igraph::vcount(reseau),
+      n_aretes           = igraph::ecount(reseau),
       date_creation      = Sys.time()
     ),
     CACHE_RESEAU
@@ -1236,17 +1231,17 @@ if (!cache_reseau_valide) {
 # Ces vérifications sont rapides et permettent de détecter tôt un problème
 # de cohérence avec le reste du script (ex : composante non connectée).
 cat("=== Vérifications post-Partie III ===\n")
-cat("  Nœuds dans reseau_rwanda  :", igraph::vcount(reseau_rwanda), "\n")
-cat("  Arêtes dans reseau_rwanda :", igraph::ecount(reseau_rwanda), "\n")
+cat("  Nœuds dans reseau  :", igraph::vcount(reseau), "\n")
+cat("  Arêtes dans reseau :", igraph::ecount(reseau), "\n")
 
-n_composantes <- igraph::count_components(reseau_rwanda %>% as_tbl_graph())
+n_composantes <- igraph::count_components(reseau %>% as_tbl_graph())
 if (n_composantes != 1) {
   warning("  ⚠ Le réseau a ", n_composantes, " composantes (attendu : 1)\n")
 } else {
   cat("  ✓ Réseau entièrement connecté (1 composante)\n")
 }
 
-n_na_longueur <- reseau_rwanda %>%
+n_na_longueur <- reseau %>%
   activate("edges") %>% st_as_sf() %>%
   pull(longueur_m) %>%
   { sum(is.na(.) | . == 0) }
@@ -1323,7 +1318,7 @@ cat("  Taguage des arêtes du réseau...\n")
 # st_centroid() : calcule le point central de chaque arête (un point par ligne).
 # Tester si UN POINT est dans un polygone est bien plus rapide que tester si
 # UNE LIGNE croise un polygone — gain de temps significatif sur ~30 000 arêtes.
-aretes_centroides <- reseau_rwanda %>%
+aretes_centroides <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   st_centroid(of_largest_polygon = FALSE) %>%
@@ -1343,13 +1338,13 @@ in_urbain <- lengths(st_intersects(aretes_centroides, zones_urbaines_union)) > 0
 
 # Intégration dans le réseau : on ajoute une colonne booléenne (TRUE/FALSE)
 # à la table des arêtes du réseau sfnetworks.
-reseau_rwanda <- reseau_rwanda %>%
+reseau <- reseau %>%
   activate("edges") %>%
   mutate(zone_urbaine = in_urbain)
 
 n_urbain <- sum(in_urbain)
 cat("  Arêtes en zone urbaine :", n_urbain,
-    "(", round(n_urbain / igraph::ecount(reseau_rwanda) * 100, 1), "% du réseau)\n\n")
+    "(", round(n_urbain / igraph::ecount(reseau) * 100, 1), "% du réseau)\n\n")
 
 # Stocker dans DuckDB pour usage dans la table des coûts 
 duck_write(
@@ -1379,7 +1374,7 @@ cat("✓ Zones d'usage du sol chargées et arêtes taguées\n\n")
 
 CACHE_PENTES <- file.path(DIR_CACHE, "pentes_cache.rds")
 
-aretes_avec_geom <- reseau_rwanda %>% activate("edges") %>% st_as_sf()
+aretes_avec_geom <- reseau %>% activate("edges") %>% st_as_sf()
 n_aretes         <- nrow(aretes_avec_geom)
 
 # ── Tentative de chargement du cache ──────────────────────────────────────────
@@ -1465,7 +1460,7 @@ if (!cache_valide) {
       cat("  Pentes :", round(i / n_aretes * 100, 1), "%\n")
     resultats_pentes[[i]] <- calculer_pente_arete(
       aretes_avec_geom$geometry[i],
-      dem_rwanda,
+      dem,
       espacement = 100
     )
   }
@@ -1489,7 +1484,7 @@ if (!cache_valide) {
 # ── Intégration des pentes dans le réseau ─────────────────────────────────────
 # case_when() : équivalent de plusieurs if/else imbriqués — catégorise la pente
 # en 4 classes selon sa valeur absolue (abs() = ignore le signe montée/descente).
-reseau_rwanda <- reseau_rwanda %>%
+reseau <- reseau %>%
   activate("edges") %>%
   mutate(
     slope_mean      = pentes_df$slope_mean,
@@ -1515,7 +1510,7 @@ cat("✓ Pentes intégrées dans le réseau\n\n")
 
 # Les "entrepôts" (warehouses) sont les origines et destinations du modèle de fret.
 # Ils représentent les lieux entre lesquels les marchandises circulent :
-# Kigali Hub, postes frontières, villes importantes, zones industrielles.
+# Postes frontières, villes importantes, zones industrielles.
 # Chaque entrepôt sera "accroché" au nœud du réseau routier le plus proche
 # (snapping), ce qui permettra de calculer des itinéraires entre eux.
 
@@ -1528,15 +1523,15 @@ manuels_sf <- entreposages_manuels %>%
   st_transform(crs = 32735)
 
 # ── Entrepôts depuis city/town OSM ────────────────────────────────────────────
-# Filtrer uniquement les villes dans le territoire rwandais
+# Filtrer uniquement les villes dans le territoire du pays étudié
 # Évite que les villes des pays voisins se snappent toutes sur les mêmes nœuds frontières
 # st_filter() : ne garde que les géométries qui intersectent le polygone donné.
 # st_buffer(dist = BUFFER_FRONTIERE_VILLES_M) : élargit la frontière de 5km pour inclure les villes
-# rwandaises situées exactement sur la frontière.
+# situées exactement sur la frontière.
 villes_osm <- villes_osm %>%
-  st_filter(rwanda_national %>% st_buffer(dist = BUFFER_FRONTIERE_VILLES_M))
+  st_filter(pays_national %>% st_buffer(dist = BUFFER_FRONTIERE_VILLES_M))
 # Buffer de 5km pour garder les villes très proches de la frontière
-cat("  Villes OSM dans ou proches du Rwanda :", nrow(villes_osm), "\n")
+cat("  Villes OSM dans ou proches du pays :", nrow(villes_osm), "\n")
 
 # Identifier les villes OSM non dupliquées avec les entrepôts manuels
 # lengths(idx_proches) == 0 : sélectionne les villes OSM qui ne sont proches
@@ -1653,7 +1648,7 @@ if (nrow(zones_retail) > 0) {
 # bind_rows() empile les 4 sources d'entrepôts (manuels, OSM villes,
 # industriels, retail) en un seul tableau.
 # mutate(pays = NA_character_) : les entrepôts OSM n'ont pas de pays associé
-# (ils sont tous internes au Rwanda).
+# (ils sont tous internes au pays étudié).
 # distinct(lon, lat) : supprime les doublons résiduels ayant exactement
 # les mêmes coordonnées.
 # Dans le bloc d'assemblage final, ajouter pays dans le select
@@ -1682,182 +1677,52 @@ entreposages_sf <- entreposages_fictifs %>%
   st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
   st_transform(crs = 32735)
 
-# Création des buffers circulaires de 2km autour de chaque entrepôt.
+# ── Buffer d'agglomération (rayon RAYON_AGGLO_ENTREPOT_M) ──────────────────────
+# Cercle de RAYON_AGGLO_ENTREPOT_M (4 km) autour de chaque point candidat. Il sert
+# au calcul de la population TEMPORAIRE de chaque candidat (Partie IV.4). Cette
+# population ne sert QU'À classer les points lors de la fusion à 4 km
+# (Partie IV.3-bis) : la population définitive sera recalculée, sans
+# chevauchement, par cellule de Voronoï (Partie IV.6).
 entreposages_buffer <- entreposages_sf %>%
-  st_buffer(dist = BUFFER_ENTREPOT_M)
+  st_buffer(dist = RAYON_AGGLO_ENTREPOT_M)
 
-# ── Accrochage (snapping) des entrepôts au réseau ─────────────────────────────
-# Les coordonnées des entrepôts ne tombent pas exactement sur le réseau routier.
-# st_nearest_feature() trouve pour chaque entrepôt le nœud du réseau le plus proche.
-# C'est le "snapping" : on "accroche" chaque entrepôt au nœud routier le plus proche.
-# Sans ce snapping, Dijkstra ne pourrait pas partir d'un entrepôt car il ne serait
-# pas sur le graphe. Avec le snapping, l'entrepôt devient synonyme du nœud voisin.
-noeuds_reseau <- reseau_rwanda %>% activate("nodes") %>% st_as_sf()
+# ── Nœuds du réseau routier (couche réutilisée pour l'accrochage ultérieur) ────
+# st_nearest_feature() accrochera chaque entrepôt CONSERVÉ au nœud routier le plus
+# proche — mais seulement APRÈS la fusion (Partie IV.3-bis), une fois connus les
+# points survivants. On extrait ici la couche de nœuds une fois pour toutes.
+noeuds_reseau <- reseau %>% activate("nodes") %>% st_as_sf()
 
-entreposages_avec_snap <- entreposages_sf %>%
-  mutate(
-    noeud_proche_id = st_nearest_feature(geometry, noeuds_reseau),
-    # Calcul de la distance d'accrochage pour contrôle qualité
-    # (une distance > 2km indiquerait un entrepôt mal positionné)
-    # st_distance() par_element = TRUE : calcule la distance entre le point i
-    # de la première couche et le point i de la deuxième couche (pas toutes les paires).
-    distance_snap   = as.numeric(
-      st_distance(geometry, noeuds_reseau[noeud_proche_id,], by_element = TRUE)
-    )
-  ) %>%
-  # ── Garder un seul entrepôt par nœud : priorité aux OSM villes, puis manuels,
-  #    puis industriels (order de source dans entreposages_fictifs)
-  #    arrange() les ranges dans l'ordre et distinct() ne garde que la première
-  #    occurrance de noeud_proche_id
-  arrange(match(source, c("osm_place", "manuel","osm_industrial","osm_retail"))) %>%
-  distinct(noeud_proche_id, .keep_all = TRUE)
-
-cat("  Entrepôts après dédoublonnage par nœud :", nrow(entreposages_avec_snap), "\n")
-
-# Associe le noeud le plus proche à chaque entrepot ainsi que son type.
-# match(A, B) : pour chaque élément de A, trouve sa position dans B.
-# Utilisé ici pour retrouver le nom/type/pays de l'entrepôt associé à chaque nœud.
-reseau_rwanda <- reseau_rwanda %>%
-  activate("nodes") %>%
-  mutate(
-    node_id        = row_number(),
-    is_warehouse   = node_id %in% entreposages_avec_snap$noeud_proche_id,  # TRUE si le nœud est proche d'un entrepôt
-    warehouse_name = if_else(                                              # Nom de l'entrepôt associé (si is_warehouse = TRUE), sinon NA
-      is_warehouse,
-      entreposages_avec_snap$nom[match(node_id, entreposages_avec_snap$noeud_proche_id)], 
-      # match () cherche la position de chaque élément de node_id dans le vecteur entreposages_avec_snap$noeud_proche_id
-      # Cette ligne permet de trouver le nom d'un entrepôt associé à un identifiant de nœud
-      NA_character_
-    ),
-    warehouse_type = if_else(                                              # Type de l'entrepôt (ex: "marche", "ville", "centre industriel"), sinon NA
-      is_warehouse,
-      entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],  # Cette ligne permet de trouver le type d'un entrepôt associé à un identifiant de nœud
-      NA_character_
-    ),
-    # ── pays d'origine pour les points frontière ──────────────────────────────
-    warehouse_pays = if_else(
-      is_warehouse,
-      entreposages_avec_snap$pays[match(node_id, entreposages_avec_snap$noeud_proche_id)],
-      NA_character_
-    )
-  )
-
-# ── Définition de noeuds_entreposage ──────────────────────────────────────────
-# noeuds_entreposage est la liste des nœuds du réseau identifiés comme entrepôts,
-# après le snapping et la déduplication par nœud (cf. entreposages_avec_snap).
-#
-# IMPORTANT : ne pas confondre les deux entités manipulées dans ce script :
-#   • entreposages_fictifs / entreposages_sf : N zones économiques modélisées
-#   • noeuds_entreposage                     : n_warehouses nœuds du graphe (après dédup.)
-# N ≥ n_warehouses car plusieurs zones peuvent tomber sur le même nœud routier.
-# Les valeurs exactes sont affichées par les cat() ci-dessous à chaque run.
-# Les enrichissements (population, RWI, emploi) portent sur les N zones.
-# Les calculs sur le graphe (Dijkstra, OD, modèle gravitaire) portent sur les n_warehouses nœuds.
-#
-# LIMITE : lors du passage de N à n_warehouses, la zone "perdante" de chaque
-# paire dupliquée est supprimée par distinct() (ligne ~1713) sans que ses
-# données d'enrichissement soient sommées dans la zone conservée. L'emploi et
-# la population de ces zones sont donc calculés mais silencieusement abandonnés,
-# ce qui sous-estime le poids économique des nœuds concernés.
-noeuds_entreposage <- reseau_rwanda %>%
-  activate("nodes") %>%
-  filter(is_warehouse) %>%
-  as_tibble() %>%
-  mutate(warehouse_id = row_number())
-
-n_warehouses <- nrow(noeuds_entreposage)
-
-cat("✓ noeuds_entreposage défini :", n_warehouses, "nœuds-entrepôts\n")
-cat("  (à comparer avec", nrow(entreposages_fictifs), "zones économiques)\n\n")
-
-cat("✓", nrow(entreposages_avec_snap), "entreposages intégrés au réseau\n\n")
-
-# ── Diagnostic : entrepôts snappés sur le même nœud ───────────────────────────
-# On identifie les nœuds partagés par plusieurs entrepôts AVANT déduplication
-# pour comprendre si les fusions concernent des zones de même type ou non.
-# Un nœud partagé par des types différents (ex : "ville" + "industrie") signale
-# une fusion potentiellement problématique pour le modèle gravitaire.
-
-# Calcul du nombre d'entrepôts par nœud (avant distinct())
-# On repart de entreposages_sf avant la déduplication par noeud_proche_id
-doublons_noeuds <- entreposages_sf %>%
-  mutate(
-    noeud_proche_id = st_nearest_feature(geometry, noeuds_reseau)
-  ) %>%
-  st_drop_geometry() %>%
-  group_by(noeud_proche_id) %>%
-  # On ne garde que les nœuds avec au moins 2 entrepôts
-  filter(n() > 1) %>%
-  summarise(
-    n_entrepots      = n(),
-    noms             = paste(nom,  collapse = " | "),
-    types            = paste(type, collapse = " | "),
-    sources          = paste(source, collapse = " | "),
-    # TRUE si tous les entrepôts sur ce nœud sont du même type
-    meme_type        = n_distinct(type) == 1,
-    .groups          = "drop"
-  ) %>%
-  arrange(desc(n_entrepots))
-
-cat("=== Diagnostic des entrepôts sur le même nœud ===\n\n")
-cat("Nœuds partagés :", nrow(doublons_noeuds), "\n")
-cat("dont même type :", sum(doublons_noeuds$meme_type), "\n")
-cat("dont types mixtes :", sum(!doublons_noeuds$meme_type), "\n\n")
-
-if (nrow(doublons_noeuds) > 0) {
-  cat("Détail des nœuds partagés :\n")
-  print(
-    doublons_noeuds %>%
-      select(noeud_proche_id, n_entrepots, types, meme_type, noms) %>%
-      rename(
-        Noeud       = noeud_proche_id,
-        N           = n_entrepots,
-        Types       = types,
-        MemeType    = meme_type,
-        Zones       = noms
-      )
-  )
-}
-cat("\n")
-# Alerte si des fusions de types différents sont détectées
-if (any(!doublons_noeuds$meme_type)) {
-  cat("⚠ Fusions de types différents détectées — la population sera\n")
-  cat("  recalculée sur l'union des buffers pour ces nœuds (voir IV.4.B)\n\n")
-} else {
-  cat("✓ Toutes les fusions concernent des zones de même type\n\n")
-}
 
 ################################################################################
-# PARTIE IV.4 — ENRICHISSEMENT DÉMOGRAPHIQUE DES NŒUDS D'ENTREPÔT
+# PARTIE IV.4 — POPULATION TEMPORAIRE DE CHAQUE POINT CANDIDAT
 #
-# OBJECTIF : Associer à chaque zone d'entrepôt un indicateur de population
-#            afin d'améliorer le calibrage du modèle gravitaire (Partie VII).
-#            Un hub desservant 800 000 habitants génère plus de demande
-#            qu'une petite ville de 20 000 habitants.
+# OBJECTIF : Estimer une population approximative pour CHACUN des points candidats
+#            (avant toute fusion), dans le seul but de classer les points lors de
+#            la fusion à RAYON_AGGLO_ENTREPOT_M de distance (Partie IV.3-bis) : 
+#.           dans un groupe de points proches, on conserve celui de plus forte population.
 #
-# TROIS APPROCHES SONT PROPOSÉES :
+#            ⚠ Cette population est TEMPORAIRE. La population définitive de chaque
+#            nœud sera recalculée, sans chevauchement, par cellule de Voronoï
+#            (Partie IV.6) en sommant les pixels WorldPop de la cellule.
+#
+# TROIS SOURCES, FUSIONNÉES PAR PRIORITÉ B (WorldPop) > A (OSM) > C (NISR) > min :
 #   A — Tags OSM du fichier PBF (rapide, intégré, mais couverture partielle)
-#   B — Raster WorldPop (haute résolution spatiale, sans requête externe)
-#   C — Données de recensement NISR via CSV (source officielle, la plus fiable)
+#   B — Raster WorldPop (haute résolution spatiale ; somme dans le buffer 4 km)
+#   C — Données de recensement NISR via CSV (source officielle, par district)
+#   Le résultat est le vecteur pop_temp (longueur = nombre de candidats N).
 #
-# STRATÉGIE DE FUSION :
-#   On calcule une colonne "population_zone" finale en appliquant une
-#   hiérarchie de priorité : B (WorldPop) > A (OSM) > C (NISR) > 0
-#   La colonne est ensuite intégrée dans reseau_rwanda (attribut de nœud)
-#   et dans DuckDB pour être accessible aux requêtes SQL des Parties V à IX.
+# EFFET DE BORD UTILE : ce bloc charge aussi des objets réutilisés plus tard —
+#   raster_worldpop        (IV.4.B) → somme par cellule de Voronoï (IV.6) + poids RWI (IV.7)
+#   pays_districts_gadm  (IV.4.C) → emploi par district (IV.8) + repli population
 #
-# PLACEMENT DANS LE SCRIPT :
-#   Ce bloc dépend de :
-#     - entreposages_avec_snap    (Partie IV.3) — liste des entrepôts snappés
-#     - entreposages_sf           (Partie IV.3) — géométries sf des entrepôts
-#     - reseau_rwanda             (Partie III)  — réseau sfnetworks
-#     - chemin_pbf                (Partie I)    — fichier PBF OSM
-#   Les Parties V à IX peuvent utiliser la colonne "population_zone"
-#   comme variable de pondération dans le modèle gravitaire.
+# DÉPEND DE :
+#     - entreposages_sf      (Partie IV.3) — géométries des N candidats
+#     - entreposages_buffer  (Partie IV.3) — buffers 4 km des candidats
+#     - chemin_pbf           (Partie I)    — fichier PBF OSM
 ################################################################################
 
 cat("==========================================================\n")
-cat("  PARTIE IV.4 — ENRICHISSEMENT DÉMOGRAPHIQUE\n")
+cat("  PARTIE IV.4 — POPULATION TEMPORAIRE PAR CANDIDAT (fusion)\n")
 cat("==========================================================\n\n")
 
 # ==============================================================================
@@ -1868,7 +1733,7 @@ cat("==========================================================\n\n")
 # communauté OSM et couvre les grandes villes mais rarement les petites zones.
 #
 # AVANTAGES  : Aucun fichier externe, déjà dans le PBF téléchargé.
-# INCONVÉNIENTS : Couverture très partielle (< 30% des zones au Rwanda),
+# INCONVÉNIENTS : Couverture très partielle (< 30% des zones),
 #                 données souvent obsolètes ou approximatives.
 # ==============================================================================
 
@@ -1925,7 +1790,7 @@ cat("  Lieux OSM avec tag population :", nrow(population_osm_raw), "\n")
 
 # ── Association à chaque entrepôt : somme des points OSM dans le buffer ────────
 # Pour chaque entrepôt, on cherche tous les points OSM peuplés dans un rayon de
-# BUFFER_DEMO_M mètres et on somme leurs populations.
+# RAYON_AGGLO_ENTREPOT_M mètres et on somme leurs populations.
 # S'il n'y en a aucun, la population OSM reste NA (sera complétée par B ou C).
 
 if (nrow(population_osm_raw) > 0) {
@@ -1935,7 +1800,7 @@ if (nrow(population_osm_raw) > 0) {
   within_buffer_A <- st_is_within_distance(
     entreposages_sf,
     population_osm_raw,
-    dist = BUFFER_DEMO_M
+    dist = RAYON_AGGLO_ENTREPOT_M
   )
 
   # Pour chaque entrepôt, on somme la population de tous les points OSM dans le buffer.
@@ -1965,10 +1830,9 @@ cat("  Population OSM min :", round(min(pop_osm_par_entrepot, na.rm = TRUE)),
 #
 # WorldPop produit des rasters de densité de population à haute résolution
 # à partir de recensements, d'images satellites et de modèles statistiques.
-# Pour le Rwanda, les données sont disponibles pour 2020 (100m par pixel).
+# Les données sont disponibles pour 2020 (100m par pixel).
 #
-# AVANTAGES  : Haute résolution spatiale (100m), couvre tout le territoire,
-#              bien calibré sur les données NISR rwandaises.
+# AVANTAGES  : Haute résolution spatiale (100m), couvre tout le territoire.
 # INCONVÉNIENTS : Fichier lourd (~150 Mo), nécessite un téléchargement externe,
 #                 données 2020 (pas 2022).
 # ==============================================================================
@@ -1990,7 +1854,7 @@ if (!is.null(WORLDPOP_LOCAL_PATH) && file.exists(WORLDPOP_LOCAL_PATH)) {
   
   tryCatch({
     raster_worldpop <- rast(WORLDPOP_LOCAL_PATH)
-    # Vérification : le raster doit avoir au moins un pixel non-NA sur le Rwanda
+    # Vérification : le raster doit avoir au moins un pixel non-NA sur la zone
     n_valeurs_valides <- global(raster_worldpop, "notNA")[,1]
     if (n_valeurs_valides > 0) {
       worldpop_ok <- TRUE
@@ -2004,7 +1868,7 @@ if (!is.null(WORLDPOP_LOCAL_PATH) && file.exists(WORLDPOP_LOCAL_PATH)) {
 }
 
 # Si le raster n'est pas disponible localement, on tente le téléchargement.
-# URL directe WorldPop pour le Rwanda 2020 (non constrainted, 100m).
+# URL directe WorldPop 2020 (non constrained, 100m) — à adapter selon le pays.
 # Pour d'autres années ou résolutions, consulter :
 # https://hub.worldpop.org/geodata/listing?id=29
 # ── REMPLACER le bloc de téléchargement WorldPop ──────────────────────────────
@@ -2042,19 +1906,19 @@ if (!worldpop_ok) {
   if (!worldpop_ok) {
     cat("  ⚠ Toutes les URLs WorldPop ont échoué\n")
     cat("    → Téléchargement manuel sur https://hub.worldpop.org\n")
-    cat("    → Chercher : Rwanda > Population > 2020 > 100m\n")
+    cat("    → Chercher : pays > Population > 2020 > 100m\n")
     cat("    → Sauvegarder sous :", WORLDPOP_LOCAL_PATH, "\n\n")
   }
 }
 
 # ── Agrégation du raster dans un buffer autour de chaque entrepôt ─────────────
 # Pour chaque entrepôt, on somme les pixels WorldPop dans un cercle de
-# BUFFER_DEMO_M mètres. Chaque pixel représente le nombre d'habitants vivant
-# dans cette cellule de 100m × 100m.
+# RAYON_AGGLO_ENTREPOT_M mètres. Chaque pixel représente le nombre d'habitants
+# vivant dans cette cellule de 100m × 100m.
 if (worldpop_ok) {
-  
+
   cat("  Agrégation WorldPop sur les buffers de",
-      BUFFER_DEMO_M / 1000, "km...\n")
+      RAYON_AGGLO_ENTREPOT_M / 1000, "km...\n")
   
   # Création des buffers de chaque entrepôt
   # entreposages_buffer est déjà défini en Partie IV.3, on le réutilise.
@@ -2101,7 +1965,7 @@ if (worldpop_ok) {
 # ==============================================================================
 # IV.4.C : Données de recensement NISR (source officielle, recommandée)
 #
-# L'Institut National de Statistiques du Rwanda (NISR) publie les résultats
+# L'Institut national de statistiques (NISR pour le Rwanda) publie les résultats
 # du recensement RPHC-5 (2022) par district. Les données sont disponibles sur HDX 
 # (Humanitarian Data Exchange)
 #
@@ -2111,7 +1975,7 @@ if (worldpop_ok) {
 #   3. Télécharger le CSV (bouton "Download")
 #   4. Placer le fichier dans data/raw/rwa_admpop_adm2_2023.csv
 #
-# Le fichier contient ~30 districts rwandais avec population par sexe.
+# Le fichier contient les districts du pays avec population par sexe.
 # On fait une jointure spatiale : chaque entrepôt est associé au district
 # dans lequel il se trouve, puis on récupère la population de ce district.
 #
@@ -2165,11 +2029,11 @@ if (file.exists(NISR_CSV_PATH)) {
     # ── Téléchargement des frontières de districts (GADM) ─────────────────────
     # GADM (Global Administrative Areas) fournit les polygones des limites
     # administratives pour tous les pays du monde.
-    # geodata::gadm() télécharge le niveau 2 (districts) pour le Rwanda.
+    # geodata::gadm() télécharge le niveau 2 (districts) pour le pays.
     # level = 2 : provinces = 1, districts = 2, secteurs = 3.
     cat("  Téléchargement des frontières de districts GADM...\n")
     
-    rwanda_districts_gadm <- tryCatch({
+    pays_districts_gadm <- tryCatch({
       
       geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
         st_as_sf() %>%
@@ -2187,13 +2051,13 @@ if (file.exists(NISR_CSV_PATH)) {
       NULL
     })
     
-    if (!is.null(rwanda_districts_gadm)) {
+    if (!is.null(pays_districts_gadm)) {
       
       # ── Jointure GADM × NISR ────────────────────────────────────────────────
       # On fusionne le tableau de population NISR avec les polygones GADM
       # via le nom de district normalisé.
       # left_join() conserve tous les polygones GADM même sans correspondance NISR.
-      districts_avec_pop <- rwanda_districts_gadm %>%
+      districts_avec_pop <- pays_districts_gadm %>%
         left_join(
           nisr_pop %>% select(district_clean, pop_total),
           by = "district_clean"
@@ -2296,140 +2160,317 @@ if (file.exists(NISR_CSV_PATH)) {
 
 
 # ==============================================================================
-# IV.4.D : Fusion des trois sources et intégration dans le modèle
+# IV.4.D : Fusion des trois sources → population TEMPORAIRE (pop_temp)
 #
-# On assemble maintenant les trois vecteurs de population (A, B, C)
-# en une seule colonne "population_zone" par entrepôt selon la hiérarchie :
-#
-#   Priorité 1 : WorldPop (B)        — disponible et non-NA      → utiliser
-#   Priorité 2 : OSM (A)             — si B absent ou NA         → utiliser
-#   Priorité 3 : NISR officiel (C)   — si A et B absents ou NA   → utiliser
-#   Priorité 0 : Population minimale — si tout est NA            → 1 000 hab (évite les divisions par zéro)
-#
-# La population finale est intégrée :
-#   - dans reseau_rwanda (attribut de nœud sfnetworks)
-#   - dans DuckDB (table "population_entrepots")
-#   - dans entreposages_fictifs (data.frame de référence)
+# On assemble les trois vecteurs (A, B, C) en une population par CANDIDAT selon
+# la hiérarchie B (WorldPop) > A (OSM) > C (NISR) > POP_FALLBACK_MIN.
+# Rappel : pop_temp ne sert qu'à classer les points lors de la fusion (IV.3-bis).
 # ==============================================================================
 
-cat("── Fusion et intégration des données de population ──────────────────\n")
+cat("── Fusion des sources → population temporaire par candidat ──────────\n")
 
-# ── Remise à l'état original d'entreposages_fictifs ───────────────────────────
-# Si le bloc IV.4 est re-exécuté, entreposages_fictifs peut avoir été gonflé
-# par des left_join() d'une exécution précédente. On le remet à ses colonnes
-# d'origine avant d'y ajouter les nouvelles variables.
-entreposages_fictifs <- entreposages_fictifs %>%
-  select(nom, type, pays, lon, lat, source) %>%
-  distinct(lon, lat, .keep_all = TRUE)
-
-# coalesce() : prend le premier argument non-NA, de gauche à droite.
-# C'est l'opérateur de "hiérarchie de sources" en une seule fonction.
-population_zone_finale <- coalesce(
-  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
-  replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
-  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR
-  rep(POP_FALLBACK_MIN, nrow(entreposages_sf))      # Fallback : défini dans 00_parametres.R
-) %>%
-  round()   # Les populations sont des entiers
-
-# ── Tableau de synthèse des sources utilisées ─────────────────────────────────
-# Ce diagnostic permet de vérifier la qualité du remplissage et d'identifier
-# les zones pour lesquelles on a dû utiliser le fallback.
-source_utilisee <- case_when(
-  !is.na(pop_worldpop_par_entrepot) ~ "WorldPop_2020",
-  !is.na(pop_osm_par_entrepot)      ~ "OSM",
-  !is.na(pop_nisr_par_entrepot)     ~ "NISR_2022",
-  TRUE                              ~ paste0("Fallback_", POP_FALLBACK_MIN)
-)
-
-# Vérification de cohérence avant construction du tableau.
-# Les trois vecteurs de population doivent avoir exactement autant de lignes
-# que entreposages_sf (référence des zones économiques actives).
+# Cohérence : les trois vecteurs doivent couvrir tous les candidats.
 stopifnot(
   length(pop_osm_par_entrepot)      == nrow(entreposages_sf),
   length(pop_worldpop_par_entrepot) == nrow(entreposages_sf),
   length(pop_nisr_par_entrepot)     == nrow(entreposages_sf)
 )
 
+# coalesce() : premier argument non-NA, de gauche à droite (hiérarchie de sources).
+pop_temp <- coalesce(
+  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
+  replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
+  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR
+  rep(POP_FALLBACK_MIN, nrow(entreposages_sf))      # Fallback
+) %>%
+  round()
+
+cat("  Population temporaire : min =", round(min(pop_temp)),
+    "| médiane =", round(median(pop_temp)),
+    "| max =", round(max(pop_temp)), "\n\n")
+
+
+################################################################################
+# PARTIE IV.3-bis — FUSION DES ENTREPÔTS À 4 km (ancrage glouton par population)
+#
+# OBJECTIF : Réduire le bruit du jeu de candidats (nombreux points OSM proches)
+#            en agglomérant les points distants de moins de RAYON_AGGLO_ENTREPOT_M.
+#
+# RÈGLE (validée) :
+#   • Les postes FRONTIÈRES sont protégés : toujours conservés comme nœuds
+#     distincts, jamais fusionnés ni absorbants (indispensables au modèle de
+#     commerce international, 03_transport.R).
+#   • Les autres points sont traités par population DÉCROISSANTE : le premier
+#     point libre devient une ANCRE et absorbe tous les points libres situés à
+#     ≤ 4 km. On répète jusqu'à épuisement. Chaque cluster est représenté par son
+#     ancre = le point de plus FORTE population (garanti par l'ordre décroissant).
+#
+#   Conséquence « un seul intermédiaire » : deux points d'un même cluster sont à
+#   au plus 2 sauts l'un de l'autre VIA l'ancre. Un point accessible seulement
+#   par 2 intermédiaires (> 4 km de l'ancre) n'est pas rattaché et devient une
+#   ancre distincte.
+################################################################################
+
+cat("==========================================================\n")
+cat("  PARTIE IV.3-bis — FUSION DES ENTREPÔTS À",
+    RAYON_AGGLO_ENTREPOT_M / 1000, "km\n")
+cat("==========================================================\n\n")
+
+n_cand        <- nrow(entreposages_sf)
+est_frontiere <- entreposages_sf$type == "frontiere"   # points à protéger
+
+# Liste des voisins à ≤ 4 km pour chaque candidat (indices dans entreposages_sf).
+# st_is_within_distance(x, x) renvoie, pour chaque point, les indices des points
+# situés à ≤ dist (lui-même inclus).
+voisins_4km <- st_is_within_distance(
+  entreposages_sf, entreposages_sf, dist = RAYON_AGGLO_ENTREPOT_M
+)
+
+# ancre_de[i] = indice de l'ancre qui représente le candidat i (0 = non affecté).
+ancre_de <- integer(n_cand)
+
+# Les frontières sont leurs propres ancres (protégées).
+ancre_de[est_frontiere] <- which(est_frontiere)
+
+# Parcours des NON-frontières par population temporaire décroissante.
+ordre <- order(pop_temp, decreasing = TRUE)
+ordre <- ordre[!est_frontiere[ordre]]
+
+for (i in ordre) {
+  if (ancre_de[i] != 0L) next          # déjà absorbé par une ancre plus peuplée
+  ancre_de[i] <- i                     # i devient une ancre
+  # Voisins encore libres et non-frontières → rattachés à l'ancre i.
+  vois <- voisins_4km[[i]]
+  vois <- vois[ancre_de[vois] == 0L & !est_frontiere[vois]]
+  ancre_de[vois] <- i
+}
+
+# Indices des points conservés (ceux qui sont leur propre ancre).
+idx_kept       <- which(ancre_de == seq_len(n_cand))
+# Taille de chaque cluster (nb de candidats rattachés à l'ancre) — diagnostic.
+taille_cluster <- tabulate(ancre_de, nbins = n_cand)[idx_kept]
+
+# Jeu d'entrepôts conservés (sf), avec leur population temporaire et la taille
+# du cluster qu'ils représentent.
+entreposages_kept <- entreposages_sf[idx_kept, ] %>%
+  mutate(
+    pop_temp       = pop_temp[idx_kept],
+    n_absorbes     = taille_cluster,
+    is_frontiere   = est_frontiere[idx_kept]
+  )
+
+cat("  Candidats initiaux :", n_cand, "→ conservés après fusion :",
+    nrow(entreposages_kept), "\n")
+cat("  dont frontières (protégées) :", sum(entreposages_kept$is_frontiere), "\n")
+cat("  Clusters de plus d'un point :", sum(taille_cluster > 1),
+    "| taille max :", max(taille_cluster), "\n\n")
+
+# ── Accrochage (snapping) des entrepôts conservés au réseau ────────────────────
+# st_nearest_feature() accroche chaque entrepôt conservé au nœud routier le plus
+# proche (indispensable pour que Dijkstra parte d'un nœud du graphe).
+entreposages_avec_snap <- entreposages_kept %>%
+  mutate(
+    noeud_proche_id = st_nearest_feature(geometry, noeuds_reseau),
+    distance_snap   = as.numeric(
+      st_distance(geometry, noeuds_reseau[noeud_proche_id, ], by_element = TRUE)
+    )
+  ) %>%
+  # Garde-fou : si deux entrepôts conservés tombent sur le même nœud réseau (très
+  # rare, car distants d'au moins 4 km), on garde la frontière sinon le plus peuplé.
+  arrange(desc(is_frontiere), desc(pop_temp)) %>%
+  distinct(noeud_proche_id, .keep_all = TRUE)
+
+cat("  Entrepôts accrochés à un nœud distinct :",
+    nrow(entreposages_avec_snap), "\n\n")
+
+# ── Marquage des nœuds-entrepôts dans reseau ────────────────────────────
+# match(node_id, noeud_proche_id) retrouve le nom/type/pays de l'entrepôt accroché.
+reseau <- reseau %>%
+  activate("nodes") %>%
+  mutate(
+    node_id        = row_number(),
+    is_warehouse   = node_id %in% entreposages_avec_snap$noeud_proche_id,
+    warehouse_name = if_else(is_warehouse,
+      entreposages_avec_snap$nom[match(node_id, entreposages_avec_snap$noeud_proche_id)],
+      NA_character_),
+    warehouse_type = if_else(is_warehouse,
+      entreposages_avec_snap$type[match(node_id, entreposages_avec_snap$noeud_proche_id)],
+      NA_character_),
+    warehouse_pays = if_else(is_warehouse,
+      entreposages_avec_snap$pays[match(node_id, entreposages_avec_snap$noeud_proche_id)],
+      NA_character_)
+  )
+
+# ── noeuds_entreposage : table des nœuds-entrepôts (1 ligne par nœud) ──────────
+# warehouse_id = numéro de ligne (1..n_warehouses) dans l'ordre des nœuds du réseau.
+noeuds_entreposage <- reseau %>%
+  activate("nodes") %>%
+  filter(is_warehouse) %>%
+  as_tibble() %>%
+  mutate(warehouse_id = row_number())
+
+n_warehouses <- nrow(noeuds_entreposage)
+
+# seeds_sf : mêmes nœuds en objet sf POINT (même ordre → même warehouse_id),
+# utilisés comme germes du pavage de Voronoï (IV.6).
+seeds_sf <- reseau %>%
+  activate("nodes") %>%
+  filter(is_warehouse) %>%
+  st_as_sf() %>%
+  mutate(warehouse_id = row_number())
+
+cat("✓ noeuds_entreposage défini :", n_warehouses, "nœuds-entrepôts\n")
+cat("  dont frontières :",
+    sum(noeuds_entreposage$warehouse_type == "frontiere"), "\n\n")
+
+
+################################################################################
+# PARTIE IV.6 — PAVAGE DE VORONOÏ ET POPULATION DÉFINITIVE PAR CELLULE
+#
+# OBJECTIF : Découper le territoire en polygones de Voronoï (un par nœud-entrepôt).
+#            Chaque point du territoire est ainsi rattaché à l'entrepôt le plus
+#            proche, et l'entrepôt hérite des caractéristiques de l'espace qu'il
+#            représente — à commencer par sa POPULATION définitive, somme des
+#            pixels WorldPop de sa cellule (couverture exhaustive, sans
+#            chevauchement → le total national est conservé).
+################################################################################
+
+cat("==========================================================\n")
+cat("  PARTIE IV.6 — PAVAGE DE VORONOÏ + POPULATION PAR CELLULE\n")
+cat("==========================================================\n\n")
+
+# ── Construction du pavage ────────────────────────────────────────────────────
+# st_voronoi() tesselle le plan à partir d'un MULTIPOINT (union des germes).
+# L'enveloppe (bbox du pays) borne la tessellation ; on rogne ensuite sur la
+# frontière nationale pour que les cellules ne débordent pas du pays.
+pays_utm <- pays_boundary %>%
+  st_transform(32735) %>%
+  st_union() %>%
+  st_make_valid()
+
+zones_voronoi <- st_voronoi(
+    st_union(seeds_sf),
+    envelope = st_as_sfc(st_bbox(pays_utm))
+  ) %>%
+  st_collection_extract("POLYGON") %>%       # une polygone par germe
+  st_sf(geometry = .) %>%
+  st_set_crs(st_crs(seeds_sf)) %>%           # st_voronoi peut perdre le CRS
+  st_make_valid() %>%
+  st_intersection(pays_utm) %>%              # rognage sur le pays
+  st_make_valid()
+
+# Rattachement de chaque cellule à son germe : st_nearest_feature() renvoie le
+# germe contenu dans la cellule (distance nulle), donc son warehouse_id.
+zones_voronoi <- zones_voronoi %>%
+  mutate(warehouse_id = seeds_sf$warehouse_id[
+    st_nearest_feature(geometry, seeds_sf)
+  ])
+
+# Contrôle : une cellule par nœud-entrepôt, identifiants tous distincts.
+stopifnot(
+  nrow(zones_voronoi)               == n_warehouses,
+  n_distinct(zones_voronoi$warehouse_id) == n_warehouses
+)
+
+# ── Population définitive = somme des pixels WorldPop dans chaque cellule ──────
+if (worldpop_ok) {
+  pop_cellule <- as.numeric(exactextractr::exact_extract(
+    raster_worldpop,
+    zones_voronoi %>% st_transform(st_crs(raster_worldpop)),
+    fun = "sum", progress = FALSE
+  ))
+  source_pop_cellule <- "WorldPop_cellule_Voronoi"
+
+} else if (exists("districts_avec_pop") && !is.null(districts_avec_pop)) {
+  # Repli : à défaut de WorldPop, on répartit la population NISR de chaque
+  # district au prorata de l'aire de cellule qui le recouvre.
+  cat("  ⚠ WorldPop indisponible → population par cellule via aire × districts NISR\n")
+  inter <- suppressWarnings(st_intersection(
+    zones_voronoi %>% select(warehouse_id),
+    districts_avec_pop %>% select(district_clean, pop_total)
+  )) %>%
+    mutate(aire = as.numeric(st_area(geometry))) %>%
+    st_drop_geometry() %>%
+    group_by(district_clean) %>%
+    mutate(part_aire = aire / sum(aire)) %>%   # part de chaque cellule dans le district
+    ungroup() %>%
+    mutate(pop_part = pop_total * part_aire) %>%
+    group_by(warehouse_id) %>%
+    summarise(pop = sum(pop_part, na.rm = TRUE), .groups = "drop")
+  pop_cellule <- inter$pop[match(zones_voronoi$warehouse_id, inter$warehouse_id)]
+  source_pop_cellule <- "NISR_aire_cellule"
+
+} else {
+  cat("  ⚠ Aucune source de population disponible → fallback minimal\n")
+  pop_cellule <- rep(POP_FALLBACK_MIN, nrow(zones_voronoi))
+  source_pop_cellule <- paste0("Fallback_", POP_FALLBACK_MIN)
+}
+
+# Plancher à POP_FALLBACK_MIN (évite population nulle → division par zéro MRIO).
+zones_voronoi$population_zone <- round(pmax(pop_cellule, POP_FALLBACK_MIN,
+                                            na.rm = TRUE))
+
+# Vecteur population aligné sur l'ordre warehouse_id (1..n_warehouses).
+pop_par_wid <- zones_voronoi$population_zone[
+  match(seq_len(n_warehouses), zones_voronoi$warehouse_id)
+]
+
+# ── Diagnostic et stockage ────────────────────────────────────────────────────
 diag_population <- tibble(
-  nom_zone        = entreposages_fictifs$nom,
-  type_zone       = entreposages_fictifs$type,
-  pop_osm         = round(pop_osm_par_entrepot),
-  pop_worldpop    = round(pop_worldpop_par_entrepot),
-  pop_nisr        = round(pop_nisr_par_entrepot),
-  population_zone = population_zone_finale,
-  source          = source_utilisee
+  nom_zone        = noeuds_entreposage$warehouse_name,
+  type_zone       = noeuds_entreposage$warehouse_type,
+  population_zone = pop_par_wid,
+  source          = source_pop_cellule
 )
 
-cat("\nDiagnostic des sources de population :\n")
-print(
-  diag_population %>%
-    count(source) %>%
-    mutate(pct = round(n / sum(n) * 100, 1)) %>%
-    rename(Source = source, N_zones = n, `Part (%)` = pct)
-)
+cat("  Population par cellule : min =", round(min(pop_par_wid)),
+    "| max =", round(max(pop_par_wid)), "\n")
+cat("  Somme des populations de cellules :",
+    format(round(sum(pop_par_wid)), big.mark = " "),
+    "(≈ population nationale si WorldPop)\n\n")
 
-cat("\nPopulation par zone (top 10 par population) :\n")
+cat("Population par zone (top 10) :\n")
 print(
   diag_population %>%
     arrange(desc(population_zone)) %>%
     slice_head(n = 10) %>%
-    select(nom_zone, type_zone, population_zone, source) %>%
     rename(Zone = nom_zone, Type = type_zone,
            Population = population_zone, Source = source)
 )
 
-# ── Stockage dans DuckDB ──────────────────────────────────────────────────────
-# On crée une table dédiée "population_entrepots" dans DuckDB pour pouvoir
-# l'utiliser dans toutes les requêtes SQL des Parties V à IX.
-# Exemple d'utilisation en SQL :
-#   SELECT m.*, p.population_zone
-#   FROM matrice_od m
-#   JOIN population_entrepots p ON m.nom_origine = p.nom_zone
-duck_write(
-  diag_population %>%
-    select(nom_zone, type_zone, population_zone, source),
-  "population_entrepots"
-)
+# Stockage DuckDB (table interrogeable par les Parties V à IX).
+duck_write(diag_population, "population_entrepots")
 
-# ── Intégration dans reseau_rwanda (attribut de nœud) ─────────────────────────
-# On ajoute la population comme attribut des nœuds d'entrepôt dans le réseau sf.
-# Les nœuds non-entrepôt reçoivent NA (ils ne sont pas des zones économiques).
-# match() : pour chaque nœud, cherche si son warehouse_name est dans notre table.
-reseau_rwanda <- reseau_rwanda %>%
+# Intégration comme attribut de nœud (NA pour les nœuds non-entrepôt).
+reseau <- reseau %>%
   activate("nodes") %>%
   mutate(
     population_zone = diag_population$population_zone[
-      match(warehouse_name,
-            diag_population$nom_zone)
+      match(warehouse_name, diag_population$nom_zone)
     ]
-    # Pour les nœuds non-entrepôt, match() retourne NA → population_zone = NA.
-    # C'est le comportement voulu : seuls les entrepôts ont une population.
   )
 
-# ── Intégration dans entreposages_fictifs ─────────────────────────────────────
-# On enrichit aussi le data.frame de référence (utilisé en Partie IV.3 et VII).
-stopifnot(nrow(entreposages_fictifs) == nrow(diag_population))
-
-entreposages_fictifs <- entreposages_fictifs %>%
-  select(-any_of(c("population_zone", "source_population"))) %>%   # idempotence
-  bind_cols(
-    diag_population %>% 
-      select(population_zone, source_population = source)
-  )
-
-# Mise à jour de la table DuckDB zones_entreposage avec la population
+# ── Reconstruction de entreposages_fictifs = table de référence des nœuds ──────
+# Après la fusion, entreposages_fictifs ne décrit plus N candidats mais les
+# n_warehouses nœuds conservés (clé = nom = warehouse_name). On y remet les
+# coordonnées (depuis la géométrie du nœud) et la population définitive.
+coords_wgs <- seeds_sf %>% st_transform(4326) %>% st_coordinates()
+entreposages_fictifs <- tibble(
+  nom               = noeuds_entreposage$warehouse_name,
+  type              = noeuds_entreposage$warehouse_type,
+  pays              = noeuds_entreposage$warehouse_pays,
+  lon               = coords_wgs[, 1],
+  lat               = coords_wgs[, 2],
+  source            = "voronoi",
+  population_zone   = pop_par_wid,
+  source_population = source_pop_cellule
+)
 duck_write(entreposages_fictifs, "zones_entreposage")
 
-cat("\n✓ Population intégrée dans reseau_rwanda et DuckDB\n")
-cat("  Nœuds avec population_zone > 0 :",
-    sum(!is.na(igraph::V(reseau_rwanda %>% as_tbl_graph())$population_zone),
-        na.rm = TRUE), "\n\n")
-
-cat("✓ Partie IV.4 terminée — population_zone disponible dans :\n")
-cat("  • reseau_rwanda  (attribut de nœud)\n")
+cat("\n✓ Partie IV.6 terminée — zones_voronoi + population_zone disponibles dans :\n")
+cat("  • reseau  (attribut de nœud population_zone)\n")
 cat("  • DuckDB         (table population_entrepots)\n")
-cat("  • entreposages_fictifs (colonne population_zone)\n\n")
+cat("  • zones_voronoi  (sf : un polygone par nœud-entrepôt)\n\n")
 
 ################################################################################
 # PARTIE IV.5 — ENRICHISSEMENT PAR L'INDICE DE RICHESSE RELATIVE (RWI)
@@ -2456,12 +2497,12 @@ cat("  • entreposages_fictifs (colonne population_zone)\n\n")
 # PLACEMENT DANS LE SCRIPT :
 #   Dépend de :
 #     - entreposages_sf, entreposages_buffer (Partie IV.3)
-#     - reseau_rwanda          (Partie III)
-#     - rwanda_boundary        (Partie II.3)
+#     - reseau          (Partie III)
+#     - pays_boundary        (Partie II.3)
 #     - duck_write()           (Partie I.2)
 #   Alimente :
 #     - Transition IV.5 → V : variable p_rwi (pour diagnostics RWI)
-#     - reseau_rwanda (attribut de nœud : rwi_moyen, p_rwi)
+#     - reseau (attribut de nœud : rwi_moyen, p_rwi)
 #     - DuckDB (table richesse_entrepots)
 ################################################################################
 
@@ -2472,7 +2513,7 @@ cat("==========================================================\n\n")
 # ==============================================================================
 # IV.5.1 : Téléchargement et préparation des données RWI
 #
-# Le fichier CSV Rwanda contient une ligne par cellule de ~2,4 km² avec :
+# Le fichier CSV contient une ligne par cellule de ~2,4 km² avec :
 #   - latitude  : latitude WGS84 du centroïde de la cellule
 #   - longitude : longitude WGS84 du centroïde de la cellule
 #   - rwi       : score de richesse relative (centré sur 0, pas d'unité)
@@ -2488,7 +2529,7 @@ rwi_sf   <- NULL
 rwi_ok   <- FALSE
 
 # ── Tentative 1 : chargement depuis le cache local ────────────────────────────
-# Si le CSV Rwanda a déjà été extrait lors d'une session précédente, on
+# Si le CSV RWI a déjà été extrait lors d'une session précédente, on
 # l'utilise directement sans retélécharger le ZIP.
 if (file.exists(RWI_CSV_LOCAL)) {
   
@@ -2526,7 +2567,7 @@ if (file.exists(RWI_CSV_LOCAL)) {
 
 # ── Tentative 2 : téléchargement du ZIP et extraction ─────────────────────────
 # Le ZIP contient les 93 pays. On le télécharge une fois (~35 Mo), on extrait
-# uniquement le fichier Rwanda, et on supprime le ZIP pour libérer l'espace.
+# uniquement le fichier du pays, et on supprime le ZIP pour libérer l'espace.
 if (!rwi_ok) {
   
   cat("  Téléchargement du ZIP RWI (~35 Mo)...\n")
@@ -2540,30 +2581,30 @@ if (!rwi_ok) {
     download.file(RWI_ZIP_URL, destfile = RWI_ZIP_LOCAL,
                   mode = "wb", quiet = FALSE)
     
-    # Liste des fichiers dans le ZIP pour vérifier que Rwanda est présent.
+    # Liste des fichiers dans le ZIP pour vérifier que le pays est présent.
     # unzip(list = TRUE) ne décompresse pas — il liste uniquement le contenu.
     contenu_zip <- unzip(RWI_ZIP_LOCAL, list = TRUE)
     cat("  Fichiers dans le ZIP :", nrow(contenu_zip), "\n")
-    
-    # Vérification que le fichier Rwanda est dans le ZIP.
-    # La présence de majuscules/minuscules peut varier selon la version du ZIP (RWA_ ou rwa_).
+
+    # Vérification que le fichier pays est dans le ZIP.
+    # La présence de majuscules/minuscules peut varier selon la version du ZIP.
     # grepl() + ignore.case = TRUE gère les deux cas.
-    idx_rwanda <- grep(
-      pattern     = "rwa.*relative.*wealth",
+    idx_fichier <- grep(
+      pattern     = RWI_FICHIER,
       x           = contenu_zip$Name,
       ignore.case = TRUE
     )
-    
-    if (length(idx_rwanda) == 0) {
-      stop("Fichier Rwanda introuvable dans le ZIP.\n",
+
+    if (length(idx_fichier) == 0) {
+      stop("Fichier pays introuvable dans le ZIP (RWI_FICHIER = ", RWI_FICHIER, ").\n",
            "Fichiers disponibles : ",
            paste(head(contenu_zip$Name, 10), collapse = ", "))
     }
-    
-    nom_fichier_zip <- contenu_zip$Name[idx_rwanda[1]]
-    cat("  Fichier Rwanda dans le ZIP :", nom_fichier_zip, "\n")
-    
-    # Extraction du seul fichier Rwanda (évite de décompresser 93 pays).
+
+    nom_fichier_zip <- contenu_zip$Name[idx_fichier[1]]
+    cat("  Fichier pays dans le ZIP :", nom_fichier_zip, "\n")
+
+    # Extraction du seul fichier pays (évite de décompresser 93 pays).
     # exdir = dirname(RWI_CSV_LOCAL) : répertoire de destination.
     unzip(
       zipfile = RWI_ZIP_LOCAL,
@@ -2597,12 +2638,12 @@ if (!rwi_ok) {
   }, error = function(e) {
     cat("  ⚠ Téléchargement RWI échoué :", conditionMessage(e), "\n")
     cat("    → Téléchargement manuel : ", RWI_ZIP_URL, "\n")
-    cat("    → Extraire", RWI_FICHIER_RWANDA, "vers", RWI_CSV_LOCAL, "\n")
+    cat("    → Extraire", RWI_FICHIER, "vers", RWI_CSV_LOCAL, "\n")
     cat("    → Partie IV.5 ignorée, le modèle continue sans RWI\n\n")
   })
 }
 
-# ── Statistiques descriptives du RWI Rwanda ───────────────────────────────────
+# ── Statistiques descriptives du RWI ──────────────────────────────────────────
 if (rwi_ok) {
   
   rwi_stats <- tibble(
@@ -2614,253 +2655,133 @@ if (rwi_ok) {
     erreur_moy   = round(mean(rwi_sf$error, na.rm = TRUE), 3)
   )
   
-  cat("\n  Distribution du RWI Rwanda :\n")
+  cat("\n  Distribution du RWI :\n")
   cat("  Cellules     :", rwi_stats$n_cellules, "\n")
   cat("  Min / Max    :", rwi_stats$rwi_min, "/", rwi_stats$rwi_max, "\n")
   cat("  Médiane / Moy:", rwi_stats$rwi_median, "/", rwi_stats$rwi_mean, "\n")
   cat("  Erreur moy.  :", rwi_stats$erreur_moy, "\n\n")
   
-  # ── Rognage aux limites du Rwanda ───────────────────────────────────────────
-  # On s'assure que les cellules RWI sont bien dans le territoire rwandais
+  # ── Rognage aux limites du pays ───────────────────────────────────────────────
+  # On s'assure que les cellules RWI sont bien dans le territoire étudié
   # (le ZIP peut contenir des cellules légèrement hors frontière).
   # st_filter() avec st_intersects : conserve les points dans le polygone.
   rwi_sf <- rwi_sf %>%
-    st_filter(rwanda_boundary %>%
+    st_filter(pays_boundary %>%
                 st_buffer(dist = 1000) %>%  # 1km de marge pour les frontières
                 st_union())
   
-  cat("  Cellules après rognage Rwanda :", nrow(rwi_sf), "\n\n")
+  cat("  Cellules après rognage :", nrow(rwi_sf), "\n\n")
 }
 
 
 # ==============================================================================
-# IV.5.2 : Calcul du score RWI moyen par entrepôt (IDW dans buffer)
+# IV.5.2 : RWI moyen par cellule de Voronoï, pondéré par la population
 #
-# MÉTHODE — ANALOGIE AVEC L'USAGE DES SOLS :
-#
-#   RWI (IV.5) :
-#     Pour chaque buffer d'entrepôt, on calcule la MOYENNE PONDÉRÉE
-#     par distance inverse (IDW) des scores RWI des cellules dans le buffer.
-#     → scalaire rwi_brut (valeur centrée proche de 0, typiquement [-3, +3])
-#     → normalisé en p_rwi ∈ [0, 1] en fin de cette section
-#
-# POURQUOI IDW ET PAS UNE SIMPLE MOYENNE ?
-#   Les cellules RWI les plus proches du centroïde de l'entrepôt sont plus
-#   représentatives de son environnement immédiat que celles en périphérie.
-#   L'IDW (Inverse Distance Weighting) pondère chaque cellule par 1/d²,
-#   ce qui donne plus de poids aux cellules proches sans exclure les autres.
-#   C'est la méthode standard en géostatistique pour l'interpolation spatiale.
-#   Elle est cohérente avec l'esprit du calcul de landuse (calc_part_landuse),
-#   qui tient implicitement compte de la distance via l'intersection des buffers.
+# MÉTHODE (le RWI est une variable RELATIVE → moyenne pondérée, pas une somme) :
+#   Chaque point RWI tombant dans une cellule de Voronoï reçoit un poids égal à
+#   la population locale (somme des pixels WorldPop dans un cercle de
+#   BUFFER_POIDS_RWI_M autour du point). Le score de la cellule est la moyenne
+#   des RWI pondérée par ces poids :
+#       rwi_brut[cellule] = Σ(rwi_i · poids_i) / Σ(poids_i)
+#   Les portions densément peuplées d'une cellule pèsent ainsi davantage que ses
+#   marges désertes. Le score est ensuite normalisé en p_rwi ∈ [0, 1] (IV.5.3).
 # ==============================================================================
 
-cat("── Calcul IDW du RWI par entrepôt ────────────────────────────────────\n")
+cat("── RWI par cellule de Voronoï (moyenne pondérée population) ──────────\n")
 
-# ── Mise en cache ─────────────────────────────────────────────────────────────
-# Même logique que le cache landuse : invalider si le nombre d'entrepôts change.
-CACHE_RWI <- file.path(DIR_CACHE, "rwi_cache.rds")
-cache_rwi_valide <- FALSE
+if (rwi_ok) {
 
-if (file.exists(CACHE_RWI) && rwi_ok) {
-  
-  cache_rwi_data <- readRDS(CACHE_RWI)
-  n_zones_actuel <- nrow(entreposages_sf)
-  
-  if (!is.null(cache_rwi_data$n_zones) &&
-      cache_rwi_data$n_zones == n_zones_actuel &&
-      !is.null(cache_rwi_data$buffer_m) &&
-      cache_rwi_data$buffer_m == BUFFER_RWI_M) {
-    
-    rwi_brut_par_entrepot <- cache_rwi_data$rwi_brut_par_entrepot
-    cache_rwi_valide      <- TRUE
-    cat("  ✓ Cache RWI valide (", n_zones_actuel, "zones,",
-        BUFFER_RWI_M, "m buffer) — calcul IDW ignoré\n\n")
+  # ── Poids-population de chaque point RWI (calculé une seule fois) ────────────
+  # exact_extract somme les pixels WorldPop dans un cercle BUFFER_POIDS_RWI_M
+  # (≈ demi-maille RWI) autour de chaque point RWI → population qu'il représente.
+  if (worldpop_ok) {
+    poids_rwi <- as.numeric(exactextractr::exact_extract(
+      raster_worldpop,
+      rwi_sf %>% st_buffer(BUFFER_POIDS_RWI_M) %>%
+        st_transform(st_crs(raster_worldpop)),
+      fun = "sum", progress = FALSE
+    ))
+    # Poids plancher = 1 là où WorldPop ne voit personne (évite Σpoids = 0).
+    poids_rwi[is.na(poids_rwi) | poids_rwi <= 0] <- 1
   } else {
-    cat("  ⚠ Cache RWI invalide (changement de nombre de zones ou buffer) — recalcul IDW\n")
+    # Sans WorldPop, on retombe sur une moyenne arithmétique simple (poids = 1).
+    poids_rwi <- rep(1, nrow(rwi_sf))
   }
-}
+  rwi_sf$poids_pop <- poids_rwi
 
-# ── Fonction de calcul IDW : RWI moyen pondéré dans un buffer ─────────────────
-#
-#   calc_rwi_idw(centroide_geom, rwi_sf, rayon_m, puissance) :
-#     → moyenne IDW des scores RWI dans le buffer
-#     → scalaire réel (centré sur 0 avant normalisation)
-#
-# Les deux fonctions :
-#   - prennent une géométrie sf représentant la zone d'entrepôt en entrée
-#   - retournent un scalaire représentant l'influence de l'environnement
-#   - utilisent le même rayon de buffer (BUFFER_ENTREPOT_M)
-#
-# Paramètres :
-#   centroide_geom — géométrie sf du point-centroïde de l'entrepôt (POINT)
-#   rwi_sf         — objet sf des cellules RWI (POINT, déjà filtré sur Rwanda)
-#   rayon_m        — rayon en mètres du buffer de recherche
-#   puissance      — exposant de l'IDW (voir paramètres)
+  # ── Rattachement de chaque point RWI à sa cellule de Voronoï ─────────────────
+  # st_join + st_within : chaque point RWI hérite du warehouse_id de la cellule
+  # qui le contient. left = FALSE écarte les points hors du pays (marge de 1 km).
+  rwi_in_cell <- rwi_sf %>%
+    st_join(zones_voronoi %>% select(warehouse_id),
+            join = st_within, left = FALSE)
 
-calc_rwi_idw <- function(centroide_geom, rwi_sf, rayon_m, puissance) {
-  
-  # Encapsulation de la géométrie brute en objet sf complet avec CRS.
-  # Sans st_sfc(crs = 32735), st_is_within_distance() ne peut pas comparer
-  # les systèmes de coordonnées et lèverait une erreur.
-  centre_sf <- st_as_sf(st_sfc(centroide_geom, crs = 32735))
-  
-  # Identification des cellules RWI dans le buffer circulaire.
-  # st_is_within_distance() retourne une liste : l'élément [[1]] donne les
-  # indices des cellules de rwi_sf qui se trouvent à ≤ rayon_m du centroïde.
-  # C'est l'équivalent de "quelles zones de landuse chevauchent le buffer ?"
-  idx_candidats <- st_is_within_distance(
-    centre_sf, rwi_sf, dist = rayon_m
-  )[[1]]
-  
-  # Cas sans cellules RWI dans le buffer (zone sans données, frontière…).
-  # On retourne NA — ce cas sera géré en IV.5.3 par le fallback médiane.
-  if (length(idx_candidats) == 0) return(NA_real_)
-  
-  # Extraction des cellules candidates et calcul des distances au centroïde.
-  cellules_buf <- rwi_sf[idx_candidats, ]
-  distances_m  <- as.numeric(
-    st_distance(centre_sf, cellules_buf)
-  )
-  
-  # Plafonnement de la distance minimale pour éviter 1/0^2 = Inf.
-  # Si une cellule est exactement sur le centroïde (distance = 0), on lui
-  # donne une distance fictive de RWI_DISTANCE_MIN_M = 50m.
-  # En pratique ce cas est extrêmement rare avec des données grillées à 2,4 km.
-  distances_m <- pmax(distances_m, RWI_DISTANCE_MIN_M)
-  
-  # Calcul des poids IDW : w_i = 1 / d_i^puissance
-  # Plus une cellule est proche (d petit), plus son poids est élevé.
-  # Avec puissance = 2 :
-  #   une cellule à 100m a un poids (1/100²) = 10 000× plus élevé
-  #   qu'une cellule à 1 000m (1/1000²).
-  poids <- 1 / (distances_m ^ puissance)
-  
-  # Moyenne pondérée IDW :
-  #   rwi_idw = Σ(rwi_i × w_i) / Σ(w_i)
-  # C'est la formule standard de Shepard (1968) pour l'interpolation spatiale.
-  # Elle garantit que le résultat est dans [min(rwi_i), max(rwi_i)].
-  sum(cellules_buf$rwi * poids) / sum(poids)
-}
+  # ── Moyenne pondérée par cellule ────────────────────────────────────────────
+  rwi_cellule <- rwi_in_cell %>%
+    st_drop_geometry() %>%
+    group_by(warehouse_id) %>%
+    summarise(rwi_brut = sum(rwi * poids_pop) / sum(poids_pop),
+              .groups = "drop")
 
-# ── Calcul pour tous les entrepôts ────────────────────────────────────────────
-if (!cache_rwi_valide && rwi_ok) {
-  
-  n_zones <- nrow(entreposages_sf)
-  cat("  Calcul IDW pour", n_zones, "zones économiques...\n")
-  
-  # Initialisation du vecteur de résultats
-  rwi_brut_par_entrepot <- numeric(n_zones)
-  
-  for (i in seq_len(n_zones)) {
-    
-    # On passe la géométrie brute (pas l'objet sf entier) pour correspondre
-    # au contrat de calc_rwi_idw(), comme on le faisait avec calc_part_landuse()
-    # dans la boucle de Partie IV.3.
-    rwi_brut_par_entrepot[i] <- calc_rwi_idw(
-      centroide_geom = entreposages_sf$geometry[i],
-      rwi_sf         = rwi_sf,
-      rayon_m        = BUFFER_RWI_M,
-      puissance      = RWI_IDW_PUISSANCE
-    )
-    
-    if (i %% 10 == 0 || i == n_zones) {
-      cat("  IDW RWI :", round(i / n_zones * 100), "%\n")
-    }
+  # Vecteur aligné sur l'ordre warehouse_id (1..n_warehouses).
+  rwi_brut_par_wid <- rwi_cellule$rwi_brut[
+    match(seq_len(n_warehouses), rwi_cellule$warehouse_id)
+  ]
+
+  # Cellules sans aucun point RWI (rare) → score du point RWI le plus proche.
+  manquants_rwi <- which(is.na(rwi_brut_par_wid))
+  if (length(manquants_rwi) > 0) {
+    idx_proche <- st_nearest_feature(seeds_sf[manquants_rwi, ], rwi_sf)
+    rwi_brut_par_wid[manquants_rwi] <- rwi_sf$rwi[idx_proche]
+    cat("  Cellules sans point RWI (plus proche utilisé) :",
+        length(manquants_rwi), "\n")
   }
-  
-  # ── Sauvegarde du cache ─────────────────────────────────────────────────────
-  saveRDS(
-    list(
-      rwi_brut_par_entrepot = rwi_brut_par_entrepot,
-      n_zones               = nrow(entreposages_sf),  
-      buffer_m              = BUFFER_RWI_M,
-      puissance             = RWI_IDW_PUISSANCE,
-      date_creation         = Sys.time()
-    ),
-    CACHE_RWI
-  )
-  cat("  ✓ Cache RWI sauvegardé :", CACHE_RWI, "\n\n")
-  
-} else if (!rwi_ok) {
-  
-  # Si le téléchargement a échoué, on remplace par la valeur neutre 0
-  # (correspond à la richesse médiane du Rwanda — ni riche ni pauvre).
-  # Le modèle gravitaire peut tourner sans RWI, juste avec moins de précision.
-  cat("  ⚠ RWI indisponible — valeurs neutres (0) utilisées pour tous les entrepôts\n\n")
-  rwi_brut_par_entrepot <- rep(0, nrow(entreposages_sf))
+
+} else {
+  # RWI indisponible → score neutre 0 pour tous (le modèle tourne sans RWI).
+  cat("  ⚠ RWI indisponible — valeurs neutres (0) pour tous les nœuds\n")
+  rwi_brut_par_wid <- rep(0, n_warehouses)
 }
 
 
 # ==============================================================================
-# IV.5.3 : Normalisation 
+# IV.5.3 : Normalisation min-max → p_rwi ∈ [0, 1]
 #
-# Le score IDW brut est centré sur 0 à l'échelle international et peut être négatif (zones pauvres).
-# Pour l'utiliser on normalise avec une transformation min-max sur l'ensemble des scores Rwanda.
-#
-# FORMULE :
-#   p_rwi = (rwi_brut - min_entrepôt) / (max_entrepôt - min_entrepôt)
-#
-# Avec cette normalisation :
-#   p_rwi = 0 → zone la plus pauvre de l'échantillon 
-#   p_rwi = 1 → zone la plus riche de l'échantillon 
-#   p_rwi = 0.5 → niveau médian national
-#
-# IMPORTANTE PRÉCAUTION — ÉCHELLE RELATIVE :
-#   Le RWI est relatif au Rwanda (pas une richesse absolue mondiale).
-#   Un p_rwi = 0.9 au Rwanda ne correspond pas à p_rwi = 0.9 en France.
-#   Ce score ne dit rien sur la richesse absolue, uniquement sur le
-#   positionnement d'une zone dans la distribution nationale.
+# Le score brut est centré sur 0 (échelle internationale, parfois négatif). On
+# le normalise sur l'ensemble des nœuds : 0 = nœud le plus pauvre, 1 = le plus
+# riche. PRÉCAUTION : score RELATIF au pays, pas une richesse absolue mondiale.
 # ==============================================================================
 
 cat("── Normalisation et intégration des scores RWI ───────────────────────\n")
 
-# ── Imputation des NA (entrepôts sans cellule RWI dans le buffer) ─────────────
-# Si un entrepôt n'a aucune cellule RWI dans son buffer (rare : frontière,
-# zone très isolée), on lui affecte la médiane nationale comme valeur neutre.
-n_na_rwi <- sum(is.na(rwi_brut_par_entrepot))
+# Imputation des éventuels NA par la médiane (valeur neutre).
+n_na_rwi <- sum(is.na(rwi_brut_par_wid))
 if (n_na_rwi > 0) {
-  mediane_rwi <- median(rwi_brut_par_entrepot, na.rm = TRUE)
-  cat("  Entrepôts sans cellule RWI :", n_na_rwi,
-      "→ imputation médiane (", round(mediane_rwi, 3), ")\n")
-  rwi_brut_par_entrepot[is.na(rwi_brut_par_entrepot)] <- mediane_rwi
+  rwi_brut_par_wid[is.na(rwi_brut_par_wid)] <-
+    median(rwi_brut_par_wid, na.rm = TRUE)
 }
 
-# ── Normalisation min-max ─────────────────────────────────────────────────────
-# rescale() du package scales effectue la transformation min-max en une ligne.
-# to = c(0, 1) : borne inférieure et supérieure de l'intervalle cible.
-# La normalisation est calculée sur les scores ENTREPÔTS (pas sur le Rwanda
-# entier) pour que les extrêmes correspondent aux zones réellement modélisées.
-rwi_min_entrepots <- min(rwi_brut_par_entrepot)
-rwi_max_entrepots <- max(rwi_brut_par_entrepot)
-
-p_rwi <- if (rwi_max_entrepots > rwi_min_entrepots) {
-  # Cas normal : il y a de la variabilité entre entrepôts
-  rescale(rwi_brut_par_entrepot, to = c(0, 1))
+# rescale() (package scales) : transformation min-max en une ligne.
+rwi_min <- min(rwi_brut_par_wid)
+rwi_max <- max(rwi_brut_par_wid)
+p_rwi <- if (rwi_max > rwi_min) {
+  rescale(rwi_brut_par_wid, to = c(0, 1))
 } else {
-  # Cas dégénéré : tous les entrepôts ont le même score (données manquantes…)
-  # → valeur neutre 0.5 pour tous (pas d'effet sur les profils)
-  rep(0.5, nrow(entreposages_sf))
+  rep(0.5, n_warehouses)   # cas dégénéré : tous les nœuds ont le même score
 }
 
-cat("  Score p_rwi après normalisation :\n")
-cat("  Min :", round(min(p_rwi), 3), "| Max :", round(max(p_rwi), 3),
-    "| Médiane :", round(median(p_rwi), 3), "\n\n")
+cat("  Score p_rwi : min =", round(min(p_rwi), 3),
+    "| médiane =", round(median(p_rwi), 3),
+    "| max =", round(max(p_rwi), 3), "\n\n")
 
-# ── Vérification d'alignement avant construction du tableau ───────────────────
-# rwi_brut_par_entrepot doit avoir exactement autant d'éléments que entreposages_sf
-# (référence des zones économiques actives). Un désalignement ici provoquerait
-# une attribution erronée des scores RWI à des zones qui ne sont pas les leurs.
-# C'est le même contrat que celui utilisé en IV.4.D pour les vecteurs population.
-stopifnot(
-  length(rwi_brut_par_entrepot) == nrow(entreposages_sf),
-  length(p_rwi)                 == nrow(entreposages_sf)
-)
+stopifnot(length(rwi_brut_par_wid) == n_warehouses,
+          length(p_rwi)            == n_warehouses)
 
-# ── Tableau de synthèse ───────────────────────────────────────────────────────
+# ── Tableau de synthèse (aligné sur noeuds_entreposage) ───────────────────────
 diag_rwi <- tibble(
-  nom_zone   = entreposages_fictifs$nom,
-  type_zone  = entreposages_fictifs$type,
-  rwi_brut   = round(rwi_brut_par_entrepot, 3),
+  nom_zone   = noeuds_entreposage$warehouse_name,
+  type_zone  = noeuds_entreposage$warehouse_type,
+  rwi_brut   = round(rwi_brut_par_wid, 3),
   p_rwi      = round(p_rwi, 3),
   classe_rwi = case_when(
     p_rwi >= 0.75 ~ "Très riche",
@@ -2870,290 +2791,218 @@ diag_rwi <- tibble(
   )
 )
 
-cat("Scores RWI par zone (classement décroissant) :\n")
+cat("Scores RWI par zone (top 10) :\n")
 print(
   diag_rwi %>%
     arrange(desc(p_rwi)) %>%
-    select(nom_zone, type_zone, rwi_brut, p_rwi, classe_rwi) %>%
+    slice_head(n = 10) %>%
     rename(Zone = nom_zone, Type = type_zone,
-           RWI_brut = rwi_brut, p_rwi = p_rwi, Classe = classe_rwi)
+           RWI_brut = rwi_brut, Classe = classe_rwi)
 )
 cat("\n")
 
-# ── Stockage dans DuckDB ──────────────────────────────────────────────────────
-# La table "richesse_entrepots" est utilisable dans toutes les requêtes
-# SQL des Parties V à IX, par exemple pour pondérer la demande par le niveau
-# de richesse dans les exports ou analyses de vulnérabilité.
-duck_write(
-  diag_rwi %>%
-    select(nom_zone, type_zone, rwi_brut, p_rwi, classe_rwi),
-  "richesse_entrepots"
-)
-cat("✓ Table richesse_entrepots créée dans DuckDB\n")
+# Stockage DuckDB (table interrogeable par les Parties V à IX).
+duck_write(diag_rwi, "richesse_entrepots")
 
-# ── Intégration dans reseau_rwanda (attribut de nœud sfnetworks) ──────────────
-# On ajoute rwi_brut et p_rwi comme attributs des nœuds d'entrepôt.
-# Les nœuds non-entrepôt reçoivent NA (même logique que population_zone).
-# match() : pour chaque nœud, trouve si son warehouse_name est dans diag_rwi.
-reseau_rwanda <- reseau_rwanda %>%
+# Intégration comme attributs de nœud (NA pour les nœuds non-entrepôt).
+reseau <- reseau %>%
   activate("nodes") %>%
   mutate(
-    rwi_brut = diag_rwi$rwi_brut[
-      match(warehouse_name, diag_rwi$nom_zone)
-    ],
-    p_rwi    = diag_rwi$p_rwi[
-      match(warehouse_name, diag_rwi$nom_zone)
-    ]
+    rwi_brut = diag_rwi$rwi_brut[match(warehouse_name, diag_rwi$nom_zone)],
+    p_rwi    = diag_rwi$p_rwi[match(warehouse_name, diag_rwi$nom_zone)]
   )
 
-# ── Intégration dans entreposages_fictifs ─────────────────────────────────────
-# Mise à jour du data.frame de référence pour le modèle gravitaire (VII.2)
-# et les exports CSV finaux (VIII.3).
+# Enrichissement de la table de référence des nœuds.
 stopifnot(nrow(entreposages_fictifs) == nrow(diag_rwi))
-
 entreposages_fictifs <- entreposages_fictifs %>%
   select(-any_of(c("rwi_brut", "p_rwi", "classe_rwi"))) %>%
-  bind_cols(
-    diag_rwi %>% select(rwi_brut, p_rwi, classe_rwi)
-  )
-
-# Mise à jour de la table DuckDB
+  bind_cols(diag_rwi %>% select(rwi_brut, p_rwi, classe_rwi))
 duck_write(entreposages_fictifs, "zones_entreposage")
 
-cat("✓ rwi_brut et p_rwi intégrés dans reseau_rwanda et DuckDB\n\n")
-
-cat("✓ Partie IV.5 terminée — p_rwi disponible dans :\n")
-cat("  • reseau_rwanda  (attribut de nœud : rwi_brut, p_rwi)\n")
+cat("✓ Partie IV.5 terminée — rwi_brut, p_rwi disponibles dans :\n")
+cat("  • reseau  (attributs de nœud : rwi_brut, p_rwi)\n")
 cat("  • DuckDB         (table richesse_entrepots)\n")
 cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 
 ################################################################################
-# PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022
+# PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022 (par nœud-entrepôt / Voronoï)
 #
-# OBJECTIF : Construire emploi_zone_secteur_all[i, s] — matrice
-#   nrow(entreposages_sf) × N_SECTEURS d'effectifs absolus par zone et secteur.
-#   Elle alimente le modèle MRIO (03_transport.R) via le poids composite :
+# OBJECTIF : Construire emploi_zone_secteur[i, s] — matrice n_warehouses ×
+#   N_SECTEURS d'effectifs absolus par NŒUD-ENTREPÔT et secteur. Elle alimente
+#   le modèle MRIO (03_transport.R) via le poids composite :
 #     w[i,s] = α × (emploi[i,s] / emploi_national[s])
 #            + (1-α) × (p_rwi[i] / Σ_j p_rwi[j])
 #     x[i,s] = production_totale[s] × w[i,s]
-#   où α = ALPHA_EMPLOI_RWI (00_parametres.R). Le RWI intervient donc comme
-#   correcteur de productivité uniforme sur tous les secteurs.
+#   où α = ALPHA_EMPLOI_RWI (00_parametres.R).
 #
-#   Hypothèse : toutes les zones ont des données RPHC5 2022 — pas de fallback
-#   qualitatif. Le script s'arrête si le fichier est absent ou si la jointure
-#   GADM échoue.
+# MÉTHODE (découpage existant, aligné sur les nœuds Voronoï) :
+#   L'emploi est connu au niveau DISTRICT (RPHC5/GADM). On le répartit
+#   ÉQUITABLEMENT entre les nœuds-entrepôts situés dans le district
+#   (emploi_district ÷ nombre de nœuds du district). Pour ne perdre aucun emploi,
+#   un district SANS nœud à l'intérieur est rattaché au nœud le plus proche : le
+#   total national d'emploi (marge des secteurs, contrainte Furness) est ainsi
+#   conservé.
 #
 # DÉPENDANCES :
-#   - entreposages_sf, entreposages_fictifs (Partie IV.3)
-#   - rwanda_districts_gadm         (Partie IV.4.C — rechargé si absent)
+#   - seeds_sf, noeuds_entreposage   (Partie IV.3-bis) — nœuds conservés
+#   - pays_districts_gadm          (Partie IV.4.C — rechargé si absent)
 #   - SECTEURS, N_SECTEURS, RPHC5_CORRESPONDANCE_SECTEURS (Paramètres)
 # ALIMENTE :
-#   - Transition IV.5→V   : emploi_zone_secteur_all
-#   - DuckDB              : table "diag_emploi"
+#   - Transition IV.5→V : emploi_zone_secteur (= emploi_zone_secteur_all)
+#   - DuckDB            : table "diag_emploi"
 ################################################################################
 
 cat("==========================================================\n")
-cat("  PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022\n")
+cat("  PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022 (par nœud)\n")
 cat("==========================================================\n\n")
-
-# Matrice d'emploi absolu par zone et par secteur (n_zones × N_SECTEURS).
-emploi_zone_secteur_all <- matrix(
-  0,
-  nrow     = nrow(entreposages_sf),
-  ncol     = N_SECTEURS,
-  dimnames = list(entreposages_fictifs$nom, SECTEURS)
-)
 
 if (!file.exists(RPHC5_EMPLOI_CSV_PATH)) {
   stop("Fichier RPHC5 emploi introuvable : ", RPHC5_EMPLOI_CSV_PATH,
        "\n  → Télécharger sur https://www.statistics.gov.rw/datasource/census-2022")
 }
-    
-    # ── Chargement du CSV d'emploi RPHC5 ──────────────────────────────────────
-    rphc5_emploi_raw <- read_csv(RPHC5_EMPLOI_CSV_PATH, show_col_types = FALSE)
-    
-    cat("  CSV emploi RPHC5 chargé :", nrow(rphc5_emploi_raw), "lignes\n")
-    cat("  Colonnes :", paste(names(rphc5_emploi_raw), collapse = ", "), "\n\n")
-    
-    # Vérification des colonnes déclarées dans RPHC5_CORRESPONDANCE_SECTEURS
-    cols_attendues  <- names(RPHC5_CORRESPONDANCE_SECTEURS)
-    cols_manquantes <- cols_attendues[!cols_attendues %in% names(rphc5_emploi_raw)]
-    if (length(cols_manquantes) > 0) {
-      warning("  ⚠ Colonnes manquantes : ",
-              paste(cols_manquantes, collapse = ", "),
-              "\n  Adapter RPHC5_CORRESPONDANCE_SECTEURS dans les paramètres.")
+
+# ── Chargement et nettoyage du CSV d'emploi RPHC5 ─────────────────────────────
+rphc5_emploi_raw <- read_csv(RPHC5_EMPLOI_CSV_PATH, show_col_types = FALSE)
+cat("  CSV emploi RPHC5 chargé :", nrow(rphc5_emploi_raw), "lignes\n")
+
+cols_attendues  <- names(RPHC5_CORRESPONDANCE_SECTEURS)
+cols_manquantes <- cols_attendues[!cols_attendues %in% names(rphc5_emploi_raw)]
+if (length(cols_manquantes) > 0) {
+  warning("  ⚠ Colonnes manquantes : ", paste(cols_manquantes, collapse = ", "),
+          "\n  Adapter RPHC5_CORRESPONDANCE_SECTEURS dans les paramètres.")
+}
+
+# Normalisation des noms de district (même translittération que IV.4.C).
+rphc5_emploi <- rphc5_emploi_raw %>%
+  rename(district = any_of(RPHC5_COL_DISTRICT_EMPLOI)) %>%
+  mutate(
+    district_clean = iconv(str_to_lower(str_trim(district)),
+                           from = "UTF-8", to = "ASCII//TRANSLIT"),
+    across(all_of(intersect(cols_attendues, names(.))),
+           ~ suppressWarnings(as.numeric(str_remove_all(as.character(.), "[,\\s]"))))
+  ) %>%
+  {
+    cols_presentes <- intersect(cols_attendues, names(.))
+    if (!"emploi_total" %in% names(.) && length(cols_presentes) > 0) {
+      mutate(., emploi_total = rowSums(select(., all_of(cols_presentes)), na.rm = TRUE))
+    } else { . }
+  }
+
+cat("  Districts après nettoyage :", nrow(rphc5_emploi), "\n")
+
+# ── Rechargement de GADM si absent (session interrompue depuis IV.4.C) ─────────
+if (!exists("pays_districts_gadm") || is.null(pays_districts_gadm)) {
+  cat("  Retéléchargement des frontières GADM...\n")
+  pays_districts_gadm <- tryCatch({
+    geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
+      st_as_sf() %>%
+      st_transform(crs = 32735) %>%
+      mutate(district_clean = iconv(str_to_lower(str_trim(NAME_2)),
+                                    from = "UTF-8", to = "ASCII//TRANSLIT")) %>%
+      select(district_gadm = NAME_2, district_clean, geometry)
+  }, error = function(e) {
+    cat("  ⚠ GADM indisponible :", conditionMessage(e), "\n"); NULL
+  })
+}
+
+if (is.null(pays_districts_gadm)) {
+  stop("GADM indisponible — impossible de construire emploi_zone_secteur.")
+}
+
+# ── Jointure GADM × emploi RPHC5 ──────────────────────────────────────────────
+cols_emploi_disponibles <- intersect(c(cols_attendues, "emploi_total"),
+                                     names(rphc5_emploi))
+
+districts_avec_emploi <- pays_districts_gadm %>%
+  left_join(rphc5_emploi %>% select(district_clean, all_of(cols_emploi_disponibles)),
+            by = "district_clean")
+
+n_sans_emploi <- sum(is.na(districts_avec_emploi$emploi_total))
+cat("  Jointure GADM × emploi :",
+    nrow(districts_avec_emploi) - n_sans_emploi, "/",
+    nrow(districts_avec_emploi), "districts appariés\n")
+
+# ── District de chaque nœud-entrepôt (point dans polygone, repli plus proche) ──
+node_join <- seeds_sf %>%
+  st_join(districts_avec_emploi %>% select(district_clean),
+          join = st_within, largest = TRUE)
+node_district <- node_join$district_clean
+manquants_nd  <- which(is.na(node_district))
+if (length(manquants_nd) > 0) {
+  idx_proche <- st_nearest_feature(seeds_sf[manquants_nd, ], districts_avec_emploi)
+  node_district[manquants_nd] <- districts_avec_emploi$district_clean[idx_proche]
+  cat("  Nœuds hors district (rattachés au plus proche) :", length(manquants_nd), "\n")
+}
+
+# ── Répartition de l'emploi de chaque district sur ses nœuds ───────────────────
+# Pour chaque district : on répartit ses effectifs (par colonne RPHC5)
+# équitablement entre les nœuds qu'il contient ; s'il n'en contient aucun, on
+# l'attribue entièrement au nœud le plus proche (aucun emploi perdu).
+emploi_node_cols <- matrix(
+  0, nrow = n_warehouses, ncol = length(cols_emploi_disponibles),
+  dimnames = list(noeuds_entreposage$warehouse_name, cols_emploi_disponibles)
+)
+
+for (d in seq_len(nrow(districts_avec_emploi))) {
+  vals <- vapply(cols_emploi_disponibles, function(cc) {
+    v <- districts_avec_emploi[[cc]][d]; if (is.na(v)) 0 else as.numeric(v)
+  }, numeric(1))
+  if (all(vals == 0)) next
+
+  nodes_d <- which(node_district == districts_avec_emploi$district_clean[d])
+  if (length(nodes_d) == 0) {
+    # District orphelin → nœud le plus proche de son centroïde.
+    nodes_d <- st_nearest_feature(
+      st_centroid(districts_avec_emploi[d, ]), seeds_sf
+    )
+  }
+  for (nd in nodes_d) {
+    emploi_node_cols[nd, ] <- emploi_node_cols[nd, ] + vals / length(nodes_d)
+  }
+}
+
+cat("  Nœuds par district : min =",
+    min(tabulate(match(node_district, districts_avec_emploi$district_clean))),
+    "| max =", max(tabulate(match(node_district, districts_avec_emploi$district_clean))), "\n")
+
+# ── Ventilation des colonnes RPHC5 vers les 11 secteurs du modèle ──────────────
+emploi_zone_secteur <- matrix(
+  0, nrow = n_warehouses, ncol = N_SECTEURS,
+  dimnames = list(noeuds_entreposage$warehouse_name, SECTEURS)
+)
+for (col_csv in intersect(cols_attendues, colnames(emploi_node_cols))) {
+  corresp <- RPHC5_CORRESPONDANCE_SECTEURS[[col_csv]]
+  for (secteur_m in names(corresp)) {
+    if (secteur_m %in% SECTEURS) {
+      emploi_zone_secteur[, secteur_m] <-
+        emploi_zone_secteur[, secteur_m] + emploi_node_cols[, col_csv] * corresp[[secteur_m]]
     }
-    
-    # ── Nettoyage (même normalisation des noms de district que IV.4.C) ────────
-    rphc5_emploi <- rphc5_emploi_raw %>%
-      rename(district = any_of(RPHC5_COL_DISTRICT_EMPLOI)) %>%
-      mutate(
-        district_clean = iconv(str_to_lower(str_trim(district)),
-                               from = "UTF-8", to = "ASCII//TRANSLIT"),
-        # Suppression des espaces / virgules parfois présents dans les exports NISR
-        across(all_of(intersect(cols_attendues, names(.))),
-               ~ suppressWarnings(as.numeric(str_remove_all(as.character(.), "[,\\s]"))))
-      ) %>%
-      # Calcul de l'emploi total si la colonne n'est pas déjà dans le fichier
-      {
-        cols_presentes <- intersect(cols_attendues, names(.))
-        if (!"emploi_total" %in% names(.) && length(cols_presentes) > 0) {
-          mutate(., emploi_total = rowSums(select(., all_of(cols_presentes)),
-                                           na.rm = TRUE))
-        } else { . }
-      }
-    
-    cat("  Districts après nettoyage :", nrow(rphc5_emploi), "\n")
-    
-    # ── Rechargement de GADM si absent de l'environnement ─────────────────────
-    # rwanda_districts_gadm a été construit en IV.4.C. Si la session a été
-    # interrompue entre IV.4.C et IV.4.F, on le retélécharge ici.
-    if (!exists("rwanda_districts_gadm") || is.null(rwanda_districts_gadm)) {
-      cat("  Retéléchargement des frontières GADM...\n")
-      rwanda_districts_gadm <- tryCatch({
-        geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
-          st_as_sf() %>%
-          st_transform(crs = 32735) %>%
-          mutate(district_clean = iconv(str_to_lower(str_trim(NAME_2)),
-                                        from = "UTF-8", to = "ASCII//TRANSLIT")) %>%
-          select(district_gadm = NAME_2, district_clean, geometry)
-      }, error = function(e) {
-        cat("  ⚠ GADM indisponible :", conditionMessage(e), "\n"); NULL
-      })
-    }
-    
-    if (!is.null(rwanda_districts_gadm)) {
-      
-      # ── Jointure GADM × emploi RPHC5 ────────────────────────────────────────
-      cols_emploi_disponibles <- intersect(
-        c(cols_attendues, "emploi_total"),
-        names(rphc5_emploi)
-      )
-      
-      districts_avec_emploi <- rwanda_districts_gadm %>%
-        left_join(
-          rphc5_emploi %>% select(district_clean, all_of(cols_emploi_disponibles)),
-          by = "district_clean"
-        )
-      
-      n_sans_emploi <- sum(is.na(districts_avec_emploi$emploi_total))
-      cat("  Jointure GADM × emploi :",
-          nrow(districts_avec_emploi) - n_sans_emploi, "/",
-          nrow(districts_avec_emploi), "districts appariés\n")
-      if (n_sans_emploi > 0) {
-        cat("  Districts non appariés :",
-            paste(districts_avec_emploi$district_gadm[
-              is.na(districts_avec_emploi$emploi_total)], collapse = ", "), "\n")
-        cat("  → Vérifier l'orthographe dans", RPHC5_EMPLOI_CSV_PATH, "\n")
-      }
-      
-      # ── Jointure spatiale entrepôts × districts ─────────────────────────────
-      # Chaque entrepôt hérite des données d'emploi du district qui le contient.
-      # L'emploi est ensuite divisé par le nombre d'entrepôts dans le même
-      # district pour éviter les doubles comptes (si N entrepôts partagent un
-      # district, chacun reçoit 1/N de l'emploi total du district).
-      entrepots_join_emploi <- entreposages_sf %>%
-        st_join(
-          districts_avec_emploi,
-          join    = st_within,
-          largest = TRUE
-        )
+  }
+}
 
-      # Fallback nearest pour les entrepôts hors frontière (postes frontières…)
-      manquants_idx_e <- which(is.na(entrepots_join_emploi$emploi_total))
-      if (length(manquants_idx_e) > 0) {
-        idx_proche_e <- st_nearest_feature(
-          entreposages_sf[manquants_idx_e, ], districts_avec_emploi
-        )
-        for (col_e in cols_emploi_disponibles) {
-          entrepots_join_emploi[[col_e]][manquants_idx_e] <-
-            districts_avec_emploi[[col_e]][idx_proche_e]
-        }
-        cat("  Entrepôts hors district (fallback nearest) :",
-            length(manquants_idx_e), "\n")
-      }
+# Plus de distinction N vs n_warehouses : la matrice « all » = matrice par nœud.
+emploi_zone_secteur_all <- emploi_zone_secteur
 
-      # ── Division par le nombre d'entrepôts par district (anti double-compte) ──
-      # On compte combien d'entrepôts partagent le même district (via district_gadm),
-      # puis on divise toutes les colonnes d'emploi par ce nombre.
-      n_entrepots_par_district <- entrepots_join_emploi %>%
-        st_drop_geometry() %>%
-        count(district_gadm, name = "n_entrepots_district")
+# Alerte si un nœud a un emploi total nul.
+zones_nulles <- which(rowSums(emploi_zone_secteur) == 0)
+if (length(zones_nulles) > 0) {
+  warning(length(zones_nulles), " nœud(s) avec emploi nul après RPHC5 : ",
+          paste(noeuds_entreposage$warehouse_name[zones_nulles], collapse = ", "))
+}
 
-      entrepots_join_emploi <- entrepots_join_emploi %>%
-        left_join(n_entrepots_par_district, by = "district_gadm") %>%
-        mutate(across(
-          all_of(cols_emploi_disponibles),
-          ~ . / n_entrepots_district
-        ))
-
-      cat("  Nombre d'entrepôts par district : min =",
-          min(n_entrepots_par_district$n_entrepots_district),
-          "| max =", max(n_entrepots_par_district$n_entrepots_district),
-          "| médiane =", median(n_entrepots_par_district$n_entrepots_district), "\n")
-
-      # ── Stockage de l'emploi total (vecteur nrow(entreposages_sf)) ──────────
-      emploi_total_par_entrepot <- as.numeric(entrepots_join_emploi$emploi_total)
-      emploi_total_par_entrepot[is.na(emploi_total_par_entrepot)] <-
-        median(emploi_total_par_entrepot, na.rm = TRUE)
-
-      cat("  Emploi total (après division) : min =", round(min(emploi_total_par_entrepot)),
-          "| max =", round(max(emploi_total_par_entrepot)), "\n\n")
-      
-      # ── Construction de l'emploi sectoriel absolu par zone ──────────────────
-      # emploi_zone_secteur_all[i, s] = effectifs bruts du RPHC5 pour la zone i
-      # et le secteur s, ventilés via RPHC5_CORRESPONDANCE_SECTEURS.
-      # Composante emploi du poids de production MRIO : x[i,s] dépend à la fois
-      # de emploi_zone_secteur_all[i,s] (pondéré par α) et de p_rwi[i] (pondéré
-      # par 1-α). Voir le poids composite w[i,s] dans 03_transport.R VII.2.B.
-      cat("  Construction de l'emploi sectoriel par zone...\n")
-
-      for (i in seq_len(nrow(entreposages_sf))) {
-
-        emploi_secteur_i <- numeric(N_SECTEURS)
-        names(emploi_secteur_i) <- SECTEURS
-
-        for (col_csv in intersect(cols_attendues, names(entrepots_join_emploi))) {
-          val_col <- as.numeric(entrepots_join_emploi[[col_csv]][i])
-          if (is.na(val_col) || val_col == 0) next
-          corresp <- RPHC5_CORRESPONDANCE_SECTEURS[[col_csv]]
-          for (secteur_m in names(corresp)) {
-            if (secteur_m %in% SECTEURS) {
-              emploi_secteur_i[secteur_m] <-
-                emploi_secteur_i[secteur_m] + val_col * corresp[[secteur_m]]
-            }
-          }
-        }
-
-        emploi_zone_secteur_all[i, ] <- emploi_secteur_i
-      }
-
-      # Vérification : aucune zone ne doit avoir un emploi total nul.
-      zones_nulles <- which(rowSums(emploi_zone_secteur_all) == 0)
-      if (length(zones_nulles) > 0) {
-        warning(length(zones_nulles), " zone(s) avec emploi nul après RPHC5 : ",
-                paste(entreposages_fictifs$nom[zones_nulles], collapse = ", "),
-                "\n  → Vérifier la jointure GADM ou le fichier ", RPHC5_EMPLOI_CSV_PATH)
-      }
-
-    } else {
-      stop("GADM indisponible — impossible de construire emploi_zone_secteur_all.")
-    }
-
-
-# Emploi total par zone : somme des secteurs (utile pour diagnostics)
-emploi_total_par_entrepot <- rowSums(emploi_zone_secteur_all)
-
-# ── Tableau de diagnostic et stockage dans DuckDB ─────────────────────────────
+# ── Diagnostic et stockage DuckDB ─────────────────────────────────────────────
+emploi_total_par_entrepot <- rowSums(emploi_zone_secteur)
 diag_emploi <- tibble(
-  nom_zone     = entreposages_fictifs$nom,
-  type_zone    = entreposages_fictifs$type,
+  nom_zone     = noeuds_entreposage$warehouse_name,
+  type_zone    = noeuds_entreposage$warehouse_type,
   emploi_total = emploi_total_par_entrepot
 )
 duck_write(diag_emploi, "diag_emploi")
 
-cat("✓ Partie IV.4.F terminée\n")
-cat("  • emploi_zone_secteur_all [", nrow(entreposages_sf), "×", N_SECTEURS, "]\n\n")
+cat("  Emploi total par nœud : min =", round(min(emploi_total_par_entrepot)),
+    "| max =", round(max(emploi_total_par_entrepot)), "\n")
+cat("✓ Partie IV.4.F terminée — emploi_zone_secteur [",
+    n_warehouses, "×", N_SECTEURS, "]\n\n")
 
 ################################################################################
 # TRANSITION IV.5 → V — EXTRACTION DE POP_I ET EMPLOI_ZONE_SECTEUR
@@ -3177,8 +3026,9 @@ pop_i <- replace_na(pop_i, median(pop_i, na.rm = TRUE))
 stopifnot(length(pop_i) == n_warehouses)
 
 # ── Emploi sectoriel absolu pour noeuds_entreposage ───────────────────────────
-# Extraction de la sous-matrice des zones actives (après déduplication).
-# emploi_zone_secteur (n_warehouses × N_SECTEURS) est l'entrée directe du MRIO.
+# emploi_zone_secteur (n_warehouses × N_SECTEURS) est déjà calculé par nœud
+# (Partie IV.4.F). On se contente de garantir l'ordre des lignes = ordre des
+# warehouse_id (le match est une simple ré-indexation de sécurité).
 emploi_zone_secteur <- emploi_zone_secteur_all[
   match(noeuds_entreposage$warehouse_name, rownames(emploi_zone_secteur_all)),
   , drop = FALSE
@@ -3195,17 +3045,17 @@ cat("  Population     : min =",
 
 # ── Indices des nœuds-entrepôts dans le graphe igraph ─────────────────────────
 # warehouse_nodes_base est un vecteur d'entiers : chaque valeur est la position
-# (l'indice) d'un nœud-entrepôt dans le graphe igraph sous-jacent à reseau_rwanda.
+# (l'indice) d'un nœud-entrepôt dans le graphe igraph sous-jacent à reseau.
 # Il est distinct de noeuds_entreposage (qui est un tibble avec noms et types) :
 # ici on ne stocke que les numéros de lignes, ce dont igraph::distances() a besoin
 # pour lancer Dijkstra depuis les bons points de départ.
 # Exemple : warehouse_nodes_base = c(42, 187, 503, ...) signifie que les nœuds
 # n°42, 187, 503… du graphe sont des entrepôts.
-# Ce vecteur est calculé ici car is_warehouse est défini en IV.3 et reseau_rwanda
+# Ce vecteur est calculé ici car is_warehouse est défini en IV.3 et reseau
 # est complet. Il est ensuite transmis à 02_couts.R et 03_transport.R via
 # persist_entreposages.rds.
 warehouse_nodes_base <- which(
-  igraph::V(reseau_rwanda %>% as_tbl_graph())$is_warehouse
+  igraph::V(reseau %>% as_tbl_graph())$is_warehouse
 )
 cat("✓ warehouse_nodes_base :", length(warehouse_nodes_base),
     "nœuds-entrepôts indexés\n\n")
@@ -3218,9 +3068,9 @@ cat("=== Sauvegarde des objets persistants (01_reseau) ===\n")
 
 saveRDS(
   list(
-    rwanda_boundary     = rwanda_boundary,
-    rwanda_national     = rwanda_national,
-    rwanda_provinces    = rwanda_provinces,
+    pays_boundary     = pays_boundary,
+    pays_national     = pays_national,
+    pays_provinces    = pays_provinces,
     lacs_raw            = lacs_raw,
     lacs_ok             = lacs_ok,
     parcs_raw           = if (exists("parcs_raw")) parcs_raw else NULL,
@@ -3235,9 +3085,9 @@ saveRDS(
 
 saveRDS(
   list(
-    reseau_rwanda      = reseau_rwanda,
-    routes_rwanda      = routes_rwanda,
-    n_aretes_physiques = igraph::ecount(reseau_rwanda %>% as_tbl_graph()),
+    reseau      = reseau,
+    routes      = routes,
+    n_aretes_physiques = igraph::ecount(reseau %>% as_tbl_graph()),
     date_creation      = Sys.time()
   ),
   PERSIST_RESEAU_BASE
@@ -3247,15 +3097,18 @@ saveRDS(
   list(
     entreposages_fictifs          = entreposages_fictifs,
     entreposages_sf               = entreposages_sf,
-    entreposages_buffer           = entreposages_buffer,
+    # zones_voronoi : pavage du pays (un polygone par nœud-entrepôt). Chaque
+    # cellule = l'espace rattaché à l'entrepôt le plus proche, dont il hérite des
+    # caractéristiques (population, RWI, emploi). Remplace les anciens buffers.
+    zones_voronoi                 = zones_voronoi,
     entreposages_avec_snap        = entreposages_avec_snap,
     noeuds_entreposage            = noeuds_entreposage,
     n_warehouses                  = n_warehouses,
     warehouse_nodes_base          = warehouse_nodes_base,
     # Emploi sectoriel absolu pour le modèle MRIO
-    # emploi_zone_secteur[i,s] : effectifs bruts zone i × secteur s (n_warehouses × N_SECTEURS)
-    # emploi_zone_secteur_all  : même matrice sur l'ensemble entreposages_sf (avant dédup.)
-    # pop_i : population par zone (vecteur n_warehouses), pour la demande finale MRIO
+    # emploi_zone_secteur[i,s] : effectifs par nœud i × secteur s (n_warehouses × N_SECTEURS)
+    # emploi_zone_secteur_all  : identique (plus de distinction N vs n_warehouses)
+    # pop_i : population par nœud (vecteur n_warehouses), pour la demande finale MRIO
     emploi_zone_secteur           = emploi_zone_secteur,
     emploi_zone_secteur_all       = emploi_zone_secteur_all,
     pop_i                         = pop_i,
@@ -3272,8 +3125,8 @@ saveRDS(
 
 # Création de la closure fond_carte (embarque les données géo)
 fond_carte <- local({
-  .prov    <- rwanda_provinces
-  .nat     <- rwanda_national
+  .prov    <- pays_provinces
+  .nat     <- pays_national
   .bbox    <- bbox_carto
   .lacs_ok <- lacs_ok
   .lacs    <- if (lacs_ok) lacs_raw  else NULL
@@ -3312,11 +3165,11 @@ cat("✓ persist_entreposages.rds\n\n")
 objets_a_liberer <- c(
   "raster_worldpop",       # Raster WorldPop (~150 Mo)
   "population_osm_raw",    # Points OSM de population
-  "routes_rwanda",         # Arêtes brutes avant nettoyage
+  "routes",         # Arêtes brutes avant nettoyage
   "aretes_reseau_sf",      # Arêtes sf intermédiaires
-  "population_zone_finale",
+  "pop_temp", "voisins_4km",  # Population temporaire + voisinages de la fusion
   "pop_worldpop_par_entrepot", "pop_nisr_par_entrepot", "pop_osm_par_entrepot",
-  "rwanda_districts_gadm", "nisr_pop_raw"
+  "pays_districts_gadm", "nisr_pop_raw"
 )
 rm(list = intersect(objets_a_liberer, ls()))
 invisible(gc(verbose = FALSE))
