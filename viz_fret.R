@@ -933,41 +933,169 @@ cat("✓ Heatmap flux OD sauvegardée\n")
 
 
 # ============================================================
-# GRAPHIQUE 4 : Composition sectorielle des flux par zone
+# GRAPHIQUE 4 : Composition sectorielle de l'offre et de la demande par zone
+#
+# IMPORTANT — ce que tracent ces graphiques :
+#   • offre_zones / demande_zones = soldes NETS par zone (max(0, x−d) et
+#     max(0, d−x)). En NET, les secteurs fortement consommés sur place sont
+#     « nettés » : la composition est mécaniquement dominée par les secteurs
+#     d'export peu absorbés localement (Mines, cultures de rente) côté offre,
+#     et par les secteurs nets importateurs côté demande. Ce n'est PAS la
+#     composition du fret qui circule, mais celle du surplus / besoin net.
+#   • prod_zones / dem_zones = flux BRUTS (production locale et demande totale
+#     avant netting). Ils reflètent la vraie structure économique de la zone.
+#
+# On fournit donc, via deux helpers réutilisables :
+#   - une vue NETTE à 100% (toutes les zones) pour offre et demande ;
+#   - une vue BRUTE en valeurs absolues, limitée à 3 entrepôts (le plus gros,
+#     le médian, le plus petit) pour rester lisible.
+# Versions en valeur (mrd RWF) et en tonnage physique (facteur sectoriel
+# TONNES_PAR_mrd_RWF, défini dans 00_parametres.R) côté demande.
 # ============================================================
 
-offre_long <- as.data.frame(offre_zones) %>%
-  rownames_to_column("Zone") %>%
-  pivot_longer(-Zone, names_to = "Secteur", values_to = "Offre_mrd_rwf") %>%
-  mutate(Zone_court = str_trunc(str_remove(Zone, " - .*"), 22))
+cat("Génération des graphiques de composition sectorielle (offre & demande)...\n")
 
-g4 <- offre_long %>%
-  group_by(Zone_court) %>%
-  mutate(Part_pct = Offre_mrd_rwf / sum(Offre_mrd_rwf) * 100) %>%
-  ungroup() %>%
-  ggplot(aes(x = reorder(Zone_court, -Offre_mrd_rwf),
-             y = Part_pct,
-             fill = Secteur)) +
-  geom_col(width = 0.8) +
-  coord_flip() +
-  scale_fill_manual(values = PALETTE_SECTEURS) +
-  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
-  labs(
-    title    = "Composition sectorielle de l'offre par zone",
-    subtitle = paste0("Modèle gravitaire — ", NOM_PAYS),
-    x        = NULL,
-    y        = "Part dans l'offre totale (%)",
-    fill     = "Secteur"
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(
-    plot.title      = element_text(face = "bold", size = 13),
-    legend.position = "right"
+# Facteur de conversion sectoriel mrd RWF → tonnes, aligné sur l'ordre SECTEURS.
+tonnes_factor <- TONNES_PAR_mrd_RWF[SECTEURS]
+# Convertit une matrice (zones × secteurs) de mrd RWF en tonnes, colonne par colonne.
+en_tonnes <- function(mat) sweep(mat, 2, tonnes_factor[colnames(mat)], `*`)
+
+# ── Helper A : composition empilée à 100% par zone (toutes les zones) ─────────
+# mat : matrice zones × secteurs (mrd RWF ou tonnes). Une barre = une zone,
+# normalisée à 100%, triée par total décroissant (la plus grosse en haut).
+# make.unique() évite que deux entrepôts au libellé tronqué identique (ex. deux
+# « Zone industrielle … ») soient fusionnés silencieusement dans une seule barre.
+graphe_compo_100 <- function(mat, titre, soustitre, fichier) {
+  noms   <- make.unique(str_trunc(str_remove(rownames(mat), " - .*"), 22), sep = "_")
+  totaux <- rowSums(mat, na.rm = TRUE)
+  df <- as.data.frame(unname(mat)); colnames(df) <- colnames(mat); df$Zone <- noms
+  df_long <- df %>%
+    pivot_longer(-Zone, names_to = "Secteur", values_to = "Valeur") %>%
+    group_by(Zone) %>%
+    mutate(tot  = sum(Valeur, na.rm = TRUE),
+           Part = ifelse(tot > 0, Valeur / tot * 100, 0)) %>%
+    ungroup() %>%
+    # Niveaux ordonnés par total croissant : avec coord_flip(), la plus grosse
+    # zone se retrouve en haut du graphique.
+    mutate(Zone = factor(Zone, levels = noms[order(totaux)]))
+  g <- ggplot(df_long, aes(Zone, Part, fill = Secteur)) +
+    geom_col(width = 0.85) +
+    coord_flip() +
+    scale_fill_manual(values = PALETTE_SECTEURS) +
+    scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+    labs(title = titre, subtitle = soustitre, x = NULL,
+         y = "Part dans le total de la zone (%)", fill = "Secteur") +
+    theme_minimal(base_size = 11) +
+    theme(plot.title    = element_text(face = "bold", size = 13),
+          plot.subtitle = element_text(color = "#666666", size = 9),
+          legend.position = "right")
+  ggsave(file.path(DIR_CARTES, fichier), g, width = 14, height = 8, dpi = 300)
+  cat("  ✓", fichier, "\n")
+}
+
+# ── Helper B : flux brut par secteur pour 3 zones (max / médiane / min) ───────
+# Sélectionne les zones de plus fort, médian et plus faible total, puis trace le
+# flux brut de chaque secteur (valeurs absolues, non normalisées). Une facette
+# par zone avec échelle libre (scales = "free_x") : la composition reste lisible
+# malgré l'écart d'ampleur entre le plus gros et le plus petit entrepôt
+# (le total de chaque zone est rappelé dans le titre de sa facette).
+# unite : libellé d'unité ("mrd RWF" ou "tonnes").
+graphe_brut3 <- function(mat, unite, titre, soustitre, fichier) {
+  totaux <- rowSums(mat, na.rm = TRUE)
+  ord <- order(totaux)
+  sel <- c(ord[length(ord)], ord[ceiling(length(ord) / 2)], ord[1])  # max, médiane, min
+  noms <- str_trunc(str_remove(rownames(mat), " - .*"), 22)
+  lab  <- sprintf("%s — %s  (total : %s %s)",
+                  c("Max", "Médiane", "Min"), noms[sel],
+                  format(round(totaux[sel]), big.mark = " "), unite)
+  sub <- mat[sel, , drop = FALSE]
+  df  <- as.data.frame(unname(sub)); colnames(df) <- colnames(mat)
+  df$Zone <- factor(lab, levels = lab)
+  df_long <- df %>%
+    pivot_longer(-Zone, names_to = "Secteur", values_to = "Valeur") %>%
+    # rev(SECTEURS) : après coord_flip(), Agriculture se retrouve en haut.
+    mutate(Secteur = factor(Secteur, levels = rev(SECTEURS)))
+  g <- ggplot(df_long, aes(Secteur, Valeur, fill = Secteur)) +
+    geom_col(width = 0.8) +
+    facet_wrap(~ Zone, ncol = 1, scales = "free_x") +
+    coord_flip() +
+    scale_fill_manual(values = PALETTE_SECTEURS, guide = "none") +
+    scale_y_continuous(labels = scales::label_number(big.mark = " ")) +
+    labs(title = titre, subtitle = soustitre, x = NULL,
+         y = paste0("Flux brut (", unite, ")")) +
+    theme_minimal(base_size = 11) +
+    theme(plot.title    = element_text(face = "bold", size = 13),
+          plot.subtitle = element_text(color = "#666666", size = 9),
+          strip.text    = element_text(face = "bold"))
+  ggsave(file.path(DIR_CARTES, fichier), g, width = 11, height = 8, dpi = 300)
+  cat("  ✓", fichier, "\n")
+}
+
+# ── 1) OFFRE — surplus net exportable, composition à 100%, toutes les zones ───
+# (ex-« graphique_composition_sectorielle » ; descriptif clarifié.)
+graphe_compo_100(
+  offre_zones,
+  "Composition sectorielle du surplus NET exportable, par zone",
+  paste0("Modèle MRIO — ", NOM_PAYS,
+         " · offre = max(0, production − demande locale), en valeur (mrd RWF)\n",
+         "Attention : domination mécanique des secteurs d'export (Mines, cultures ",
+         "de rente) — les secteurs consommés localement sont nettés. ≠ composition du fret."),
+  "graphique_composition_sectorielle.png"
+)
+
+# ── 2) OFFRE — flux brut (production locale, avant netting), 3 entrepôts types ─
+if (exists("prod_zones")) {
+  graphe_brut3(
+    prod_zones, "mrd RWF",
+    "Flux brut par secteur — production locale (3 entrepôts types)",
+    paste0("Modèle MRIO — ", NOM_PAYS,
+           " · production brute x[i,s] avant netting · entrepôts max / médiane / min"),
+    "graphique_offre_brut_3entrepots.png"
   )
+} else {
+  cat("  ⚠ prod_zones absent du persist — relancer 03_transport.R pour le graphe brut offre\n")
+}
 
-ggsave(file.path(DIR_CARTES,"graphique_composition_sectorielle.png"),
-       g4, width = 14, height = 8, dpi = 300)
-cat("✓ Graphique composition sectorielle sauvegardé\n\n")
+# ── 3) DEMANDE — besoin NET (déficit importé), composition à 100%, en valeur ──
+graphe_compo_100(
+  demande_zones,
+  "Composition sectorielle du besoin NET (déficit importé), par zone — valeur",
+  paste0("Modèle MRIO — ", NOM_PAYS,
+         " · demande = max(0, demande locale − production), en valeur (mrd RWF)"),
+  "graphique_demande_composition_mrd_rwf.png"
+)
+
+# ── 4) DEMANDE — besoin NET, composition à 100%, en tonnage physique ──────────
+graphe_compo_100(
+  en_tonnes(demande_zones),
+  "Composition sectorielle du besoin NET (déficit importé), par zone — tonnes",
+  paste0("Modèle MRIO — ", NOM_PAYS,
+         " · besoin net converti en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
+  "graphique_demande_composition_tonnes.png"
+)
+
+# ── 5) & 6) DEMANDE — flux brut (demande totale, avant netting), 3 entrepôts ───
+#            en valeur (mrd RWF) puis en tonnes.
+if (exists("dem_zones")) {
+  graphe_brut3(
+    dem_zones, "mrd RWF",
+    "Flux brut par secteur — demande totale (3 entrepôts types) — valeur",
+    paste0("Modèle MRIO — ", NOM_PAYS,
+           " · demande brute d[i,s] (interm. + finale) avant netting"),
+    "graphique_demande_brut_mrd_rwf_3entrepots.png"
+  )
+  graphe_brut3(
+    en_tonnes(dem_zones), "tonnes",
+    "Flux brut par secteur — demande totale (3 entrepôts types) — tonnes",
+    paste0("Modèle MRIO — ", NOM_PAYS,
+           " · demande brute convertie en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
+    "graphique_demande_brut_tonnes_3entrepots.png"
+  )
+} else {
+  cat("  ⚠ dem_zones absent du persist — relancer 03_transport.R pour les graphes bruts demande\n")
+}
+
+cat("✓ Graphiques de composition sectorielle (offre & demande) sauvegardés\n\n")
 
 # ==============================================================================
 # DIAGRAMME DE SANKEY — Flux de fret : Origine → Secteur → Destination

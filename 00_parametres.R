@@ -992,12 +992,32 @@ PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 # ── Secteurs économiques (dans l'ordre de SECTEURS) ───────────────────────────
 # Centralisé ici pour garantir que chaque secteur a toujours la même couleur
 # dans tous les graphiques et cartes (barres, trajectoires, Sankey, carte dominante).
-# La palette « Set2 » de RColorBrewer plafonne à 8 couleurs ; on l'interpole donc
-# avec colorRampPalette() pour couvrir les N_SECTEURS secteurs (11 actuellement).
-PALETTE_SECTEURS <- setNames(
-  colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(N_SECTEURS),
-  SECTEURS
+# Palette définie À LA MAIN (11 teintes) plutôt que par interpolation de Set2 :
+# interpoler 8 couleurs Set2 vers 11 produisait 4 tons saumon/beige quasi
+# identiques (Mines, Cultures_export, Manufactures, Énergie), rendant illisibles
+# les barres de composition sectorielle. Les teintes ci-dessous sont réparties
+# sur la roue chromatique (vert → olive → brun → orange → rouge → violet → bleu
+# → cyan → jaune → rose) pour un contraste maximal, y compris en vision réduite.
+# L'association couleur↔secteur se fait par NOM : l'ordre d'empilement dans
+# ggplot n'a donc aucune incidence sur les couleurs affichées.
+.palette_secteurs_brut <- c(
+  Agriculture     = "#2E7D32",  # vert
+  Cultures_export = "#9ACD32",  # vert-olive (cultures de rente : café, thé, tabac)
+  Mines           = "#8D6E63",  # brun
+  Agro_industrie  = "#F57C00",  # orange
+  Chimie_petrole  = "#C62828",  # rouge
+  Manufactures    = "#7B1FA2",  # violet
+  Construction    = "#607D8B",  # bleu-gris
+  Commerce        = "#1565C0",  # bleu
+  Transport       = "#00ACC1",  # cyan
+  Energie_eau     = "#FDD835",  # jaune
+  Services        = "#EC407A"   # rose
 )
+# Garde-fou : si un secteur de SECTEURS n'a pas de couleur attitrée (ajout d'un
+# secteur sans mise à jour ici), on arrête avec un message explicite plutôt que
+# de laisser ggplot afficher des barres grises silencieusement.
+stopifnot(all(SECTEURS %in% names(.palette_secteurs_brut)))
+PALETTE_SECTEURS <- .palette_secteurs_brut[SECTEURS]   # réordonne selon SECTEURS
 
 cat("✓ Palettes de couleurs définies\n\n")
 
