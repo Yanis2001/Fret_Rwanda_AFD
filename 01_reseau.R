@@ -2747,7 +2747,7 @@ if (rwi_ok) {
 # ==============================================================================
 # IV.5.3 : Normalisation min-max → p_rwi ∈ [0, 1]
 #
-# Le score brut est centré sur 0 (échelle internationale, parfois négatif). On
+# Le score brut est centré sur 0 (échelle nationale, parfois négatif). On
 # le normalise sur l'ensemble des nœuds : 0 = nœud le plus pauvre, 1 = le plus
 # riche. PRÉCAUTION : score RELATIF au pays, pas une richesse absolue mondiale.
 # ==============================================================================
@@ -2835,13 +2835,13 @@ cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 #     x[i,s] = production_totale[s] × w[i,s]
 #   où α = ALPHA_EMPLOI_RWI (00_parametres.R).
 #
-# MÉTHODE (découpage existant, aligné sur les nœuds Voronoï) :
-#   L'emploi est connu au niveau DISTRICT (RPHC5/GADM). On le répartit
-#   ÉQUITABLEMENT entre les nœuds-entrepôts situés dans le district
-#   (emploi_district ÷ nombre de nœuds du district). Pour ne perdre aucun emploi,
-#   un district SANS nœud à l'intérieur est rattaché au nœud le plus proche : le
-#   total national d'emploi (marge des secteurs, contrainte Furness) est ainsi
-#   conservé.
+# MÉTHODE (prorata d'aire des cellules de Voronoï) :
+#   L'emploi est connu au niveau DISTRICT (RPHC5/GADM). On intersecte les cellules
+#   de Voronoï avec les polygones de district, puis on attribue à chaque cellule
+#   la fraction de l'emploi du district proportionnelle à l'aire de l'intersection
+#   (même logique que le fallback NISR pour la population). Les cellules de Voronoï
+#   couvrant l'intégralité du territoire, chaque district est découpé entre au
+#   moins une cellule : aucun emploi n'est perdu.
 #
 # DÉPENDANCES :
 #   - seeds_sf, noeuds_entreposage   (Partie IV.3-bis) — nœuds conservés
@@ -2922,48 +2922,37 @@ cat("  Jointure GADM × emploi :",
     nrow(districts_avec_emploi) - n_sans_emploi, "/",
     nrow(districts_avec_emploi), "districts appariés\n")
 
-# ── District de chaque nœud-entrepôt (point dans polygone, repli plus proche) ──
-node_join <- seeds_sf %>%
-  st_join(districts_avec_emploi %>% select(district_clean),
-          join = st_within, largest = TRUE)
-node_district <- node_join$district_clean
-manquants_nd  <- which(is.na(node_district))
-if (length(manquants_nd) > 0) {
-  idx_proche <- st_nearest_feature(seeds_sf[manquants_nd, ], districts_avec_emploi)
-  node_district[manquants_nd] <- districts_avec_emploi$district_clean[idx_proche]
-  cat("  Nœuds hors district (rattachés au plus proche) :", length(manquants_nd), "\n")
-}
+# ── Répartition de l'emploi de chaque district au prorata de l'aire de Voronoï ─
+# On intersecte les cellules de Voronoï avec les districts GADM pour calculer
+# la fraction d'aire de chaque cellule dans son district, puis on applique ce
+# poids à l'emploi sectoriel du district (même logique que le fallback NISR
+# pour la population en IV.6).
+inter_emploi <- suppressWarnings(st_intersection(
+  zones_voronoi %>% select(warehouse_id),
+  districts_avec_emploi %>% select(district_clean, all_of(cols_emploi_disponibles))
+)) %>%
+  mutate(aire = as.numeric(st_area(geometry))) %>%
+  st_drop_geometry() %>%
+  group_by(district_clean) %>%
+  mutate(part_aire = aire / sum(aire)) %>%   # fraction de l'aire du district dans chaque cellule
+  ungroup()
 
-# ── Répartition de l'emploi de chaque district sur ses nœuds ───────────────────
-# Pour chaque district : on répartit ses effectifs (par colonne RPHC5)
-# équitablement entre les nœuds qu'il contient ; s'il n'en contient aucun, on
-# l'attribue entièrement au nœud le plus proche (aucun emploi perdu).
 emploi_node_cols <- matrix(
   0, nrow = n_warehouses, ncol = length(cols_emploi_disponibles),
   dimnames = list(noeuds_entreposage$warehouse_name, cols_emploi_disponibles)
 )
 
-for (d in seq_len(nrow(districts_avec_emploi))) {
-  vals <- vapply(cols_emploi_disponibles, function(cc) {
-    v <- districts_avec_emploi[[cc]][d]; if (is.na(v)) 0 else as.numeric(v)
-  }, numeric(1))
-  if (all(vals == 0)) next
-
-  nodes_d <- which(node_district == districts_avec_emploi$district_clean[d])
-  if (length(nodes_d) == 0) {
-    # District orphelin → nœud le plus proche de son centroïde.
-    nodes_d <- st_nearest_feature(
-      st_centroid(districts_avec_emploi[d, ]), seeds_sf
-    )
-  }
-  for (nd in nodes_d) {
-    emploi_node_cols[nd, ] <- emploi_node_cols[nd, ] + vals / length(nodes_d)
-  }
+# Pour chaque colonne sectorielle RPHC5 : emploi_district × part_aire, puis
+# agrégation par warehouse_id (une cellule peut chevaucher plusieurs districts).
+for (cc in cols_emploi_disponibles) {
+  inter_cc <- inter_emploi %>%
+    mutate(emploi_part = .data[[cc]] * part_aire) %>%
+    group_by(warehouse_id) %>%
+    summarise(emploi = sum(emploi_part, na.rm = TRUE), .groups = "drop")
+  emploi_node_cols[inter_cc$warehouse_id, cc] <- inter_cc$emploi
 }
 
-cat("  Nœuds par district : min =",
-    min(tabulate(match(node_district, districts_avec_emploi$district_clean))),
-    "| max =", max(tabulate(match(node_district, districts_avec_emploi$district_clean))), "\n")
+cat("  Cellules Voronoï utilisées :", nrow(inter_emploi), "intersections district × cellule\n")
 
 # ── Ventilation des colonnes RPHC5 vers les 11 secteurs du modèle ──────────────
 emploi_zone_secteur <- matrix(
