@@ -28,11 +28,11 @@ fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 list2env(.ent, envir = .GlobalEnv)
 
 .res  <- readRDS(PERSIST_RESEAU_COUTS)
-reseau_rwanda <- .res$reseau_rwanda
+reseau <- .res$reseau
 rm(.ent, .res)
 
 .base         <- readRDS(PERSIST_RESEAU_BASE)
-routes_rwanda <- .base$routes_rwanda
+routes <- .base$routes
 rm(.base)
 
 # ==============================================================================
@@ -91,14 +91,14 @@ local({
 # tm_lines() : représente les lignes (routes) avec une couleur selon "road_type".
 # tm_scale() : définit comment mapper les valeurs de "road_type" aux couleurs.
 carte_verif_routes <- fond_carte() +
-  tm_shape(routes_rwanda) +
+  tm_shape(routes) +
   tm_lines(
     col       = "road_type",
     col.scale = tm_scale(values = PALETTE_ROAD_TYPE),
     col.legend = tm_legend(title = "Type de route"),
     lwd = 1.2
   ) +
-  tm_title("Réseau Routier du Rwanda\nContrôle post-nettoyage") +
+  tm_title(paste0("Réseau Routier — ", NOM_PAYS, "\nContrôle post-nettoyage")) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position = c("right", "top"))
@@ -178,14 +178,14 @@ cat("── Visualisation de la distribution démographique ──────�
 # proportionnel à la population (échelle log pour gérer les ordres de grandeur).
 # Kigali (~1 M d'habitants) ne doit pas écraser visuellement les petites villes.
 
-entrepots_pop_sf <- reseau_rwanda %>%
+entrepots_pop_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse, !is.na(population_zone)) %>%
   st_as_sf() 
 
 carte_population <- fond_carte() +
 
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.4) +
 
   # Contours des cellules de Voronoï : chaque zone d'entrepôt correspond à une
@@ -293,7 +293,7 @@ cat("  ✓ graphique_population_zones.png\n\n")
 cat("── Visualisations RWI ────────────────────────────────────────────────\n")
 
 # ── Préparation de la couche sf pour les entrepôts enrichis RWI ───────────────
-entrepots_rwi_sf <- reseau_rwanda %>%
+entrepots_rwi_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse, !is.na(p_rwi)) %>%
   st_as_sf() %>%
@@ -324,7 +324,7 @@ PALETTE_RWI <- c(
 
 carte_rwi <- fond_carte() +
 
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.4) +
 
   # Contours des cellules de Voronoï : chaque zone d'entrepôt correspond à une
@@ -362,8 +362,8 @@ tmap_save(
 )
 cat("  ✓ carte_rwi_zones.png\n")
 
-# ── Carte : raster RWI Rwanda (vue d'ensemble des données brutes) ─────────────
-# Cette carte montre les données RWI pour TOUT le Rwanda (pas seulement les
+# ── Carte : raster RWI (vue d'ensemble des données brutes) ───────────────────
+# Cette carte montre les données RWI pour tout le pays (pas seulement les
 # entrepôts), ce qui permet de visualiser les gradients spatiaux de richesse
 # et de vérifier que les entrepôts sont bien positionnés dans leur contexte.
 if (rwi_ok && nrow(rwi_sf) > 0) {
@@ -394,17 +394,17 @@ if (rwi_ok && nrow(rwi_sf) > 0) {
       lwd         = 1
     ) +
     
-    tm_title("Données RWI brutes — Rwanda\n(chaque point = cellule de ~2,4 km²)") +
+    tm_title(paste0("Données RWI brutes — ", NOM_PAYS, "\n(chaque point = cellule de ~2,4 km²)")) +
     tm_layout(legend.outside = TRUE, frame = TRUE) +
     tm_scalebar(position = c("left", "bottom")) +
     tm_compass(position  = c("right", "top"))
   
   tmap_save(
     carte_rwi_raster,
-    file.path(DIR_CARTES, "carte_rwi_rwanda_brut.png"),
+    file.path(DIR_CARTES, "carte_rwi_brut.png"),
     width = 3000, height = 2400, dpi = 300
   )
-  cat("  ✓ carte_rwi_rwanda_brut.png\n")
+  cat("  ✓ carte_rwi_brut.png\n")
 }
 
 # ── Graphique : corrélation RWI × population ──────────────────────────────────
@@ -520,7 +520,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
     ORDER BY arete_id
   "))
   
-  reseau_tmp <- reseau_rwanda %>%
+  reseau_tmp <- reseau %>%
     activate("edges") %>%
     mutate(
       cost_per_tkm          = couts_veh$cost_per_tkm,
@@ -569,7 +569,7 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
   "))
   cat("Lignes récupérées :", nrow(couts_veh), "\n")
   
-  reseau_tmp <- reseau_rwanda %>%
+  reseau_tmp <- reseau %>%
     activate("edges") %>%
     mutate(
       cost_per_tkm          = couts_veh$cost_per_tkm,
@@ -618,7 +618,7 @@ ratio_df <- duck_query("
 ")
 
 if (nrow(ratio_df) > 0) {
-  reseau_ratio <- reseau_rwanda %>%
+  reseau_ratio <- reseau %>%
     activate("edges") %>%
     mutate(ratio_lourd_vs_legere = ratio_df$ratio_lourd_vs_legere)
   
@@ -662,7 +662,7 @@ ratio_moyen_df <- duck_query("
 ")
 
 if (nrow(ratio_moyen_df) > 0) {
-  reseau_ratio_moyen <- reseau_rwanda %>%
+  reseau_ratio_moyen <- reseau %>%
     activate("edges") %>%
     mutate(ratio_moyen_vs_camionnette = ratio_moyen_df$ratio_moyen_vs_camionnette)
   
@@ -696,7 +696,7 @@ if (FALSE) {
 # du terrain sur chaque segment routier. Elle permet d'identifier visuellement
 # les zones montagneuses (routes en rouge = pente forte > 8%).
 carte_pentes <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col="slope_category",
            col.scale = tm_scale(values = PALETTE_PENTE),
            col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
@@ -705,9 +705,9 @@ carte_pentes <- fond_carte() +
   tm_scalebar(position=c("left","bottom")) +
   tm_compass(position=c("right","top"))
 
-tmap_save(carte_pentes, file.path(DIR_CARTES,"carte_pentes_rwanda.png"),
+tmap_save(carte_pentes, file.path(DIR_CARTES,"carte_pentes.png"),
           width=3000, height=2400, dpi=300)
-cat("  ✓ carte_pentes_rwanda.png\n")
+cat("  ✓ carte_pentes.png\n")
 
 if (FALSE) {
   tmap_mode("view")
@@ -729,7 +729,7 @@ if (FALSE) {
 # zones de congestion urbaine.
 # Elle répond à la question : "Où décarboner le transport est-il le plus urgent ?"
 carte_co2 <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(
     col        = "co2_kg_par_tkm",
     col.scale  = tm_scale_intervals(style = "quantile", n = 5,
@@ -756,7 +756,7 @@ cat("  ✓ carte_emissions_co2_par_tkm.png\n")
 # des normes Euro des moteurs (plus sévère en ville) et de la congestion
 # (ralentissements → régime moteur sous-optimal → émissions NOx élevées).
 carte_nox <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(
     col        = "nox_g_par_tkm",
     col.scale  = tm_scale_intervals(style = "quantile", n = 5,

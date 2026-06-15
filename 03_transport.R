@@ -1612,18 +1612,18 @@ cat("✓ Flux total modélisé:", format(round(sum(flux_total)), big.mark = " ")
 cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 
 # ==============================================================================
-# VII.5 : Projection des flux RoW sur le réseau routier rwandais
+# VII.5 : Projection des flux RoW sur le réseau routier du pays
 #
 # PRINCIPE :
 #   Les nœuds RoW sont virtuels (hors réseau routier). Pour l'affectation
 #   All-or-Nothing (Partie VIII), chaque flux T[RoW_k, j] (ou T[j, RoW_k])
 #   doit être attribué à un chemin physique. On l'injecte au poste frontière
 #   optimal b*(j) = argmin_b C_road[b, j] sur les frontières du pays k.
-#   Seul le segment rwandais b*(j) → j est affecté aux routes.
+#   Seul le segment intérieur b*(j) → j est affecté aux routes.
 #
 #   Remarque : le coût pré-frontière (segment étranger) est déjà intégré dans
 #   le modèle gravitaire (C_total_s) et ne génère aucun trafic sur les routes
-#   rwandaises.
+#   du pays étudié.
 #
 # RÉSULTAT :
 #   flux_tonnes_total : matrice (n_warehouses × n_warehouses) pour l'affectation.
@@ -2204,7 +2204,7 @@ reseau <- reseau %>%
 # Rapport global d'émissions (pour le log console).
 # Ces totaux agrègent toutes les arêtes du réseau et donc tous les flux OD
 # modélisés. Ils constituent un ordre de grandeur de l'empreinte carbone
-# et polluante du fret routier rwandais dans le modèle.
+# et polluante du fret routier dans le modèle.
 co2_total_reseau_t   <- sum(emissions_co2_aretes,  na.rm = TRUE) / 1000
 nox_total_reseau_kg  <- sum(emissions_nox_aretes,  na.rm = TRUE) / 1000
 pm25_total_reseau_kg <- sum(emissions_pm25_aretes, na.rm = TRUE) / 1000

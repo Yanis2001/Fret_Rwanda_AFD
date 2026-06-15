@@ -28,7 +28,7 @@ fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 list2env(.ent, envir = .GlobalEnv)
 
 .fret <- readRDS(PERSIST_RESEAU_FRET)
-reseau_rwanda    <- .fret$reseau_rwanda   # version avec volumes fret
+reseau    <- .fret$reseau   # version avec volumes fret
 volumes_par_zone <- .fret$volumes_par_zone
 rm(.fret)
 
@@ -85,9 +85,9 @@ local({
 # Couche sf de toutes les arêtes du réseau, avec un index entier arete_idx.
 # Nécessaire pour : filtrer les arêtes perturbées/critiques, calculer les volumes
 # par type de route, et construire les couches de détour.
-# On repart de reseau_rwanda (déjà chargé) plutôt que de le sauvegarder dans
+# On repart de reseau (déjà chargé) plutôt que de le sauvegarder dans
 # PERSIST_VULNERAB (objet géométrique lourd, ~50 Mo).
-aretes_reseau_sf <- reseau_rwanda %>%
+aretes_reseau_sf <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   mutate(arete_idx = row_number())
@@ -95,7 +95,7 @@ aretes_reseau_sf <- reseau_rwanda %>%
 # ── Reconstruction de coords_zones_sf ─────────────────────────────────────────
 # Points sf des zones d'entrepôt, utilisés sur la Carte D (itinéraires de détour).
 # Version simplifiée sans taille_point — la Carte D n'en a pas besoin.
-coords_zones_sf <- reseau_rwanda %>%
+coords_zones_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
   st_as_sf()
@@ -155,7 +155,7 @@ aretes_critiques_sf <- aretes_reseau_sf %>%
   )
 
 # Points des zones colorés par impact (surcoût moyen relatif)
-impact_par_zone_sf <- reseau_rwanda %>%
+impact_par_zone_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
   st_as_sf() %>%

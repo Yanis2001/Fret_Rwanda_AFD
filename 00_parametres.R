@@ -126,12 +126,12 @@ for (d in c(DIR_CACHE, DIR_PERSIST, DIR_CARTES, DIR_EXPORTS, DIR_RASTERS)) {
   dir.create(d, showWarnings = FALSE, recursive = TRUE)
 }
 
-# URL publique et stable pour le PBF Rwanda (date fixe = reproductibilité)
-# Si on veut utiliser les données les plus à jour, utiliser le lien suivant : 
-# https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
+# URL publique et stable du PBF OSM (date fixe = reproductibilité).
+# ⚠ À adapter selon le pays : https://download.geofabrik.de/<continent>/<pays>.osm.pbf
+# Version à jour : https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
 GEOFABRIK_PBF_URL <- "https://download.geofabrik.de/africa/rwanda-260315.osm.pbf"
 
-chemin_pbf     <- "rwanda-260315.osm.pbf"  # Nom local du fichier PBF après téléchargement
+chemin_pbf <- "rwanda-260315.osm.pbf"  # Nom local du fichier PBF — à adapter selon le pays
 
 # WorldPop a réorganisé plusieurs fois son arborescence.
 # On teste les URLs candidates dans l'ordre jusqu'à en trouver une valide.

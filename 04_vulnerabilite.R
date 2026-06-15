@@ -21,7 +21,7 @@ cat("=== Chargement des objets ===\n")
 
 list2env(.geo,  envir = .GlobalEnv)
 list2env(.ent,  envir = .GlobalEnv)
-reseau_rwanda         <- .fret$reseau_rwanda
+reseau         <- .fret$reseau
 flux_tonnes_total     <- readRDS(PERSIST_FLUX_FRET)$flux_tonnes_total
 n_noeuds              <- .mm$n_noeuds
 n_vehicules           <- .mm$n_vehicules
@@ -65,7 +65,7 @@ cat("✓ Objets chargés\n\n")
 #
 # DÉPENDANCES :
 #   Ce bloc dépend des objets construits dans les Parties I à VIII :
-#     reseau_rwanda      — réseau sfnetworks avec coûts et volumes
+#     reseau      — réseau sfnetworks avec coûts et volumes
 #     graphe_multimodal  — graphe igraph multi-modal (3 couches véhicules)
 #     od_long            — matrice OD de référence (avant perturbation)
 #     noeuds_entreposage — liste et indices des zones d'entrepôt
@@ -109,7 +109,7 @@ if (UTILISER_MODE_BUFFER) {
     st_point(c(CENTRE_PERTURBATION_LON, CENTRE_PERTURBATION_LAT)),
     crs = 4326    # WGS84 = système GPS standard
   ) %>%
-    st_transform(crs = 32735)    # UTM Zone 35S = système métrique Rwanda
+    st_transform(crs = 32735)    # UTM Zone 35S = système métrique (Afrique de l'Est)
   
   # st_buffer() crée un cercle de rayon RAYON_PERTURBATION_M autour du point.
   # Ce cercle représente la zone géographique affectée par l'événement.
@@ -117,7 +117,7 @@ if (UTILISER_MODE_BUFFER) {
                                         dist = RAYON_PERTURBATION_M)
   
   # Récupération de toutes les arêtes du réseau sous forme sf
-  aretes_sf_mode_b <- reseau_rwanda %>%
+  aretes_sf_mode_b <- reseau %>%
     activate("edges") %>%
     st_as_sf()
   
@@ -177,7 +177,7 @@ if (UTILISER_MODE_RASTER) {
     raster_risque <- project(raster_risque, "EPSG:32735", method = "bilinear")
     
     # Récupération des arêtes du réseau
-    aretes_sf_mode_c <- reseau_rwanda %>%
+    aretes_sf_mode_c <- reseau %>%
       activate("edges") %>%
       st_as_sf() %>%
       mutate(arete_idx_c = row_number())
@@ -258,7 +258,7 @@ if (UTILISER_MODE_RASTER) {
 # ── Bilan : arêtes effectivement perturbées ───────────────────────────────────
 # On traduit maintenant les osm_id en indices d'arêtes dans le graphe igraph.
 # Ce sont ces indices qui seront utilisés pour supprimer les arêtes.
-aretes_reseau_sf <- reseau_rwanda %>%
+aretes_reseau_sf <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   mutate(arete_idx = row_number())
@@ -277,7 +277,7 @@ n_perturb <- length(indices_aretes_perturbees)
 if (n_perturb == 0) {
   # Si aucune arête n'est trouvée, on arrête avec un message explicatif
   stop("⚠ Aucune arête perturbée identifiée. Vérifiez les paramètres du scénario.\n",
-       "  → Mode Buffer : les coordonnées GPS sont-elles dans le Rwanda ?\n",
+       "  → Mode Buffer : les coordonnées GPS sont-elles dans le pays étudié ?\n",
        "  → Mode Manuel : les osm_id existent-ils dans le réseau ?\n",
        "  → Mode Raster : le seuil est-il trop élevé ?\n")
 }

@@ -65,7 +65,7 @@ RUN_VIZ_VULNERAB <- TRUE   # viz — ~3 min  — cartes vulnérabilité / détou
 t_debut <- Sys.time()
 cat("
      ╔══════════════════════════════════════════╗\n
-     ║  RUN COMPLET — Réseau Fret Rwanda        ║\n
+     ║  RUN COMPLET — Réseau de Fret            ║\n
      ╚══════════════════════════════════════════╝\n\n")
 
 executer_module <- function(nom, fichier, actif) {

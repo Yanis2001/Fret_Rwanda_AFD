@@ -28,7 +28,7 @@ fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
 list2env(.ent, envir = .GlobalEnv)
 
 .fret <- readRDS(PERSIST_RESEAU_FRET)
-reseau_rwanda         <- .fret$reseau_rwanda
+reseau         <- .fret$reseau
 volume_par_secteur    <- .fret$volume_par_secteur
 volume_par_secteur_df <- .fret$volume_par_secteur_df
 volumes_par_zone      <- .fret$volumes_par_zone
@@ -99,7 +99,7 @@ local({
 # rescale() (du package scales) : normalise une variable entre deux valeurs cibles.
 # Ici, log10(volume) est mis à l'échelle entre 0.5 et 5 pour définir
 # l'épaisseur des lignes sur la carte (lignes plus épaisses = trafic plus élevé).
-aretes_fret <- reseau_rwanda %>%
+aretes_fret <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   filter(volume_tonnes > 0) %>%
@@ -110,7 +110,7 @@ aretes_fret <- reseau_rwanda %>%
   )
 
 # Coordonnées des zones
-coords_zones_sf <- reseau_rwanda %>%
+coords_zones_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
   st_as_sf()
@@ -152,7 +152,7 @@ cat("Génération de la carte du trafic fret...\n")
 carte_fret <- fond_carte() +
   
   # Réseau de base en gris très clair
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.3) +
   
   # Arêtes avec trafic
@@ -177,7 +177,7 @@ carte_fret <- fond_carte() +
     size.legend = tm_legend(show = FALSE)
   ) +
   
-  tm_title("Intensité du Trafic Fret\nModèle gravitaire - Rwanda") +
+  tm_title(paste0("Intensité du Trafic Fret\nModèle gravitaire — ", NOM_PAYS)) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position = c("right", "top"))
@@ -205,7 +205,7 @@ cat("\nGénération des cartes sectorielles de trafic...\n")
 # stockés dans volume_par_secteur_df (construit en Partie VIII.1).
 # volume_par_secteur_df a une ligne par arête physique et une colonne
 # par secteur, nommée "vol_t_<Secteur>" (ex : "vol_t_Agriculture").
-aretes_geom_base <- reseau_rwanda %>%
+aretes_geom_base <- reseau %>%
   activate("edges") %>%
   st_as_sf()
 
@@ -253,7 +253,7 @@ for (s in SECTEURS) {
   carte_s <- fond_carte() +
     
     # Réseau de base en gris très clair (contexte géographique)
-    tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+    tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
     tm_lines(col = "#DDDDDD", lwd = 0.3) +
     
     # Arêtes avec trafic pour ce secteur
@@ -280,7 +280,7 @@ for (s in SECTEURS) {
     ) +
     
     tm_title(paste0("Intensité du Trafic Fret — Secteur ", s,
-                    "\nModèle gravitaire - Rwanda")) +
+                    "\nModèle gravitaire — ", NOM_PAYS)) +
     tm_layout(legend.outside = TRUE, frame = TRUE) +
     tm_scalebar(position = c("left", "bottom")) +
     tm_compass(position  = c("right", "top"))
@@ -356,7 +356,7 @@ aretes_dominant_sf <- aretes_geom_base %>%
 carte_dominant <- fond_carte() +
   
   # Réseau de base en gris clair
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#EEEEEE", lwd = 0.3) +
   
   # Arêtes colorées par secteur dominant
@@ -389,13 +389,13 @@ cat("  ✓ carte_secteur_dominant.png\n\n")
 # qu'une arête peu chargée sur une piste pentue en mauvais état.
 # C'est l'information de politique publique la plus utile : on y voit où une
 # réhabilitation routière (surface → bitumée) aurait le plus grand impact carbone.
-aretes_ges <- reseau_rwanda %>%
+aretes_ges <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   filter(emissions_co2_t > 0)
 
 carte_ges_affecte <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.3) +
   tm_shape(aretes_ges) +
   tm_lines(
@@ -666,13 +666,13 @@ cat("  ✓ distribution_trafic_par_secteur.png\n\n")
 
 
 # ── Carte : part du camion lourd par arête ────────────────────────────────────
-aretes_avec_trafic <- reseau_rwanda %>%
+aretes_avec_trafic <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   filter(volume_tonnes > 0)
 
 carte_modal <- fond_carte() +
-  tm_shape(reseau_rwanda %>% activate("edges") %>% st_as_sf()) +
+  tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#DDDDDD", lwd = 0.3) +
   tm_shape(aretes_avec_trafic) +
   tm_lines(
@@ -714,7 +714,7 @@ g1 <- flux_par_secteur_df %>%
   scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
   labs(
     title    = "Flux commerciaux interzonaux par secteur",
-    subtitle = "Modèle gravitaire - Rwanda (données fictives réalistes)",
+    subtitle = paste0("Modèle gravitaire — ", NOM_PAYS),
     x        = NULL,
     y        = "Flux total inter-zones (milliers de tonnes)"
   ) +
@@ -777,7 +777,7 @@ g2 <- recap_zones %>%
   labs(
     title    = "Offre et Demande par zone économique",
     subtitle = paste0(
-      "Modèle gravitaire — Rwanda\n",
+      "Modèle gravitaire — ", NOM_PAYS, "\n",
       "Contour bleu = max offre ('", ref_offre_court, "') | ",
       "Contour rouge = max demande ('", ref_demande_court, "')"
     ),
@@ -853,7 +853,7 @@ g2_tonnes <- recap_zones_tonnes %>%
   labs(
     title    = "Offre et Demande par zone économique (tonnes)",
     subtitle = paste0(
-      "Modèle gravitaire — Rwanda\n",
+      "Modèle gravitaire — ", NOM_PAYS, "\n",
       "Contour bleu = max offre ('", ref_offre_t_court, "') | ",
       "Contour rouge = max demande ('", ref_demande_t_court, "')"
     ),
@@ -913,7 +913,7 @@ g3 <- ggplot(flux_heatmap,
   ) +
   labs(
     title    = "Matrice des flux commerciaux interzonaux",
-    subtitle = "Modèle gravitaire - Rwanda (log₁₀ tonnes)",
+    subtitle = paste0("Modèle gravitaire — ", NOM_PAYS, " (log₁₀ tonnes)"),
     x        = "Destination",
     y        = "Origine"
   ) +
@@ -954,7 +954,7 @@ g4 <- offre_long %>%
   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   labs(
     title    = "Composition sectorielle de l'offre par zone",
-    subtitle = "Modèle gravitaire - Rwanda",
+    subtitle = paste0("Modèle gravitaire — ", NOM_PAYS),
     x        = NULL,
     y        = "Part dans l'offre totale (%)",
     fill     = "Secteur"
@@ -1099,14 +1099,14 @@ bilan_mrio <- duck_query("
   ORDER BY surplus_total_mrd_rwf DESC
 ")
 
-# Imports et exports SAM par secteur (mrd RWF), issus de sam_rwanda calculé dans
+# Imports et exports SAM par secteur (mrd RWF), issus de sam calculé dans
 # 00_parametres.R. Les imports entrent dans l'offre totale (supply-side), les
 # exports dans la demande totale (demand-side) : avec cette convention, les deux
 # colonnes sont égales par construction (équilibre comptable de la SAM).
 commerce_sam <- tibble(
   secteur     = SECTEURS,
-  imports_sam = as.numeric(sam_rwanda$imports[SECTEURS]),
-  exports_sam = as.numeric(sam_rwanda$exports[SECTEURS])
+  imports_sam = as.numeric(sam$imports[SECTEURS]),
+  exports_sam = as.numeric(sam$exports[SECTEURS])
 )
 
 df_mrio <- bilan_mrio %>%
