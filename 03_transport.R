@@ -893,9 +893,8 @@ if (residu_max < 0.01) {
 
 # ── Pays RoW et leurs postes frontières ──────────────────────────────────────
 # COMMERCE_EXTERIEUR_NISR définit les pays RoW (ordre canonique).
-# On récupère aussi les coûts pré-frontière depuis DuckDB.
 pays_row <- unique(COMMERCE_EXTERIEUR_NISR$pays)   # vecteur des pays RoW
-n_row    <- length(pays_row)                        # = 4
+n_row    <- length(pays_row)                       # = 4
 
 # Récupérer le pays de chaque poste frontière (depuis entreposages_fictifs).
 # idx_frontiere_par_pays : tibble (idx = position dans noeuds_entreposage, pays)
@@ -1361,14 +1360,6 @@ flux_total <- matrix(0, nrow = n_total, ncol = n_total,
 # ==============================================================================
 # VII.4-bis : Décomposition brut/net des marges (commerce extérieur en brut)
 #
-# PROBLÈME RÉSOLU :
-#   La formulation NETTE (offre_zones = max(0, x−d)) annule, zone par zone, toute
-#   la production d'un secteur importateur net (ex. Chimie, Manufactures : x < d
-#   partout → offre = 0). Les exports de ces secteurs, portés par les nœuds RoW,
-#   n'ont alors plus aucune origine domestique pour les alimenter → le Furness
-#   doublement contraint devient infaisable (marge destination à 100 %).
-#
-# SOLUTION (piste « découplage import/export ») :
 #   On sépare trois flux physiquement distincts et on les résout séparément :
 #     1. EXPORT      : zones (production brute) → nœuds RoW
 #     2. IMPORT      : nœuds RoW → zones (demande brute)
@@ -1379,9 +1370,9 @@ flux_total <- matrix(0, nrow = n_total, ncol = n_total,
 #   fraction τ_M de sa demande, où :
 #       τ_E[s] = exports[s]  / production_totale[s]   (propension à exporter)
 #       τ_M[s] = imports[s]  / Σ_i d[i,s]             (pénétration des imports)
-#   Comme exports[s] ≤ production_totale[s] pour tous les secteurs (vérifié sur la
-#   SAM 2021), τ_E ∈ [0,1] : les exports proviennent de la production domestique
-#   (pas de ré-export). De même τ_M ∈ [0,1].
+#   Comme exports[s] ≤ production_totale[s] pour tous les secteurs, τ_E ∈ [0,1] : 
+#   les exports proviennent de la production domestique (pas de ré-export). 
+#   De même τ_M ∈ [0,1].
 #
 #   Marges par zone qui en découlent :
 #       e_zones[i,s]     = τ_E[s] × x[i,s]                (origine de la jambe export)
@@ -1409,8 +1400,6 @@ e_zones     <- sweep(prod_zones, 2, tau_E,     `*`)  # production exportée
 m_zones     <- sweep(dem_zones,  2, tau_M,     `*`)  # demande couverte par import
 prod_dom    <- sweep(prod_zones, 2, 1 - tau_E, `*`)  # production restant au marché domestique
 dem_dom     <- sweep(dem_zones,  2, 1 - tau_M, `*`)  # demande restant au marché domestique
-# pmax(M, 0) — la matrice est passée en PREMIER : pmax copie les attributs
-# (dim, dimnames) de son premier argument ; un scalaire en premier les effacerait.
 o_dom_zones <- pmax(prod_dom - dem_dom, 0)           # surplus domestique (origine domestique)
 q_dom_zones <- pmax(dem_dom - prod_dom, 0)           # déficit domestique (destination domestique)
 
@@ -1489,7 +1478,7 @@ for (s in SECTEURS) {
   # ── Découpage de la friction en blocs ────────────────────────────────────────
   # friction est n_total × n_total. On en extrait trois blocs correspondant aux
   # trois jambes. Le bloc RoW↔RoW (transit) n'est volontairement pas utilisé.
-  Tcoef <- TONNES_PAR_mrd_RWF[s]              # facteur mrd RWF → tonnes
+  Tcoef <- TONNES_PAR_mrd_RWF[s]                     # facteur mrd RWF → tonnes
   F_dom <- friction[idx_dom, idx_dom, drop = FALSE]  # zone → zone
   F_exp <- friction[idx_dom, idx_row, drop = FALSE]  # zone → frontière (export)
   F_imp <- friction[idx_row, idx_dom, drop = FALSE]  # frontière → zone (import)
