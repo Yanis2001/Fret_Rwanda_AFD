@@ -1097,13 +1097,21 @@ if (exists("prod_zones") && exists("dem_zones")) {
   sel_dem  <- c(ord_d[length(ord_d)], ord_d[ceiling(length(ord_d) / 2)], ord_d[1])
   rang_dem <- c("Demande max", "Demande médiane", "Demande min")
 
-  # 4) OFFRE brute (production locale x) sur les 3 entrepôts de la demande.
+  # 4a) OFFRE brute (production locale x) sur les 3 entrepôts de la demande — valeur.
   graphe_brut3(
     prod_zones, "mrd RWF", sel_dem, rang_dem,
-    "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande)",
+    "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande) — valeur",
     paste0("Modèle MRIO — ", NOM_PAYS,
            " · production brute x[i,s] avant netting · mêmes entrepôts que le graphe demande"),
-    "graphique_offre_brut_3entrepots.png"
+    "graphique_offre_brut_mrd_rwf_3entrepots.png"
+  )
+  # 4b) OFFRE brute sur les mêmes 3 entrepôts — tonnage physique.
+  graphe_brut3(
+    en_tonnes(prod_zones), "tonnes", sel_dem, rang_dem,
+    "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande) — tonnes",
+    paste0("Modèle MRIO — ", NOM_PAYS,
+           " · production brute convertie en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
+    "graphique_offre_brut_tonnes_3entrepots.png"
   )
   # 5) DEMANDE brute (demande totale d) sur les mêmes 3 entrepôts — valeur.
   graphe_brut3(
