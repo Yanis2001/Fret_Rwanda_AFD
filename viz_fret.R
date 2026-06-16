@@ -732,6 +732,19 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 
 
 # ============================================================
+# ORDRE CANONIQUE DES ENTREPÔTS (population décroissante)
+# Utilisé partout où TOUS les entrepôts sont affichés (offre/demande par zone,
+# heatmap OD, compositions sectorielles à 100%), afin qu'ils soient toujours
+# rangés de la même façon : du plus peuplé (en haut) au moins peuplé (en bas).
+# pop_i provient de persist_entreposages et est aligné ligne à ligne sur
+# offre_zones ; on le nomme par zone pour un appariement robuste PAR NOM (et non
+# par position), réutilisable quel que soit l'ordre des lignes de la matrice.
+# ============================================================
+stopifnot(length(pop_i) == nrow(offre_zones))
+pop_par_zone <- setNames(pop_i, rownames(offre_zones))
+
+
+# ============================================================
 # GRAPHIQUE 2 : Offre vs Demande par zone
 # ============================================================
 
@@ -748,18 +761,20 @@ g2 <- recap_zones %>%
   ) %>%
   mutate(
     Zone_court = str_trunc(zone, 28),
+    # Population de la zone : sert à ordonner les barres (population décroissante).
+    Pop        = pop_par_zone[zone],
     Type_flux  = recode(Type_flux,
                         "offre_totale_mrd_rwf"   = "offre",
                         "demande_totale_mrd_rwf" = "demande")
   ) %>%
-  ggplot(aes(x = reorder(Zone_court, Valeur),
+  ggplot(aes(x = reorder(Zone_court, Pop),
              y = Valeur,
              fill = Type_flux)) +
   geom_col(position = "dodge", width = 0.7) +
   # Contour bleu sur la zone à la plus forte offre (cohérent avec fill offre = bleu)
   geom_col(
     data = ~ filter(., Zone_court == ref_offre_court, Type_flux == "offre"),
-    aes(x = reorder(Zone_court, Valeur), y = Valeur),
+    aes(x = reorder(Zone_court, Pop), y = Valeur),
     fill = NA, color = "#1976D2", linewidth = 1.3,
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
@@ -767,7 +782,7 @@ g2 <- recap_zones %>%
   # Contour rouge sur la zone à la plus forte demande (cohérent avec fill demande = rouge)
   geom_col(
     data = ~ filter(., Zone_court == ref_demande_court, Type_flux == "demande"),
-    aes(x = reorder(Zone_court, Valeur), y = Valeur),
+    aes(x = reorder(Zone_court, Pop), y = Valeur),
     fill = NA, color = "#D32F2F", linewidth = 1.3,
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
@@ -825,24 +840,26 @@ g2_tonnes <- recap_zones_tonnes %>%
   ) %>%
   mutate(
     Zone_court = str_trunc(zone, 28),
+    # Population de la zone : sert à ordonner les barres (population décroissante).
+    Pop        = pop_par_zone[zone],
     Type_flux  = recode(Type_flux,
                         "offre_totale_tonnes"   = "offre",
                         "demande_totale_tonnes" = "demande")
   ) %>%
-  ggplot(aes(x = reorder(Zone_court, Valeur),
+  ggplot(aes(x = reorder(Zone_court, Pop),
              y = Valeur / 1000,
              fill = Type_flux)) +
   geom_col(position = "dodge", width = 0.7) +
   geom_col(
     data = ~ filter(., Zone_court == ref_offre_t_court, Type_flux == "offre"),
-    aes(x = reorder(Zone_court, Valeur), y = Valeur / 1000),
+    aes(x = reorder(Zone_court, Pop), y = Valeur / 1000),
     fill = NA, color = "#1976D2", linewidth = 1.3,
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
   ) +
   geom_col(
     data = ~ filter(., Zone_court == ref_demande_t_court, Type_flux == "demande"),
-    aes(x = reorder(Zone_court, Valeur), y = Valeur / 1000),
+    aes(x = reorder(Zone_court, Pop), y = Valeur / 1000),
     fill = NA, color = "#D32F2F", linewidth = 1.3,
     position = "dodge", width = 0.7,
     inherit.aes = FALSE
@@ -886,6 +903,11 @@ noms_courts_raw <- noeuds_entreposage$warehouse_name %>%
 
 noms_courts <- make.unique(noms_courts_raw, sep = "_")  # Kigali, Kigali_1, Kigali_2
 
+# Ordre d'affichage des axes : population décroissante (cohérent avec les autres
+# graphiques « tous entrepôts »). noms_courts est aligné ligne à ligne sur
+# noeuds_entreposage, donc sur pop_i ; order(pop_i, décroissant) donne le bon tri.
+ordre_pop_court <- noms_courts[order(pop_i, decreasing = TRUE)]
+
 # flux_total inclut les nœuds RoW (lignes/colonnes au-delà de n_warehouses).
 # On extrait uniquement le bloc domestique × domestique pour la heatmap.
 n_dom <- length(noms_courts)
@@ -898,8 +920,10 @@ flux_heatmap <- flux_dom %>%
   pivot_longer(-Origine, names_to = "Destination", values_to = "Flux") %>%
   mutate(
     Flux_log    = ifelse(Flux > 0, log10(Flux), NA),
-    Origine     = factor(Origine,     levels = rev(noms_courts)),
-    Destination = factor(Destination, levels = noms_courts)
+    # rev() pour l'axe Y : avec ggplot, le 1er niveau est en bas ; on inverse
+    # pour que l'entrepôt le plus peuplé soit en haut. Axe X : plus peuplé à gauche.
+    Origine     = factor(Origine,     levels = rev(ordre_pop_court)),
+    Destination = factor(Destination, levels = ordre_pop_court)
   )
 
 g3 <- ggplot(flux_heatmap,
@@ -962,12 +986,13 @@ en_tonnes <- function(mat) sweep(mat, 2, tonnes_factor[colnames(mat)], `*`)
 
 # ── Helper A : composition empilée à 100% par zone (toutes les zones) ─────────
 # mat : matrice zones × secteurs (mrd RWF ou tonnes). Une barre = une zone,
-# normalisée à 100%, triée par total décroissant (la plus grosse en haut).
+# normalisée à 100%, rangée par POPULATION DÉCROISSANTE (la plus peuplée en haut)
+# pour un ordre identique d'un graphique « tous entrepôts » à l'autre.
 # make.unique() évite que deux entrepôts au libellé tronqué identique (ex. deux
 # « Zone industrielle … ») soient fusionnés silencieusement dans une seule barre.
 graphe_compo_100 <- function(mat, titre, soustitre, fichier) {
-  noms   <- make.unique(str_trunc(str_remove(rownames(mat), " - .*"), 22), sep = "_")
-  totaux <- rowSums(mat, na.rm = TRUE)
+  noms <- make.unique(str_trunc(str_remove(rownames(mat), " - .*"), 22), sep = "_")
+  pop  <- pop_par_zone[rownames(mat)]   # population alignée sur les lignes de mat
   df <- as.data.frame(unname(mat)); colnames(df) <- colnames(mat); df$Zone <- noms
   df_long <- df %>%
     pivot_longer(-Zone, names_to = "Secteur", values_to = "Valeur") %>%
@@ -975,9 +1000,9 @@ graphe_compo_100 <- function(mat, titre, soustitre, fichier) {
     mutate(tot  = sum(Valeur, na.rm = TRUE),
            Part = ifelse(tot > 0, Valeur / tot * 100, 0)) %>%
     ungroup() %>%
-    # Niveaux ordonnés par total croissant : avec coord_flip(), la plus grosse
-    # zone se retrouve en haut du graphique.
-    mutate(Zone = factor(Zone, levels = noms[order(totaux)]))
+    # Niveaux par population croissante : avec coord_flip(), l'entrepôt le plus
+    # peuplé se retrouve en haut (lecture haut→bas = population décroissante).
+    mutate(Zone = factor(Zone, levels = noms[order(pop)]))
   g <- ggplot(df_long, aes(Zone, Part, fill = Secteur)) +
     geom_col(width = 0.85) +
     coord_flip() +
@@ -993,20 +1018,20 @@ graphe_compo_100 <- function(mat, titre, soustitre, fichier) {
   cat("  ✓", fichier, "\n")
 }
 
-# ── Helper B : flux brut par secteur pour 3 zones (max / médiane / min) ───────
-# Sélectionne les zones de plus fort, médian et plus faible total, puis trace le
-# flux brut de chaque secteur (valeurs absolues, non normalisées). Une facette
-# par zone avec échelle libre (scales = "free_x") : la composition reste lisible
-# malgré l'écart d'ampleur entre le plus gros et le plus petit entrepôt
-# (le total de chaque zone est rappelé dans le titre de sa facette).
-# unite : libellé d'unité ("mrd RWF" ou "tonnes").
-graphe_brut3 <- function(mat, unite, titre, soustitre, fichier) {
+# ── Helper B : flux brut par secteur pour 3 zones imposées ────────────────────
+# Trace le flux brut de chaque secteur (valeurs absolues, non normalisées) pour
+# les 3 entrepôts dont les indices de ligne sont fournis dans `sel` (et étiquetés
+# par `rang`). On impose les MÊMES 3 entrepôts (ceux min/médian/max de la demande)
+# aux graphes offre et demande, pour lire directement l'effet du netting
+# demande = max(0, d − x) en comparant production brute x et demande brute d.
+# Une facette par zone, échelle libre (scales = "free_x") : la composition reste
+# lisible malgré l'écart d'ampleur (le total de chaque zone est rappelé en titre
+# de facette). unite : libellé d'unité ("mrd RWF" ou "tonnes").
+graphe_brut3 <- function(mat, unite, sel, rang, titre, soustitre, fichier) {
   totaux <- rowSums(mat, na.rm = TRUE)
-  ord <- order(totaux)
-  sel <- c(ord[length(ord)], ord[ceiling(length(ord) / 2)], ord[1])  # max, médiane, min
   noms <- str_trunc(str_remove(rownames(mat), " - .*"), 22)
   lab  <- sprintf("%s — %s  (total : %s %s)",
-                  c("Max", "Médiane", "Min"), noms[sel],
+                  rang, noms[sel],
                   format(round(totaux[sel]), big.mark = " "), unite)
   sub <- mat[sel, , drop = FALSE]
   df  <- as.data.frame(unname(sub)); colnames(df) <- colnames(mat)
@@ -1043,20 +1068,7 @@ graphe_compo_100(
   "graphique_composition_sectorielle.png"
 )
 
-# ── 2) OFFRE — flux brut (production locale, avant netting), 3 entrepôts types ─
-if (exists("prod_zones")) {
-  graphe_brut3(
-    prod_zones, "mrd RWF",
-    "Flux brut par secteur — production locale (3 entrepôts types)",
-    paste0("Modèle MRIO — ", NOM_PAYS,
-           " · production brute x[i,s] avant netting · entrepôts max / médiane / min"),
-    "graphique_offre_brut_3entrepots.png"
-  )
-} else {
-  cat("  ⚠ prod_zones absent du persist — relancer 03_transport.R pour le graphe brut offre\n")
-}
-
-# ── 3) DEMANDE — besoin NET (déficit importé), composition à 100%, en valeur ──
+# ── 2) DEMANDE — besoin NET (déficit importé), composition à 100%, en valeur ──
 graphe_compo_100(
   demande_zones,
   "Composition sectorielle du besoin NET (déficit importé), par zone — valeur",
@@ -1065,7 +1077,7 @@ graphe_compo_100(
   "graphique_demande_composition_mrd_rwf.png"
 )
 
-# ── 4) DEMANDE — besoin NET, composition à 100%, en tonnage physique ──────────
+# ── 3) DEMANDE — besoin NET, composition à 100%, en tonnage physique ──────────
 graphe_compo_100(
   en_tonnes(demande_zones),
   "Composition sectorielle du besoin NET (déficit importé), par zone — tonnes",
@@ -1074,25 +1086,43 @@ graphe_compo_100(
   "graphique_demande_composition_tonnes.png"
 )
 
-# ── 5) & 6) DEMANDE — flux brut (demande totale, avant netting), 3 entrepôts ───
-#            en valeur (mrd RWF) puis en tonnes.
-if (exists("dem_zones")) {
+# ── 4) à 6) FLUX BRUTS sur 3 entrepôts FIXES : ceux min/médian/max de la DEMANDE
+# Mêmes 3 entrepôts affichés côté production (offre brute x) et côté demande
+# (demande brute d), pour visualiser directement l'effet de max(0, d − x).
+# Nécessite prod_zones ET dem_zones (bruts) persistés par 03_transport.R.
+if (exists("prod_zones") && exists("dem_zones")) {
+  # Sélection par la demande totale brute (rowSums dem_zones) : max, médiane, min.
+  dem_tot  <- rowSums(dem_zones, na.rm = TRUE)
+  ord_d    <- order(dem_tot)
+  sel_dem  <- c(ord_d[length(ord_d)], ord_d[ceiling(length(ord_d) / 2)], ord_d[1])
+  rang_dem <- c("Demande max", "Demande médiane", "Demande min")
+
+  # 4) OFFRE brute (production locale x) sur les 3 entrepôts de la demande.
   graphe_brut3(
-    dem_zones, "mrd RWF",
-    "Flux brut par secteur — demande totale (3 entrepôts types) — valeur",
+    prod_zones, "mrd RWF", sel_dem, rang_dem,
+    "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande)",
+    paste0("Modèle MRIO — ", NOM_PAYS,
+           " · production brute x[i,s] avant netting · mêmes entrepôts que le graphe demande"),
+    "graphique_offre_brut_3entrepots.png"
+  )
+  # 5) DEMANDE brute (demande totale d) sur les mêmes 3 entrepôts — valeur.
+  graphe_brut3(
+    dem_zones, "mrd RWF", sel_dem, rang_dem,
+    "Flux brut par secteur — demande totale (entrepôts min/médian/max de la demande) — valeur",
     paste0("Modèle MRIO — ", NOM_PAYS,
            " · demande brute d[i,s] (interm. + finale) avant netting"),
     "graphique_demande_brut_mrd_rwf_3entrepots.png"
   )
+  # 6) DEMANDE brute sur les mêmes 3 entrepôts — tonnage physique.
   graphe_brut3(
-    en_tonnes(dem_zones), "tonnes",
-    "Flux brut par secteur — demande totale (3 entrepôts types) — tonnes",
+    en_tonnes(dem_zones), "tonnes", sel_dem, rang_dem,
+    "Flux brut par secteur — demande totale (entrepôts min/médian/max de la demande) — tonnes",
     paste0("Modèle MRIO — ", NOM_PAYS,
            " · demande brute convertie en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
     "graphique_demande_brut_tonnes_3entrepots.png"
   )
 } else {
-  cat("  ⚠ dem_zones absent du persist — relancer 03_transport.R pour les graphes bruts demande\n")
+  cat("  ⚠ prod_zones/dem_zones absents du persist — relancer 03_transport.R pour les graphes bruts\n")
 }
 
 cat("✓ Graphiques de composition sectorielle (offre & demande) sauvegardés\n\n")
