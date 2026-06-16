@@ -726,7 +726,7 @@ emploi_national[emploi_national == 0] <- 1
 pop_totale <- sum(pop_i, na.rm = TRUE)
 if (pop_totale == 0) stop("pop_totale est nulle — vérifier diag_population dans persist.")
 
-# ── Extraction du RWI normalisé aligné sur noeuds_entreposage ────────────────
+# ── Extraction du RWI normalisé aligné sur noeuds_entreposage ─────────────────
 # p_rwi est calculé dans 01_reseau.R (min-max sur [0,1]) et stocké dans diag_rwi.
 # On réaligne sur noeuds_entreposage (même logique que pop_i ci-dessus).
 p_rwi_zones <- diag_rwi$p_rwi[
