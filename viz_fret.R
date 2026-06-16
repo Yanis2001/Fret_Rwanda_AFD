@@ -985,26 +985,78 @@ tonnes_factor <- TONNES_PAR_mrd_RWF[SECTEURS]
 en_tonnes <- function(mat) sweep(mat, 2, tonnes_factor[colnames(mat)], `*`)
 
 # ── Helper A : composition empilée à 100% par zone (toutes les zones) ─────────
-# mat : matrice zones × secteurs (mrd RWF ou tonnes). Une barre = une zone,
-# normalisée à 100%, rangée par POPULATION DÉCROISSANTE (la plus peuplée en haut)
+# mat : matrice zones × secteurs (mrd RWF ou tonnes) = composante DOMESTIQUE
+# (surplus net offre_zones, ou déficit net demande_zones), tracée en aplat.
+# mat_hachure (optionnel) : composante de COMMERCE EXTÉRIEUR empilée par-dessus,
+# mêmes couleurs sectorielles mais HACHURÉE (imports côté offre, exports côté
+# demande). On normalise à 100% le total (domestique + commerce extérieur) de
+# chaque zone. Intérêt : par l'identité ressources-emplois de la SAM,
+#   Σ_zones offre + imports = Σ_zones demande + exports   (par secteur),
+# donc les graphes offre et demande ont la MÊME composition sectorielle agrégée
+# (répartie différemment selon les entrepôts) — on visualise ainsi ce qui passe
+# par chaque jambe gravitaire (domestique vs export/import).
+# Une barre = une zone, rangée par POPULATION DÉCROISSANTE (plus peuplée en haut)
 # pour un ordre identique d'un graphique « tous entrepôts » à l'autre.
-# make.unique() évite que deux entrepôts au libellé tronqué identique (ex. deux
-# « Zone industrielle … ») soient fusionnés silencieusement dans une seule barre.
-graphe_compo_100 <- function(mat, titre, soustitre, fichier) {
+# make.unique() évite que deux entrepôts au libellé tronqué identique soient
+# fusionnés silencieusement dans une seule barre.
+graphe_compo_100 <- function(mat, titre, soustitre, fichier,
+                             mat_hachure = NULL,
+                             lab_solide = "domestique", lab_hachure = "commerce ext.") {
   noms <- make.unique(str_trunc(str_remove(rownames(mat), " - .*"), 22), sep = "_")
   pop  <- pop_par_zone[rownames(mat)]   # population alignée sur les lignes de mat
-  df <- as.data.frame(unname(mat)); colnames(df) <- colnames(mat); df$Zone <- noms
-  df_long <- df %>%
-    pivot_longer(-Zone, names_to = "Secteur", values_to = "Valeur") %>%
+
+  # Passage au format long de la composante domestique (Bloc = solide).
+  vers_long <- function(m, bloc) {
+    d <- as.data.frame(unname(m)); colnames(d) <- colnames(m); d$Zone <- noms
+    pivot_longer(d, -Zone, names_to = "Secteur", values_to = "Valeur") %>%
+      mutate(Bloc = bloc)
+  }
+  df_long <- vers_long(mat, lab_solide)
+  if (!is.null(mat_hachure)) df_long <- bind_rows(df_long, vers_long(mat_hachure, lab_hachure))
+
+  df_long <- df_long %>%
     group_by(Zone) %>%
     mutate(tot  = sum(Valeur, na.rm = TRUE),
            Part = ifelse(tot > 0, Valeur / tot * 100, 0)) %>%
     ungroup() %>%
-    # Niveaux par population croissante : avec coord_flip(), l'entrepôt le plus
-    # peuplé se retrouve en haut (lecture haut→bas = population décroissante).
-    mutate(Zone = factor(Zone, levels = noms[order(pop)]))
-  g <- ggplot(df_long, aes(Zone, Part, fill = Secteur)) +
-    geom_col(width = 0.85) +
+    mutate(
+      # Niveaux par population croissante : avec coord_flip(), l'entrepôt le plus
+      # peuplé se retrouve en haut (lecture haut→bas = population décroissante).
+      Zone    = factor(Zone, levels = noms[order(pop)]),
+      Secteur = factor(Secteur, levels = SECTEURS),
+      Bloc    = factor(Bloc, levels = c(lab_solide, lab_hachure)),
+      # Ordre d'empilement : bloc domestique d'abord (1..N), puis bloc commerce
+      # extérieur (101..), secteurs dans l'ordre SECTEURS à l'intérieur de chaque
+      # bloc → les deux jambes apparaissent en blocs distincts dans chaque barre.
+      ordre   = (as.integer(Bloc) - 1L) * 100L + match(Secteur, SECTEURS)
+    )
+
+  if (is.null(mat_hachure)) {
+    # Cas sans commerce extérieur : aplat simple (comportement d'origine).
+    g <- ggplot(df_long, aes(Zone, Part, fill = Secteur, group = ordre)) +
+      geom_col(width = 0.85, position = position_stack(reverse = TRUE))
+  } else {
+    # Cas avec commerce extérieur : aplat (domestique) + hachures (commerce ext.).
+    g <- ggplot(df_long, aes(Zone, Part, fill = Secteur, pattern = Bloc, group = ordre)) +
+      geom_col_pattern(
+        width           = 0.85,
+        position        = position_stack(reverse = TRUE),
+        pattern_colour  = NA,          # pas de contour de hachure
+        pattern_fill    = "grey15",    # couleur des hachures (sur fond = couleur secteur)
+        pattern_density = 0.35,
+        pattern_spacing = 0.009,
+        pattern_angle   = 45,
+        colour = NA, linewidth = 0
+      ) +
+      scale_pattern_manual(values = setNames(c("none", "stripe"),
+                                             c(lab_solide, lab_hachure)),
+                           name = NULL) +
+      guides(pattern = guide_legend(override.aes = list(fill = "grey75"),
+                                    order = 2),
+             fill    = guide_legend(order = 1))
+  }
+
+  g <- g +
     coord_flip() +
     scale_fill_manual(values = PALETTE_SECTEURS) +
     scale_y_continuous(labels = scales::percent_format(scale = 1)) +
@@ -1014,7 +1066,9 @@ graphe_compo_100 <- function(mat, titre, soustitre, fichier) {
     theme(plot.title    = element_text(face = "bold", size = 13),
           plot.subtitle = element_text(color = "#666666", size = 9),
           legend.position = "right")
-  ggsave(file.path(DIR_CARTES, fichier), g, width = 14, height = 8, dpi = 300)
+  # Barres plus hautes quand il y a des hachures, pour qu'elles restent visibles.
+  ggsave(file.path(DIR_CARTES, fichier), g,
+         width = 14, height = if (is.null(mat_hachure)) 8 else 11, dpi = 300)
   cat("  ✓", fichier, "\n")
 }
 
@@ -1056,34 +1110,60 @@ graphe_brut3 <- function(mat, unite, sel, rang, titre, soustitre, fichier) {
   cat("  ✓", fichier, "\n")
 }
 
-# ── 1) OFFRE — surplus net exportable, composition à 100%, toutes les zones ───
+# Composante de commerce extérieur (hachurée) ajoutée si e_zones/m_zones sont
+# persistés (03_transport.R) : imports côté offre, exports côté demande. Par
+# l'identité SAM Σoffre+imports = Σdemande+exports, les graphes offre et demande
+# ont alors la même composition sectorielle agrégée (sur des entrepôts différents).
+hach_ok <- exists("e_zones") && exists("m_zones")
+if (!hach_ok) cat("  ⚠ e_zones/m_zones absents — relancer 03_transport.R pour les hachures commerce ext.\n")
+
+# ── 1) OFFRE — surplus net (aplat) + imports (hachuré), à 100%, en valeur ─────
 # (ex-« graphique_composition_sectorielle » ; descriptif clarifié.)
 graphe_compo_100(
   offre_zones,
-  "Composition sectorielle du surplus NET exportable, par zone",
+  "Composition sectorielle — surplus net (aplat) + imports (hachuré), par zone — valeur",
   paste0("Modèle MRIO — ", NOM_PAYS,
-         " · offre = max(0, production − demande locale), en valeur (mrd RWF)\n",
-         "Attention : domination mécanique des secteurs d'export (Mines, cultures ",
-         "de rente) — les secteurs consommés localement sont nettés. ≠ composition du fret."),
-  "graphique_composition_sectorielle.png"
+         " · aplat = surplus domestique max(0, x−d) [jambe domestique] · ",
+         "hachuré = imports τ_M·d [jambe import], en valeur (mrd RWF)\n",
+         "Totaux sectoriels identiques au graphe demande (identité ressources-emplois)."),
+  "graphique_composition_sectorielle.png",
+  mat_hachure = if (hach_ok) m_zones else NULL,
+  lab_solide = "surplus domestique", lab_hachure = "imports"
 )
 
-# ── 2) DEMANDE — besoin NET (déficit importé), composition à 100%, en valeur ──
+# ── 2) OFFRE — idem en tonnage physique ───────────────────────────────────────
+graphe_compo_100(
+  en_tonnes(offre_zones),
+  "Composition sectorielle — surplus net (aplat) + imports (hachuré), par zone — tonnes",
+  paste0("Modèle MRIO — ", NOM_PAYS,
+         " · surplus domestique + imports, convertis en tonnes (facteur TONNES_PAR_mrd_RWF)"),
+  "graphique_offre_composition_tonnes.png",
+  mat_hachure = if (hach_ok) en_tonnes(m_zones) else NULL,
+  lab_solide = "surplus domestique", lab_hachure = "imports"
+)
+
+# ── 3) DEMANDE — déficit net (aplat) + exports (hachuré), à 100%, en valeur ───
 graphe_compo_100(
   demande_zones,
-  "Composition sectorielle du besoin NET (déficit importé), par zone — valeur",
+  "Composition sectorielle — déficit net (aplat) + exports (hachuré), par zone — valeur",
   paste0("Modèle MRIO — ", NOM_PAYS,
-         " · demande = max(0, demande locale − production), en valeur (mrd RWF)"),
-  "graphique_demande_composition_mrd_rwf.png"
+         " · aplat = déficit domestique max(0, d−x) [jambe domestique] · ",
+         "hachuré = exports τ_E·x [jambe export], en valeur (mrd RWF)\n",
+         "Totaux sectoriels identiques au graphe offre (identité ressources-emplois)."),
+  "graphique_demande_composition_mrd_rwf.png",
+  mat_hachure = if (hach_ok) e_zones else NULL,
+  lab_solide = "déficit domestique", lab_hachure = "exports"
 )
 
-# ── 3) DEMANDE — besoin NET, composition à 100%, en tonnage physique ──────────
+# ── 4) DEMANDE — idem en tonnage physique ─────────────────────────────────────
 graphe_compo_100(
   en_tonnes(demande_zones),
-  "Composition sectorielle du besoin NET (déficit importé), par zone — tonnes",
+  "Composition sectorielle — déficit net (aplat) + exports (hachuré), par zone — tonnes",
   paste0("Modèle MRIO — ", NOM_PAYS,
-         " · besoin net converti en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
-  "graphique_demande_composition_tonnes.png"
+         " · déficit domestique + exports, convertis en tonnes (facteur TONNES_PAR_mrd_RWF)"),
+  "graphique_demande_composition_tonnes.png",
+  mat_hachure = if (hach_ok) en_tonnes(e_zones) else NULL,
+  lab_solide = "déficit domestique", lab_hachure = "exports"
 )
 
 # ── 4) à 6) FLUX BRUTS sur 3 entrepôts FIXES : ceux min/médian/max de la DEMANDE

@@ -2404,6 +2404,8 @@ saveRDS(
     demande_zones       = demande_zones,       # n_warehouses × N_SECTEURS (domestique, NET : max(0,d−x))
     prod_zones          = prod_zones,          # n_warehouses × N_SECTEURS (production locale BRUTE x[i,s], avant netting)
     dem_zones           = dem_zones,           # n_warehouses × N_SECTEURS (demande totale BRUTE d[i,s], avant netting)
+    e_zones             = e_zones,             # n_warehouses × N_SECTEURS (exports par zone = τ_E·prod_zones, jambe gravitaire export)
+    m_zones             = m_zones,             # n_warehouses × N_SECTEURS (imports par zone = τ_M·dem_zones, jambe gravitaire import)
     offre_total         = offre_total,         # n_total × N_SECTEURS (domestique + RoW)
     demande_total       = demande_total,       # n_total × N_SECTEURS (domestique + RoW)
     noms_zones_uniques  = noms_zones_uniques,  # noms des n_warehouses zones domestiques
@@ -2420,8 +2422,8 @@ cat("✓ persist_flux_fret.rds\n")
 # pour la sauvegarde du réseau qui suit. Sans ce rm(), ils resteraient en
 # mémoire et doubleraient le pic RAM lors du saveRDS suivant.
 rm(flux_gravitaire, flux_total, flux_tonnes_total,
-   offre_zones, demande_zones, prod_zones, dem_zones, offre_total, demande_total,
-   flux_par_secteur_df, recap_zones)
+   offre_zones, demande_zones, prod_zones, dem_zones, e_zones, m_zones,
+   offre_total, demande_total, flux_par_secteur_df, recap_zones)
 invisible(gc(full = TRUE))
 invisible(gc(full = TRUE))
 afficher_ram("entre les deux sauvegardes")

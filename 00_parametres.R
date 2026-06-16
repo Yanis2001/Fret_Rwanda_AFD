@@ -42,6 +42,7 @@ packages_requis <- c(
   "digest",        # Génération d'empreinte numérique (hash) d'objets R
   "ggrepel",       # Étiquettes ggplot2 sans chevauchement (graphiques RWI, démographie)
   "ggalluvial",    # Diagrammes de Sankey pour les flux de fret (viz_fret.R)
+  "ggpattern",     # Remplissages hachurés (composition sectorielle : exports/imports vs domestique)
   "RColorBrewer",  # Palettes de couleurs pour les cartes et graphiques sectoriels
   "readxl"         # Lecture des fichiers Excel (.xlsx) — utilisé pour la SAM IFPRI 2021
 )
