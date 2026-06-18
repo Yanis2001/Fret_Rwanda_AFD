@@ -363,7 +363,7 @@ RPHC5_CORRESPONDANCE_SECTEURS <- list(
 # Secteurs économiques modélisés (découpage orienté FRET, dérivé de la SAM).
 # Ordre fixe. La matrice A et les agrégats sont recalculés automatiquement depuis
 # la SAM via SAM_MAPPING_SECTEURS, donc changer cette liste impose seulement de
-# maintenir cohérents : SAM_MAPPING_SECTEURS, BETA_SECTEUR, TONNES_PAR_mrd_RWF,
+# maintenir cohérents : SAM_MAPPING_SECTEURS, BETA_SECTEUR, VALEUR_RWF_PAR_TONNE,
 # RPHC5_CORRESPONDANCE_SECTEURS, COMMERCE_EXTERIEUR_NISR, couts_prebordure_df.
 SECTEURS <- c("Agriculture", "Cultures_export", "Mines", "Agro_industrie",
               "Chimie_petrole", "Manufactures", "Construction", "Commerce",
@@ -650,30 +650,28 @@ production_totale <- sam$output[SECTEURS]
 cat("  ✓ production_totale : SAM IFPRI (",
     round(sum(production_totale)), "mrd RWF d'output total )\n")
 
-# ── Facteurs de conversion valeur économique → masse de fret ──────────────────
-# Unité : TONNES PAR MILLIARD DE RWF (les flux du modèle — production, demande —
-# sont en milliards de RWF).
-#
-# Logique : densité physique = tonnes par unité de valeur. Plus le bien est lourd
-# et bon marché (agrégats, vivrier), plus le facteur est élevé ; plus il est léger
-# et cher (café, machines), plus il est faible. Les SERVICES et l'ÉNERGIE/EAU ne
-# génèrent AUCUN fret routier (mis à 0) : le secteur Transport est mis à 0 car il
-# produit un service (déplacer les biens des autres), déjà capturé par les flux
-# physiques des autres secteurs ; ses propres intrants (carburant, pièces) sont
-# comptés via la matrice A (demande intermédiaire), pas via son output.
-TONNES_PAR_mrd_RWF <- c(
-  Agriculture     = 1700,  # Vivrier pondéreux : racines, bananes, céréales (FAOSTAT)
-  Cultures_export = 280,   # Café/thé/tabac : valeur unitaire élevée → faible tonnage
-  Mines           = 2300,  # Minerai dense (3T) + carrières (RMB Annual Report 2022)
-  Agro_industrie  = 1800,  # Farine, boissons, huiles, sucre transformés
-  Chimie_petrole  = 1600,  # Produits pétroliers (vrac lourd) dominants à l'import
-  Manufactures    = 1100,  # Mix : ciment/verre (nmet) lourds, machines/textile plus légers
-  Construction    = 9000,  # Agrégats, ciment, acier : très lourds / très faible valeur
-  Commerce        = 760,   # Biens redistribués, valeur unitaire plus élevée
-  Transport       = 0,     # Service (cf. supra) — fret nul pour éviter le double comptage
-  Energie_eau     = 0,     # Électricité + eau : aucun fret routier
-  Services        = 0      # Immatériel (finance, ICT, éducation, santé, administration)
+# ── Valeur unitaire des marchandises (RWF PAR TONNE) ──────────────────────────
+VALEUR_RWF_PAR_TONNE <- c(
+  Agriculture     =   588000,  # Vivrier pondéreux : racines, bananes, céréales (FAOSTAT) — ≈ 1700 t/mrd
+  Cultures_export =  3571000,  # Café/thé/tabac : forte valeur unitaire                   — ≈ 280 t/mrd
+  Mines           =   435000,  # Minerai dense (3T) + carrières (RMB Annual Report 2022)  — ≈ 2300 t/mrd
+  Agro_industrie  =   556000,  # Farine, boissons, huiles, sucre transformés              — ≈ 1800 t/mrd
+  Chimie_petrole  =   625000,  # Produits pétroliers (vrac lourd) dominants à l'import    — ≈ 1600 t/mrd
+  Manufactures    =   909000,  # Mix : ciment/verre lourds + machines/textile plus légers — ≈ 1100 t/mrd
+  Construction    =   111000,  # Agrégats, ciment, acier : très lourds / faible valeur    — ≈ 9000 t/mrd
+  Commerce        =  1316000,  # Biens redistribués, valeur unitaire plus élevée          — ≈ 760 t/mrd
+  Transport       =      Inf,  # Service (cf. supra) — fret nul pour éviter le double comptage
+  Energie_eau     =      Inf,  # Électricité + eau : aucun fret routier
+  Services        =      Inf   # Immatériel (finance, ICT, éducation, santé, administration)
 )
+stopifnot(setequal(names(VALEUR_RWF_PAR_TONNE), SECTEURS))
+
+# ── Densité physique DÉRIVÉE (tonnes par milliard de RWF) ──────────────────────
+# NE PAS ÉDITER : obtenue par inversion de VALEUR_RWF_PAR_TONNE. Conservée sous ce
+# nom car tout l'aval (03_transport.R, viz_fret.R) raisonne en tonnes/mrd RWF.
+#   tonnes/mrd RWF = 1e9 RWF/mrd ÷ valeur (RWF/tonne)
+#   valeur = Inf (services) → 0 tonne/mrd RWF (pas de fret) : le test « == 0 » en aval reste valide.
+TONNES_PAR_mrd_RWF <- 1e9 / VALEUR_RWF_PAR_TONNE
 stopifnot(setequal(names(TONNES_PAR_mrd_RWF), SECTEURS))
 
 # ==============================================================================
@@ -985,6 +983,17 @@ PALETTE_CLASSE_TRAFIC <- c(
   "Très élevé"  = "#6A0DAD"    # Violet intense
 )
 
+# ── Catégories de saturation (encombrement V/C) ───────────────────────────────
+# Carte des goulots d'étranglement : vert = fluide, rouge = saturé (V/C>1).
+# Les niveaux correspondent à classe_saturation calculée dans 03_transport.R.
+PALETTE_SATURATION <- c(
+  "Fluide"            = "#1A9850",   # Vert        — V/C < 0,5
+  "Dense"             = "#FEE08B",   # Jaune       — 0,5 ≤ V/C < 0,8
+  "Proche saturation" = "#FC8D59",   # Orange      — 0,8 ≤ V/C < 1,0
+  "Saturé"            = "#D73027",   # Rouge       — V/C ≥ 1,0
+  "Inconnu"           = "#CCCCCC"    # Gris        — capacité non définie
+)
+
 # ── Palette d'émissions (vert pâle → rouge foncé) ─────────────────────────────
 # Rouge = route très émettrice (pente forte + mauvaise surface + véhicule lourd)
 # Vert  = route peu émettrice (plat, bitumée, camion léger)
@@ -1039,16 +1048,96 @@ cat("✓ Palettes de couleurs définies\n\n")
 # Ce tableau contient les caractéristiques physiques et économiques de chaque
 # type de véhicule : consommation de carburant, prix du carburant, valeur
 # du temps du chauffeur, coûts d'usure selon le type de route, capacité de
-# chargement, et pénalité en zone urbaine (congestion, restrictions de tonnage).
+# chargement, pénalité en zone urbaine (congestion, restrictions de tonnage),
+# et équivalent PCU (Passenger Car Unit, équivalent en voitures particulières) 
+# (facteur_pcu) utilisé par la fonction d'encombrement.
 # UNITÉS MONÉTAIRES : toutes en RWF (prix_carburant en RWF/L, valeur_temps en
 # RWF/h, usure_* en RWF/km, chargement/déchargement en RWF).
 params_flotte_df <- tribble(
-  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_rwf, ~cout_dechargement_rwf,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1383.2,          4446,          19.76,        39.52,         69.16,          3.0,              1.05,            2.68,                  0.25,                  0.040,                  14820,                14820,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1383.2,          7410,          49.40,        79.04,         118.56,         7.5,              1.25,            2.68,                  0.50,                  0.065,                  24700,                24700,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1383.2,          9880,          79.04,        138.32,        217.36,         20.0,             1.60,            2.68,                  0.80,                  0.090,                  39520,                39520
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_rwf, ~cout_dechargement_rwf, ~facteur_pcu,
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1383.2,          4446,          19.76,        39.52,         69.16,          3.0,              1.05,            2.68,                  0.25,                  0.040,                  14820,                14820,                1.5,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1383.2,          7410,          49.40,        79.04,         118.56,         7.5,              1.25,            2.68,                  0.50,                  0.065,                  24700,                24700,                2.0,
+  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1383.2,          9880,          79.04,        138.32,        217.36,         20.0,             1.60,            2.68,                  0.80,                  0.090,                  39520,                39520,                3.0
 )
 duck_write(params_flotte_df, "params_flotte")
+
+# ── Table 1bis : capacité d'écoulement par type de route (congestion) ─────────
+# OBJECTIF : borner le débit de chaque tronçon pour modéliser l'encombrement.
+# La capacité est exprimée en PCU/jour ("Passenger Car Unit" = équivalent
+# voiture particulière) 
+# Elle dépend uniquement du TYPE de route, pas de sa longueur (c'est un débit
+# de section). Ces valeurs sont des ordres de grandeur à caler sur des comptages
+# réels (RTDA, corridor Nord) lorsqu'ils seront disponibles.
+capacites_route_df <- tribble(
+  ~road_type,     ~capacite_pcu_jour,
+  "motorway",     30000,   # autoroute — débit très élevé
+  "trunk",        15000,   # route nationale principale
+  "primary",      10000,   # route primaire
+  "secondary",     6000,   # route secondaire
+  "tertiary",      3000,   # route tertiaire
+  "unclassified",  1500    # route non classée / desserte locale
+)
+
+# ── Conversion tonnes/an → PCU/jour ───────────────────────────────────────────
+# Le modèle affecte des TONNES/AN par véhicule ; la capacité est en PCU/JOUR.
+# On convertit la charge d'une arête ainsi, pour chaque type de véhicule v :
+#   trajets/an = tonnes_an / (capacite_tonnes[v] × TAUX_CHARGEMENT)
+#   PCU/jour   = trajets/an / JOURS_TRAFIC_AN × facteur_pcu[v]
+# puis on somme sur les véhicules pour obtenir la charge PCU/jour du tronçon.
+TAUX_CHARGEMENT <- 0.7   # taux de remplissage moyen des camions (0–1)
+JOURS_TRAFIC_AN <- 300   # nombre de jours ouvrables de trafic fret par an
+
+# ── Fonction de congestion BPR (Bureau of Public Roads) ───────────────────────
+# Coût congestionné = coût_libre × [ 1 + BPR_ALPHA × (V/C)^BPR_BETA ]
+# où V = charge (PCU/jour) et C = capacité (PCU/jour) du tronçon.
+# Tant que V < C le surcoût reste faible ; au-delà il croît fortement, ce qui
+# reporte le trafic vers d'autres itinéraires. Valeurs classiques : 0,15 et 4.
+BPR_ALPHA <- 0.15
+BPR_BETA  <- 4
+
+# ── Affectation à l'équilibre (Méthode des Moyennes Successives, MSA) ──────────
+# Comme le coût dépend de la charge (et inversement), on itère :
+#   1. affectation All-or-Nothing avec les coûts congestionnés courants
+#   2. moyennage de la nouvelle charge avec la précédente (pas 1/n)
+#   3. arrêt quand la charge ne varie quasiment plus (gap < MSA_TOL)
+MSA_MAX_ITER <- 20     # nombre maximal d'itérations d'équilibre
+MSA_TOL      <- 0.01   # convergence : variation relative L1 de la charge < 1 %
+
+# Interrupteur global de la fonction d'encombrement.
+#   TRUE  → affectation à l'équilibre (BPR + MSA), reroutage selon la saturation
+#   FALSE → affectation All-or-Nothing historique (1 passe, sans capacité)
+# Peut être surchargé depuis run_all.R avant le source des modules.
+if (!exists("CONGESTION")) CONGESTION <- TRUE
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CHOIX DU VÉHICULE PAR LOT ÉCONOMIQUE (EOQ) — version A (sans coût en transit)
+# Le véhicule qui dessert une paire OD pour un secteur n'est plus simplement le
+# moins cher au tonne-km, mais celui qui minimise le COÛT LOGISTIQUE TOTAL annuel :
+#   CLT(q, v) = (Q/q)·K_v + Q·c_v + (q/2)·V_s·r
+#   où Q   = flux de l'OD (tonnes/an),
+#      q   = taille d'envoi (tonnes), optimisée,
+#      K_v = coût fixe par trajet = cout_chargement_rwf + cout_dechargement_rwf,
+#      c_v = coût de transport de l'OD pour le véhicule v (RWF/tonne),
+#      V_s = valeur de la marchandise (= VALEUR_RWF_PAR_TONNE[secteur]),
+#      r   = taux de détention du stock (ci-dessous).
+# Taille d'envoi optimale : q* = √(2·Q·K_v / (V_s·r)), plafonnée à la capacité.
+# Intuition : gros flux et bien bon marché → gros camion rempli ; petit flux ou
+# bien de valeur → véhicule plus petit, envois plus fréquents.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Interrupteur : TRUE = véhicule choisi par EOQ ; FALSE = comportement historique
+# (véhicule du chemin de moindre coût au tonne-km). Surchargé depuis run_all.R.
+if (!exists("CHOIX_VEHICULE_EOQ")) CHOIX_VEHICULE_EOQ <- TRUE
+
+# ── Taux de détention du stock « r » (coût annuel de garder 1 RWF en stock) ───
+# Décomposé en composantes EXPLICITES pour la lisibilité ; leur SOMME = r.
+# Chaque composante est une fraction de la valeur de la marchandise, par an.
+R_CAPITAL      <- 0.16   # coût d'opportunité du capital immobilisé (≈ taux prêteur BNR)
+R_STOCKAGE     <- 0.03   # entreposage : espace, manutention, énergie
+R_ASSURANCE    <- 0.01   # assurance des marchandises en stock
+R_OBSOLESCENCE <- 0.03   # dépréciation, pertes, péremption (moyenne tous secteurs)
+# r total utilisé par l'EOQ (≈ 0,23/an avec les valeurs ci-dessus)
+TAUX_DETENTION_STOCK <- R_CAPITAL + R_STOCKAGE + R_ASSURANCE + R_OBSOLESCENCE
 
 # ── Table 2 : vitesses par véhicule × type de route × surface ─────────────────
 # Chaque véhicule a ses propres vitesses de référence sur chaque combinaison.
