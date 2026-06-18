@@ -188,6 +188,80 @@ tmap_save(carte_fret,
 cat("✓ Carte trafic fret sauvegardée\n")
 
 # ============================================================
+# CARTE 4bis : Saturation du réseau (goulots d'étranglement V/C)
+# Colore chaque tronçon selon son taux de saturation (charge/capacité)
+# calculé par la fonction d'encombrement en 03_transport.R.
+# Vert = fluide, rouge = saturé (V/C ≥ 1). L'épaisseur croît avec V/C
+# pour faire ressortir visuellement les goulots.
+# ============================================================
+
+# Garde-fou : la colonne taux_saturation n'existe que si 03_transport.R a été
+# relancé AVEC la fonction d'encombrement (CONGESTION). Si le réseau chargé est
+# antérieur, on saute la carte avec un message plutôt que de planter.
+colonnes_aretes <- reseau %>% activate("edges") %>% as_tibble() %>% names()
+
+if ("taux_saturation" %in% colonnes_aretes) {
+
+  cat("Génération de la carte de saturation...\n")
+
+  # Couche des arêtes empruntées, avec saturation et épaisseur proportionnelle.
+  aretes_saturation <- reseau %>%
+    activate("edges") %>%
+    st_as_sf() %>%
+    filter(volume_tonnes > 0) %>%
+    mutate(
+      taux_saturation = as.numeric(taux_saturation),
+      # Épaisseur de ligne croissante avec la saturation (échelle linéaire)
+      lwd_val = as.numeric(rescale(taux_saturation, to = c(0.5, 5)))
+    )
+
+  carte_saturation <- fond_carte() +
+
+    # Réseau de base en gris très clair (contexte géographique)
+    tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
+    tm_lines(col = "#DDDDDD", lwd = 0.3) +
+
+    # Arêtes colorées par classe de saturation (catégoriel, comme warehouse_type)
+    tm_shape(aretes_saturation) +
+    tm_lines(
+      col        = "classe_saturation",
+      col.scale  = tm_scale(values = PALETTE_SATURATION),
+      col.legend = tm_legend(title = "Saturation (V/C)"),
+      lwd        = "lwd_val",
+      lwd.scale  = tm_scale(values.range = c(0.4, 5)),
+      lwd.legend = tm_legend(show = FALSE)
+    ) +
+
+    # Points des zones (mêmes couleurs que la carte globale)
+    tm_shape(coords_zones_sf) +
+    tm_dots(
+      fill        = "warehouse_type",
+      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
+      fill.legend = tm_legend(title = "Type de zone"),
+      size        = "taille_point",
+      size.scale  = tm_scale(values.range = c(0.3, 1.8)),
+      size.legend = tm_legend(show = FALSE)
+    ) +
+
+    tm_title(paste0("Saturation du réseau de fret (V/C)\nFonction d'encombrement — ",
+                    NOM_PAYS)) +
+    tm_layout(legend.outside = TRUE, frame = TRUE) +
+    tm_scalebar(position = c("left", "bottom")) +
+    tm_compass(position  = c("right", "top"))
+
+  tmap_save(carte_saturation,
+            file.path(DIR_CARTES, "carte_saturation_reseau.png"),
+            width = 3000, height = 2400, dpi = 300)
+  cat("  ✓ carte_saturation_reseau.png\n")
+  cat("    Tronçons saturés (V/C>1) :",
+      sum(aretes_saturation$taux_saturation > 1, na.rm = TRUE), "\n\n")
+
+} else {
+  cat("⚠ Carte de saturation ignorée : colonne taux_saturation absente.\n")
+  cat("  → Relancer 03_transport.R avec CONGESTION = TRUE.\n\n")
+}
+
+# ============================================================
 # CARTE 5 : Intensité du fret PAR SECTEUR
 # Une carte par secteur économique, même style que carte_trafic_fret
 # mais en filtrant le volume pour ne garder que les tonnes du secteur.
@@ -743,15 +817,23 @@ cat("✓ Graphique flux secteurs sauvegardé\n")
 stopifnot(length(pop_i) == nrow(offre_zones))
 pop_par_zone <- setNames(pop_i, rownames(offre_zones))
 
+# Libellé court et lisible d'une zone, identique à celui des graphes de
+# composition sectorielle : on retire le suffixe descriptif après " - " (souvent
+# le nom de district/secteur administratif) et l'éventuelle parenthèse, puis on
+# tronque à 22 caractères. But : des barres lisibles malgré des noms d'entrepôts
+# longs, et une troncature cohérente d'un graphique « tous entrepôts » à l'autre.
+zone_court <- function(z) str_trunc(str_remove(str_remove(z, " - .*"), " \\(.*"), 22)
+
 
 # ============================================================
 # GRAPHIQUE 2 : Offre vs Demande par zone
 # ============================================================
 
 # ── Zones au sommet d'offre / demande (pour mise en évidence sur le graphique) ──
-# str_trunc(28) est la troncature utilisée dans Zone_court ci-dessous.
-ref_offre_court   <- str_trunc(recap_zones$zone[which.max(recap_zones$offre_totale_mrd_rwf)],   28)
-ref_demande_court <- str_trunc(recap_zones$zone[which.max(recap_zones$demande_totale_mrd_rwf)], 28)
+# zone_court() est la même troncature lisible que celle utilisée dans Zone_court
+# ci-dessous, pour que la comparaison de libellés (contour) reste cohérente.
+ref_offre_court   <- zone_court(recap_zones$zone[which.max(recap_zones$offre_totale_mrd_rwf)])
+ref_demande_court <- zone_court(recap_zones$zone[which.max(recap_zones$demande_totale_mrd_rwf)])
 
 g2 <- recap_zones %>%
   pivot_longer(
@@ -760,7 +842,7 @@ g2 <- recap_zones %>%
     values_to = "Valeur"
   ) %>%
   mutate(
-    Zone_court = str_trunc(zone, 28),
+    Zone_court = zone_court(zone),
     # Population de la zone : sert à ordonner les barres (population décroissante).
     Pop        = pop_par_zone[zone],
     Type_flux  = recode(Type_flux,
@@ -804,12 +886,17 @@ g2 <- recap_zones %>%
   theme(
     plot.title         = element_text(face = "bold", size = 14),
     plot.subtitle      = element_text(color = "#666666", size = 9),
+    # Texte d'axe Y réduit : avec ~91 zones empilées, une petite taille évite que
+    # les libellés d'entrepôts ne se chevauchent verticalement.
+    axis.text.y        = element_text(size = 7),
     legend.position    = "top",
     panel.grid.major.y = element_blank()
   )
 
+# height = 18 : ~91 zones × 2 barres (dodge) → grande hauteur pour espacer les
+# libellés de l'axe Y et garantir leur lisibilité (pas de chevauchement vertical).
 ggsave(file.path(DIR_CARTES, "graphique_offre_demande_mrd_rwf.png"),
-       g2, width = 13, height = 8, dpi = 300)
+       g2, width = 13, height = 18, dpi = 300)
 cat("✓ Graphique offre/demande (mrd RWF) sauvegardé\n")
 
 
@@ -829,8 +916,8 @@ recap_zones_tonnes <- duck_query("
   ORDER BY offre_totale_tonnes DESC
 ")
 
-ref_offre_t_court   <- str_trunc(recap_zones_tonnes$zone[which.max(recap_zones_tonnes$offre_totale_tonnes)],   28)
-ref_demande_t_court <- str_trunc(recap_zones_tonnes$zone[which.max(recap_zones_tonnes$demande_totale_tonnes)], 28)
+ref_offre_t_court   <- zone_court(recap_zones_tonnes$zone[which.max(recap_zones_tonnes$offre_totale_tonnes)])
+ref_demande_t_court <- zone_court(recap_zones_tonnes$zone[which.max(recap_zones_tonnes$demande_totale_tonnes)])
 
 g2_tonnes <- recap_zones_tonnes %>%
   pivot_longer(
@@ -839,7 +926,7 @@ g2_tonnes <- recap_zones_tonnes %>%
     values_to = "Valeur"
   ) %>%
   mutate(
-    Zone_court = str_trunc(zone, 28),
+    Zone_court = zone_court(zone),
     # Population de la zone : sert à ordonner les barres (population décroissante).
     Pop        = pop_par_zone[zone],
     Type_flux  = recode(Type_flux,
@@ -882,12 +969,17 @@ g2_tonnes <- recap_zones_tonnes %>%
   theme(
     plot.title         = element_text(face = "bold", size = 14),
     plot.subtitle      = element_text(color = "#666666", size = 9),
+    # Texte d'axe Y réduit : avec ~91 zones empilées, une petite taille évite que
+    # les libellés d'entrepôts ne se chevauchent verticalement.
+    axis.text.y        = element_text(size = 7),
     legend.position    = "top",
     panel.grid.major.y = element_blank()
   )
 
+# height = 18 : ~91 zones × 2 barres (dodge) → grande hauteur pour espacer les
+# libellés de l'axe Y et garantir leur lisibilité (pas de chevauchement vertical).
 ggsave(file.path(DIR_CARTES, "graphique_offre_demande_tonnes.png"),
-       g2_tonnes, width = 13, height = 8, dpi = 300)
+       g2_tonnes, width = 13, height = 18, dpi = 300)
 cat("✓ Graphique offre/demande (tonnes) sauvegardé\n")
 
 
