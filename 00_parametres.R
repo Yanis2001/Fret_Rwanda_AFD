@@ -103,6 +103,35 @@ cat("✓ Tous les packages sont chargés\n\n")
 ################################################################################
 
 # ==============================================================================
+# CHOIX DU MODE
+# Regroupe TOUS les interrupteurs de mode du modèle (quel comportement activer).
+# ==============================================================================
+
+# ── Affectation du fret (module 03) ───────────────────────────────────────────
+# Congestion : TRUE = affectation à l'équilibre (BPR sur le temps + itérations
+#   MSA, reroutage selon la saturation V/C) ; FALSE = All-or-Nothing
+CONGESTION         <- TRUE
+
+# Choix du véhicule par lot économique (EOQ) : TRUE = le véhicule de chaque
+#   secteur sur chaque OD minimise le coût logistique total (transport + coût
+#   fixe par trajet + stock cyclique + stock en transit) ; FALSE = véhicule du
+#   chemin de moindre coût au tonne-km 
+CHOIX_VEHICULE_EOQ <- TRUE
+
+# ── Scénario de vulnérabilité (module 04) ─────────────────────────────────────
+# Mode(s) de définition de la perturbation. On peut en activer plusieurs : les
+#   arêtes perturbées sont l'UNION des modes actifs. Le mode manuel (liste
+#   OSM_IDS_PERTURBES_MANUEL) est toujours appliqué en plus.
+#     UTILISER_MODE_BUFFER : toutes les routes dans un rayon autour d'un point
+#     UTILISER_MODE_RASTER : intersection avec un raster de risque externe
+UTILISER_MODE_BUFFER <- FALSE
+UTILISER_MODE_RASTER <- TRUE
+
+# Mode de nommage du scénario : NULL = automatique (nom construit depuis les noms
+#   OSM des arêtes perturbées) ; sinon une chaîne = nom manuel imposé.
+NOM_SCENARIO_MANUEL  <- NULL
+
+# ==============================================================================
 # Pays étudié
 # Utilisé dans les titres de cartes et messages console.
 # ==============================================================================
@@ -692,27 +721,20 @@ DESCRIPTION_SCENARIO  <- "Scénario de test"
 DUREE_JOURS           <- 14
 TYPE_EVENEMENT        <- "inondation"
 
-# Choix du mode de création de scénario :
-#     Mode A — Manuel       : liste d'osm_id ou de coordonnées GPS fournie à la main
+# Définition des perturbations — trois méthodes combinables :
+#     Mode A — Manuel       : liste d'osm_id fournie à la main (ci-dessous)
 #     Mode B — Buffer zone  : toutes les routes dans un rayon autour d'un point
 #     Mode C — Raster risque: intersection avec un raster (grille) externe
-# Si plusieurs méthodes sont choisies, les routes affectées seront celles de l'union des méthodes
+# L'activation des modes B/C se fait dans la section CHOIX DU MODE (tête de script).
 
-# Mettre l'identifiant OSM de la ou des routes affectées
+# Mettre l'identifiant OSM de la ou des routes affectées (mode manuel)
 OSM_IDS_PERTURBES_MANUEL <- c(479687569)
 
-# Nom du scénario de vulnérabilité.
-# Deux modes disponibles — choisir en modifiant uniquement NOM_SCENARIO_MANUEL :
-#
-#   Mode automatique (défaut) : laisser NOM_SCENARIO_MANUEL <- NULL
-#     → le nom est construit depuis les noms OSM des arêtes perturbées
-#       (ex. "inondation_RN1_Kigali") ; fallback "Scenario_default" si DuckDB
-#       n'est pas encore disponible (session fraîche avant 01_reseau.R).
-#
-#   Mode manuel : renseigner une chaîne de caractères
-#     → NOM_SCENARIO_MANUEL <- "Mon_scenario_custom"
-NOM_SCENARIO_MANUEL <- NULL   
-
+# Nom du scénario, construit selon NOM_SCENARIO_MANUEL (défini dans CHOIX DU MODE) :
+#   NULL   → automatique : nom dérivé des noms OSM des arêtes perturbées
+#            (ex. "inondation_RN1_Kigali") ; fallback "Scenario_default" si DuckDB
+#            indisponible (session fraîche avant 01_reseau.R).
+#   chaîne → manuel : ce nom est utilisé tel quel.
 NOM_SCENARIO <- if (!is.null(NOM_SCENARIO_MANUEL)) {
   NOM_SCENARIO_MANUEL
 } else {
@@ -741,11 +763,8 @@ NOM_SCENARIO <- if (!is.null(NOM_SCENARIO_MANUEL)) {
     paste(c(TYPE_EVENEMENT, noms_clean), collapse = "_")
   }, error = function(e) "Scenario_default")
 }
-# Pour les activer : mettre TRUE, sinon : mettre FALSE
-UTILISER_MODE_BUFFER        <- FALSE  
-UTILISER_MODE_RASTER        <- TRUE
 
-# Coordonnées du centre de la zone perturbée du mode buffer 
+# Coordonnées du centre de la zone perturbée du mode buffer
 CENTRE_PERTURBATION_LON <- 29.950   # Est-Ouest
 CENTRE_PERTURBATION_LAT <- -2.150   # Nord-Sud
 
@@ -1001,13 +1020,7 @@ PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 
 # ── Secteurs économiques (dans l'ordre de SECTEURS) ───────────────────────────
 # Centralisé ici pour garantir que chaque secteur a toujours la même couleur
-# dans tous les graphiques et cartes (barres, trajectoires, Sankey, carte dominante).
-# Palette définie À LA MAIN (11 teintes) plutôt que par interpolation de Set2 :
-# interpoler 8 couleurs Set2 vers 11 produisait 4 tons saumon/beige quasi
-# identiques (Mines, Cultures_export, Manufactures, Énergie), rendant illisibles
-# les barres de composition sectorielle. Les teintes ci-dessous sont réparties
-# sur la roue chromatique (vert → olive → brun → orange → rouge → violet → bleu
-# → cyan → jaune → rose) pour un contraste maximal, y compris en vision réduite.
+# dans tous les graphiques et cartes.
 # L'association couleur↔secteur se fait par NOM : l'ordre d'empilement dans
 # ggplot n'a donc aucune incidence sur les couleurs affichées.
 .palette_secteurs_brut <- c(
@@ -1088,10 +1101,13 @@ TAUX_CHARGEMENT <- 0.7   # taux de remplissage moyen des camions (0–1)
 JOURS_TRAFIC_AN <- 300   # nombre de jours ouvrables de trafic fret par an
 
 # ── Fonction de congestion BPR (Bureau of Public Roads) ───────────────────────
-# Coût congestionné = coût_libre × [ 1 + BPR_ALPHA × (V/C)^BPR_BETA ]
-# où V = charge (PCU/jour) et C = capacité (PCU/jour) du tronçon.
-# Tant que V < C le surcoût reste faible ; au-delà il croît fortement, ce qui
-# reporte le trafic vers d'autres itinéraires. Valeurs classiques : 0,15 et 4.
+# Fonction volume-délai appliquée au TEMPS de trajet (une route saturée ralentit) :
+#   temps_congestionné = temps_libre × [ 1 + BPR_ALPHA × (V/C)^BPR_BETA ]
+# où V = charge (PCU/jour) et C = capacité (PCU/jour) du tronçon. Seule la
+# composante « temps » du coût généralisé enfle (carburant/usure inchangés), et le
+# temps congestionné alimente le stock en transit de l'EOQ → un bien de valeur fuit
+# les routes saturées (lien congestion → choix modal). Tant que V < C le surcoût
+# reste faible ; au-delà il croît fortement, reportant le trafic. Classiques : 0,15 et 4.
 BPR_ALPHA <- 0.15
 BPR_BETA  <- 4
 
@@ -1102,32 +1118,17 @@ BPR_BETA  <- 4
 #   3. arrêt quand la charge ne varie quasiment plus (gap < MSA_TOL)
 MSA_MAX_ITER <- 20     # nombre maximal d'itérations d'équilibre
 MSA_TOL      <- 0.01   # convergence : variation relative L1 de la charge < 1 %
-
-# Interrupteur global de la fonction d'encombrement.
-#   TRUE  → affectation à l'équilibre (BPR + MSA), reroutage selon la saturation
-#   FALSE → affectation All-or-Nothing historique (1 passe, sans capacité)
-# Peut être surchargé depuis run_all.R avant le source des modules.
-if (!exists("CONGESTION")) CONGESTION <- TRUE
+# (L'activation de la congestion se fait via CONGESTION, section CHOIX DU MODE.)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CHOIX DU VÉHICULE PAR LOT ÉCONOMIQUE (EOQ) — version A (sans coût en transit)
+# CHOIX DU VÉHICULE PAR LOT ÉCONOMIQUE (EOQ)
 # Le véhicule qui dessert une paire OD pour un secteur n'est plus simplement le
-# moins cher au tonne-km, mais celui qui minimise le COÛT LOGISTIQUE TOTAL annuel :
-#   CLT(q, v) = (Q/q)·K_v + Q·c_v + (q/2)·V_s·r
-#   où Q   = flux de l'OD (tonnes/an),
-#      q   = taille d'envoi (tonnes), optimisée,
-#      K_v = coût fixe par trajet = cout_chargement_rwf + cout_dechargement_rwf,
-#      c_v = coût de transport de l'OD pour le véhicule v (RWF/tonne),
-#      V_s = valeur de la marchandise (= VALEUR_RWF_PAR_TONNE[secteur]),
-#      r   = taux de détention du stock (ci-dessous).
-# Taille d'envoi optimale : q* = √(2·Q·K_v / (V_s·r)), plafonnée à la capacité.
+# moins cher au tonne-km, mais celui qui minimise le COÛT LOGISTIQUE TOTAL annuel
 # Intuition : gros flux et bien bon marché → gros camion rempli ; petit flux ou
-# bien de valeur → véhicule plus petit, envois plus fréquents.
+# bien de valeur → véhicule plus petit. Le terme en transit ajoute la sensibilité
+# au TEMPS : un bien de valeur fuit les trajets lents (et les routes congestionnées).
 # ══════════════════════════════════════════════════════════════════════════════
-
-# Interrupteur : TRUE = véhicule choisi par EOQ ; FALSE = comportement historique
-# (véhicule du chemin de moindre coût au tonne-km). Surchargé depuis run_all.R.
-if (!exists("CHOIX_VEHICULE_EOQ")) CHOIX_VEHICULE_EOQ <- TRUE
+# (L'activation de l'EOQ se fait via CHOIX_VEHICULE_EOQ, section CHOIX DU MODE.)
 
 # ── Taux de détention du stock « r » (coût annuel de garder 1 RWF en stock) ───
 # Décomposé en composantes EXPLICITES pour la lisibilité ; leur SOMME = r.
@@ -1138,6 +1139,10 @@ R_ASSURANCE    <- 0.01   # assurance des marchandises en stock
 R_OBSOLESCENCE <- 0.03   # dépréciation, pertes, péremption (moyenne tous secteurs)
 # r total utilisé par l'EOQ (≈ 0,23/an avec les valeurs ci-dessus)
 TAUX_DETENTION_STOCK <- R_CAPITAL + R_STOCKAGE + R_ASSURANCE + R_OBSOLESCENCE
+
+# Heures par an (calendaires) pour convertir le temps de trajet τ_v en fraction
+# d'année : la marchandise « dort » dans le pipeline 24h/24 pendant le transit.
+HEURES_PAR_AN <- 8760
 
 # ── Table 2 : vitesses par véhicule × type de route × surface ─────────────────
 # Chaque véhicule a ses propres vitesses de référence sur chaque combinaison.
