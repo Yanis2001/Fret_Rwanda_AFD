@@ -115,7 +115,7 @@ CONGESTION         <- TRUE
 # Choix du véhicule par lot économique (EOQ) : TRUE = le véhicule de chaque
 #   secteur sur chaque OD minimise le coût logistique total (transport + coût
 #   fixe par trajet + stock cyclique + stock en transit) ; FALSE = véhicule du
-#   chemin de moindre coût au tonne-km 
+#   chemin de moindre coût au tonne-km
 CHOIX_VEHICULE_EOQ <- TRUE
 
 # ── Scénario de vulnérabilité (module 04) ─────────────────────────────────────
@@ -434,17 +434,27 @@ SAM_MAPPING_SECTEURS <- c(
   osrv = "Services"
 )
 
-# Comptes de la SAM lus en COLONNE et agrégés comme DEMANDE FINALE :
-# consommation des 10 catégories de ménages + consommation publique (gov)
-# + compte capital « s-i ».
-# Avec s-i = FBCF + variation de stocks
+# Comptes MÉNAGES de la SAM (consommation finale des ménages), ventilés par
+# STRATE (r = rural, u = urbain) et QUINTILE de revenu (1 = plus pauvre … 5 = plus
+# riche). Chaque compte « hhd-XY » porte un panier de consommation par commodité
+# différent : les ménages ruraux pauvres consomment surtout de l'agriculture/
+# agro-alimentaire, les ménages urbains aisés davantage de manufactures/services.
+# Le suffixe « XY » (ex. « r1 », « u5 ») sert de clé de GROUPE dans la
+# spatialisation de la demande finale par groupe (cf. 03_transport.R).
+SAM_COMPTES_MENAGES <- c(
+  "hhd-r1", "hhd-r2", "hhd-r3", "hhd-r4", "hhd-r5",
+  "hhd-u1", "hhd-u2", "hhd-u3", "hhd-u4", "hhd-u5"
+)
+
+# Comptes de demande finale NON ménagère, SANS dimension revenu/urbain :
+#   « gov » = consommation publique ; « s-i » = compte capital (FBCF + var. stocks).
+SAM_COMPTES_DEMANDE_PUBLIQUE <- c("gov", "s-i")
+
+# Comptes de la SAM lus en COLONNE et agrégés comme DEMANDE FINALE TOTALE :
+# ménages + consommation publique (gov) + compte capital « s-i ».
 # Les exportations (compte « row ») sont volontairement exclues — traitées via
 # les entrepôts RoW (03_transport.R).
-SAM_COMPTES_DEMANDE_FINALE <- c(
-  "hhd-r1", "hhd-r2", "hhd-r3", "hhd-r4", "hhd-r5",
-  "hhd-u1", "hhd-u2", "hhd-u3", "hhd-u4", "hhd-u5",
-  "gov", "s-i"
-)
+SAM_COMPTES_DEMANDE_FINALE <- c(SAM_COMPTES_MENAGES, SAM_COMPTES_DEMANDE_PUBLIQUE)
 
 # Compte des MARGES de commerce et de transport de la SAM.
 # Dans la SAM, l'offre d'une commodité (sa colonne) inclut une marge versée au
@@ -491,7 +501,13 @@ SAM_COMPTES_TAXES_PRODUITS <- c("stax", "mtax")
 #   output         : production domestique commercialisée par secteur (prix de base)
 #   va             : valeur ajoutée par secteur (output − intrants intermédiaires)
 #   demande_finale : demande finale par secteur, au prix de base, marges du
-#                    Commerce incluses
+#                    Commerce incluses (= total : ménages + gov + s-i)
+#   demande_finale_groupes  : matrice secteur × groupe-ménage (colonnes « r1 »…
+#                    « u5 ») = panier de consommation de chaque groupe SAM, au prix
+#                    de base. Σ_colonnes + demande_finale_publique = demande_finale.
+#   demande_finale_publique : demande finale NON ménagère par secteur (gov + s-i),
+#                    au prix de base, marges du Commerce incluses (résidu non
+#                    ventilable par quintile/strate).
 #   imports        : importations par secteur (flux compte « row » → commodité)
 #   exports        : exportations par secteur (prix de base)
 lire_sam <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
@@ -530,6 +546,12 @@ lire_sam <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   exp_brut  <- zero_sec()   # DEMANDE : exports bruts (prix d'acquisition)
   marg_recu <- zero_sec()   # DEMANDE : marges reçues (≠ 0 uniquement pour le Commerce)
 
+  # Demande finale brute VENTILÉE par compte (secteur × compte de demande finale).
+  # Permet, après passage au prix de base, de séparer les paniers de chaque groupe
+  # de ménages (colonnes hhd-*) de la demande publique (gov, s-i). Σ_colonnes = fdem.
+  fdem_comptes <- matrix(0, length(SEC), length(SAM_COMPTES_DEMANDE_FINALE),
+                         dimnames = list(SEC, SAM_COMPTES_DEMANDE_FINALE))
+
   # Boucle 1 : grandeurs par commodité (offre et demande), agrégées aux secteurs.
   for (sf in suffixes) {
     s_grp  <- SAM_MAPPING_SECTEURS[[sf]]
@@ -545,8 +567,11 @@ lire_sam <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
       tax_paye[s_grp] <- tax_paye[s_grp] + num(idx_row(tx), cc)
 
     # DEMANDE (ligne de la commodité)
-    for (dc in SAM_COMPTES_DEMANDE_FINALE)
-      fdem[s_grp] <- fdem[s_grp] + num(rc, idx_col(dc))
+    for (dc in SAM_COMPTES_DEMANDE_FINALE) {
+      v_dc <- num(rc, idx_col(dc))
+      fdem[s_grp]            <- fdem[s_grp]            + v_dc   # total demande finale brute
+      fdem_comptes[s_grp, dc] <- fdem_comptes[s_grp, dc] + v_dc # ventilation par compte (pour les groupes)
+    }
     exp_brut[s_grp]  <- exp_brut[s_grp]  + num(rc, idx_col("row"))              # exports
     marg_recu[s_grp] <- marg_recu[s_grp] + num(rc, idx_col(SAM_COMPTE_MARGES))  # marges reçues (Commerce)
   }
@@ -579,6 +604,22 @@ lire_sam <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   exports        <- exp_brut * k                   # exports ramenés au prix de base
   demande_finale <- fdem * k + marg_recu           # demande finale au prix de base + marges Commerce
 
+  # ── Ventilation de la demande finale par groupe de ménages ──────────────────
+  # On applique le même facteur prix de base k (par LIGNE = par secteur, comme
+  # Z_base) à la demande finale ventilée par compte, puis on sépare :
+  #   • les paniers ménages (colonnes hhd-*, renommées par leur clé de groupe
+  #     « r1 »…« u5 ») → demande_finale_groupes (secteur × groupe) ;
+  #   • la demande publique (gov + s-i) + les marges reçues du Commerce (flux
+  #     dérivé non ventilable par quintile/strate) → demande_finale_publique.
+  # Par construction : Σ_groupes + demande_finale_publique = demande_finale.
+  fdem_comptes_base       <- fdem_comptes * k
+  demande_finale_groupes  <- fdem_comptes_base[, SAM_COMPTES_MENAGES, drop = FALSE]
+  colnames(demande_finale_groupes) <- sub("^hhd-", "", SAM_COMPTES_MENAGES)
+  demande_finale_publique <- rowSums(
+    fdem_comptes_base[, SAM_COMPTES_DEMANDE_PUBLIQUE, drop = FALSE]
+  ) + marg_recu
+  names(demande_finale_publique) <- SEC
+
   # Z au prix de base : on multiplie chaque LIGNE i (commodité vendue) par k[i].
   Z_base <- Z * k                                  # recyclage par ligne (k recyclé sur les colonnes)
   conso_interm <- rowSums(Z_base)                  # = inter * k (cohérent avec A %*% output)
@@ -595,11 +636,16 @@ lire_sam <- function(chemin = SAM_XLSX_PATH, feuille = SAM_FEUILLE) {
   stopifnot(
     all(k > 0 & k <= 1 + 1e-9),          # facteur prix de base valide
     all(demande_finale >= -1e-6),        # pas de demande finale négative
-    max(abs(residu)) < 1e-6              # bilan ressources-emplois équilibré (résidu ≈ 0)
+    max(abs(residu)) < 1e-6,             # bilan ressources-emplois équilibré (résidu ≈ 0)
+    # la somme des paniers groupes + la demande publique reconstitue la demande totale
+    max(abs(rowSums(demande_finale_groupes) + demande_finale_publique
+            - demande_finale)) < 1e-6
   )
 
   list(A = A_sam, output = output[SEC], va = va[SEC],
        demande_finale = demande_finale[SEC],
+       demande_finale_groupes  = demande_finale_groupes[SEC, , drop = FALSE],
+       demande_finale_publique = demande_finale_publique[SEC],
        imports = imports[SEC], exports = exports[SEC])
 }
 
@@ -616,7 +662,31 @@ cat("  ✓ SAM lue :", sum(sam$va), "mrd RWF de VA totale (",
 DEMANDE_FINALE_SAM <- sam$demande_finale[SECTEURS]
 stopifnot(all(names(DEMANDE_FINALE_SAM) %in% SECTEURS))
 
-# ── Pondération composite emploi × RWI dans le modèle MRIO ───────────────────
+# ── Demande finale désagrégée par groupe de ménages ───────────────────────────
+# Utilisées par 03_transport.R pour spatialiser la demande finale par groupe.
+#   DEMANDE_FINALE_GROUPES_SAM  : matrice secteur × groupe (colonnes « r1 »…« u5 »),
+#       panier de consommation de chaque groupe SAM (strate × quintile), mrd RWF.
+#   DEMANDE_FINALE_PUBLIQUE_SAM : demande finale non ménagère (gov + s-i + marges
+#       Commerce) par secteur, mrd RWF — spatialisée par pop × RWI.
+# Identité préservée : rowSums(GROUPES) + PUBLIQUE = DEMANDE_FINALE_SAM.
+DEMANDE_FINALE_GROUPES_SAM  <- sam$demande_finale_groupes[SECTEURS, , drop = FALSE]
+DEMANDE_FINALE_PUBLIQUE_SAM <- sam$demande_finale_publique[SECTEURS]
+stopifnot(
+  setequal(colnames(DEMANDE_FINALE_GROUPES_SAM),
+           sub("^hhd-", "", SAM_COMPTES_MENAGES)),
+  max(abs(rowSums(DEMANDE_FINALE_GROUPES_SAM) + DEMANDE_FINALE_PUBLIQUE_SAM
+          - DEMANDE_FINALE_SAM)) < 1e-6
+)
+
+# ── Paramètres de la classification urbain/rural des zones ────────────────────
+# SEUIL_PART_URBAINE : une zone (cellule de Voronoï) est classée « urbaine » si la
+#   part de sa POPULATION vivant en zone de landuse urbain (LANDUSE_URBAIN) atteint
+#   ce seuil ; sinon « rurale ». 0.5 = majorité de la population en zone urbaine.
+#   Calculé en 01_reseau.R (colonne is_urbain de diag_population) à ajuster pour
+#   retrouver une part urbaine nationale réaliste (~17–27 % au Rwanda).
+SEUIL_PART_URBAINE <- 0.5
+
+# ── Pondération composite emploi × RWI dans le modèle MRIO ────────────────────
 #
 # ALPHA_EMPLOI_RWI : part de l'emploi dans le poids de production d'une zone.
 #   w[i,s] = ALPHA_EMPLOI_RWI × (emp[i,s] / emp_national[s])
