@@ -1191,7 +1191,7 @@ MSA_TOL      <- 0.01   # convergence : variation relative L1 de la charge < 1 %
 # (L'activation de la congestion se fait via CONGESTION, section CHOIX DU MODE.)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CHOIX DU VÉHICULE PAR LOT ÉCONOMIQUE (EOQ)
+# CHOIX DU VÉHICULE PAR LOT ÉCONOMIQUE (EOQ : Economic Order Quantity, aussi appelé formule de Wilson)
 # Le véhicule qui dessert une paire OD pour un secteur n'est plus simplement le
 # moins cher au tonne-km, mais celui qui minimise le COÛT LOGISTIQUE TOTAL annuel
 # Intuition : gros flux et bien bon marché → gros camion rempli ; petit flux ou
