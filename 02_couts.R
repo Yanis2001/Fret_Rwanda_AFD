@@ -449,13 +449,27 @@ for (v_idx in seq_len(n_vehicules)) {
     WHERE vehicule_id = '{id_veh}'
     ORDER BY arete_id
   "))
-  
+
+  # Coefficient « valeur du temps par tonne » du véhicule = valeur_temps / capacite_tonnes
+  # (RWF par heure et par tonne). Multiplié par le temps de trajet d'une arête, il
+  # donne la PART TEMPS du poids de Dijkstra. On la précalcule ici (couche coût)
+  # pour que 03 n'ait plus à la reconstruire : 03 applique la congestion BPR à cette
+  # seule composante. Le facteur urbain (sur-coût temps en ville) n'est PAS inclus —
+  # il reste dans la part hors-temps.
+  idx_flotte     <- match(id_veh, params_flotte_df$vehicule_id)
+  coef_temps_veh <- params_flotte_df$valeur_temps[idx_flotte] /
+                    params_flotte_df$capacite_tonnes[idx_flotte]
+
   # weight : poids de Dijkstra = coût total de traverser cette arête avec ce véhicule
   # = cost_per_tkm × length_km (coût par tonne-kilomètre × distance en km)
   edges_intra[[v_idx]] <- tibble(
     from          = node_multi(v_idx, aretes_base_tbl$from),
     to            = node_multi(v_idx, aretes_base_tbl$to),
     weight        = couts_veh$cost_per_tkm * couts_veh$length_km,
+    # weight_temps : part « temps » du poids (RWF/tonne) = temps × coef_temps_veh.
+    # NA de travel_time_h ramené à 0 (cohérent avec le traitement appliqué en 03).
+    weight_temps  = ifelse(is.na(couts_veh$travel_time_h), 0, couts_veh$travel_time_h) *
+                    coef_temps_veh,
     length_km     = couts_veh$length_km,
     travel_time_h = couts_veh$travel_time_h,
     vehicule_id   = id_veh,
@@ -494,6 +508,7 @@ for (wh_node in warehouse_nodes_base) {
       from          = node_multi(v_orig, wh_node),
       to            = node_multi(v_dest, wh_node),
       weight        = couts_transb$cout_rwf_fixe[r],
+      weight_temps  = 0,    # Transbordement : pas de temps de trajet → part temps nulle
       length_km     = 0,    # Pas de distance physique au transbordement
       travel_time_h = 0,    # Temps de manutention non modélisé ici
       vehicule_id   = paste0(couts_transb$vehicule_origine[r],
