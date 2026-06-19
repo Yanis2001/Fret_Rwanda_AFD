@@ -45,7 +45,7 @@ if (nchar(token) > 0) {
 
 # Recalcul forcé de tous les caches (réseau, pentes, OD, affectation).
 # Remettre à FALSE après un reset pour bénéficier des caches (~30 min gagnés).
-RESET_CACHES     <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
+RESET_CACHES     <- TRUE  # ← passer à TRUE pour tout recalculer depuis zéro
 
 RUN_PARAMETRES   <- TRUE   # 00 — < 1 min  — packages, DuckDB, palettes
 RUN_RESEAU       <- TRUE   # 01 — ~20 min  — réseau OSM, pentes, démographie
@@ -56,7 +56,6 @@ RUN_VULNERAB     <- TRUE   # 04 — ~13 min  — vulnérabilité, criticité
 RUN_VIZ_RESEAU   <- TRUE   # viz — ~3 min  — cartes réseau / coûts / pentes
 RUN_VIZ_FRET     <- TRUE   # viz — ~2 min  — cartes fret / Sankey
 RUN_VIZ_VULNERAB <- TRUE   # viz — ~3 min  — cartes vulnérabilité / détours
-
 
 # ==============================================================================
 # EXÉCUTION SÉQUENTIELLE
