@@ -2423,6 +2423,52 @@ diag_population <- tibble(
   source          = source_pop_cellule
 )
 
+# ── Classification urbain/rural des cellules (pour la demande finale par groupe) ──
+# OBJECTIF : calculer pour chaque cellule de Voronoï sa PART URBAINE = part de sa
+# population vivant en zone de landuse urbain (zones_urbaines_union), puis un statut
+# is_urbain (part ≥ SEUIL_PART_URBAINE). Sert en 03_transport.R à rattacher chaque 
+# zone à un groupe de ménages SAM (strate urbain/rural × quintile).
+# On mesure une part de POPULATION (et non d'aire).
+part_urbaine_par_wid <- setNames(rep(0, n_warehouses), seq_len(n_warehouses))
+
+if (worldpop_ok && exists("zones_urbaines_union") &&
+    !is.null(zones_urbaines_union) && length(zones_urbaines_union) > 0) {
+  # Intersection de chaque cellule avec l'union des zones urbaines, puis somme des
+  # pixels WorldPop tombant dans la partie urbaine de la cellule.
+  inter_urb <- suppressWarnings(st_intersection(
+    zones_voronoi %>% select(warehouse_id),
+    st_make_valid(zones_urbaines_union) %>% st_transform(st_crs(zones_voronoi))
+  ))
+  if (nrow(inter_urb) > 0) {
+    pop_urb <- as.numeric(exactextractr::exact_extract(
+      raster_worldpop,
+      inter_urb %>% st_transform(st_crs(raster_worldpop)),
+      fun = "sum", progress = FALSE
+    ))
+    # tapply : agrège par warehouse_id (une cellule peut donner plusieurs morceaux).
+    pop_urb_agg <- tapply(pop_urb, inter_urb$warehouse_id, sum, na.rm = TRUE)
+    part_urbaine_par_wid[as.integer(names(pop_urb_agg))] <- as.numeric(pop_urb_agg)
+    # Part urbaine = pop urbaine / pop totale de la cellule, bornée à [0,1].
+    part_urbaine_par_wid <- pmin(1, part_urbaine_par_wid / pmax(pop_par_wid, 1))
+  }
+} else {
+  cat("  ⚠ WorldPop ou zones urbaines indisponibles → toutes les zones",
+      "classées rurales (part urbaine = 0)\n")
+}
+
+# Ajout à diag_population (lignes alignées sur l'ordre warehouse_id = 1..n).
+diag_population <- diag_population %>%
+  mutate(
+    part_urbaine = round(part_urbaine_par_wid, 3),
+    is_urbain    = part_urbaine_par_wid >= SEUIL_PART_URBAINE
+  )
+
+cat("  Zones urbaines (part pop ≥ ", SEUIL_PART_URBAINE, ") : ",
+    sum(diag_population$is_urbain), " / ", n_warehouses,
+    " | part pop urbaine nationale : ",
+    round(sum(pop_par_wid[diag_population$is_urbain]) / sum(pop_par_wid) * 100, 1),
+    " %\n", sep = "")
+
 cat("  Population par cellule : min =", round(min(pop_par_wid)),
     "| max =", round(max(pop_par_wid)), "\n")
 cat("  Somme des populations de cellules :",
