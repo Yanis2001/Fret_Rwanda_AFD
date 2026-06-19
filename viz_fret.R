@@ -1752,3 +1752,123 @@ ggsave(
 )
 cat("✓ graphique_validation_trc_secteurs.png\n\n")
 
+################################################################################
+# VIII.10 — Carte des classes géo-sociales
+#
+# OBJECTIF : Visualiser la segmentation géo-sociale du territoire utilisée par
+# le modèle MRIO pour spatialiser la demande finale des ménages.
+# Chaque cellule de Voronoï est colorée selon son groupe SAM :
+#   strate urbain/rural (U / R) × quintile de revenu RWI (1 = plus pauvre … 5)
+#
+# Les quintiles sont attribués séparément au sein de chaque strate (urbain,
+# rural) en pondérant par la population (méthode identique à 03_transport.R).
+# Le RWI (Relative Wealth Index) mesure le niveau de vie relatif de la zone.
+################################################################################
+
+cat("=== VIII.10 : Carte des classes géo-sociales ===\n")
+
+# ── Reconstruction des groupes géo-sociaux ────────────────────────────────────
+# Reproduit exactement la logique de 03_transport.R afin que la carte soit
+# cohérente avec les groupes effectivement utilisés dans le modèle de transport.
+
+# Fonction d'attribution des quintiles : tri par p_rwi croissant au sein de
+# chaque strate, puis découpage en 5 tranches de population équi-peuplées.
+assigner_quintiles_rwi_viz <- function(p_rwi, pop, is_urbain) {
+  quint <- integer(length(p_rwi))
+  for (idx in split(seq_along(p_rwi), is_urbain)) {
+    if (length(idx) == 0) next
+    o   <- idx[order(p_rwi[idx])]
+    w   <- pop[o]
+    pos <- (cumsum(w) - w / 2) / sum(w)
+    quint[o] <- findInterval(pos, c(.2, .4, .6, .8)) + 1L
+  }
+  pmin(pmax(quint, 1L), 5L)
+}
+
+# Statut urbain/rural de chaque zone (calculé dans 01_reseau.R, persisté dans
+# diag_population). NA → rural par défaut (cohérent avec 03_transport.R).
+is_urbain_viz <- diag_population$is_urbain[
+  match(noeuds_entreposage$warehouse_name, diag_population$nom_zone)
+]
+is_urbain_viz <- replace_na(is_urbain_viz, FALSE)
+
+# RWI normalisé [0,1] par zone (calculé dans 01_reseau.R, persisté dans diag_rwi).
+# NA → médiane (cohérent avec 03_transport.R).
+p_rwi_viz <- diag_rwi$p_rwi[
+  match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
+]
+p_rwi_viz <- replace_na(p_rwi_viz, median(p_rwi_viz, na.rm = TRUE))
+
+quintile_viz <- assigner_quintiles_rwi_viz(p_rwi_viz, pop_i, is_urbain_viz)
+groupe_viz   <- paste0(ifelse(is_urbain_viz, "Urbain Q", "Rural Q"), quintile_viz)
+
+# ── Jointure avec zones_voronoi ───────────────────────────────────────────────
+# noeuds_entreposage est ordonné comme warehouse_id = row_number() → jointure
+# directe sans ambiguïté. On exclut les nœuds-frontière (hors territoire RW).
+voronoi_geo <- zones_voronoi %>%
+  left_join(
+    tibble(
+      warehouse_id = noeuds_entreposage$warehouse_id,
+      warehouse_name = noeuds_entreposage$warehouse_name,
+      warehouse_type = noeuds_entreposage$warehouse_type,
+      groupe_geosocial = groupe_viz,
+      strate = ifelse(is_urbain_viz, "Urbain", "Rural"),
+      quintile = quintile_viz
+    ),
+    by = "warehouse_id"
+  ) %>%
+  filter(warehouse_type != "frontiere")   # exclut les nœuds hors Rwanda
+
+# Ordre d'affichage : Rural Q1…Q5 puis Urbain Q1…Q5 (du plus pauvre au plus riche)
+niveaux_groupe <- c(paste0("Rural Q",  1:5), paste0("Urbain Q", 1:5))
+voronoi_geo <- voronoi_geo %>%
+  mutate(groupe_geosocial = factor(groupe_geosocial, levels = niveaux_groupe))
+
+# ── Palette de couleurs ───────────────────────────────────────────────────────
+# Vert (rural) et bleu (urbain), 5 nuances du plus clair (Q1 pauvre) au plus
+# foncé (Q5 riche), pour distinguer simultanément strate et niveau de vie.
+PALETTE_GEOSOCIAL <- c(
+  "Rural Q1"  = "#C7E9C0",
+  "Rural Q2"  = "#74C476",
+  "Rural Q3"  = "#31A354",
+  "Rural Q4"  = "#006D2C",
+  "Rural Q5"  = "#00441B",
+  "Urbain Q1" = "#C6DBEF",
+  "Urbain Q2" = "#6BAED6",
+  "Urbain Q3" = "#2171B5",
+  "Urbain Q4" = "#08519C",
+  "Urbain Q5" = "#08306B"
+)
+
+# ── Carte tmap ────────────────────────────────────────────────────────────────
+carte_geosocial <- fond_carte() +
+  tm_shape(voronoi_geo) +
+  tm_polygons(
+    fill        = "groupe_geosocial",
+    fill.scale  = tm_scale_categorical(values = PALETTE_GEOSOCIAL),
+    fill.legend = tm_legend(
+      title    = "Classe géo-sociale",
+      position = tm_pos_out("right", "center")
+    ),
+    col        = "#FFFFFF",
+    lwd        = 0.2,
+    col_alpha  = 0.6
+  ) +
+  tm_title("Classes géo-sociales — strate urbain/rural × quintile de revenu (RWI)") +
+  tm_credits(
+    paste0("Quintiles calculés séparément au sein de chaque strate ",
+           "(urbain / rural), pondérés par la population WorldPop.\n",
+           "RWI = Relative Wealth Index (Meta / Chi et al., 2022)."),
+    position = tm_pos_out("left", "bottom"),
+    size     = 0.65
+  )
+
+tmap_save(
+  carte_geosocial,
+  file.path(DIR_CARTES, "carte_classes_geosociales.png"),
+  width  = 2200,
+  height = 1800,
+  dpi    = 300
+)
+cat("  ✓ carte_classes_geosociales.png\n\n")
+
