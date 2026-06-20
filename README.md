@@ -44,8 +44,8 @@ RUN_PARAMETRES   <- TRUE   # 00 — configuration (toujours TRUE)
 RUN_RESEAU       <- TRUE   # 01 — construction du réseau (~30 min)
 RUN_COUTS        <- TRUE   # 02 — calcul des coûts (~5 min)
 RUN_TRANSPORT    <- TRUE   # 03 — matrice OD + gravitaire (~1h)
-RUN_VULNERAB     <- FALSE  # 04 — analyse de criticité (~2h)
-RUN_ARIO         <- FALSE  # 05 — modèle ARIO (~1 min)
+RUN_AFFECTATION  <- TRUE   # 04 - affectation au réseau
+RUN_VULNERAB     <- FALSE  # 05 — analyse de criticité (~2h)
 ```
 
 Puis :
@@ -70,7 +70,6 @@ Les résultats (cartes, CSV, Parquet, GeoPackage) sont écrits dans le dossier `
 | `03_transport.R` | Matrice OD multi-modale + modèle gravitaire + projection RoW |
 | `04_affectation.R` | Affectation du fret sur le réseau + émissions, saturation, exports |
 | `05_vulnerabilite.R` | Analyse de criticité et scénarios de perturbation |
-| `06_ario.R` | Modèle économique ARIO (pertes indirectes) |
 | `viz_*.R` | Scripts de visualisation (cartes, Sankey, graphiques) |
 | `outputs/` | Résultats générés (non versionnés) |
 
