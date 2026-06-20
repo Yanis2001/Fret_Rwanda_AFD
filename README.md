@@ -67,9 +67,10 @@ Les résultats (cartes, CSV, Parquet, GeoPackage) sont écrits dans le dossier `
 | `00_parametres.R` | Paramètres globaux du modèle (packages, DuckDB, palettes) |
 | `01_reseau.R` | Construction du réseau routier depuis OSM + pentes SRTM |
 | `02_couts.R` | Calcul des coûts de transport par véhicule |
-| `03_transport.R` | Matrice OD multi-modale + modèle gravitaire |
-| `04_vulnerabilite.R` | Analyse de criticité et scénarios de perturbation |
-| `05_ario.R` | Modèle économique ARIO (pertes indirectes) |
+| `03_transport.R` | Matrice OD multi-modale + modèle gravitaire + projection RoW |
+| `04_affectation.R` | Affectation du fret sur le réseau + émissions, saturation, exports |
+| `05_vulnerabilite.R` | Analyse de criticité et scénarios de perturbation |
+| `06_ario.R` | Modèle économique ARIO (pertes indirectes) |
 | `viz_*.R` | Scripts de visualisation (cartes, Sankey, graphiques) |
 | `outputs/` | Résultats générés (non versionnés) |
 

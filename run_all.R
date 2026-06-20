@@ -50,8 +50,9 @@ RESET_CACHES     <- TRUE  # ← passer à TRUE pour tout recalculer depuis zéro
 RUN_PARAMETRES   <- TRUE   # 00 — < 1 min  — packages, DuckDB, palettes
 RUN_RESEAU       <- TRUE   # 01 — ~20 min  — réseau OSM, pentes, démographie
 RUN_COUTS        <- TRUE   # 02 — < 1 min  — coûts, graphe multi-modal
-RUN_TRANSPORT    <- TRUE   # 03 — ~15 min  — OD, gravitaire, affectation
-RUN_VULNERAB     <- TRUE   # 04 — ~13 min  — vulnérabilité, criticité
+RUN_TRANSPORT    <- TRUE   # 03 — ~12 min  — OD, IO, gravitaire, projection RoW
+RUN_AFFECTATION  <- TRUE   # 04 — ~5 min   — affectation réseau, émissions, saturation
+RUN_VULNERAB     <- TRUE   # 05 — ~13 min  — vulnérabilité, criticité
 
 RUN_VIZ_RESEAU   <- TRUE   # viz — ~3 min  — cartes réseau / coûts / pentes
 RUN_VIZ_FRET     <- TRUE   # viz — ~2 min  — cartes fret / Sankey
@@ -132,7 +133,8 @@ if (RESET_CACHES) {
 executer_module("01_reseau",       "01_reseau.R",       RUN_RESEAU)
 executer_module("02_couts",        "02_couts.R",        RUN_COUTS)
 executer_module("03_transport",    "03_transport.R",    RUN_TRANSPORT)
-executer_module("04_vulnerabilite","04_vulnerabilite.R",RUN_VULNERAB)
+executer_module("04_affectation",  "04_affectation.R",  RUN_AFFECTATION)
+executer_module("05_vulnerabilite","05_vulnerabilite.R",RUN_VULNERAB)
 
 executer_module("viz_reseau",      "viz_reseau.R",      RUN_VIZ_RESEAU)
 executer_module("viz_fret",        "viz_fret.R",        RUN_VIZ_FRET)

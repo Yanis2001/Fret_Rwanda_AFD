@@ -1,11 +1,12 @@
 ################################################################################
-# 04_vulnerabilite.R
+# 05_vulnerabilite.R
 # RÔLE : Simulation d'un scénario de perturbation (inondation, glissement...),
 #        recalcul de la matrice OD dégradée, surcoûts, arêtes critiques.
 # ENTRÉES  : persist_reseau_fret.rds, persist_graphe_mm.rds,
 #            persist_mapping_mm.rds, persist_entreposages.rds + od_cache.rds
 # SORTIES  : persist_vulnerabilite.rds + cartes PNG + CSV
-# DÉPEND DE : 00_parametres.R, 01_reseau.R, 02_couts.R, 03_transport.R
+# DÉPEND DE : 00_parametres.R, 01_reseau.R, 02_couts.R, 03_transport.R,
+#             04_affectation.R
 # NOTE : Modifier NOM_SCENARIO dans 00_parametres.R avant de relancer.
 ################################################################################
 
