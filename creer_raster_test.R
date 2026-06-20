@@ -2,7 +2,7 @@
 # creer_raster_test.R
 #
 # OBJECTIF : Créer un raster synthétique de risque d'inondation pour tester
-#            le Mode C (raster) du script 04_vulnerabilite.R.
+#            le Mode C (raster) du script 05_vulnerabilite.R.
 #
 # SORTIE   : data/raw/zones_inondables_rwanda.tif
 #            Valeurs entre 0 et 1 (probabilité de risque d'inondation).
@@ -12,7 +12,7 @@
 # UTILISATION :
 #   1. Exécuter ce script une fois pour générer le raster.
 #   2. Dans 00_parametres.R, mettre UTILISER_MODE_RASTER <- TRUE.
-#   3. Lancer 04_vulnerabilite.R normalement.
+#   3. Lancer 05_vulnerabilite.R normalement.
 ################################################################################
 
 library(terra)
@@ -129,9 +129,9 @@ writeRaster(r_final, chemin_sortie, overwrite = TRUE)
 
 cat("✓ Raster sauvegardé :", chemin_sortie, "\n")
 cat("  Dimensions :", nrow(r_final), "×", ncol(r_final), "cellules\n")
-cat("  CRS        : EPSG:4326 (WGS84) — sera reprojeté en UTM 35S par 04_vulnerabilite.R\n\n")
+cat("  CRS        : EPSG:4326 (WGS84) — sera reprojeté en UTM 35S par 05_vulnerabilite.R\n\n")
 
-cat("=== Pour utiliser ce raster dans 04_vulnerabilite.R ===\n")
+cat("=== Pour utiliser ce raster dans 05_vulnerabilite.R ===\n")
 cat("  Dans 00_parametres.R, mettre :\n")
 cat("    UTILISER_MODE_RASTER <- TRUE\n")
 cat("  Les autres paramètres par défaut sont déjà calibrés pour ce raster :\n")
