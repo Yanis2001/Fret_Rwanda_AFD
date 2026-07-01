@@ -2445,6 +2445,17 @@ if (worldpop_ok && exists("zones_urbaines_union") &&
     zones_voronoi %>% select(warehouse_id),
     st_make_valid(zones_urbaines_union) %>% st_transform(st_crs(zones_voronoi))
   ))
+  # Comme pour le rognage des cellules, cette intersection peut produire des
+  # GEOMETRYCOLLECTION (polygone + arêtes de contact). On ne garde que la
+  # composante polygonale et on écarte les morceaux vides : sinon exact_extract()
+  # échoue avec « Mixed-type geometries not supported ». Les warehouse_id sont
+  # conservés (une cellule peut donner plusieurs morceaux, agrégés ensuite).
+  inter_urb <- suppressWarnings(
+    inter_urb %>%
+      st_make_valid() %>%
+      st_collection_extract("POLYGON")
+  )
+  inter_urb <- inter_urb[!st_is_empty(inter_urb), ]
   if (nrow(inter_urb) > 0) {
     pop_urb <- as.numeric(exactextractr::exact_extract(
       raster_worldpop,
