@@ -12,6 +12,11 @@
 
 source("00_parametres.R")
 
+# Boucle d'équilibre BPR/MSA réutilisable (méthode du 04) : sert à ré-équilibrer
+# la congestion sur le réseau dégradé et à produire les poids congestionnés de
+# référence. Voir CONGESTION_VULNERABILITE dans 00_parametres.R.
+source("outils_affectation_equilibre.R")
+
 cat("=== Chargement des objets ===\n")
 
 .geo  <- readRDS(PERSIST_GEODATA)
@@ -23,7 +28,13 @@ cat("=== Chargement des objets ===\n")
 list2env(.geo,  envir = .GlobalEnv)
 list2env(.ent,  envir = .GlobalEnv)
 reseau         <- .fret$reseau
-flux_tonnes_total     <- readRDS(PERSIST_FLUX_FRET)$flux_tonnes_total
+# Flux issus du modèle gravitaire (03) : flux_tonnes_total (OD agrégée) pour les
+# surcoûts, ET flux_gravitaire (OD par secteur) requis par la ré-affectation
+# d'équilibre (l'EOQ q* dépend du secteur — cf. affecter_equilibre_msa()).
+.flux_fret            <- readRDS(PERSIST_FLUX_FRET)
+flux_tonnes_total     <- .flux_fret$flux_tonnes_total
+flux_gravitaire       <- .flux_fret$flux_gravitaire
+rm(.flux_fret)
 n_noeuds              <- .mm$n_noeuds
 n_vehicules           <- .mm$n_vehicules
 stocker_lourd("graphe_multimodal", .mm$graphe_multimodal)
@@ -326,64 +337,10 @@ cat("  Surfaces          :", resume_perturb$surfaces, "\n\n")
 
 cat("── Reconstruction du graphe dégradé ──────────────────────────────────\n\n")
 
-# ── Initialisation des vecteurs d'accumulation pour les itinéraires de contournement ──
-# On initialise ici les trois vecteurs qui mesurent l'usage des arêtes de détour. 
-# Trois métriques par arête physique :
-#   surcout_pondere_arete  : Σ(surcoût_relatif_% × volume_tonnes) pour tous les flux
-#                            reroutés passant par cette arête (indicateur d'exposition)
-#   volume_detourne_arete  : Σ(volume_tonnes) rerouté passant par cette arête (tonnes)
-surcout_pondere_arete  <- numeric(n_aretes_physiques)
-volume_detourne_arete  <- numeric(n_aretes_physiques)
-
-# ── Table de lookup pour les coûts OD de référence ────────────────────────────
-# Plutôt que de faire filter(od_long, id_origine == i, id_destination == j)
-# à chaque itération de la boucle interne (O(n) par appel), on construit
-# un vecteur nommé qui permet un accès direct en O(1) via la clé "i_j".
-# paste0(i, "_", j) est la clé unique pour chaque paire OD.
-od_ref_map <- setNames(
-  od_long$cout_rwf,
-  paste0(od_long$id_origine, "_", od_long$id_destination)
-)
-cat("  Table de référence OD pré-chargée (", length(od_ref_map), "paires)\n\n")
-
-# ── Récupération des poids originaux du graphe multi-modal ────────────────────
-# igraph::E() : accède aux arêtes (edges) du graphe.
-# $weight : attribut "weight" de chaque arête (coût de transport en RWF).
-poids_originaux <- igraph::E(recuperer_lourd("graphe_multimodal"))$weight
-
-# On travaille sur une COPIE du graphe multi-modal pour ne pas altérer l'original.
-# Le graphe original (graphe_multimodal) reste intact et servira de référence.
-graphe_degrade <- recuperer_lourd("graphe_multimodal")
-
-# ── Mise à l'infini des arêtes perturbées dans TOUTES les couches véhicule ────
-# Dans le graphe multi-modal, chaque arête physique existe en N_vehicules
-# exemplaires (une par couche). On doit bloquer l'arête dans TOUTES les couches.
-#
-# La correspondance entre arête physique (indice 1..n_aretes) et arêtes
-# multi-modales (une par couche) est donnée par le vecteur lookup construit en V.2.
-
-# Toutes les arêtes multi-modales de type "route" (pas de transbordement)
-# dont l'indice physique est dans la liste des arêtes perturbées
-indices_mm_perturbes <- which(
-  lookup_type     == "route" &
-    lookup_physique %in% indices_aretes_perturbees
-)
-
-cat("  Arêtes multi-modales à bloquer :", length(indices_mm_perturbes),
-    "(", n_perturb, "arêtes physiques ×", n_vehicules, "couches véhicules)\n")
-
-# Attribution d'un poids infini aux arêtes perturbées.
-# Inf en R est la valeur "infini" — Dijkstra ne traversera jamais une arête
-# de poids infini car il existerait toujours un chemin de moindre coût.
-# C'est mathématiquement équivalent à supprimer les arêtes du graphe.
-igraph::E(graphe_degrade)$weight[indices_mm_perturbes] <- Inf
-
-cat("  ✓ Graphe dégradé construit (arêtes bloquées avec poids = Inf)\n\n")
-
-# ── Recalcul de la matrice OD sur le réseau dégradé ───────────────────────────
-cat("  Recalcul des distances OD sur le réseau dégradé...\n")
-
-# Cache de la table aretes_couts_tous en mémoire vive.
+# ══════════════════════════════════════════════════════════════════════════════
+# Cache des émissions par arête × véhicule (chargé une seule fois, hors fonction).
+# Utilisé dans recalculer_od() pour sommer CO2/NOx/PM le long de chaque chemin.
+# ══════════════════════════════════════════════════════════════════════════════
 aretes_ems_cache <- duck_query(
   "SELECT arete_id, vehicule_id, co2_kg, nox_g, pm25_g FROM aretes_couts_tous"
 )
@@ -393,13 +350,44 @@ aretes_ems_idx <- setNames(
 )
 cat("  Cache émissions chargé :", nrow(aretes_ems_cache), "arêtes × véhicules\n\n")
 
+# ══════════════════════════════════════════════════════════════════════════════
+# recalculer_od() : recalcule la matrice OD (coût, distance, émissions) pour un
+# jeu de POIDS multimodaux donné, sur le graphe multimodal complet. Appelée pour
+# la RÉFÉRENCE (réseau intact) ET le réseau DÉGRADÉ ; poids libres (repli) ou
+# congestionnés d'équilibre.
+#
+#   poids_mm   : poids d'arête (RWF/tonne) ; Inf = arête coupée (jamais empruntée).
+#   od_ref_map : coûts OD de référence (vecteur nommé "i_j"). Fourni (appel
+#                dégradé) → on accumule l'usage des arêtes de détour ; NULL (appel
+#                référence) → pas d'accumulation.
+#   label      : suffixe du fichier de checkpoint (reprise après crash).
+#
+# Renvoie list(od, surcout_pondere_arete, volume_detourne_arete). Les colonnes de
+# `od` portent les noms « dégradés » (cout_degrade, distance_km_degrade, …) ;
+# l'appelant les renomme au besoin pour la table de référence.
+# ══════════════════════════════════════════════════════════════════════════════
+recalculer_od <- function(poids_mm, od_ref_map = NULL, label = "deg") {
+
+  # Graphe multimodal complet ; on route avec `poids_mm` (inutile de copier le
+  # graphe : les arêtes coupées portent déjà un poids Inf dans poids_mm).
+  g <- recuperer_lourd("graphe_multimodal")
+
+  # Accumulateurs d'usage des arêtes de détour, par arête physique (remplis
+  # seulement si od_ref_map est fourni, c.-à-d. lors de l'appel dégradé) :
+  #   surcout_pondere_arete : Σ(surcoût_relatif_% × volume_tonnes) des flux reroutés
+  #   volume_detourne_arete : Σ(volume_tonnes) rerouté passant par l'arête
+  surcout_pondere_arete <- numeric(n_aretes_physiques)
+  volume_detourne_arete <- numeric(n_aretes_physiques)
+
+  cat("  Recalcul des distances OD (label =", label, ")...\n")
+
 # On stocke les résultats dans une liste, puis on l'assemble en data.frame.
 # La structure est identique à od_long (Partie VI) pour faciliter la comparaison.
 od_rows_degrade <- list()
 idx_deg         <- 0
 
 # ── Chargement du checkpoint si disponible ────────────────────────────────────   
-CHECKPOINT_OD_DEG <- file.path(DIR_EXPORTS, "od_degrade_checkpoint.rds")     
+CHECKPOINT_OD_DEG <- file.path(DIR_EXPORTS, paste0("od_", label, "_checkpoint.rds"))
 origines_deja_traitees <- c()                                                
 if (file.exists(CHECKPOINT_OD_DEG)) {                                        
   checkpoint <- readRDS(CHECKPOINT_OD_DEG)                                   
@@ -426,26 +414,26 @@ for (i in seq_along(warehouse_nodes_base)) {
   # dans le graphe DÉGRADÉ (routes bloquées = poids infini).
   # La syntaxe est identique au Dijkstra de la Partie VI, seul le graphe change.
   dists_deg <- igraph::distances(
-    graphe_degrade,
+    g,
     v       = sources_i,
     to      = targets_all,
-    weights = igraph::E(graphe_degrade)$weight
+    weights = poids_mm
   )
 
   # Reconstruction des chemins depuis chaque couche véhicule de l'origine i
   # vers TOUTES les cibles en une seule passe par couche (n_vehicules appels)
   chemins_par_vehicule <- lapply(seq_len(n_vehicules), function(v) {
     igraph::shortest_paths(
-      graphe_degrade,
+      g,
       from    = sources_i[v],
       to      = targets_all,
-      weights = igraph::E(graphe_degrade)$weight,
+      weights = poids_mm,
       output  = "epath"
     )$epath
   })
 
   # Attributs des arêtes extraits une seule fois par origine (évite un appel par j).
-  edge_attrs_deg <- igraph::edge_attr(graphe_degrade)
+  edge_attrs_deg <- igraph::edge_attr(g)
 
   for (j in seq_along(warehouse_nodes_base)) {
     if (i == j) next
@@ -485,8 +473,10 @@ for (i in seq_along(warehouse_nodes_base)) {
           pm25_g_degrade <- sum(aretes_ems_cache$pm25_g[idx_ems[valides_ems]], na.rm = TRUE)
         }
 
-        # Accumulation pour les itinéraires de contournement
-        cout_ref_ij <- od_ref_map[paste0(i, "_", j)]
+        # Accumulation pour les itinéraires de contournement (seulement en appel
+        # dégradé : la référence od_ref_map est fournie ; NULL → cout_ref_ij = NA,
+        # ce qui désactive l'accumulation via le test !is.na() ci-dessous).
+        cout_ref_ij <- if (!is.null(od_ref_map)) od_ref_map[paste0(i, "_", j)] else NA_real_
         if (!is.na(cout_ref_ij) && min_cout_deg > cout_ref_ij && cout_ref_ij > 0) {
 
           surcout_rel_ij <- (min_cout_deg - cout_ref_ij) / cout_ref_ij * 100
@@ -552,7 +542,93 @@ for (i in seq_along(warehouse_nodes_base)) {
 # Suppression du checkpoint une fois la boucle terminée avec succès         
 if (file.exists(CHECKPOINT_OD_DEG)) file.remove(CHECKPOINT_OD_DEG)         
 
-od_degrade <- bind_rows(od_rows_degrade)
+  # ── Valeur de retour : table OD + accumulateurs d'usage des détours ──────────
+  list(
+    od                    = bind_rows(od_rows_degrade),
+    surcout_pondere_arete = surcout_pondere_arete,
+    volume_detourne_arete = volume_detourne_arete
+  )
+}
+# ── fin recalculer_od() ───────────────────────────────────────────────────────
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CALCUL DE LA RÉFÉRENCE ET DU RÉSEAU DÉGRADÉ (avec ou sans congestion)
+#
+# Deux régimes selon CONGESTION_VULNERABILITE (00_parametres.R) :
+#   TRUE  → on rejoue l'équilibre BPR/MSA (méthode du 04) : la référence est
+#           l'équilibre du réseau INTACT, le dégradé l'équilibre du réseau amputé
+#           (le trafic se reporte et re-congestionne les routes restantes).
+#   FALSE → coûts LIBRES (charge nulle) ; référence = matrice OD du cache (od_long).
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Arêtes multimodales à couper (toutes les couches véhicule des arêtes perturbées).
+# Sert au repli (blocage direct des poids libres) ; en mode congestion, le blocage
+# est géré dans affecter_equilibre_msa() via aretes_bloquees.
+indices_mm_perturbes <- which(
+  lookup_type == "route" & lookup_physique %in% indices_aretes_perturbees
+)
+cat("  Arêtes multi-modales à couper :", length(indices_mm_perturbes),
+    "(", n_perturb, "arêtes physiques ×", n_vehicules, "couches)\n\n")
+
+if (isTRUE(CONGESTION_VULNERABILITE) && isTRUE(CONGESTION)) {
+
+  cat("── Congestion ACTIVÉE : ré-équilibrage BPR/MSA (méthode du 04) ─────────\n\n")
+
+  # [1/2] Référence : équilibre de congestion sur le réseau INTACT.
+  cat("  [1/2] Équilibre de référence (réseau intact)...\n")
+  eq_base <- affecter_equilibre_msa(integer(0))
+  res_ref <- recalculer_od(eq_base$poids_mm, od_ref_map = NULL, label = "ref")
+
+  # Table de référence au format od_long (renommage des colonnes « dégradées »).
+  od_reference <- res_ref$od %>%
+    transmute(
+      id_origine, id_destination, nom_origine, nom_destination,
+      cout_rwf      = cout_degrade,
+      distance_km   = distance_km_degrade,
+      co2_kg_trajet = co2_kg_degrade,
+      nox_g_trajet  = nox_g_degrade,
+      pm25_g_trajet = pm25_g_degrade
+    )
+
+  # Coûts OD de référence (accès O(1) par clé "i_j") pour l'accumulation détours.
+  od_ref_map <- setNames(
+    od_reference$cout_rwf,
+    paste0(od_reference$id_origine, "_", od_reference$id_destination)
+  )
+
+  # [2/2] Dégradé : équilibre de congestion sur le réseau amputé (report de trafic).
+  cat("\n  [2/2] Équilibre sur le réseau dégradé (report de trafic)...\n")
+  eq_deg  <- affecter_equilibre_msa(indices_aretes_perturbees)
+  res_deg <- recalculer_od(eq_deg$poids_mm, od_ref_map = od_ref_map, label = "deg")
+
+  # Poids congestionnés de référence : base de la criticité IX.4 (congestion
+  # statique, un re-MSA par arête testée étant infaisable).
+  poids_criticite_base <- eq_base$poids_mm
+
+} else {
+
+  cat("── Congestion désactivée pour la vulnérabilité : coûts libres ──────────\n\n")
+
+  # Poids libres avec arêtes coupées à Inf (équivalent de l'ancien graphe_degrade).
+  poids_criticite_base <- igraph::E(recuperer_lourd("graphe_multimodal"))$weight
+  poids_libre          <- poids_criticite_base
+  poids_libre[indices_mm_perturbes] <- Inf
+
+  # Référence = matrice OD libre déjà calculée en 03 (od_long du cache).
+  od_reference <- od_long
+  od_ref_map   <- setNames(
+    od_long$cout_rwf,
+    paste0(od_long$id_origine, "_", od_long$id_destination)
+  )
+
+  res_deg <- recalculer_od(poids_libre, od_ref_map = od_ref_map, label = "deg")
+}
+
+# Résultats du réseau dégradé, communs aux deux régimes.
+od_degrade            <- res_deg$od
+surcout_pondere_arete <- res_deg$surcout_pondere_arete
+volume_detourne_arete <- res_deg$volume_detourne_arete
 
 cat("✓ Matrice OD dégradée calculée\n\n")
 
@@ -573,7 +649,7 @@ cat("── Calcul des surcoûts ───────────────�
 # left_join() : pour chaque paire OD dans la matrice de référence, on récupère
 # le coût dégradé correspondant. Les colonnes by = sont les clés de jointure.
 
-od_compare <- od_long %>%
+od_compare <- od_reference %>%
   left_join(
     od_degrade %>%
       select(id_origine, id_destination, cout_degrade, connecte,
@@ -805,13 +881,17 @@ cat("  Arêtes candidates :", length(aretes_candidates),
 #   - Construit un graphe temporaire avec ces arêtes bloquées (poids = Inf)
 #   - Recalcule les distances OD pour les paires les plus importantes
 #   - Retourne le surcoût total agrégé (en RWF)
-calculer_surcout_total <- function(indices_a_supprimer, graphe_ref, paires_imp) {
+calculer_surcout_total <- function(indices_a_supprimer, poids_base, paires_imp) {
 
-  # Blocage des arêtes perturbées dans toutes les couches véhicule.
-  # R applique copy-on-modify : graphe_ref est copié localement à cette ligne,
-  # l'original (graphe_criticite) reste intact pour l'itération suivante.
+  # Graphe multimodal complet ; on route avec une COPIE des poids de base dans
+  # laquelle l'arête candidate est coupée (poids Inf sur toutes ses couches).
+  # poids_base = poids congestionnés d'équilibre de référence (congestion statique)
+  # ou poids libres en repli. On ne re-ré-équilibre PAS la congestion par arête
+  # testée (un MSA complet × centaines d'arêtes serait infaisable).
+  g <- recuperer_lourd("graphe_multimodal")
+  poids_temp  <- poids_base
   idx_mm_temp <- which(lookup_type == "route" & lookup_physique %in% indices_a_supprimer)
-  igraph::E(graphe_ref)$weight[idx_mm_temp] <- Inf
+  poids_temp[idx_mm_temp] <- Inf
 
   # Regroupement des paires par origine unique.
   n_wh          <- length(warehouse_nodes_base)
@@ -831,10 +911,10 @@ calculer_surcout_total <- function(indices_a_supprimer, graphe_ref, paires_imp) 
 
     # Un seul appel distances() pour toutes les destinations de l'origine i_u
     dists_u <- igraph::distances(
-      graphe_ref,
+      g,
       v       = sources_u,
       to      = targets_all_c,
-      weights = igraph::E(graphe_ref)$weight
+      weights = poids_temp
     )
 
     for (j_k in j_list) {
@@ -864,10 +944,9 @@ paires_importantes_crit <- paires_importantes_crit[
   paires_importantes_crit[, 1] != paires_importantes_crit[, 2], , drop = FALSE
 ]
 
-# Copie unique du graphe avant la boucle.
-# R copiera graphe_criticite localement dans calculer_surcout_total() au moment
-# de la modification des poids (copy-on-modify)
-graphe_criticite <- recuperer_lourd("graphe_multimodal")
+# Poids de base de la criticité : poids congestionnés d'équilibre de référence
+# (mode congestion) ou poids libres (repli), définis en IX.2 (poids_criticite_base).
+# Chaque appel en copie une version localement avec l'arête candidate coupée.
 
 cat("  Paires OD importantes (seuil :", SEUIL_PAIRES_CRITICITE, "t) :",
     nrow(paires_importantes_crit), "\n")
@@ -888,7 +967,7 @@ pb_crit <- progress_bar$new(
 )
 
 for (k in seq_along(aretes_candidates)) {
-  resultat_k <- calculer_surcout_total(aretes_candidates[k], graphe_criticite, paires_importantes_crit)
+  resultat_k <- calculer_surcout_total(aretes_candidates[k], poids_criticite_base, paires_importantes_crit)
   criticite_df$surcout_pondere[k]     <- resultat_k$surcout
   criticite_df$n_deconnexions_caus[k] <- resultat_k$n_deconnexions
   pb_crit$tick()
@@ -1027,14 +1106,14 @@ saveRDS(
 cat("✓ persist_vulnerabilite.rds\n\n")
 
 # Libération des gros objets intermédiaires de la partie IX.
-# graphe_degrade et graphe_criticite sont des copies du graphe multimodal (~500 Mo
-# selon la taille du réseau). aretes_ems_cache et od_rows_degrade peuvent aussi
-# être volumineux. Tout est déjà dans le .rds ci-dessus.
+# eq_base / eq_deg (résultats d'équilibre) et res_ref / res_deg (tables OD) peuvent
+# être volumineux, tout comme aretes_ems_cache et od_degrade. Tout ce qui est utile
+# en aval est déjà dans le .rds ci-dessus. intersect() évite toute erreur si un
+# objet est absent (ex. eq_base/eq_deg n'existent qu'en mode congestion).
 objets_a_liberer <- c(
-  "graphe_degrade", "graphe_criticite",
+  "eq_base", "eq_deg", "res_ref", "res_deg",
   "aretes_ems_cache", "aretes_ems_idx",
-  "od_rows_degrade", "od_degrade",
-  "chemins_par_vehicule", "edge_attrs_deg",
+  "od_degrade", "od_reference",
   "paires_importantes_crit"
 )
 rm(list = intersect(objets_a_liberer, ls()))

@@ -122,6 +122,15 @@ CONGESTION         <- TRUE
 #   FALSE = remplissage FIXE (TAUX_CHARGEMENT) pour les PCU. La comptabilité des coûts reste produite.
 EOQ <- TRUE
 
+# Prise en compte de la congestion dans l'analyse de vulnérabilité (module 05) :
+#   TRUE  = le réseau dégradé est RÉ-ÉQUILIBRÉ (méthode BPR/MSA) — le
+#           trafic se reporte sur les routes restantes et les re-congestionne ;
+#           la référence OD et l'analyse de criticité sont elles aussi évaluées
+#           sur les poids congestionnés d'équilibre (congestion statique de base
+#           pour la criticité, un re-MSA par arête testée étant infaisable).
+#   FALSE = coûts LIBRES (charge nulle), référence = od_cache.
+CONGESTION_VULNERABILITE <- TRUE
+
 # ── Scénario de vulnérabilité (module 04) ─────────────────────────────────────
 # Mode(s) de définition de la perturbation. On peut en activer plusieurs : les
 #   arêtes perturbées sont l'UNION des modes actifs. Le mode manuel (liste
