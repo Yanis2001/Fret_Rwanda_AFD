@@ -48,15 +48,15 @@ if (nchar(token) > 0) {
 RESET_CACHES     <- TRUE  # ← passer à TRUE pour tout recalculer depuis zéro
 
 RUN_PARAMETRES   <- TRUE   # 00 — < 1 min  — packages, DuckDB, palettes
-RUN_RESEAU       <- TRUE   # 01 — ~20 min  — réseau OSM, pentes, démographie
+RUN_RESEAU       <- TRUE   # 01 — ~25 min  — réseau OSM, pentes, démographie
 RUN_COUTS        <- TRUE   # 02 — < 1 min  — coûts, graphe multi-modal
-RUN_TRANSPORT    <- TRUE   # 03 — ~12 min  — OD, IO, gravitaire, projection RoW
-RUN_AFFECTATION  <- TRUE   # 04 — ~5 min   — affectation réseau, émissions, saturation
-RUN_VULNERAB     <- TRUE   # 05 — ~13 min  — vulnérabilité, criticité
+RUN_TRANSPORT    <- TRUE   # 03 — ~9 min  — OD, IO, gravitaire, projection RoW
+RUN_AFFECTATION  <- TRUE   # 04 — ~7,5 min   — affectation réseau, émissions, saturation
+RUN_VULNERAB     <- TRUE   # 05 — ~10 min  — vulnérabilité, criticité
 
 RUN_VIZ_RESEAU   <- TRUE   # viz — ~3 min  — cartes réseau / coûts / pentes
-RUN_VIZ_FRET     <- TRUE   # viz — ~2 min  — cartes fret / Sankey
-RUN_VIZ_VULNERAB <- TRUE   # viz — ~3 min  — cartes vulnérabilité / détours
+RUN_VIZ_FRET     <- TRUE   # viz — ~8 min  — cartes fret / Sankey
+RUN_VIZ_VULNERAB <- TRUE   # viz — < 1 min  — cartes vulnérabilité / détours
 
 # ==============================================================================
 # EXÉCUTION SÉQUENTIELLE

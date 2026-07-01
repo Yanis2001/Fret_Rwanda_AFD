@@ -610,7 +610,6 @@ if (!cache_affectation_valide) {
         idx_s <- match(s, SECTEURS)
         
         # Volume en tonnes pour ce secteur entre i et j
-        # flux_gravitaire[[s]] est directement en tonnes (converti avant Furness)
         flux_ij_s <- flux_gravitaire[[s]][i, j]
         
         # Si le flux sectoriel est négligeable, on passe au secteur suivant
@@ -660,7 +659,7 @@ if (!cache_affectation_valide) {
 
         # ── PCU endogènes (seulement si EOQ pilote la congestion) ─────────────
         # Le nombre de trajets/an d'une arête découle de la taille d'envoi q* de
-        # SON véhicule : trajets/an = Q / q*_v ; PCU/jour = trajets/an × facteur_pcu
+        # son véhicule : trajets/an = Q / q*_v ; PCU/jour = trajets/an × facteur_pcu
         # / JOURS_TRAFIC_AN. On accumule ces PCU par arête physique (charge AON de
         # l'itération), qui remplaceront le remplissage fixe dans la congestion.
         if (isTRUE(EOQ)) {
@@ -711,9 +710,9 @@ if (!cache_affectation_valide) {
     
     pb_aff$tick()
   }
-  # ── fin de la boucle sur les origines (une affectation AON complète) ──────────
+  # ── fin de la boucle sur les origines (une affectation AON complète) ────────
 
-  # ── MISE À JOUR D'ÉQUILIBRE (MSA) ─────────────────────────────────────────────
+  # ── MISE À JOUR D'ÉQUILIBRE (MSA) ───────────────────────────────────────────
   # volume_trafic_mm_s contient la charge AON de CETTE itération (charge
   # auxiliaire Y). On la moyenne avec la charge d'équilibre courante au pas 1/n :
   #   V^{n} = V^{n-1} + (1/n) · (Y − V^{n-1})
@@ -761,7 +760,7 @@ if (!cache_affectation_valide) {
 
   }  # ── fin de la boucle d'équilibre MSA ──────────────────────────────────────
 
-  # La charge retenue est la charge d'ÉQUILIBRE (et non la dernière AON brute).
+  # La charge retenue est la charge d'ÉQUILIBRE.
   # On la réinjecte dans volume_trafic_mm_s pour que TOUT l'aval (agrégations,
   # émissions, exports, viz) reste inchangé.
   volume_trafic_mm_s <- volume_eq_s
