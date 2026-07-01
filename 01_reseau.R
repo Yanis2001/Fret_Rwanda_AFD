@@ -2357,7 +2357,13 @@ zones_voronoi <- st_voronoi(
   st_set_crs(st_crs(seeds_sf)) %>%           # st_voronoi peut perdre le CRS
   st_make_valid() %>%
   st_intersection(pays_utm) %>%              # rognage sur le pays
-  st_make_valid()
+  st_make_valid() %>%
+  # Le rognage sur la frontière peut transformer une cellule en
+  # GEOMETRYCOLLECTION (polygone + bout de ligne/point résiduel). On ré-extrait
+  # la seule composante polygonale : sans cela la colonne de géométrie devient
+  # « mixte » et exact_extract() échoue avec « Mixed-type geometries not supported ».
+  st_collection_extract("POLYGON") %>%
+  st_cast("MULTIPOLYGON")
 
 # Rattachement de chaque cellule à son germe : st_nearest_feature() renvoie le
 # germe contenu dans la cellule (distance nulle), donc son warehouse_id.
