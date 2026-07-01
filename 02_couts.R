@@ -452,10 +452,7 @@ for (v_idx in seq_len(n_vehicules)) {
 
   # Coefficient « valeur du temps par tonne » du véhicule = valeur_temps / capacite_tonnes
   # (RWF par heure et par tonne). Multiplié par le temps de trajet d'une arête, il
-  # donne la PART TEMPS du poids de Dijkstra. On la précalcule ici (couche coût)
-  # pour que 03 n'ait plus à la reconstruire : 03 applique la congestion BPR à cette
-  # seule composante. Le facteur urbain (sur-coût temps en ville) n'est PAS inclus —
-  # il reste dans la part hors-temps.
+  # donne la PART TEMPS du poids de Dijkstra. 
   idx_flotte     <- match(id_veh, params_flotte_df$vehicule_id)
   coef_temps_veh <- params_flotte_df$valeur_temps[idx_flotte] /
                     params_flotte_df$capacite_tonnes[idx_flotte]

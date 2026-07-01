@@ -112,11 +112,15 @@ cat("✓ Tous les packages sont chargés\n\n")
 #   MSA, reroutage selon la saturation V/C) ; FALSE = All-or-Nothing
 CONGESTION         <- TRUE
 
-# Choix du véhicule par lot économique (EOQ) : TRUE = le véhicule de chaque
-#   secteur sur chaque OD minimise le coût logistique total (transport + coût
-#   fixe par trajet + stock cyclique + stock en transit) ; FALSE = véhicule du
-#   chemin de moindre coût au tonne-km
-CHOIX_VEHICULE_EOQ <- TRUE
+# Lot économique (EOQ) — pilote le REMPLISSAGE des véhicules et la VENTILATION 
+# du coût logistique en 4 composantes (commande + transport + stock cyclique + 
+# stock en transit) 
+#   TRUE  = q* PILOTE la congestion : le nombre de trajets (donc les PCU et la
+#           saturation) devient endogène (trajets/an = Q/q*) au lieu d'un
+#           remplissage fixe. La congestion devient sensible à la valeur des
+#           marchandises et q* rétroagit sur le routage (équilibre MSA).
+#   FALSE = remplissage FIXE (TAUX_CHARGEMENT) pour les PCU. La comptabilité des coûts reste produite.
+EOQ <- TRUE
 
 # ── Scénario de vulnérabilité (module 04) ─────────────────────────────────────
 # Mode(s) de définition de la perturbation. On peut en activer plusieurs : les
@@ -1190,16 +1194,6 @@ MSA_MAX_ITER <- 20     # nombre maximal d'itérations d'équilibre
 MSA_TOL      <- 0.01   # convergence : variation relative L1 de la charge < 1 %
 # (L'activation de la congestion se fait via CONGESTION, section CHOIX DU MODE.)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CHOIX DU VÉHICULE PAR LOT ÉCONOMIQUE (EOQ : Economic Order Quantity, aussi appelé formule de Wilson)
-# Le véhicule qui dessert une paire OD pour un secteur n'est plus simplement le
-# moins cher au tonne-km, mais celui qui minimise le COÛT LOGISTIQUE TOTAL annuel
-# Intuition : gros flux et bien bon marché → gros camion rempli ; petit flux ou
-# bien de valeur → véhicule plus petit. Le terme en transit ajoute la sensibilité
-# au TEMPS : un bien de valeur fuit les trajets lents (et les routes congestionnées).
-# ══════════════════════════════════════════════════════════════════════════════
-# (L'activation de l'EOQ se fait via CHOIX_VEHICULE_EOQ, section CHOIX DU MODE.)
-
 # ── Taux de détention du stock « r » (coût annuel de garder 1 RWF en stock) ───
 # Décomposé en composantes EXPLICITES pour la lisibilité ; leur SOMME = r.
 # Chaque composante est une fraction de la valeur de la marchandise, par an.
@@ -1213,6 +1207,16 @@ TAUX_DETENTION_STOCK <- R_CAPITAL + R_STOCKAGE + R_ASSURANCE + R_OBSOLESCENCE
 # Heures par an (calendaires) pour convertir le temps de trajet τ_v en fraction
 # d'année : la marchandise « dort » dans le pipeline 24h/24 pendant le transit.
 HEURES_PAR_AN <- 8760
+
+# ── Plancher de remplissage des envois (fraction de la capacité du véhicule) ──
+# Quand EOQ = TRUE, la taille d'envoi optimale q* (Wilson) PILOTE le nombre de
+# trajets, donc les PCU et la congestion : trajets/an = Q/q*. Sans borne basse,
+# un bien de forte valeur à coût de commande faible donnerait un q* minuscule →
+# une explosion du nombre de trajets (et des PCU). On impose donc un remplissage
+# minimal : q* ≥ EOQ_REMPLISSAGE_MIN × capacité. La valeur est aussi plafonnée en
+# haut à la capacité (camion plein). Doit être > 0. À calibrer ; 0,5 = au moins
+# un demi-chargement par envoi.
+EOQ_REMPLISSAGE_MIN <- 0.5
 
 # ── Table 2 : vitesses par véhicule × type de route × surface ─────────────────
 # Chaque véhicule a ses propres vitesses de référence sur chaque combinaison.
