@@ -132,8 +132,7 @@ afficher_ram <- function(etape = "") {
   cat("  [RAM ", etape, "] ", ram_mb, " MB utilisés\n", sep = "")
 }
 
-# Double gc() pour forcer la libération complète (premier passage marque,
-# deuxième passage collecte réellement)
+# Double gc() pour forcer la libération complète 
 invisible(gc(full = TRUE))
 invisible(gc(full = TRUE))
 afficher_ram("après nettoyage")
@@ -177,13 +176,15 @@ empreinte_entrees <- digest::digest(
     msa               = c(MSA_MAX_ITER, MSA_TOL),
     conversion_pcu    = c(TAUX_CHARGEMENT, JOURS_TRAFIC_AN),
     facteur_pcu       = params_flotte_df$facteur_pcu,
-    # Paramètres du choix de véhicule par EOQ (version A)
+    # Paramètres EOQ : q* de Wilson + ventilation, et (si EOQ=TRUE) PCU endogène
+    # pilotant la congestion. Tout changement invalide le cache d'affectation.
     eoq               = list(
-      CHOIX_VEHICULE_EOQ, HEURES_PAR_AN,
+      EOQ, EOQ_REMPLISSAGE_MIN, HEURES_PAR_AN,
       TAUX_DETENTION_STOCK, VALEUR_RWF_PAR_TONNE,
       params_flotte_df$cout_chargement_rwf,
       params_flotte_df$cout_dechargement_rwf,
-      params_flotte_df$capacite_tonnes
+      params_flotte_df$capacite_tonnes,
+      params_flotte_df$facteur_pcu
     )
   ),
   algo = "xxhash64"
@@ -203,9 +204,14 @@ if (file.exists(CACHE_AFFECTATION)) {
       cache_aff$empreinte == empreinte_entrees &&
       !is.null(cache_aff$volume_trafic_mm_s)) {
     
-    volume_trafic_mm_s       <- cache_aff$volume_trafic_mm_s   
+    volume_trafic_mm_s       <- cache_aff$volume_trafic_mm_s
     paires_traitees          <- cache_aff$paires_traitees
     paires_non_connectees    <- cache_aff$paires_non_connectees
+    # Comptabilité EOQ (composantes de coût par secteur) ; NULL si cache produit
+    # par une version antérieure.
+    compta_eoq               <- cache_aff$compta_eoq
+    # PCU/jour d'équilibre endogène (si EOQ = TRUE) ; NULL sinon ou cache ancien.
+    pcu_eq                   <- cache_aff$pcu_eq
     cache_affectation_valide <- TRUE
     
     cat("  ✓ Cache d'affectation valide\n")
@@ -223,13 +229,12 @@ if (file.exists(CACHE_AFFECTATION)) {
 # pour vérifier que le filtre n'élimine pas trop de flux économiquement
 # significatifs. Une paire exclue = flux trop faible pour être affecté
 # au réseau routier, mais qui contribue quand même au tonnage total.
-# Ce diagnostic est affiché même quand le cache d'affectation est valide.
 
 # Toutes les paires hors diagonale (i ≠ j), sans filtre de seuil
 toutes_paires <- which(flux_tonnes_total > 0, arr.ind = TRUE)
 toutes_paires <- toutes_paires[toutes_paires[, 1] != toutes_paires[, 2], ]
 
-# Paires sous le seuil = toutes les paires actives MOINS celles retenues
+# Paires sous le seuil = toutes les paires MOINS celles retenues
 n_paires_sous_seuil <- nrow(toutes_paires) - nrow(paires_actives)
 
 # Tonnage total des paires exclues (pour juger de leur poids économique)
@@ -280,7 +285,7 @@ C_phys <- capacites_route_df$capacite_pcu_jour[
 # Diagnostic de calibration : un NA dans C_phys signale un road_type présent dans
 # le réseau mais absent de capacites_route_df (table de capacité incomplète) — ou
 # un road_type manquant en amont. On l'affiche explicitement avant de le combler,
-# pour que ce trou de calibration soit visible plutôt que masqué silencieusement.
+# pour que ce trou de calibration soit visible.
 types_sans_capacite <- setdiff(unique(road_type_phys), capacites_route_df$road_type)
 if (length(types_sans_capacite) > 0) {
   warning(sprintf(
@@ -302,15 +307,18 @@ conv_v <- params_flotte_df$facteur_pcu[.m_veh] /
 
 # Paramètres EOQ par véhicule, dans le MÊME ordre que les colonnes du tableau de
 # trafic et que les lignes de dists_all (VEHICULES_IDS$vehicule_id) :
-#   K_vec   = coût fixe par trajet (chargement + déchargement), RWF
-#   cap_vec = capacité de chargement, tonnes
-K_vec   <- params_flotte_df$cout_chargement_rwf[.m_veh] +
-           params_flotte_df$cout_dechargement_rwf[.m_veh]
-cap_vec <- params_flotte_df$capacite_tonnes[.m_veh]
+#   K_vec           = coût fixe par trajet (chargement + déchargement), RWF
+#   cap_vec         = capacité de chargement, tonnes
+#   facteur_pcu_vec = équivalent voiture particulière (PCU) d'un trajet du véhicule
+#                     (sert à convertir les trajets/an endogènes en PCU/jour)
+K_vec           <- params_flotte_df$cout_chargement_rwf[.m_veh] +
+                   params_flotte_df$cout_dechargement_rwf[.m_veh]
+cap_vec         <- params_flotte_df$capacite_tonnes[.m_veh]
+facteur_pcu_vec <- params_flotte_df$facteur_pcu[.m_veh]
 rm(.veh_order, .m_veh)
 
 # Nombre d'itérations d'équilibre : 1 seule passe si la congestion est désactivée
-# (on retombe alors exactement sur l'affectation All-or-Nothing).
+# (on tombe alors sur l'affectation All-or-Nothing).
 n_iter_msa <- if (isTRUE(CONGESTION)) MSA_MAX_ITER else 1L
 cat("── Congestion :", if (isTRUE(CONGESTION)) "ACTIVÉE" else "désactivée",
     "— itérations d'équilibre max :", n_iter_msa, "──────\n\n")
@@ -351,15 +359,20 @@ if (!cache_affectation_valide) {
   )
   V_phys <- rep(0, n_aretes_physiques)
 
-  # ══════════════════════════════════════════════════════════════════════════
+  # pcu_eq = PCU/jour d'ÉQUILIBRE par arête physique quand EOQ pilote la congestion
+  # (charge issue des trajets endogènes Q/q*, moyennée par MSA comme le tonnage).
+  # Reste à 0 et inutilisée si EOQ = FALSE (la congestion repose alors sur conv_v).
+  pcu_eq <- rep(0, n_aretes_physiques)
+
+  # ════════════════════════════════════════════════════════════════════════════
   # BOUCLE D'ÉQUILIBRE (MSA) : chaque itération relance une affectation AON
   # complète avec des coûts congestionnés, puis moyenne la charge obtenue avec
   # celle des itérations précédentes (pas 1/n) jusqu'à stabilisation (gap<tol).
   # Si CONGESTION = FALSE, n_iter_msa = 1 → une seule passe AON à coûts libres.
-  # ══════════════════════════════════════════════════════════════════════════
+  # ════════════════════════════════════════════════════════════════════════════
   for (iter_msa in seq_len(n_iter_msa)) {
 
-  # ── Coûts congestionnés de l'itération : coût_libre × facteur BPR ────────────
+  # ── Coûts congestionnés de l'itération : coût_libre × facteur BPR ───────────
   # Le facteur BPR dépend de la saturation V/C de chaque arête PHYSIQUE ; on
   # l'applique ensuite aux copies multimodales (une par véhicule) de l'arête,
   # repérées via lookup_physique. À l'itération 1, V_phys = 0 → facteur = 1,
@@ -379,7 +392,7 @@ if (!cache_affectation_valide) {
   poids_mm   <- poids_horstemps_mm + poids_temps_mm * f_edge
   temps_mm_c <- temps_mm * f_edge
 
-  # ── ÉTAPE 4 : Préparation des matrices de résultats ───────────────────────────
+  # ── ÉTAPE 4 : Préparation des matrices de résultats ─────────────────────────
   # Tableau 3D (arêtes × véhicules × secteurs) pour conserver l'information sectorielle.
   # Chaque "tranche" du tableau correspond à un secteur économique.
   # Exemple de lecture : volume_trafic_mm_s[500, "camion_moyen", "Agriculture"]
@@ -389,11 +402,34 @@ if (!cache_affectation_valide) {
     dim      = c(n_aretes_physiques, n_vehicules, N_SECTEURS),
     dimnames = list(NULL, VEHICULES_IDS$vehicule_id, SECTEURS)
   )
-  
+
+  # ── Comptabilité des coûts logistiques (EOQ) — calculée DANS TOUS LES CAS ────
+  # On agrège ici, par secteur (lignes) et par composante de coût (colonnes), le
+  # coût logistique annuel ventilé selon l'identité de Wilson :
+  #   cout_commande       = Σ (Q/q*)·K        (passation/manutention de commande)
+  #   cout_transport      = Σ  Q·c            (acheminement)
+  #   cout_stock_cyclique = Σ (q*/2)·V_s·r    (stock moyen détenu entre 2 livraisons)
+  #   cout_stock_transit  = Σ  Q·τ·V_s·r      (marchandise immobilisée en transit)
+  # flux_tonnes et flux_x_qopt servent à restituer la taille d'envoi q* moyenne
+  # (pondérée par le flux). Cet accumulateur est PUREMENT comptable. Réinitialisé
+  # à chaque itération MSA → en fin de boucle il reflète la dernière passe AON
+  # (≈ équilibre après convergence).
+  compta_eoq <- matrix(
+    0, nrow = N_SECTEURS, ncol = 6,
+    dimnames = list(SECTEURS,
+                    c("cout_commande", "cout_transport", "cout_stock_cyclique",
+                      "cout_stock_transit", "flux_tonnes", "flux_x_qopt"))
+  )
+
+  # pcu_aux = charge PCU/jour AON de CETTE itération, par arête physique, quand
+  # EOQ pilote la congestion (trajets endogènes Q/q* convertis en PCU). Accumulée
+  # pendant la boucle OD puis moyennée dans pcu_eq. Inutilisée si EOQ = FALSE.
+  pcu_aux <- rep(0, n_aretes_physiques)
+
   paires_traitees       <- 0
   paires_non_connectees <- 0
 
-  # ── ÉTAPE 5 : Boucle principale par zone origine ──────────────────────────────
+  # ── ÉTAPE 5 : Boucle principale par zone origine ────────────────────────────
   # On parcourt les zones origine une par une. Pour chaque origine i, on calcule
   # en UNE SEULE fois les distances vers toutes les destinations (bien plus
   # efficace qu'une requête par paire).
@@ -465,12 +501,7 @@ if (!cache_affectation_valide) {
       # ── Dijkstra : calcul du chemin optimal (une seule fois pour la paire i,j) ──
       # On cherche le chemin de moindre coût entre i et j, indépendamment
       # de la nature de la marchandise. Ce chemin sera ensuite utilisé pour
-      # ventiler les volumes de TOUS les secteurs :
-      # le routage physique ne dépend pas du type de marchandise, seulement
-      # des coûts de transport.
-      # Cette hypothèse est cohérente avec la structure du modèle : les
-      # différences sectorielles interviennent dans la GÉNÉRATION des flux
-      # mais pas dans le ROUTAGE.
+      # ventiler les volumes de TOUS les secteurs 
       
       cols_j   <- j + (seq_len(n_vehicules) - 1) * n_warehouses
       min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
@@ -531,35 +562,42 @@ if (!cache_affectation_valide) {
       veh_id_vec   <- veh_id_vec[valides]
       col_veh_vec  <- match(veh_id_vec, VEHICULES_IDS$vehicule_id)
 
-      # ── Coût de transport mono-véhicule de l'OD (RWF/tonne), par véhicule ───
-      # dists_all[v, cols_j[v]] = coût d'aller de i à j ENTIÈREMENT dans la couche
-      # du véhicule v (sans transbordement). C'est le c_v dont l'EOQ a besoin pour
-      # arbitrer le choix de véhicule. Inf = véhicule injoignable en mono-couche.
-      cout_transp_veh <- dists_all[cbind(seq_len(n_vehicules), cols_j)]
-      eoq_possible    <- isTRUE(CHOIX_VEHICULE_EOQ) && any(is.finite(cout_transp_veh))
-
-      # ── Temps de trajet par véhicule LE LONG du chemin (τ_v) ────────────────
-      # Pour chaque véhicule v, on somme son temps de parcours sur les arêtes
-      # physiques du chemin retenu. Une route saturée est allongée de τ_v). 
-      # τ_v est ensuite converti en fraction d'année.
-      if (eoq_possible) {
-        .mm_ids <- outer(idx_phys_vec,
-                         (seq_len(n_vehicules) - 1L) * n_aretes_physiques, `+`)
-        .t      <- temps_mm_c[.mm_ids]
-        .t[is.na(.t)] <- 0
-        tau_v_an <- colSums(matrix(.t, nrow = length(idx_phys_vec))) / HEURES_PAR_AN
-        rm(.mm_ids, .t)
-      } else {
-        tau_v_an <- rep(0, n_vehicules)
-      }
+      # ── Découpage du chemin en JAMBES (segments entre deux transbordements) ──
+      # Une jambe = suite d'arêtes consécutives empruntées dans la MÊME couche
+      # véhicule. Comme un changement de véhicule n'a lieu qu'à un transbordement,
+      # les ruptures de col_veh_vec (rle) délimitent exactement les jambes. Pour
+      # chaque jambe on précalcule UNE FOIS (indépendamment du secteur) :
+      #   v      = son véhicule
+      #   c      = son coût de transport réalisé, RWF/tonne (somme des poids
+      #            d'arêtes le long de la jambe, congestion incluse)
+      #   tau_an = son temps de transit, converti en fraction d'année
+      # q* sera ensuite calculé PAR JAMBE dans la boucle secteur (il dépend de Q
+      # et de V_s). Le découpage est fait DANS TOUS LES CAS (la comptabilité est
+      # toujours produite). Le plancher de remplissage garantit q* > 0, donc pas
+      # besoin d'exclure les véhicules à coût fixe nul.
+      runs   <- rle(col_veh_vec)              # segments de véhicule constant
+      fin    <- cumsum(runs$lengths)          # indice de fin de chaque jambe
+      debut  <- fin - runs$lengths + 1L       # indice de début de chaque jambe
+      jambes <- lapply(seq_along(runs$values), function(g) {
+        v      <- runs$values[g]
+        # ID des arêtes multimodales de la jambe = arête physique décalée dans
+        # la couche du véhicule v (même indexation que le graphe multimodal).
+        mm_ids <- idx_phys_vec[debut[g]:fin[g]] + (v - 1L) * n_aretes_physiques
+        list(
+          v      = v,
+          c      = sum(poids_mm[mm_ids],   na.rm = TRUE),
+          tau_an = sum(temps_mm_c[mm_ids], na.rm = TRUE) / HEURES_PAR_AN
+        )
+      })
 
       # ── Ventilation sectorielle sur le chemin trouvé ────────────────────────
-      # Le ROUTAGE (arêtes physiques) reste commun à tous les secteurs. En revanche,
-      # le VÉHICULE est choisi PAR SECTEUR par lot économique (EOQ) :
-      # selon le flux Q et la valeur V_s de la marchandise, le secteur emprunte le
-      # véhicule qui minimise son coût logistique total. Si l'EOQ est désactivé
-      # (ou aucun véhicule mono-couche joignable), on garde le véhicule du chemin
-      # de moindre coût.
+      # Le ROUTAGE (arêtes physiques) ET le VÉHICULE de chaque arête sont communs
+      # à tous les secteurs : le véhicule est toujours celui de la couche empruntée
+      # par le chemin multimodal de moindre coût (col_veh_vec). Seul le VOLUME
+      # affecté varie d'un secteur à l'autre. Pour chaque secteur on calcule la
+      # taille d'envoi q* (Wilson, plafonnée/planchée) et la ventilation de son
+      # coût logistique (comptabilité, toujours) ; si EOQ = TRUE, q* sert EN PLUS à
+      # convertir le flux en trajets/an → PCU, qui pilotent alors la congestion.
       for (s in SECTEURS) {
         
         # ── Indice numérique du secteur dans la 3e dimension du tableau ───────
@@ -579,26 +617,56 @@ if (!cache_affectation_valide) {
         # pour ne pas alourdir inutilement les calculs
         if (is.na(flux_ij_s) || flux_ij_s < 1) next
 
-        # ── Choix du véhicule par lot économique (EOQ) ────────────────────────
-        # On compare les véhicules par leur coût logistique total annuel :
-        #   CLT(q,v) = (Q/q)·K_v + Q·c_v + (q/2)·V_s·r + Q·τ_v·V_s·r
-        # (commande + transport + stock cyclique + stock en transit), avec la taille
-        # d'envoi optimale q* = √(2·Q·K_v/(V_s·r)) plafonnée à la capacité. Le terme
-        # en transit (Q·τ_v·V_s·r) rend le choix sensible au temps de trajet τ_v. Le
-        # secteur emprunte le véhicule de CLT minimal, affecté à TOUTES les arêtes du
-        # chemin (col_v constant). Sans EOQ, on garde le véhicule du chemin.
-        if (eoq_possible) {
-          Vs    <- VALEUR_RWF_PAR_TONNE[s]
-          q_opt <- pmin(sqrt(2 * flux_ij_s * K_vec / (Vs * TAUX_DETENTION_STOCK)),
-                        cap_vec)
-          clt   <- (flux_ij_s / q_opt) * K_vec +
-                   flux_ij_s * cout_transp_veh +
-                   (q_opt / 2) * Vs * TAUX_DETENTION_STOCK +
-                   flux_ij_s * tau_v_an * Vs * TAUX_DETENTION_STOCK  # stock en transit
-          clt[!is.finite(cout_transp_veh)] <- Inf   # véhicule injoignable exclu
-          col_v <- rep.int(which.min(clt), length(idx_phys_vec))
-        } else {
-          col_v <- col_veh_vec                       # véhicule du chemin 
+        col_v <- col_veh_vec
+        Vs    <- VALEUR_RWF_PAR_TONNE[s]
+
+        # ── Taille d'envoi optimale q* par véhicule (Wilson, bornée) ──────────
+        # q*_v = √(2·Q·K_v/(V_s·r)), plafonnée en haut à la capacité (camion plein)
+        # et planchée en bas à EOQ_REMPLISSAGE_MIN × capacité (remplissage minimal,
+        # évite un q* nul/minuscule → trajets explosifs). Vecteur indexé comme les
+        # colonnes véhicule. Même q* servira à la comptabilité ET aux trajets PCU.
+        q_star_vec <- pmin(
+          pmax(sqrt(2 * flux_ij_s * K_vec / (Vs * TAUX_DETENTION_STOCK)),
+               EOQ_REMPLISSAGE_MIN * cap_vec),
+          cap_vec
+        )
+
+        # ── Comptabilité des coûts logistiques (toujours, identité comptable) ──
+        # On ventile le coût logistique annuel JAMBE PAR JAMBE puis on SOMME les
+        # jambes pour obtenir la décomposition à l'échelle de l'OD i→j. Chaque
+        # segment entre deux transbordements est un envoi indépendant, avec la
+        # taille q*_v de SON véhicule. Pour chaque jambe :
+        #   cout_commande = (Q/q*)·K_v
+        #   transport     =  Q·c_jambe           (coût réalisé de la jambe)
+        #   stock cyclique= (q*/2)·V_s·r
+        #   stock transit =  Q·τ_jambe·V_s·r
+        # flux_tonnes / flux_x_qopt cumulent Q et Q·q* PAR JAMBE pour restituer la
+        # taille d'envoi q* moyenne (pondérée par le flux) sur l'ensemble des jambes.
+        for (jb in jambes) {
+          q_leg <- q_star_vec[jb$v]
+          compta_eoq[idx_s, "cout_commande"]       <- compta_eoq[idx_s, "cout_commande"] +
+            (flux_ij_s / q_leg) * K_vec[jb$v]
+          compta_eoq[idx_s, "cout_transport"]      <- compta_eoq[idx_s, "cout_transport"] +
+            flux_ij_s * jb$c
+          compta_eoq[idx_s, "cout_stock_cyclique"] <- compta_eoq[idx_s, "cout_stock_cyclique"] +
+            (q_leg / 2) * Vs * TAUX_DETENTION_STOCK
+          compta_eoq[idx_s, "cout_stock_transit"]  <- compta_eoq[idx_s, "cout_stock_transit"] +
+            flux_ij_s * jb$tau_an * Vs * TAUX_DETENTION_STOCK
+          compta_eoq[idx_s, "flux_tonnes"]         <- compta_eoq[idx_s, "flux_tonnes"] +
+            flux_ij_s
+          compta_eoq[idx_s, "flux_x_qopt"]         <- compta_eoq[idx_s, "flux_x_qopt"] +
+            flux_ij_s * q_leg
+        }
+
+        # ── PCU endogènes (seulement si EOQ pilote la congestion) ─────────────
+        # Le nombre de trajets/an d'une arête découle de la taille d'envoi q* de
+        # SON véhicule : trajets/an = Q / q*_v ; PCU/jour = trajets/an × facteur_pcu
+        # / JOURS_TRAFIC_AN. On accumule ces PCU par arête physique (charge AON de
+        # l'itération), qui remplaceront le remplissage fixe dans la congestion.
+        if (isTRUE(EOQ)) {
+          trips_an <- flux_ij_s / q_star_vec[col_v]                 # trajets/an par arête
+          pcu_arete <- trips_an * facteur_pcu_vec[col_v] / JOURS_TRAFIC_AN
+          pcu_aux[idx_phys_vec] <- pcu_aux[idx_phys_vec] + pcu_arete
         }
 
         # ── Affectation vectorisée sur un tableau 3D ──────────────────────────
@@ -613,7 +681,7 @@ if (!cache_affectation_valide) {
         #
         # cbind(idx_phys_vec, col_v, idx_s) construit cette matrice :
         #   - idx_phys_vec et col_v sont des vecteurs de même longueur (autant que
-        #     d'arêtes du chemin ; col_v = colonne du véhicule EOQ choisi)
+        #     d'arêtes du chemin ; col_v = véhicule de l'arête sur le chemin)
         #   - idx_s est un scalaire : R le RECYCLE automatiquement pour qu'il
         #     apparaisse sur chaque ligne
         # Résultat : une matrice à 3 colonnes avec une ligne par arête du chemin.
@@ -653,10 +721,21 @@ if (!cache_affectation_valide) {
   # Wardrop (tous les itinéraires utilisés d'une OD finissent au même coût).
   volume_eq_s <- volume_eq_s + (1 / iter_msa) * (volume_trafic_mm_s - volume_eq_s)
 
-  # Recalcul de la charge physique (PCU/jour) à partir de la charge d'équilibre :
-  # somme sur les secteurs → [arête, véhicule], puis conversion tonnes/an→PCU/jour.
-  .vol_eq_mm <- apply(volume_eq_s, c(1, 2), sum)
-  V_new      <- as.vector(.vol_eq_mm %*% conv_v)
+  # Recalcul de la charge physique (PCU/jour) d'équilibre, selon le mode de
+  # remplissage :
+  #   - EOQ = TRUE : la charge PCU AON de l'itération (pcu_aux, issue des trajets
+  #     endogènes Q/q*) est moyennée par MSA dans pcu_eq, qui DEVIENT V_phys. La
+  #     congestion est ainsi pilotée par la taille d'envoi q*.
+  #   - EOQ = FALSE : remplissage fixe — on convertit le tonnage d'équilibre en
+  #     PCU/jour via le scalaire conv_v (somme sur les secteurs → [arête, véhicule]).
+  if (isTRUE(EOQ)) {
+    pcu_eq <- pcu_eq + (1 / iter_msa) * (pcu_aux - pcu_eq)
+    V_new  <- pcu_eq
+  } else {
+    .vol_eq_mm <- apply(volume_eq_s, c(1, 2), sum)
+    V_new      <- as.vector(.vol_eq_mm %*% conv_v)
+    rm(.vol_eq_mm)
+  }
 
   # Critère de convergence : variation relative L1 de la charge entre 2 itérations.
   gap_msa <- sum(abs(V_new - V_phys)) / max(sum(V_new), 1)
@@ -669,7 +748,7 @@ if (!cache_affectation_valide) {
     iter_msa, n_iter_msa, gap_msa, max(.sat_iter, na.rm = TRUE),
     sum(.sat_iter > 1, na.rm = TRUE)
   ))
-  rm(.vol_eq_mm, .sat_iter)
+  rm(.sat_iter)
   invisible(gc(verbose = FALSE))
 
   # Arrêt anticipé si la charge ne bouge presque plus (équilibre atteint).
@@ -698,6 +777,8 @@ if (!cache_affectation_valide) {
       volume_trafic_mm_s    = volume_trafic_mm_s,
       paires_traitees       = paires_traitees,
       paires_non_connectees = paires_non_connectees,
+      compta_eoq            = compta_eoq,   # ventilation des coûts logistiques
+      pcu_eq                = pcu_eq,        # PCU/jour endogène (0 si EOQ = FALSE)
       empreinte             = empreinte_entrees,
       date_creation         = Sys.time()
     ),
@@ -740,12 +821,18 @@ volume_par_secteur_df <- as.data.frame(volume_par_secteur)
 colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
 
 # ── Charge physique (PCU/jour) et taux de saturation par arête ────────────────
-# Calculé dans TOUS les cas (recalcul OU chargement du cache) à partir de la
-# charge finale par arête×véhicule (volume_trafic_mm, en tonnes/an) et des
-# capacités par type de route (C_phys, en PCU/jour). conv_v convertit chaque
-# colonne véhicule de tonnes/an en PCU/jour ; le produit matriciel somme sur
-# les véhicules. saturation_phys = V/C : >1 signale un tronçon surchargé.
-charge_pcu_jour <- as.vector(volume_trafic_mm %*% conv_v)
+# Calculé dans TOUS les cas (recalcul OU chargement du cache). Deux régimes :
+#   - EOQ = TRUE : la charge PCU est la charge endogène d'équilibre pcu_eq
+#     (trajets Q/q* issus de la taille d'envoi), cohérente avec la congestion.
+#   - EOQ = FALSE : remplissage fixe — conv_v convertit le tonnage par arête×
+#     véhicule (volume_trafic_mm) en PCU/jour, le produit matriciel sommant sur
+#     les véhicules.
+# saturation_phys = V/C : >1 signale un tronçon surchargé.
+charge_pcu_jour <- if (isTRUE(EOQ) && !is.null(pcu_eq)) {
+  pcu_eq
+} else {
+  as.vector(volume_trafic_mm %*% conv_v)
+}
 saturation_phys <- charge_pcu_jour / C_phys
 
 # ── Calcul des émissions totales affectées sur le réseau ──────────────────────
@@ -1025,6 +1112,30 @@ write.csv(aretes_fret_sectoriel,
           file.path(DIR_EXPORTS, "volumes_fret_par_secteur.csv"),
           row.names = FALSE)
 cat("✓ Export sectoriel par arête sauvegardé\n")
+
+# ── Export de la comptabilité des coûts logistiques (EOQ) ─────────────────────
+# Produit DANS TOUS LES CAS : on exporte la ventilation du coût logistique annuel
+# par secteur — les 4 composantes (commande, transport, stock cyclique, stock en
+# transit), leur total, et la taille d'envoi q* moyenne par jambe (pondérée par le
+# flux). (Le test !is.null couvre seulement un ancien cache sans cette table.)
+if (!is.null(compta_eoq)) {
+  compta_eoq_df <- as.data.frame(compta_eoq) %>%
+    rownames_to_column("secteur") %>%
+    mutate(
+      cout_total_rwf = cout_commande + cout_transport +
+                       cout_stock_cyclique + cout_stock_transit,
+      # q* moyen par jambe (tonnes) = Σ_jambes(Q·q*) / Σ_jambes(Q) ; NA si aucune
+      # jambe comptabilisée. flux_tonnes/flux_x_qopt sont des cumuls PAR JAMBE
+      # servant uniquement à cette moyenne — retirés de la sortie finale.
+      q_opt_moyen_t  = ifelse(flux_tonnes > 0, flux_x_qopt / flux_tonnes, NA_real_)
+    ) %>%
+    select(-flux_x_qopt, -flux_tonnes)   # cumuls internes, retirés de la sortie
+
+  write.csv(compta_eoq_df,
+            file.path(DIR_EXPORTS, "comptabilite_couts_eoq.csv"),
+            row.names = FALSE)
+  cat("✓ Comptabilité des coûts logistiques (EOQ) exportée\n")
+}
 
 # ==============================================================================
 # SAUVEGARDE INTER-SCRIPTS
