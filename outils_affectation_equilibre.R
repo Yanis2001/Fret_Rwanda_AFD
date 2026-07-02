@@ -1,22 +1,14 @@
 ################################################################################
 # outils_affectation_equilibre.R
-# RÔLE : Fonction réutilisable qui rejoue l'affectation du fret À L'ÉQUILIBRE
-#        (BPR/MSA) et renvoie les POIDS CONGESTIONNÉS d'équilibre du graphe
-#        multimodal, ainsi que la charge et la saturation par arête physique.
+# RÔLE : SOURCE UNIQUE de l'affectation du fret au réseau À L'ÉQUILIBRE (BPR/MSA).
+#        Appelée par 04_affectation.R (affectation principale) ET
+#        05_vulnerabilite.R (ré-équilibre sur réseau intact/dégradé).
 #
-# POURQUOI : le 05_vulnerabilite.R doit mesurer les surcoûts de détour sur un
-#        réseau CONGESTIONNÉ (et non à charge nulle). Plutôt que de dupliquer la
-#        logique, on encapsule ici la méthode d'équilibre du 04_affectation.R :
-#          - baseline (aretes_bloquees vide)         → congestion de référence ;
-#          - réseau dégradé (aretes_bloquees fournies)→ report de trafic + re-
-#            congestion des routes restantes.
-#
-# ⚠ RENVOI CROISÉ : cette fonction reproduit FIDÈLEMENT la boucle d'équilibre du
-#   04_affectation.R (préparation congestion lignes ~271-318 ; boucle MSA/BPR
-#   lignes ~331-761). Le 04 n'est PAS refactoré pour l'utiliser (son affectation
-#   est enveloppée d'un cache/checkpoint validé). Les deux restent couplés
-#   numériquement car TOUS les paramètres vivent dans 00_parametres.R : toute
-#   modification de la méthode d'équilibre du 04 doit être répercutée ici.
+# POURQUOI une fonction partagée : garantir que 04 et 05 utilisent EXACTEMENT la
+#        même méthode d'équilibre (pas de dérive entre deux copies du code).
+#          - 04 : appel sans arête bloquée → affectation + comptabilité EOQ ;
+#          - 05 baseline : appel sans arête bloquée → poids congestionnés de réf. ;
+#          - 05 dégradé  : appel avec arêtes bloquées → report de trafic + re-congestion.
 #
 # ENTRÉES (objets globaux préparés par le script appelant — 04 ou 05) :
 #   - graphe_multimodal (via recuperer_lourd) avec attributs weight, weight_temps,
@@ -26,15 +18,16 @@
 #   - reseau (pour le road_type des arêtes physiques)
 #   - flux_gravitaire (matrices OD tonnes par secteur), flux_tonnes_total
 #   - paramètres 00 : CONGESTION, EOQ, BPR_ALPHA/BETA, MSA_MAX_ITER/TOL, SECTEURS,
-#     N_SECTEURS, VEHICULES_IDS, params_flotte_df, capacites_route_df,
-#     TAUX_CHARGEMENT, JOURS_TRAFIC_AN, TAUX_DETENTION_STOCK, EOQ_REMPLISSAGE_MIN,
+#     VEHICULES_IDS, params_flotte_df, capacites_route_df, TAUX_CHARGEMENT,
+#     JOURS_TRAFIC_AN, TAUX_DETENTION_STOCK, EOQ_REMPLISSAGE_MIN,
 #     VALEUR_RWF_PAR_TONNE, HEURES_PAR_AN, SEUIL_FLUX_TONNES
 ################################################################################
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # preparer_congestion() : construit les objets invariants de la congestion.
-# (Copie annotée de 04_affectation.R lignes ~271-318.)
+# (Utilisée aussi par 04 pour le chemin « cache valide », où l'affectation n'est
+#  pas rejouée mais où C_phys / conv_v restent nécessaires au taux de saturation.)
 # Renvoie une liste avec, par arête physique ou par véhicule :
 #   C_phys          : capacité d'écoulement (PCU/jour) par arête physique
 #   conv_v          : coefficient tonnes/an → PCU/jour, par véhicule
@@ -85,21 +78,31 @@ preparer_congestion <- function() {
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# affecter_equilibre_msa(aretes_bloquees) : rejoue l'affectation à l'équilibre.
+# affecter_equilibre_msa(aretes_bloquees) : affectation du fret à l'équilibre.
+#
+# Rejoue la boucle d'équilibre MSA/BPR : à chaque itération, une affectation
+# All-or-Nothing multimodale sectorielle (avec taille d'envoi q* de Wilson et
+# comptabilité EOQ) sur des coûts congestionnés, puis moyennage de la charge
+# (pas 1/n) jusqu'à convergence (gap < MSA_TOL). Si CONGESTION = FALSE, une seule
+# passe AON à coûts libres.
 #
 # ARGUMENT :
 #   aretes_bloquees : vecteur d'indices d'arêtes PHYSIQUES à retirer du réseau
 #                     (poids Inf dans toutes les couches véhicule). Vide par
-#                     défaut → équilibre de référence (réseau intact).
+#                     défaut → réseau intact.
 #
 # RENVOIE une liste :
-#   poids_mm        : poids multimodaux CONGESTIONNÉS d'équilibre (RWF/tonne),
-#                     Inf sur les arêtes bloquées → réutilisables tels quels dans
-#                     un Dijkstra (igraph::distances / shortest_paths)
-#   temps_mm_c      : temps de trajet congestionné par arête mm (heures)
-#   V_phys          : charge PCU/jour d'équilibre par arête physique
-#   saturation_phys : V/C par arête physique (>1 = tronçon surchargé)
-#   C_phys          : capacité PCU/jour par arête physique
+#   volume_trafic_mm_s : charge d'équilibre (tonnes) [arête, véhicule, secteur]
+#   compta_eoq         : ventilation des coûts logistiques par secteur (6 colonnes)
+#   pcu_eq             : charge PCU/jour d'équilibre par arête physique (EOQ)
+#   V_phys             : charge physique d'équilibre par arête physique (PCU/jour)
+#   saturation_phys    : V/C par arête physique
+#   C_phys             : capacité PCU/jour par arête physique
+#   poids_mm           : poids multimodaux CONGESTIONNÉS d'équilibre (RWF/tonne),
+#                        Inf sur les arêtes bloquées → réutilisables tels quels
+#                        dans un Dijkstra (utilisé par 05)
+#   temps_mm_c         : temps de trajet congestionné par arête mm (heures)
+#   paires_traitees / paires_non_connectees : comptages (dernière itération)
 # ──────────────────────────────────────────────────────────────────────────────
 affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
 
@@ -131,8 +134,7 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   poids_horstemps_mm <- pmax(poids_mm_libre - poids_temps_mm, 0)
 
   # ── Arêtes multimodales à bloquer (toutes les couches véhicule des arêtes
-  # physiques perturbées) : poids Inf → Dijkstra ne les emprunte jamais, leur
-  # charge reste donc nulle et le trafic se reporte ailleurs. ────────────────────
+  # physiques perturbées) : poids Inf → jamais empruntées, charge nulle. ─────────
   .est_route <- lookup_type == "route"
   indices_mm_bloques <- if (length(aretes_bloquees) > 0) {
     which(.est_route & lookup_physique %in% aretes_bloquees)
@@ -141,12 +143,11 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   }
 
   # ── Paires OD actives (flux > seuil, hors diagonale), regroupées par origine ──
-  # Identique au 04 (ligne 148) : on n'affecte que les paires économiquement
-  # significatives.
   paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
   paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], , drop = FALSE]
   paires_par_origine <- split(paires_actives[, 2], paires_actives[, 1])
   origines_a_traiter <- as.integer(names(paires_par_origine))
+  n_origines         <- length(origines_a_traiter)
 
   # targets_all_global : indices des nœuds-entrepôts dans chaque couche véhicule.
   targets_all_global <- as.vector(sapply(
@@ -155,10 +156,6 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   ))
 
   # ── État d'équilibre accumulé (MSA) ───────────────────────────────────────────
-  # volume_eq_s = charge d'équilibre (tonnes, [arête, véhicule, secteur]) ;
-  # V_phys      = charge physique correspondante (PCU/jour) ; pcu_eq = charge PCU
-  # endogène quand EOQ pilote la congestion. Initialisés à 0 → 1ère itération = AON
-  # à coûts libres.
   volume_eq_s <- array(0, dim = c(n_aretes_physiques, n_vehicules, N_SECTEURS),
                        dimnames = list(NULL, VEHICULES_IDS$vehicule_id, SECTEURS))
   V_phys <- rep(0, n_aretes_physiques)
@@ -170,9 +167,18 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   cat("    ── Équilibre MSA (", length(aretes_bloquees), "arêtes bloquées ) —",
       if (isTRUE(CONGESTION)) "congestion ACTIVÉE" else "AON libre", "──\n")
 
-  # Dernier facteur BPR par arête mm (mis à jour à chaque itération ; sert à
+  # Facteur BPR par arête mm (mis à jour à chaque itération ; sert aussi à
   # recomposer les poids d'équilibre finaux après la boucle).
   f_edge <- rep(1, length(poids_mm_libre))
+
+  # Sorties conservées entre itérations (reflètent la DERNIÈRE passe AON).
+  volume_trafic_mm_s    <- volume_eq_s
+  compta_eoq            <- matrix(0, nrow = N_SECTEURS, ncol = 6,
+    dimnames = list(SECTEURS, c("cout_commande", "cout_transport",
+                                "cout_stock_cyclique", "cout_stock_transit",
+                                "flux_tonnes", "flux_x_qopt")))
+  paires_traitees       <- 0
+  paires_non_connectees <- 0
 
   # ════════════════════════════════════════════════════════════════════════════
   # BOUCLE D'ÉQUILIBRE (MSA)
@@ -189,16 +195,28 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
     }
     poids_mm   <- poids_horstemps_mm + poids_temps_mm * f_edge
     temps_mm_c <- temps_mm * f_edge
-
     # Blocage des arêtes perturbées (après recomposition, pour écraser leur poids).
     if (length(indices_mm_bloques) > 0) poids_mm[indices_mm_bloques] <- Inf
 
-    # ── Affectation All-or-Nothing multimodale, sectorielle ─────────────────────
+    # ── Résultats de CETTE passe AON (réinitialisés chaque itération) ───────────
     volume_trafic_mm_s <- array(0, dim = c(n_aretes_physiques, n_vehicules, N_SECTEURS),
                                 dimnames = list(NULL, VEHICULES_IDS$vehicule_id, SECTEURS))
-    # pcu_aux : charge PCU/jour AON de l'itération (trajets endogènes Q/q*), quand
-    # EOQ pilote la congestion. Inutilisée si EOQ = FALSE.
+    # Comptabilité EOQ par secteur (identité de Wilson, ventilation en 4 postes).
+    compta_eoq <- matrix(0, nrow = N_SECTEURS, ncol = 6,
+      dimnames = list(SECTEURS, c("cout_commande", "cout_transport",
+                                  "cout_stock_cyclique", "cout_stock_transit",
+                                  "flux_tonnes", "flux_x_qopt")))
+    # pcu_aux : charge PCU/jour AON de l'itération (trajets endogènes Q/q*), EOQ.
     pcu_aux <- rep(0, n_aretes_physiques)
+
+    paires_traitees       <- 0
+    paires_non_connectees <- 0
+
+    pb_aff <- progress_bar$new(
+      format = paste0("  Itér. ", iter_msa, "/", n_iter_msa,
+                      " [:bar] :percent | ETA: :eta | :current/:total"),
+      total = n_origines, clear = FALSE, width = 70
+    )
 
     for (i in origines_a_traiter) {
 
@@ -217,7 +235,10 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
 
         cols_j   <- j + (seq_len(n_vehicules) - 1) * n_warehouses
         min_cout <- min(dists_all[, cols_j], na.rm = TRUE)
-        if (is.infinite(min_cout)) next   # paire déconnectée (arête bloquée)
+        if (is.infinite(min_cout)) {
+          paires_non_connectees <- paires_non_connectees + 1
+          next
+        }
 
         # Meilleure combinaison (couche départ, couche arrivée)
         best_idx_mat <- which(dists_all[, cols_j] == min_cout, arr.ind = TRUE)
@@ -230,41 +251,86 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
                                            weights = poids_mm, output = "epath")
         edges_path_mm <- as.integer(path_obj$epath[[1]])
         rm(path_obj)
-        if (length(edges_path_mm) == 0) next
+        if (length(edges_path_mm) == 0) {
+          paires_non_connectees <- paires_non_connectees + 1
+          next
+        }
 
         # Arêtes "route" du chemin (hors transbordements) + indices physiques/véhicules
         edges_valides <- edges_path_mm[edges_path_mm <= max_idx_mm]
         types_e       <- lookup_type[edges_valides]
         edges_routes  <- edges_valides[types_e == "route"]
-        if (length(edges_routes) == 0) next
+        if (length(edges_routes) == 0) {
+          paires_traitees <- paires_traitees + 1
+          next
+        }
 
         idx_phys_vec <- lookup_physique[edges_routes]
         veh_id_vec   <- lookup_vehicule[edges_routes]
         valides <- idx_phys_vec >= 1 & idx_phys_vec <= n_aretes_physiques & veh_id_vec != ""
-        if (!any(valides)) next
+        if (!any(valides)) {
+          paires_traitees <- paires_traitees + 1
+          next
+        }
         idx_phys_vec <- idx_phys_vec[valides]
         veh_id_vec   <- veh_id_vec[valides]
         col_veh_vec  <- match(veh_id_vec, VEHICULES_IDS$vehicule_id)
 
+        # ── Découpage du chemin en JAMBES (segments à véhicule constant) ─────────
+        # Une jambe = arêtes consécutives dans la même couche véhicule (les ruptures
+        # de col_veh_vec délimitent les jambes). Pour chaque jambe on précalcule
+        # (indépendamment du secteur) son véhicule v, son coût réalisé c (RWF/tonne,
+        # congestion incluse) et son temps de transit tau_an (fraction d'année).
+        runs   <- rle(col_veh_vec)
+        fin    <- cumsum(runs$lengths)
+        debut  <- fin - runs$lengths + 1L
+        jambes <- lapply(seq_along(runs$values), function(gr) {
+          v      <- runs$values[gr]
+          mm_ids <- idx_phys_vec[debut[gr]:fin[gr]] + (v - 1L) * n_aretes_physiques
+          list(v      = v,
+               c      = sum(poids_mm[mm_ids],   na.rm = TRUE),
+               tau_an = sum(temps_mm_c[mm_ids], na.rm = TRUE) / HEURES_PAR_AN)
+        })
+
         # ── Ventilation sectorielle : routage et véhicule communs à tous les
-        # secteurs, seul le VOLUME change. Pour chaque secteur on affecte son flux
-        # et (si EOQ) on convertit en trajets/an via la taille d'envoi q* (Wilson).
+        # secteurs, seul le VOLUME change. Pour chaque secteur : taille d'envoi q*
+        # (Wilson bornée), comptabilité EOQ jambe par jambe, PCU endogènes (si EOQ),
+        # et affectation du flux au tableau 3D.
         for (s in SECTEURS) {
 
           idx_s     <- match(s, SECTEURS)
           flux_ij_s <- flux_gravitaire[[s]][i, j]
           if (is.na(flux_ij_s) || flux_ij_s < 1) next
 
-          # PCU endogènes (seulement si EOQ pilote la congestion) : q* borné entre
-          # un remplissage minimal et la capacité ; trajets/an = Q/q* ;
-          # PCU/jour = trajets/an × facteur_pcu / JOURS_TRAFIC_AN.
+          Vs         <- VALEUR_RWF_PAR_TONNE[s]
+          # q*_v = √(2·Q·K_v/(V_s·r)), plafonné à la capacité, planché à un
+          # remplissage minimal (évite un q* nul → trajets explosifs).
+          q_star_vec <- pmin(
+            pmax(sqrt(2 * flux_ij_s * K_vec / (Vs * TAUX_DETENTION_STOCK)),
+                 EOQ_REMPLISSAGE_MIN * cap_vec),
+            cap_vec
+          )
+
+          # Comptabilité logistique annuelle, ventilée jambe par jambe puis sommée.
+          for (jb in jambes) {
+            q_leg <- q_star_vec[jb$v]
+            compta_eoq[idx_s, "cout_commande"]       <- compta_eoq[idx_s, "cout_commande"] +
+              (flux_ij_s / q_leg) * K_vec[jb$v]
+            compta_eoq[idx_s, "cout_transport"]      <- compta_eoq[idx_s, "cout_transport"] +
+              flux_ij_s * jb$c
+            compta_eoq[idx_s, "cout_stock_cyclique"] <- compta_eoq[idx_s, "cout_stock_cyclique"] +
+              (q_leg / 2) * Vs * TAUX_DETENTION_STOCK
+            compta_eoq[idx_s, "cout_stock_transit"]  <- compta_eoq[idx_s, "cout_stock_transit"] +
+              flux_ij_s * jb$tau_an * Vs * TAUX_DETENTION_STOCK
+            compta_eoq[idx_s, "flux_tonnes"]         <- compta_eoq[idx_s, "flux_tonnes"] +
+              flux_ij_s
+            compta_eoq[idx_s, "flux_x_qopt"]         <- compta_eoq[idx_s, "flux_x_qopt"] +
+              flux_ij_s * q_leg
+          }
+
+          # PCU endogènes (seulement si EOQ pilote la congestion) : trajets/an =
+          # Q/q* ; PCU/jour = trajets/an × facteur_pcu / JOURS_TRAFIC_AN.
           if (isTRUE(EOQ)) {
-            Vs         <- VALEUR_RWF_PAR_TONNE[s]
-            q_star_vec <- pmin(
-              pmax(sqrt(2 * flux_ij_s * K_vec / (Vs * TAUX_DETENTION_STOCK)),
-                   EOQ_REMPLISSAGE_MIN * cap_vec),
-              cap_vec
-            )
             trips_an  <- flux_ij_s / q_star_vec[col_veh_vec]
             pcu_arete <- trips_an * facteur_pcu_vec[col_veh_vec] / JOURS_TRAFIC_AN
             pcu_aux[idx_phys_vec] <- pcu_aux[idx_phys_vec] + pcu_arete
@@ -274,9 +340,12 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
           indices_3d <- cbind(idx_phys_vec, col_veh_vec, idx_s)
           volume_trafic_mm_s[indices_3d] <- volume_trafic_mm_s[indices_3d] + flux_ij_s
         }
+
+        paires_traitees <- paires_traitees + 1
       }
 
       rm(dists_all)
+      pb_aff$tick()
     }
     # ── fin de la passe AON ─────────────────────────────────────────────────────
 
@@ -313,10 +382,12 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   }
   # ── fin de la boucle d'équilibre MSA ──────────────────────────────────────────
 
+  # La charge retenue est la charge d'ÉQUILIBRE (moyennée), pas celle de la
+  # dernière passe AON. compta_eoq / paires_* reflètent la dernière passe (≈
+  # équilibre après convergence), comportement identique au 04.
+  volume_trafic_mm_s <- volume_eq_s
+
   # ── Poids d'équilibre FINAUX : recomposés à partir de la charge convergée ─────
-  # (la dernière passe AON a utilisé les coûts de V_phys de l'itération PRÉCÉDENTE ;
-  # on recalcule ici le facteur BPR sur le V_phys d'équilibre final pour renvoyer
-  # des poids cohérents avec la saturation retournée.)
   if (isTRUE(CONGESTION)) {
     f_bpr_phys <- 1 + BPR_ALPHA * (V_phys / C_phys)^BPR_BETA
     f_edge[]   <- 1
@@ -327,10 +398,15 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   if (length(indices_mm_bloques) > 0) poids_mm[indices_mm_bloques] <- Inf
 
   list(
-    poids_mm        = poids_mm,
-    temps_mm_c      = temps_mm_c,
-    V_phys          = V_phys,
-    saturation_phys = V_phys / C_phys,
-    C_phys          = C_phys
+    volume_trafic_mm_s    = volume_trafic_mm_s,
+    compta_eoq            = compta_eoq,
+    pcu_eq                = pcu_eq,
+    V_phys                = V_phys,
+    saturation_phys       = V_phys / C_phys,
+    C_phys                = C_phys,
+    poids_mm              = poids_mm,
+    temps_mm_c            = temps_mm_c,
+    paires_traitees       = paires_traitees,
+    paires_non_connectees = paires_non_connectees
   )
 }
