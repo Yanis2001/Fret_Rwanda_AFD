@@ -296,7 +296,7 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
         # secteurs, seul le VOLUME change. Pour chaque secteur : taille d'envoi q*
         # (Wilson bornée), comptabilité EOQ jambe par jambe, PCU endogènes (si EOQ),
         # et affectation du flux au tableau 3D.
-        for (s in SECTEURS) {
+        for (s in SECTEURS_FRET) {
 
           idx_s     <- match(s, SECTEURS)
           flux_ij_s <- flux_gravitaire[[s]][i, j]

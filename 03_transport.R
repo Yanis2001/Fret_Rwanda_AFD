@@ -1482,7 +1482,7 @@ q_dom_zones <- pmax(dem_dom - prod_dom, 0)           # déficit domestique (dest
 idx_dom <- 1:n_warehouses
 idx_row <- (n_warehouses + 1):n_total
 
-for (s in SECTEURS) {
+for (s in SECTEURS_FRET) {
 
   beta_s <- BETA_SECTEUR[s]
 
@@ -1610,7 +1610,7 @@ for (s in SECTEURS) {
 
 cat("\n── Vérification des contraintes de marges ─────────────────────────────\n")
 
-for (s in SECTEURS) {
+for (s in SECTEURS_FRET) {
 
   T_s   <- flux_gravitaire[[s]]
   Tcoef <- TONNES_PAR_mrd_RWF[s]
@@ -1644,10 +1644,10 @@ for (s in SECTEURS) {
 
 # ── Résultats globaux ─────────────────────────────────────────────────────────
 flux_par_secteur_df <- tibble(
-  Secteur           = SECTEURS,
-  Beta              = unname(BETA_SECTEUR),
-  Flux_total_tonnes = sapply(SECTEURS, function(s) round(sum(flux_gravitaire[[s]]), 0)),
-  Flux_moyen_tonnes = sapply(SECTEURS, function(s) {
+  Secteur           = SECTEURS_FRET,
+  Beta              = unname(BETA_SECTEUR[SECTEURS_FRET]),
+  Flux_total_tonnes = sapply(SECTEURS_FRET, function(s) round(sum(flux_gravitaire[[s]]), 0)),
+  Flux_moyen_tonnes = sapply(SECTEURS_FRET, function(s) {
     f <- flux_gravitaire[[s]]
     round(mean(f[f > 0]), 1)
   })
@@ -1703,7 +1703,8 @@ flux_tonnes_total_ext <- matrix(
   nrow = n_total, ncol = n_total,
   dimnames = list(noms_total, noms_total)
 )
-for (s in SECTEURS) {
+
+for (s in SECTEURS_FRET) {
   flux_tonnes_total_ext <- flux_tonnes_total_ext + flux_gravitaire[[s]]
 }
 

@@ -786,6 +786,13 @@ stopifnot(setequal(names(VALEUR_RWF_PAR_TONNE), SECTEURS))
 TONNES_PAR_mrd_RWF <- 1e9 / VALEUR_RWF_PAR_TONNE
 stopifnot(setequal(names(TONNES_PAR_mrd_RWF), SECTEURS))
 
+# ── Secteurs effectivement modélisés en FRET ──────────────────────────────────
+# Sous-ensemble de SECTEURS avec du fret physique 
+# Les autres restent dans SECTEURS pour la comptabilité économique (matrice A,
+# demande finale, SAM) mais sont EXCLUS du modèle gravitaire et de tous les 
+# tableaux/cartes de fret.
+SECTEURS_FRET <- SECTEURS[TONNES_PAR_mrd_RWF[SECTEURS] > 0]
+
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
 # ==============================================================================

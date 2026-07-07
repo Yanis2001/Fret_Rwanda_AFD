@@ -295,9 +295,7 @@ stopifnot(nrow(aretes_geom_base) == nrow(volume_par_secteur_df))
 # supplémentaires (une par secteur) contenant le tonnage sectoriel.
 aretes_avec_secteurs <- bind_cols(aretes_geom_base, volume_par_secteur_df)
 
-# Boucle sur tous les secteurs pour générer une carte par secteur.
-# seq_along(SECTEURS) génère les indices 1, 2, ..., N_SECTEURS.
-for (s in SECTEURS) {
+for (s in SECTEURS_FRET) {
   
   # Nom de la colonne sectorielle dans le tableau
   # (cohérent avec le préfixe "vol_t_" défini en Partie VIII.1)
@@ -1319,8 +1317,8 @@ cat("Génération du diagramme de Sankey...\n")
 # Les indices de ligne/colonne de flux_gravitaire[[s]] correspondent
 # directement aux lignes de noeuds_entreposage (construit en IV.3).
 
-sankey_raw <- map_dfr(SECTEURS, function(s) {
-  mat_s <- flux_gravitaire[[s]]   
+sankey_raw <- map_dfr(SECTEURS_FRET, function(s) {
+  mat_s <- flux_gravitaire[[s]]
   # which() avec arr.ind = TRUE retourne une matrice à 2 colonnes :
   # colonne 1 = indice de ligne (origine), colonne 2 = indice de colonne (destination)
   idx <- which(mat_s > 0 & row(mat_s) != col(mat_s), arr.ind = TRUE)
@@ -1730,8 +1728,7 @@ g_valid_sec <- ggplot(cout_sec_df,
     title    = "Décomposition sectorielle du coût de transport modélisé",
     subtitle = paste0(
       "Total modélisé : ", round(cout_model_mrd, 1), " mrd RWF",
-      "  (", round(part_transport, 1), "% du trc SAM).\n",
-      "Secteurs sans fret physique (Transport, Énergie_eau, Services) exclus."
+      "  (", round(part_transport, 1), "% du trc SAM).\n"
     ),
     x = NULL,
     y = "Coût de transport (mrd RWF)"
