@@ -180,10 +180,10 @@ empreinte_entrees <- digest::digest(
     msa               = c(MSA_MAX_ITER, MSA_TOL),
     conversion_pcu    = c(TAUX_CHARGEMENT, JOURS_TRAFIC_AN),
     facteur_pcu       = params_flotte_df$facteur_pcu,
-    # Paramètres EOQ : q* de Wilson + ventilation, et (si EOQ=TRUE) PCU endogène
-    # pilotant la congestion. Tout changement invalide le cache d'affectation.
+    # Paramètres EOQ : taille d'envoi q* de Wilson + ventilation du coût logistique
+    # (comptabilité). Tout changement invalide le cache d'affectation.
     eoq               = list(
-      EOQ, EOQ_REMPLISSAGE_MIN, HEURES_PAR_AN,
+      EOQ_REMPLISSAGE_MIN, HEURES_PAR_AN,
       TAUX_DETENTION_STOCK, VALEUR_RWF_PAR_TONNE,
       params_flotte_df$cout_chargement_rwf,
       params_flotte_df$cout_dechargement_rwf,
@@ -214,8 +214,6 @@ if (file.exists(CACHE_AFFECTATION)) {
     # Comptabilité EOQ (composantes de coût par secteur) ; NULL si cache produit
     # par une version antérieure.
     compta_eoq               <- cache_aff$compta_eoq
-    # PCU/jour d'équilibre endogène (si EOQ = TRUE) ; NULL sinon ou cache ancien.
-    pcu_eq                   <- cache_aff$pcu_eq
     cache_affectation_valide <- TRUE
     
     cat("  ✓ Cache d'affectation valide\n")
@@ -312,7 +310,6 @@ if (!cache_affectation_valide) {
 
   volume_trafic_mm_s    <- res_aff$volume_trafic_mm_s    # charge d'équilibre 3D [arête,véhicule,secteur]
   compta_eoq            <- res_aff$compta_eoq            # ventilation des coûts logistiques par secteur
-  pcu_eq                <- res_aff$pcu_eq                # PCU/jour endogène (0 si EOQ = FALSE)
   paires_traitees       <- res_aff$paires_traitees
   paires_non_connectees <- res_aff$paires_non_connectees
 
@@ -325,7 +322,6 @@ if (!cache_affectation_valide) {
       paires_traitees       = paires_traitees,
       paires_non_connectees = paires_non_connectees,
       compta_eoq            = compta_eoq,   # ventilation des coûts logistiques
-      pcu_eq                = pcu_eq,        # PCU/jour endogène (0 si EOQ = FALSE)
       empreinte             = empreinte_entrees,
       date_creation         = Sys.time()
     ),
@@ -368,18 +364,11 @@ volume_par_secteur_df <- as.data.frame(volume_par_secteur)
 colnames(volume_par_secteur_df) <- paste0("vol_t_", SECTEURS)
 
 # ── Charge physique (PCU/jour) et taux de saturation par arête ────────────────
-# Calculé dans TOUS les cas (recalcul OU chargement du cache). Deux régimes :
-#   - EOQ = TRUE : la charge PCU est la charge endogène d'équilibre pcu_eq
-#     (trajets Q/q* issus de la taille d'envoi), cohérente avec la congestion.
-#   - EOQ = FALSE : remplissage fixe — conv_v convertit le tonnage par arête×
-#     véhicule (volume_trafic_mm) en PCU/jour, le produit matriciel sommant sur
-#     les véhicules.
+# Calculé dans TOUS les cas (recalcul OU chargement du cache). Remplissage FIXE :
+# conv_v convertit le tonnage par arête×véhicule (volume_trafic_mm) en PCU/jour, le
+# produit matriciel sommant sur les véhicules.
 # saturation_phys = V/C : >1 signale un tronçon surchargé.
-charge_pcu_jour <- if (isTRUE(EOQ) && !is.null(pcu_eq)) {
-  pcu_eq
-} else {
-  as.vector(volume_trafic_mm %*% conv_v)
-}
+charge_pcu_jour <- as.vector(volume_trafic_mm %*% conv_v)
 saturation_phys <- charge_pcu_jour / C_phys
 
 # ── Calcul des émissions totales affectées sur le réseau ──────────────────────

@@ -112,16 +112,6 @@ cat("✓ Tous les packages sont chargés\n\n")
 #   MSA, reroutage selon la saturation V/C) ; FALSE = All-or-Nothing
 CONGESTION         <- TRUE
 
-# Lot économique (EOQ) — pilote le REMPLISSAGE des véhicules et la VENTILATION 
-# du coût logistique en 4 composantes (commande + transport + stock cyclique + 
-# stock en transit) 
-#   TRUE  = q* PILOTE la congestion : le nombre de trajets (donc les PCU et la
-#           saturation) devient endogène (trajets/an = Q/q*) au lieu d'un
-#           remplissage fixe. La congestion devient sensible à la valeur des
-#           marchandises et q* rétroagit sur le routage (équilibre MSA).
-#   FALSE = remplissage FIXE (TAUX_CHARGEMENT) pour les PCU. La comptabilité des coûts reste produite.
-EOQ <- TRUE
-
 # Prise en compte de la congestion dans l'analyse de vulnérabilité (module 05) :
 #   TRUE  = le réseau dégradé est RÉ-ÉQUILIBRÉ (méthode BPR/MSA) — le
 #           trafic se reporte sur les routes restantes et les re-congestionne ;
@@ -1225,13 +1215,13 @@ TAUX_DETENTION_STOCK <- R_CAPITAL + R_STOCKAGE + R_ASSURANCE + R_OBSOLESCENCE
 HEURES_PAR_AN <- 8760
 
 # ── Plancher de remplissage des envois (fraction de la capacité du véhicule) ──
-# Quand EOQ = TRUE, la taille d'envoi optimale q* (Wilson) PILOTE le nombre de
-# trajets, donc les PCU et la congestion : trajets/an = Q/q*. Sans borne basse,
-# un bien de forte valeur à coût de commande faible donnerait un q* minuscule →
-# une explosion du nombre de trajets (et des PCU). On impose donc un remplissage
-# minimal : q* ≥ EOQ_REMPLISSAGE_MIN × capacité. La valeur est aussi plafonnée en
-# haut à la capacité (camion plein). Doit être > 0. À calibrer ; 0,5 = au moins
-# un demi-chargement par envoi.
+# La taille d'envoi optimale q* (Wilson) sert à la comptabilité logistique (coût de
+# commande = Q/q* × coût fixe, stock cyclique = q*/2 × valeur × r). Sans borne basse,
+# un bien de forte valeur à coût de commande faible donnerait un q* minuscule → un
+# coût de commande explosif (Q/q* → ∞). On impose donc un remplissage minimal :
+# q* ≥ EOQ_REMPLISSAGE_MIN × capacité. La valeur est aussi plafonnée en haut à la
+# capacité (camion plein). Doit être > 0. À calibrer ; 0,5 = au moins un
+# demi-chargement par envoi.
 EOQ_REMPLISSAGE_MIN <- 0.5
 
 # ── Table 2 : vitesses par véhicule × type de route × surface ─────────────────

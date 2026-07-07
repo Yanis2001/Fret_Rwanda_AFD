@@ -17,7 +17,7 @@
 #   - n_aretes_physiques, n_vehicules, n_warehouses, node_multi(), warehouse_nodes_base
 #   - reseau (pour le road_type des arêtes physiques)
 #   - flux_gravitaire (matrices OD tonnes par secteur), flux_tonnes_total
-#   - paramètres 00 : CONGESTION, EOQ, BPR_ALPHA/BETA, MSA_MAX_ITER/TOL, SECTEURS,
+#   - paramètres 00 : CONGESTION, BPR_ALPHA/BETA, MSA_MAX_ITER/TOL, SECTEURS,
 #     VEHICULES_IDS, params_flotte_df, capacites_route_df, TAUX_CHARGEMENT,
 #     JOURS_TRAFIC_AN, TAUX_DETENTION_STOCK, EOQ_REMPLISSAGE_MIN,
 #     VALEUR_RWF_PAR_TONNE, HEURES_PAR_AN, SEUIL_FLUX_TONNES
@@ -33,7 +33,6 @@
 #   conv_v          : coefficient tonnes/an → PCU/jour, par véhicule
 #   K_vec           : coût fixe par trajet (chargement+déchargement), par véhicule
 #   cap_vec         : capacité de chargement (tonnes), par véhicule
-#   facteur_pcu_vec : équivalent voiture particulière (PCU) d'un trajet, par véhicule
 # ──────────────────────────────────────────────────────────────────────────────
 preparer_congestion <- function() {
 
@@ -60,18 +59,16 @@ preparer_congestion <- function() {
     (params_flotte_df$capacite_tonnes[.m_veh] * TAUX_CHARGEMENT * JOURS_TRAFIC_AN)
 
   # Paramètres EOQ par véhicule, MÊME ordre que les colonnes de trafic :
-  #   K_vec = coût fixe par trajet ; cap_vec = capacité ; facteur_pcu_vec = PCU/trajet
+  #   K_vec = coût fixe par trajet ; cap_vec = capacité de chargement (tonnes)
   K_vec           <- params_flotte_df$cout_chargement_rwf[.m_veh] +
                      params_flotte_df$cout_dechargement_rwf[.m_veh]
   cap_vec         <- params_flotte_df$capacite_tonnes[.m_veh]
-  facteur_pcu_vec <- params_flotte_df$facteur_pcu[.m_veh]
 
   list(
     C_phys          = C_phys,
     conv_v          = conv_v,
     K_vec           = K_vec,
     cap_vec         = cap_vec,
-    facteur_pcu_vec = facteur_pcu_vec,
     road_type_phys  = road_type_phys
   )
 }
@@ -94,7 +91,6 @@ preparer_congestion <- function() {
 # RENVOIE une liste :
 #   volume_trafic_mm_s : charge d'équilibre (tonnes) [arête, véhicule, secteur]
 #   compta_eoq         : ventilation des coûts logistiques par secteur (6 colonnes)
-#   pcu_eq             : charge PCU/jour d'équilibre par arête physique (EOQ)
 #   V_phys             : charge physique d'équilibre par arête physique (PCU/jour)
 #   saturation_phys    : V/C par arête physique
 #   C_phys             : capacité PCU/jour par arête physique
@@ -112,7 +108,6 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   conv_v          <- prep$conv_v
   K_vec           <- prep$K_vec
   cap_vec         <- prep$cap_vec
-  facteur_pcu_vec <- prep$facteur_pcu_vec
 
   N_SECTEURS <- length(SECTEURS)
 
@@ -159,7 +154,6 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   volume_eq_s <- array(0, dim = c(n_aretes_physiques, n_vehicules, N_SECTEURS),
                        dimnames = list(NULL, VEHICULES_IDS$vehicule_id, SECTEURS))
   V_phys <- rep(0, n_aretes_physiques)
-  pcu_eq <- rep(0, n_aretes_physiques)
 
   # Nombre d'itérations : 1 seule passe (AON à coûts libres) si CONGESTION = FALSE.
   n_iter_msa <- if (isTRUE(CONGESTION)) MSA_MAX_ITER else 1L
@@ -206,8 +200,6 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
       dimnames = list(SECTEURS, c("cout_commande", "cout_transport",
                                   "cout_stock_cyclique", "cout_stock_transit",
                                   "flux_tonnes", "flux_x_qopt")))
-    # pcu_aux : charge PCU/jour AON de l'itération (trajets endogènes Q/q*), EOQ.
-    pcu_aux <- rep(0, n_aretes_physiques)
 
     paires_traitees       <- 0
     paires_non_connectees <- 0
@@ -294,8 +286,8 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
 
         # ── Ventilation sectorielle : routage et véhicule communs à tous les
         # secteurs, seul le VOLUME change. Pour chaque secteur : taille d'envoi q*
-        # (Wilson bornée), comptabilité EOQ jambe par jambe, PCU endogènes (si EOQ),
-        # et affectation du flux au tableau 3D.
+        # (Wilson bornée), comptabilité EOQ jambe par jambe, et affectation du flux
+        # au tableau 3D.
         for (s in SECTEURS_FRET) {
 
           idx_s     <- match(s, SECTEURS)
@@ -328,14 +320,6 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
               flux_ij_s * q_leg
           }
 
-          # PCU endogènes (seulement si EOQ pilote la congestion) : trajets/an =
-          # Q/q* ; PCU/jour = trajets/an × facteur_pcu / JOURS_TRAFIC_AN.
-          if (isTRUE(EOQ)) {
-            trips_an  <- flux_ij_s / q_star_vec[col_veh_vec]
-            pcu_arete <- trips_an * facteur_pcu_vec[col_veh_vec] / JOURS_TRAFIC_AN
-            pcu_aux[idx_phys_vec] <- pcu_aux[idx_phys_vec] + pcu_arete
-          }
-
           # Affectation vectorisée du flux sectoriel sur le tableau 3D.
           indices_3d <- cbind(idx_phys_vec, col_veh_vec, idx_s)
           volume_trafic_mm_s[indices_3d] <- volume_trafic_mm_s[indices_3d] + flux_ij_s
@@ -352,17 +336,12 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
     # ── Mise à jour d'équilibre (MSA, pas 1/n) ──────────────────────────────────
     volume_eq_s <- volume_eq_s + (1 / iter_msa) * (volume_trafic_mm_s - volume_eq_s)
 
-    # Charge physique (PCU/jour) d'équilibre selon le mode de remplissage :
-    #   EOQ = TRUE  : charge PCU endogène (pcu_aux) moyennée par MSA (pcu_eq → V) ;
-    #   EOQ = FALSE : tonnage d'équilibre converti via conv_v (remplissage fixe).
-    if (isTRUE(EOQ)) {
-      pcu_eq <- pcu_eq + (1 / iter_msa) * (pcu_aux - pcu_eq)
-      V_new  <- pcu_eq
-    } else {
-      .vol_eq_mm <- apply(volume_eq_s, c(1, 2), sum)
-      V_new      <- as.vector(.vol_eq_mm %*% conv_v)
-      rm(.vol_eq_mm)
-    }
+    # Charge physique (PCU/jour) d'équilibre : remplissage FIXE — le tonnage
+    # d'équilibre par arête×véhicule est converti en PCU/jour via conv_v
+    # (TAUX_CHARGEMENT), le produit matriciel sommant sur les véhicules.
+    .vol_eq_mm <- apply(volume_eq_s, c(1, 2), sum)
+    V_new      <- as.vector(.vol_eq_mm %*% conv_v)
+    rm(.vol_eq_mm)
 
     gap_msa <- sum(abs(V_new - V_phys)) / max(sum(V_new), 1)
     V_phys  <- V_new
@@ -400,7 +379,6 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
   list(
     volume_trafic_mm_s    = volume_trafic_mm_s,
     compta_eoq            = compta_eoq,
-    pcu_eq                = pcu_eq,
     V_phys                = V_phys,
     saturation_phys       = V_phys / C_phys,
     C_phys                = C_phys,
