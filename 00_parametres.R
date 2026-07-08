@@ -395,7 +395,7 @@ RPHC5_CORRESPONDANCE_SECTEURS <- list(
 # Secteurs économiques modélisés (découpage orienté FRET, dérivé de la SAM).
 # Ordre fixe. La matrice A et les agrégats sont recalculés automatiquement depuis
 # la SAM via SAM_MAPPING_SECTEURS, donc changer cette liste impose seulement de
-# maintenir cohérents : SAM_MAPPING_SECTEURS, BETA_SECTEUR, VALEUR_RWF_PAR_TONNE,
+# maintenir cohérents : SAM_MAPPING_SECTEURS, VALEUR_RWF_PAR_TONNE,
 # RPHC5_CORRESPONDANCE_SECTEURS, COMMERCE_EXTERIEUR_NISR, couts_prebordure_df.
 SECTEURS <- c("Agriculture", "Cultures_export", "Mines", "Agro_industrie",
               "Chimie_petrole", "Manufactures", "Construction", "Commerce",
@@ -709,10 +709,7 @@ EPSILON_RWI <- 0.05
 # Paramètres de friction par secteur (beta du modèle gravitaire)
 #   Beta élevé = commerce très sensible au coût du transport rapporté à la valeur du bien
 #               (biens lourds à faible valeur unitaire : agriculture, construction)
-#   Beta faible = peu sensible (biens à haute valeur ajoutée, services)
-# Pour les secteurs sans fret physique (Transport, Energie_eau, Services), beta est
-# sans effet (offre/demande en tonnes nulles → matrice de flux vide), on conserve
-# une valeur basse par cohérence.
+#   Beta faible = peu sensible (biens à haute valeur ajoutée)
 BETA_SECTEUR <- c(
   Agriculture     = 2.3,   # Vivrier pondéreux, faible valeur unitaire → très sensible
   Cultures_export = 1.4,   # Café/thé/tabac : forte valeur → peu sensible au coût
@@ -721,10 +718,7 @@ BETA_SECTEUR <- c(
   Chimie_petrole  = 1.5,   # Vrac pétrolier : lourd mais valeur élevée
   Manufactures    = 1.6,   # Mix textile/métaux/machines, valeur moyenne/haute
   Construction    = 2.5,   # Agrégats/ciment : très lourds, très faible valeur → très sensible
-  Commerce        = 1.7,   # Redistribution de biens
-  Transport       = 1.3,   # Service (fret nul) — valeur conservée par cohérence
-  Energie_eau     = 0.9,   # Service en réseau (fret nul)
-  Services        = 0.9    # Immatériel (fret nul)
+  Commerce        = 1.7    # Redistribution de biens
 )
 
 # ── Paramètres du modèle gravitaire doublement contraint ──────────────────────
@@ -782,6 +776,9 @@ stopifnot(setequal(names(TONNES_PAR_mrd_RWF), SECTEURS))
 # demande finale, SAM) mais sont EXCLUS du modèle gravitaire et de tous les 
 # tableaux/cartes de fret.
 SECTEURS_FRET <- SECTEURS[TONNES_PAR_mrd_RWF[SECTEURS] > 0]
+
+# Garde-fou : BETA_SECTEUR doit couvrir exactement les secteurs de fret 
+stopifnot(setequal(names(BETA_SECTEUR), SECTEURS_FRET))
 
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing

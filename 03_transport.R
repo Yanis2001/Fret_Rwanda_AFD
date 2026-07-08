@@ -1034,7 +1034,7 @@ duck_write(demande_row_df, "demande_zones_row")
 cat("✓ Couche RoW construite :", n_row, "pays,", n_total, "nœuds au total\n\n")
 
 cat("Paramètres du modèle gravitaire:\n")
-for (s in SECTEURS) {
+for (s in SECTEURS_FRET) {
   cat("  β(", s, ") =", BETA_SECTEUR[s], "\n")
 }
 cat("\n")
