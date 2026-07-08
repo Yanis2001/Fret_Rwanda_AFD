@@ -90,20 +90,6 @@ duck_query("
       CASE WHEN a.zone_urbaine = TRUE THEN f.facteur_urbain ELSE 1.0 END
         AS facteur_urbain_applique,
       f.capacite_tonnes,
-      -- Facteur surface et coût d'usure : résolu ici par CASE (fonction si-alors-sinon) pour éviter
-      -- une jointure supplémentaire (params_surface n'est plus une table séparée)
-      CASE a.surface
-        WHEN 'paved'   THEN f.facteur_paved
-        WHEN 'gravel'  THEN f.facteur_gravel
-        WHEN 'unpaved' THEN f.facteur_unpaved
-        ELSE f.facteur_unpaved
-      END AS facteur_surface,
-      CASE a.surface
-        WHEN 'paved'   THEN f.usure_paved
-        WHEN 'gravel'  THEN f.usure_gravel
-        WHEN 'unpaved' THEN f.usure_unpaved
-        ELSE f.usure_unpaved
-      END AS usure_rwf_km,
       -- ── Facteurs d'émission récupérés depuis params_flotte ─────────────────
       -- Ces trois colonnes alimenteront les calculs des étapes suivantes.
       -- Le CO2 est une constante physique (combustion du gazole).
@@ -115,23 +101,53 @@ duck_query("
     CROSS JOIN params_flotte f
   ),
 
-  -- Étape 2 : jointure avec la table de vitesses (vehicule_id + road_type + surface)
+  -- Repli par (véhicule, surface) : dans params_flotte_type_route, le facteur de
+  -- surconsommation et le coût d'usure ne dépendent que de la surface. On les
+  -- agrège donc ici par (vehicule_id, surface) — MAX() sert uniquement à choisir
+  -- l'unique valeur du groupe — afin de pouvoir les récupérer même lorsque le
+  -- couple (road_type, surface) de l'arête n'existe pas dans la table.
+  params_surface AS (
+    SELECT
+      vehicule_id,
+      surface,
+      MAX(facteur_conso_route) AS facteur_conso_route,
+      MAX(usure_rwf_km)        AS usure_rwf_km
+    FROM params_flotte_type_route
+    GROUP BY vehicule_id, surface
+  ),
+
+  -- Étape 2 : jointure avec les paramètres dépendant de la route
+  --           (vehicule_id + road_type + surface) : vitesse, facteur de
+  --           surconsommation lié à la surface, coût d'usure.
   -- LEFT JOIN : garde toutes les lignes de la table de gauche (aretes_x_vehicules)
-  -- et ajoute les colonnes de la table de droite (vitesses_flotte) quand la
-  -- condition ON est vraie. Si aucune vitesse n'est trouvée, NULL est retourné.
-  -- COALESCE(valeur, 30) : si la vitesse est NULL (non trouvée), on utilise 30 km/h
-  -- comme valeur par défaut raisonnable.
+  -- et ajoute les colonnes de la table de droite (params_flotte_type_route) quand
+  -- la condition ON est vraie. Si aucune ligne n'est trouvée, NULL est retourné.
+  -- Valeurs par défaut si le couple (road_type, surface) est absent de la table :
+  --   - vitesse : 30 km/h (valeur raisonnable)
+  --   - facteur de conso / usure : valeurs de la même surface (params_surface),
+  --     et à défaut (surface inconnue) celles de la surface 'unpaved', la plus
+  --     pénalisante 
   avec_vitesse AS (
     SELECT
       ax.*,
-      COALESCE(v.vitesse_kmh, 30) AS vitesse_base -- COALESCE : remplace les valeurs NULL par 30
+      COALESCE(v.vitesse_kmh, 30) AS vitesse_base, -- COALESCE : remplace les valeurs NULL par 30
+      COALESCE(ps.facteur_conso_route, pu.facteur_conso_route) AS facteur_surface,
+      COALESCE(ps.usure_rwf_km,        pu.usure_rwf_km)        AS usure_rwf_km
     FROM aretes_x_vehicules ax
-    -- Rajoût de la colonne vitesse en appariant en fonction de l'identifiant 
+    -- Rajoût de la colonne vitesse en appariant en fonction de l'identifiant
     -- du véhicule, du type de route et de la surface
-    LEFT JOIN vitesses_flotte v
+    LEFT JOIN params_flotte_type_route v
       ON  ax.vehicule_id = v.vehicule_id
       AND ax.road_type   = v.road_type
       AND ax.surface     = v.surface
+    -- Conso/usure de la surface de l'arête (indépendantes du type de route)
+    LEFT JOIN params_surface ps
+      ON  ax.vehicule_id = ps.vehicule_id
+      AND ax.surface     = ps.surface
+    -- Repli 'unpaved' quand la surface de l'arête est inconnue/absente
+    LEFT JOIN params_surface pu
+      ON  ax.vehicule_id = pu.vehicule_id
+      AND pu.surface     = 'unpaved'
   ),
 
   -- Étape 3 : application du facteur de pente sur la vitesse

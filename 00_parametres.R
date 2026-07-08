@@ -1136,18 +1136,12 @@ cat("✓ Palettes de couleurs définies\n\n")
 
 # ── Table 1 : paramètres scalaires par véhicule ───────────────────────────────
 # Ce tableau contient les caractéristiques physiques et économiques de chaque
-# type de véhicule : consommation de carburant, prix du carburant, valeur
-# du temps du chauffeur, coûts d'usure selon le type de route, capacité de
-# chargement, pénalité en zone urbaine (congestion, restrictions de tonnage),
-# et équivalent PCU (Passenger Car Unit, équivalent en voitures particulières) 
-# (facteur_pcu) utilisé par la fonction d'encombrement.
-# UNITÉS MONÉTAIRES : toutes en RWF (prix_carburant en RWF/L, valeur_temps en
-# RWF/h, usure_* en RWF/km, chargement/déchargement en RWF).
+# type de véhicule 
 params_flotte_df <- tribble(
-  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_paved, ~facteur_gravel, ~facteur_unpaved, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~usure_paved, ~usure_gravel, ~usure_unpaved, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_rwf, ~cout_dechargement_rwf, ~facteur_pcu,
-  "camionnette",  "Camionnette (<3.5t)",    10,          1.00,           1.08,            1.18,             1.0,                  1383.2,          4446,          19.76,        39.52,         69.16,          3.0,              1.05,            2.68,                  0.25,                  0.040,                  14820,                14820,                1.5,
-  "camion_moyen", "Camion moyen (5-10t)",   20,          1.00,           1.15,            1.30,             1.5,                  1383.2,          7410,          49.40,        79.04,         118.56,         7.5,              1.25,            2.68,                  0.50,                  0.065,                  24700,                24700,                2.0,
-  "camion_lourd", "Camion lourd (>10t)",    35,          1.00,           1.25,            1.50,             2.0,                  1383.2,          9880,          79.04,        138.32,        217.36,         20.0,             1.60,            2.68,                  0.80,                  0.090,                  39520,                39520,                3.0
+  ~vehicule_id,   ~nom,                    ~conso_base, ~facteur_conso_pente, ~prix_carburant, ~valeur_temps, ~capacite_tonnes, ~facteur_urbain, ~facteur_emission_co2, ~facteur_emission_nox, ~facteur_emission_pm25, ~cout_chargement_rwf, ~cout_dechargement_rwf, ~facteur_pcu,
+  "camionnette",  "Camionnette (<3.5t)",    10,          1.0,                  1383.2,          4446,          3.0,              1.05,            2.68,                  0.25,                  0.040,                  14820,                14820,                1.5,
+  "camion_moyen", "Camion moyen (5-10t)",   20,          1.5,                  1383.2,          7410,          7.5,              1.25,            2.68,                  0.50,                  0.065,                  24700,                24700,                2.0,
+  "camion_lourd", "Camion lourd (>10t)",    35,          2.0,                  1383.2,          9880,          20.0,             1.60,            2.68,                  0.80,                  0.090,                  39520,                39520,                3.0
 )
 duck_write(params_flotte_df, "params_flotte")
 
@@ -1221,53 +1215,59 @@ HEURES_PAR_AN <- 8760
 # demi-chargement par envoi.
 EOQ_REMPLISSAGE_MIN <- 0.5
 
-# ── Table 2 : vitesses par véhicule × type de route × surface ─────────────────
-# Chaque véhicule a ses propres vitesses de référence sur chaque combinaison.
-# L'ajout d'un véhicule = ajouter 11 lignes avec son vehicule_id.
-# Les vitesses sont en km/h et varient selon :
-#   - le type de véhicule (un camion lourd ne peut pas aller aussi vite qu'une camionnette)
-#   - le type de route (une autoroute permet des vitesses plus élevées qu'un chemin non classé)
-#   - la surface (bitumée = rapide, piste en terre = lent)
-vitesses_flotte_df <- tribble(
-  ~vehicule_id,   ~road_type,      ~surface,   ~vitesse_kmh,
+# ── Table 2 : paramètres par véhicule × type de route × surface ───────────────
+# Chaque véhicule a ses propres caractéristiques de circulation sur chaque
+# combinaison (type de route, surface). L'ajout d'un véhicule = ajouter 11 lignes
+# avec son vehicule_id. Trois colonnes :
+#   - vitesse_kmh          : vitesse de référence (km/h), varie selon
+#       le type de véhicule (un camion lourd ne va pas aussi vite qu'une camionnette),
+#       le type de route (une autoroute permet plus de vitesse qu'un chemin non classé),
+#       la surface (bitumée = rapide, piste en terre = lent).
+#   - facteur_conso_route  : multiplicateur SANS UNITÉ appliqué à conso_base
+#       (surconsommation de carburant due à la résistance au roulement : 1.00 sur
+#       bitume, davantage sur latérite/terre, d'autant plus que le véhicule est lourd).
+#   - usure_rwf_km         : coût d'usure du véhicule en RWF/km (pneus, suspension,
+#       entretien), qui explose sur les mauvaises surfaces.
+params_flotte_type_route_df <- tribble(
+  ~vehicule_id,   ~road_type,      ~surface,   ~vitesse_kmh, ~facteur_conso_route, ~usure_rwf_km,
   # --- Camionnette ---
-  "camionnette",  "motorway",      "paved",    120,
-  "camionnette",  "trunk",         "paved",     90,
-  "camionnette",  "trunk",         "gravel",    60,
-  "camionnette",  "primary",       "paved",     80,
-  "camionnette",  "primary",       "gravel",    55,
-  "camionnette",  "secondary",     "paved",     70,
-  "camionnette",  "secondary",     "gravel",    50,
-  "camionnette",  "tertiary",      "paved",     60,
-  "camionnette",  "tertiary",      "unpaved",   35,
-  "camionnette",  "unclassified",  "gravel",    45,
-  "camionnette",  "unclassified",  "unpaved",   28,
+  "camionnette",  "motorway",      "paved",    120,          1.00,                  19.76,
+  "camionnette",  "trunk",         "paved",     90,          1.00,                  19.76,
+  "camionnette",  "trunk",         "gravel",    60,          1.08,                  39.52,
+  "camionnette",  "primary",       "paved",     80,          1.00,                  19.76,
+  "camionnette",  "primary",       "gravel",    55,          1.08,                  39.52,
+  "camionnette",  "secondary",     "paved",     70,          1.00,                  19.76,
+  "camionnette",  "secondary",     "gravel",    50,          1.08,                  39.52,
+  "camionnette",  "tertiary",      "paved",     60,          1.00,                  19.76,
+  "camionnette",  "tertiary",      "unpaved",   35,          1.18,                  69.16,
+  "camionnette",  "unclassified",  "gravel",    45,          1.08,                  39.52,
+  "camionnette",  "unclassified",  "unpaved",   28,          1.18,                  69.16,
   # --- Camion moyen ---
-  "camion_moyen", "motorway",      "paved",    100,
-  "camion_moyen", "trunk",         "paved",     60,
-  "camion_moyen", "trunk",         "gravel",    40,
-  "camion_moyen", "primary",       "paved",     60,
-  "camion_moyen", "primary",       "gravel",    40,
-  "camion_moyen", "secondary",     "paved",     50,
-  "camion_moyen", "secondary",     "gravel",    35,
-  "camion_moyen", "tertiary",      "paved",     45,
-  "camion_moyen", "tertiary",      "unpaved",   25,
-  "camion_moyen", "unclassified",  "gravel",    30,
-  "camion_moyen", "unclassified",  "unpaved",   20,
+  "camion_moyen", "motorway",      "paved",    100,          1.00,                  49.40,
+  "camion_moyen", "trunk",         "paved",     60,          1.00,                  49.40,
+  "camion_moyen", "trunk",         "gravel",    40,          1.15,                  79.04,
+  "camion_moyen", "primary",       "paved",     60,          1.00,                  49.40,
+  "camion_moyen", "primary",       "gravel",    40,          1.15,                  79.04,
+  "camion_moyen", "secondary",     "paved",     50,          1.00,                  49.40,
+  "camion_moyen", "secondary",     "gravel",    35,          1.15,                  79.04,
+  "camion_moyen", "tertiary",      "paved",     45,          1.00,                  49.40,
+  "camion_moyen", "tertiary",      "unpaved",   25,          1.30,                 118.56,
+  "camion_moyen", "unclassified",  "gravel",    30,          1.15,                  79.04,
+  "camion_moyen", "unclassified",  "unpaved",   20,          1.30,                 118.56,
   # --- Camion lourd ---
-  "camion_lourd", "motorway",      "paved",     80,
-  "camion_lourd", "trunk",         "paved",     50,
-  "camion_lourd", "trunk",         "gravel",    30,
-  "camion_lourd", "primary",       "paved",     50,
-  "camion_lourd", "primary",       "gravel",    30,
-  "camion_lourd", "secondary",     "paved",     40,
-  "camion_lourd", "secondary",     "gravel",    25,
-  "camion_lourd", "tertiary",      "paved",     35,
-  "camion_lourd", "tertiary",      "unpaved",   18,
-  "camion_lourd", "unclassified",  "gravel",    22,
-  "camion_lourd", "unclassified",  "unpaved",   14
+  "camion_lourd", "motorway",      "paved",     80,          1.00,                  79.04,
+  "camion_lourd", "trunk",         "paved",     50,          1.00,                  79.04,
+  "camion_lourd", "trunk",         "gravel",    30,          1.25,                 138.32,
+  "camion_lourd", "primary",       "paved",     50,          1.00,                  79.04,
+  "camion_lourd", "primary",       "gravel",    30,          1.25,                 138.32,
+  "camion_lourd", "secondary",     "paved",     40,          1.00,                  79.04,
+  "camion_lourd", "secondary",     "gravel",    25,          1.25,                 138.32,
+  "camion_lourd", "tertiary",      "paved",     35,          1.00,                  79.04,
+  "camion_lourd", "tertiary",      "unpaved",   18,          1.50,                 217.36,
+  "camion_lourd", "unclassified",  "gravel",    22,          1.25,                 138.32,
+  "camion_lourd", "unclassified",  "unpaved",   14,          1.50,                 217.36
 )
-duck_write(vitesses_flotte_df, "vitesses_flotte")
+duck_write(params_flotte_type_route_df, "params_flotte_type_route")
 
 # ── Table 3 : facteurs de pente par véhicule × catégorie ──────────────────────
 # Un camion chargé en côte monte beaucoup plus lentement qu'en terrain plat.

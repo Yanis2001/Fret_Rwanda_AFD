@@ -12,7 +12,7 @@
 #   → les données RPHC5 d'emploi ont été mises à jour (emploi_zone_secteur)
 #
 # RELANCER 02_couts.R avant ce script si :
-#   → les paramètres de flotte (params_flotte, vitesses_flotte, facteurs_pente)
+#   → les paramètres de flotte (params_flotte, params_flotte_type_route, facteurs_pente)
 #     ont changé
 #   → les valeurs VEHICULE_REFERENCE ou TONNES_PAR_mrd_RWF ont changé
 #   → le DEM (pentes) a été recalculé
