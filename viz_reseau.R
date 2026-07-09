@@ -205,7 +205,7 @@ carte_population <- fond_carte() +
     size        = 0.3
   ) +
 
-  tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020 / OSM") +
+  tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020") +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -263,7 +263,6 @@ g_pop <- diag_population %>%
   scale_alpha_manual(
     values = c("NISR_2022"     = 1.0,
                "WorldPop_2020" = 0.8,
-               "OSM"           = 0.65,
                "Fallback_1000" = 0.35),
     name   = "Source"
   ) +

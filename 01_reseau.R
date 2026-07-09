@@ -1705,20 +1705,18 @@ noeuds_reseau <- reseau %>% activate("nodes") %>% st_as_sf()
 #            nœud sera recalculée, sans chevauchement, par cellule de Voronoï
 #            (Partie IV.6) en sommant les pixels WorldPop de la cellule.
 #
-# TROIS SOURCES, FUSIONNÉES PAR PRIORITÉ B (WorldPop) > A (OSM) > C (NISR) > min :
-#   A — Tags OSM du fichier PBF (rapide, intégré, mais couverture partielle)
-#   B — Raster WorldPop (haute résolution spatiale ; somme dans le buffer 4 km)
-#   C — Données de recensement NISR via CSV (source officielle, par district)
+# DEUX SOURCES, FUSIONNÉES PAR PRIORITÉ A (WorldPop) > B (NISR) > min :
+#   A — Raster WorldPop (haute résolution spatiale ; somme dans le buffer 4 km)
+#   B — Données de recensement NISR via CSV (source officielle, par district)
 #   Le résultat est le vecteur pop_temp (longueur = nombre de candidats N).
 #
 # EFFET DE BORD UTILE : ce bloc charge aussi des objets réutilisés plus tard —
-#   raster_worldpop        (IV.4.B) → somme par cellule de Voronoï (IV.6) + poids RWI (IV.7)
-#   pays_districts_gadm    (IV.4.C) → emploi par district (IV.8) + repli population
+#   raster_worldpop        (IV.4.A) → somme par cellule de Voronoï (IV.6) + poids RWI (IV.7)
+#   pays_districts_gadm    (IV.4.B) → emploi par district (IV.8) + repli population
 #
 # DÉPEND DE :
 #     - entreposages_sf      (Partie IV.3) — géométries des N candidats
 #     - entreposages_buffer  (Partie IV.3) — buffers 4 km des candidats
-#     - chemin_pbf           (Partie I)    — fichier PBF OSM
 ################################################################################
 
 cat("==========================================================\n")
@@ -1726,107 +1724,7 @@ cat("  PARTIE IV.4 — POPULATION TEMPORAIRE PAR CANDIDAT (fusion)\n")
 cat("==========================================================\n\n")
 
 # ==============================================================================
-# IV.4.A : Extraction des tags de population depuis le fichier PBF
-#
-# Dans OpenStreetMap, certains noeuds de type "place" possèdent un tag
-# "population" indiquant le nombre d'habitants. Ce tag est maintenu par la
-# communauté OSM et couvre les grandes villes mais rarement les petites zones.
-#
-# AVANTAGES  : Aucun fichier externe, déjà dans le PBF téléchargé.
-# INCONVÉNIENTS : Couverture très partielle (< 30% des zones),
-#                 données souvent obsolètes ou approximatives.
-# ==============================================================================
-
-cat("── Approche A : tags OSM de population ──────────────────────────────\n")
-
-# Extraction des noeuds de type place avec un tag population depuis le PBF.
-# On réutilise la même syntaxe que pour les villes en Partie II.2.
-# other_tags contient les attributs secondaires au format "clé"=>"valeur".
-# La fonction extraire_tag() est définie en Partie II.2 et réutilisée ici.
-population_osm_raw <- tryCatch({
-  
-  result <- st_read(
-    chemin_pbf,
-    layer = "points",
-    # On charge tous les lieux habités (city, town, village) qui ont potentiellement
-    # un tag population dans other_tags.
-    query = "SELECT name, place, other_tags FROM points
-             WHERE place IN ('city', 'town', 'village', 'suburb')",
-    quiet = TRUE
-  ) 
-  
-  # Normalisation robuste du nom de la colonne géométrie.
-  # Quand query= est spécifié, st_read retourne un sf dont la colonne
-  # géométrie peut s'appeler "geom", "geometry", "wkb_geometry", etc.
-  # st_geometry(x) <- "geometry" renomme la colonne active quelle que soit
-  # son appellation d'origine, sans erreur si elle s'appelle déjà "geometry".
-  st_geometry(result) <- "geometry"
-  
-  result %>%
-    st_as_sf() %>%
-    st_transform(crs = 32735) %>%
-    filter(!is.na(name)) %>%
-    mutate(
-      # Extraction du tag "population" depuis la chaîne other_tags.
-      # extraire_tag() utilise une regex pour trouver "population"=>"<valeur>".
-      # as.numeric() convertit la chaîne "45000" en entier 45000.
-      # suppressWarnings() évite les avertissements sur les valeurs non convertibles
-      # (ex : "45,000" avec virgule → NA, ce qui est le comportement voulu).
-      pop_osm_brute = suppressWarnings(
-        as.numeric(sapply(other_tags, extraire_tag, cle = "population"))
-      )
-    ) %>%
-    filter(!is.na(pop_osm_brute), pop_osm_brute > 0)
-  
-}, error = function(e) {
-  cat("  ⚠ Extraction PBF population échouée :", conditionMessage(e), "\n")
-  # Retourner un sf vide avec la même structure pour ne pas bloquer la suite
-  st_sf(name          = character(0),
-        pop_osm_brute = numeric(0),
-        geometry      = st_sfc(crs = 32735))
-})
-
-cat("  Lieux OSM avec tag population :", nrow(population_osm_raw), "\n")
-
-# ── Association à chaque entrepôt : somme des points OSM dans le buffer ────────
-# Pour chaque entrepôt, on cherche tous les points OSM peuplés dans un rayon de
-# RAYON_AGGLO_ENTREPOT_M mètres et on somme leurs populations.
-# S'il n'y en a aucun, la population OSM reste NA (sera complétée par B ou C).
-
-if (nrow(population_osm_raw) > 0) {
-
-  # st_is_within_distance() : matrice booléenne entrepôts × lieux OSM peuplés.
-  # Retourne pour chaque entrepôt la liste des indices des points OSM dans le buffer.
-  within_buffer_A <- st_is_within_distance(
-    entreposages_sf,
-    population_osm_raw,
-    dist = RAYON_AGGLO_ENTREPOT_M
-  )
-
-  # Pour chaque entrepôt, on somme la population de tous les points OSM dans le buffer.
-  # sum() avec na.rm = TRUE ignore les tags mal renseignés sans planter le calcul.
-  pop_osm_par_entrepot <- sapply(seq_len(nrow(entreposages_sf)), function(i) {
-
-    candidats <- within_buffer_A[[i]]  # Indices des lieux OSM dans le buffer
-
-    if (length(candidats) == 0) return(NA_real_)  # Aucun lieu OSM à proximité
-
-    sum(population_osm_raw$pop_osm_brute[candidats], na.rm = TRUE)
-  })
-  
-} else {
-  # Aucun tag population dans le PBF : vecteur de NA de la bonne taille
-  pop_osm_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
-}
-
-cat("  Entrepôts avec pop. OSM :",
-    sum(!is.na(pop_osm_par_entrepot)), "/", nrow(entreposages_sf), "\n")
-cat("  Population OSM min :", round(min(pop_osm_par_entrepot, na.rm = TRUE)),
-    "| max :", round(max(pop_osm_par_entrepot, na.rm = TRUE)), "\n\n")
-
-
-# ==============================================================================
-# IV.4.B : Population depuis un raster WorldPop (~100m de résolution)
+# IV.4.A : Population depuis un raster WorldPop (~100m de résolution)
 #
 # WorldPop produit des rasters de densité de population à haute résolution
 # à partir de recensements, d'images satellites et de modèles statistiques.
@@ -1837,7 +1735,7 @@ cat("  Population OSM min :", round(min(pop_osm_par_entrepot, na.rm = TRUE)),
 #                 données 2020 (pas 2022).
 # ==============================================================================
 
-cat("── Approche B : raster WorldPop (population ~100m) ──────────────────\n")
+cat("── Approche A : raster WorldPop (population ~100m) ──────────────────\n")
 
 #Création d'un vecteur avec que des NA
 pop_worldpop_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
@@ -1941,7 +1839,7 @@ if (worldpop_ok) {
     # exact_extract avec fun="sum" retourne un vecteur numérique.
     # Quand tous les pixels d'un buffer sont NA, R calcule sum(NA, na.rm=TRUE) = 0,
     # ce qui masquerait le vrai "sans données" et empêcherait coalesce() de
-    # basculer sur NISR ou OSM. On reconvertit donc ces 0 en NA.
+    # basculer sur NISR. On reconvertit donc ces 0 en NA.
     pop_worldpop_par_entrepot <- as.numeric(resultats_wp)
     pop_worldpop_par_entrepot[
       !is.na(pop_worldpop_par_entrepot) & pop_worldpop_par_entrepot == 0
@@ -1956,14 +1854,14 @@ if (worldpop_ok) {
     
   }, error = function(e) {
     cat("  ⚠ Agrégation WorldPop échouée :", conditionMessage(e), "\n")
-    cat("  → Approche B ignorée\n\n")
+    cat("  → Approche A ignorée\n\n")
     pop_worldpop_par_entrepot <<- rep(NA_real_, nrow(entreposages_sf))
   })
 }
 
 
 # ==============================================================================
-# IV.4.C : Données de recensement NISR (source officielle, recommandée)
+# IV.4.B : Données de recensement NISR (source officielle, recommandée)
 #
 # L'Institut national de statistiques (NISR pour le Rwanda) publie les résultats
 # du recensement RPHC-5 (2022) par district. Les données sont disponibles sur HDX 
@@ -1983,7 +1881,7 @@ if (worldpop_ok) {
 #                 nécessite un téléchargement manuel.
 # ==============================================================================
 
-cat("── Approche C : recensement NISR 2022 (par district) ────────────────\n")
+cat("── Approche B : recensement NISR 2022 (par district) ────────────────\n")
 
 pop_nisr_par_entrepot <- rep(NA_real_, nrow(entreposages_sf))
 
@@ -2145,42 +2043,40 @@ if (file.exists(NISR_CSV_PATH)) {
           "| max :", round(max(pop_nisr_par_entrepot, na.rm = TRUE)), "\n\n")
       
     } else {
-      cat("  ⚠ GADM non disponible — approche C abandonnée\n\n")
+      cat("  ⚠ GADM non disponible — approche B abandonnée\n\n")
     }
     
   }, error = function(e) {
-    cat("  ⚠ Approche C échouée :", conditionMessage(e), "\n\n")
+    cat("  ⚠ Approche B échouée :", conditionMessage(e), "\n\n")
   })
   
 } else {
   cat("  Fichier NISR non trouvé :", NISR_CSV_PATH, "\n")
   cat("  → Télécharger sur https://data.humdata.org/dataset/cod-ps-rwa\n")
-  cat("  → Approche C ignorée\n\n")
+  cat("  → Approche B ignorée\n\n")
 }
 
 
 # ==============================================================================
-# IV.4.D : Fusion des trois sources → population TEMPORAIRE (pop_temp)
+# IV.4.C : Fusion des deux sources → population TEMPORAIRE (pop_temp)
 #
-# On assemble les trois vecteurs (A, B, C) en une population par CANDIDAT selon
-# la hiérarchie B (WorldPop) > A (OSM) > C (NISR) > POP_FALLBACK_MIN.
+# On assemble les deux vecteurs (A, B) en une population par CANDIDAT selon
+# la hiérarchie A (WorldPop) > B (NISR) > POP_FALLBACK_MIN.
 # Rappel : pop_temp ne sert qu'à classer les points lors de la fusion (IV.3-bis).
 # ==============================================================================
 
 cat("── Fusion des sources → population temporaire par candidat ──────────\n")
 
-# Cohérence : les trois vecteurs doivent couvrir tous les candidats.
+# Cohérence : les deux vecteurs doivent couvrir tous les candidats.
 stopifnot(
-  length(pop_osm_par_entrepot)      == nrow(entreposages_sf),
   length(pop_worldpop_par_entrepot) == nrow(entreposages_sf),
   length(pop_nisr_par_entrepot)     == nrow(entreposages_sf)
 )
 
 # coalesce() : premier argument non-NA, de gauche à droite (hiérarchie de sources).
 pop_temp <- coalesce(
-  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source B : WorldPop
-  replace_na(pop_osm_par_entrepot,      NA_real_),  # Source A : OSM
-  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source C : NISR
+  replace_na(pop_worldpop_par_entrepot, NA_real_),  # Source A : WorldPop
+  replace_na(pop_nisr_par_entrepot,     NA_real_),  # Source B : NISR
   rep(POP_FALLBACK_MIN, nrow(entreposages_sf))      # Fallback
 ) %>%
   round()
@@ -2908,7 +2804,7 @@ cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 #
 # DÉPENDANCES :
 #   - seeds_sf, noeuds_entreposage   (Partie IV.3-bis) — nœuds conservés
-#   - pays_districts_gadm          (Partie IV.4.C — rechargé si absent)
+#   - pays_districts_gadm          (Partie IV.4.B — rechargé si absent)
 #   - SECTEURS, N_SECTEURS, RPHC5_CORRESPONDANCE_SECTEURS (Paramètres)
 # ALIMENTE :
 #   - Transition IV.5→V : emploi_zone_secteur (= emploi_zone_secteur_all)
@@ -2935,7 +2831,7 @@ if (length(cols_manquantes) > 0) {
           "\n  Adapter RPHC5_CORRESPONDANCE_SECTEURS dans les paramètres.")
 }
 
-# Normalisation des noms de district (même translittération que IV.4.C).
+# Normalisation des noms de district (même translittération que IV.4.B).
 rphc5_emploi <- rphc5_emploi_raw %>%
   rename(district = any_of(RPHC5_COL_DISTRICT_EMPLOI)) %>%
   mutate(
@@ -2953,7 +2849,7 @@ rphc5_emploi <- rphc5_emploi_raw %>%
 
 cat("  Districts après nettoyage :", nrow(rphc5_emploi), "\n")
 
-# ── Rechargement de GADM si absent (session interrompue depuis IV.4.C) ─────────
+# ── Rechargement de GADM si absent (session interrompue depuis IV.4.B) ─────────
 if (!exists("pays_districts_gadm") || is.null(pays_districts_gadm)) {
   cat("  Retéléchargement des frontières GADM...\n")
   pays_districts_gadm <- tryCatch({
@@ -3216,11 +3112,10 @@ cat("✓ persist_entreposages.rds\n\n")
 # plus nécessaires pour les scripts suivants, qui rechargent depuis les .rds.
 objets_a_liberer <- c(
   "raster_worldpop",       # Raster WorldPop (~150 Mo)
-  "population_osm_raw",    # Points OSM de population
   "routes",         # Arêtes brutes avant nettoyage
   "aretes_reseau_sf",      # Arêtes sf intermédiaires
   "pop_temp", "voisins",  # Population temporaire + voisinages de la fusion
-  "pop_worldpop_par_entrepot", "pop_nisr_par_entrepot", "pop_osm_par_entrepot",
+  "pop_worldpop_par_entrepot", "pop_nisr_par_entrepot",
   "pays_districts_gadm", "nisr_pop_raw"
 )
 rm(list = intersect(objets_a_liberer, ls()))

@@ -327,12 +327,12 @@ SEUIL_LONGUEUR_ARETE_M <- 0.5
 # Paramètres démographiques
 # ==============================================================================
 
-# Population minimale attribuée à une zone quand aucune des trois sources
-# (WorldPop, OSM, NISR) ne fournit de valeur. Évite les zones à population = 0
+# Population minimale attribuée à une zone quand aucune des deux sources
+# (WorldPop, NISR) ne fournit de valeur. Évite les zones à population = 0
 # qui bloqueraient le modèle gravitaire (offre/demande nulle).
 POP_FALLBACK_MIN <- 1000
 
-# ── Zoom du raster WorldPop pour l'approche B ─────────────────────────────────
+# ── Zoom du raster WorldPop pour l'approche A ─────────────────────────────────
 # Résolution disponible sur le portail WorldPop :
 #   z=10 → ~100m/pixel (précis, fichier lourd ~200 Mo)
 #   z=8  → ~400m/pixel (moins précis, fichier léger ~15 Mo)
