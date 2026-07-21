@@ -1157,13 +1157,6 @@ cat("  → Ce montant sera ajouté à C_ij pour toutes les paires OD\n\n")
 #               sum_j T_ij^s = O_i^s  (flux sortants = offre de i)
 #               sum_i T_ij^s = D_j^s  (flux entrants = demande de j)
 #
-# COMPATIBILITÉ OFFRE / DEMANDE :
-#   offre_total[i,s] et demande_total[j,s] (domestiques + RoW) sont construits
-#   indépendamment (Parties VII.2 et VII.2.C) ; leur somme n'est pas nécessairement égale.
-#   On normalise les deux cibles sur leur moyenne géométrique :
-#     S^s = sqrt(sum_i O_i^s × sum_j D_j^s)
-#   Cela préserve les distributions relatives tout en rendant les totaux compatibles.
-#
 # RÉFÉRENCES :
 #   - Wilson (1967), Transportation Research 1(3), 253-269
 #     → dérivation par maximisation d'entropie, preuve d'existence de A_i, B_j
@@ -1213,45 +1206,38 @@ furness_gravity <- function(O_s,
     ncol(friction) == n
   )
   
-  # ── Calcul des cibles normalisées ────────────────────────────────────────────
-  # offre_zones et demande_zones ont été construits indépendamment dans VII.2.
-  # Leur somme totale n'est pas nécessairement égale (O_total ≠ D_total).
-  # On les normalise toutes deux sur la moyenne géométrique de leurs totaux :
-  #   S = sqrt(sum(O) × sum(D))
-  # Cela équivaut à mettre à l'échelle chaque cible par un facteur constant :
-  #   target_O_i = O_i × S / sum(O)  →  sum(target_O) = S
-  #   target_D_j = D_j × S / sum(D)  →  sum(target_D) = S
-  # La distribution RELATIVE entre zones est préservée ; seule l'échelle change.
-  # Après normalisation, sum(target_O) == sum(target_D) == S, ce qui est
-  # la condition nécessaire à l'existence d'une solution doublement contrainte.
-  
+  # ── Contrôle de faisabilité du problème biproportionnel ─────────────────────
+  # L'IPF ne converge que si sum(O) = sum(D). 
+
   total_O <- sum(O_s, na.rm = TRUE)
   total_D <- sum(D_s, na.rm = TRUE)
-  
+
   # Cas dégénéré : secteur sans offre ou sans demande (ex : secteur Mines dans
   # une zone uniquement résidentielle). On retourne une matrice nulle.
+  # Ce test précède le contrôle d'équilibre car un total nul des deux côtés est
+  # un cas légitime (secteur absent), pas un déséquilibre.
   if (total_O < 1e-12 || total_D < 1e-12) {
     cat("  [", secteur, "] Offre ou demande nulle — matrice de flux vide\n")
     return(matrix(0, nrow = n, ncol = n))
   }
-  
-  # Moyenne géométrique des totaux = cible commune pour les deux marges
-  S_cible  <- sqrt(total_O * total_D)
-  
-  # Facteurs de normalisation : ratio entre la cible commune et le total actuel
-  # target_O_i = O_i × (S / sum(O)) : redistributionne S en proportions de O_i
-  # target_D_j = D_j × (S / sum(D)) : redistributionne S en proportions de D_j
-  target_O <- O_s * (S_cible / total_O)
-  target_D <- D_s * (S_cible / total_D)
-  
-  # Vérification numérique de la compatibilité (les deux doivent valoir S_cible)
-  # L'écart relatif doit être inférieur à 1e-8 (erreur d'arrondi flottant)
-  ecart_rel <- abs(sum(target_O) - sum(target_D)) / S_cible
-  if (ecart_rel > 1e-6) {
-    warning("  [", secteur, "] Déséquilibre offre/demande après normalisation : ",
-            round(ecart_rel * 100, 6), "% — vérifier offre_zones et demande_zones")
+
+  # Écart relatif entre les deux totaux, rapporté au plus grand des deux.
+  # Attendu : ~1e-15 (ordre de sommation flottante). Tout écart supérieur à
+  # TOL_EQUILIBRE_MARGES traduit une incohérence amont réelle et rend le
+  # problème infaisable : on interrompt plutôt que de produire une matrice de
+  # flux dont les marges ne veulent rien dire.
+  ecart_rel <- abs(total_O - total_D) / max(total_O, total_D)
+  if (ecart_rel > TOL_EQUILIBRE_MARGES) {
+    stop("  [", secteur, "] Marges déséquilibrées : ΣO = ", round(total_O, 3),
+         ", ΣD = ", round(total_D, 3), " (écart ", round(ecart_rel * 100, 6),
+         " %).\n  → Vérifier le bilan ressources-emplois VII.2.B.2 ",
+         "(Σ_i prod_zones[i,s] doit valoir production_totale[s]).")
   }
-  
+
+  # Cibles de l'IPF 
+  target_O <- O_s
+  target_D <- D_s
+
   # ── Initialisation de la matrice de flux ─────────────────────────────────────
   # T_ij = O_i^s × D_j^s × friction_ij
   # C'est le point de départ de Furness : la matrice "non contrainte" qui
@@ -1375,12 +1361,21 @@ furness_rect <- function(O_s, D_s, friction, secteur = "") {
   # Cas dégénéré : secteur sans export (ou sans import) → bloc de flux nul.
   if (total_O < 1e-12 || total_D < 1e-12) return(matrix(0, nO, nD))
 
-  # Cibles normalisées sur la moyenne géométrique (identique à furness_gravity ;
-  # ici total_O == total_D par construction, donc S = total et les cibles sont
-  # inchangées — la normalisation ne fait que sécuriser d'éventuels arrondis).
-  S_cible  <- sqrt(total_O * total_D)
-  target_O <- O_s * (S_cible / total_O)
-  target_D <- D_s * (S_cible / total_D)
+  # Contrôle de faisabilité, identique à furness_gravity : les marges des jambes
+  # export et import sont équilibrées par construction (les totaux RoW sont les
+  # totaux SAM ventilés par des parts pays normalisées à 1, cf. VII.4-bis), donc
+  # un écart au-delà de l'arrondi flottant est une erreur fatale.
+  ecart_rel <- abs(total_O - total_D) / max(total_O, total_D)
+  if (ecart_rel > TOL_EQUILIBRE_MARGES) {
+    stop("  [", secteur, "] Marges déséquilibrées : ΣO = ", round(total_O, 3),
+         ", ΣD = ", round(total_D, 3), " (écart ", round(ecart_rel * 100, 6),
+         " %).\n  → Vérifier la cohérence entre les totaux SAM (imports/exports) ",
+         "et les marges spatialisées e_zones / m_zones.")
+  }
+
+  # Cibles de l'IPF 
+  target_O <- O_s
+  target_D <- D_s
 
   # Matrice initiale T_ij = O_i × D_j × friction_ij, NA/Inf remis à 0.
   T_mat <- outer(O_s, D_s) * friction
