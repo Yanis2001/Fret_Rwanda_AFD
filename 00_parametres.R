@@ -739,9 +739,8 @@ FURNESS_MAX_ITER <- 200
 # indiscernables de la solution exacte.
 FURNESS_TOL <- 1e-6
 
-# Tolérance sur l'équilibre des marges avant lancement de l'IPF détectant 
-# n'importe quel déséquilibre réel.
-TOL_EQUILIBRE_MARGES <- 1e-9
+# Tolérance sur l'équilibre des marges avant lancement de l'IPF.
+TOL_EQUILIBRE_MARGES <- FURNESS_TOL / 10
 
 # Matrice des coefficients techniques A
 A <- sam$A[SECTEURS, SECTEURS]

@@ -1222,10 +1222,10 @@ furness_gravity <- function(O_s,
   }
 
   # Écart relatif entre les deux totaux, rapporté au plus grand des deux.
-  # Attendu : ~1e-15 (ordre de sommation flottante). Tout écart supérieur à
-  # TOL_EQUILIBRE_MARGES traduit une incohérence amont réelle et rend le
-  # problème infaisable : on interrompt plutôt que de produire une matrice de
-  # flux dont les marges ne veulent rien dire.
+  # Attendu : ~1e-8
+  # Tout écart supérieur à TOL_EQUILIBRE_MARGES traduit une incohérence amont
+  # réelle et rend le problème infaisable : on interrompt plutôt que de produire
+  # une matrice de flux dont les marges ne veulent rien dire.
   ecart_rel <- abs(total_O - total_D) / max(total_O, total_D)
   if (ecart_rel > TOL_EQUILIBRE_MARGES) {
     stop("  [", secteur, "] Marges déséquilibrées : ΣO = ", round(total_O, 3),
@@ -1364,7 +1364,7 @@ furness_rect <- function(O_s, D_s, friction, secteur = "") {
   # Contrôle de faisabilité, identique à furness_gravity : les marges des jambes
   # export et import sont équilibrées par construction (les totaux RoW sont les
   # totaux SAM ventilés par des parts pays normalisées à 1, cf. VII.4-bis), donc
-  # un écart au-delà de l'arrondi flottant est une erreur fatale.
+  # un écart dépassant le résidu d'équilibrage de la SAM est une erreur fatale.
   ecart_rel <- abs(total_O - total_D) / max(total_O, total_D)
   if (ecart_rel > TOL_EQUILIBRE_MARGES) {
     stop("  [", secteur, "] Marges déséquilibrées : ΣO = ", round(total_O, 3),
