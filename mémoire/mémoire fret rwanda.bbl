@@ -1,0 +1,3018 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.3 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{none/global//global/global/global}
+    \entry{IPCC2021}{book}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=676f7b9b8e5bb30500c01e2385e59174}{%
+           family={{IPCC}},
+           familyi={I\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {Cambridge University Press}%
+      }
+      \strng{namehash}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{fullhash}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{fullhashraw}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{bibnamehash}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{authorbibnamehash}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{authornamehash}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{authorfullhash}{676f7b9b8e5bb30500c01e2385e59174}
+      \strng{authorfullhashraw}{676f7b9b8e5bb30500c01e2385e59174}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Climate Change 2021: The Physical Science Basis. Contribution of Working Group I to the Sixth Assessment Report of the Intergovernmental Panel on Climate Change}
+      \field{year}{2021}
+      \verb{urlraw}
+      \verb https://www.ipcc.ch/report/ar6/wg1/
+      \endverb
+      \verb{url}
+      \verb https://www.ipcc.ch/report/ar6/wg1/
+      \endverb
+    \endentry
+    \entry{deJong2004}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=1f56a3a99d1028d184ea451ac40204a3}{%
+           family={Jong},
+           familyi={J\bibinitperiod},
+           given={Gerard},
+           giveni={G\bibinitperiod},
+           givenun=0,
+           prefix={de},
+           prefixi={d\bibinitperiod},
+           prefixun=0}}%
+        {{un=0,uniquepart=base,hash=5786cbad04419e1b3bac988ee6d8b6bf}{%
+           family={Gunn},
+           familyi={G\bibinitperiod},
+           given={Hugh},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=57d58638741f29a4985d8488f9a3e363}{%
+           family={Walker},
+           familyi={W\bibinitperiod},
+           given={Warren},
+           giveni={W\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{54df91d99c572563696cf439cfd8de32}
+      \strng{fullhash}{54df91d99c572563696cf439cfd8de32}
+      \strng{fullhashraw}{54df91d99c572563696cf439cfd8de32}
+      \strng{bibnamehash}{54df91d99c572563696cf439cfd8de32}
+      \strng{authorbibnamehash}{54df91d99c572563696cf439cfd8de32}
+      \strng{authornamehash}{54df91d99c572563696cf439cfd8de32}
+      \strng{authorfullhash}{54df91d99c572563696cf439cfd8de32}
+      \strng{authorfullhashraw}{54df91d99c572563696cf439cfd8de32}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transport Reviews}
+      \field{number}{1}
+      \field{title}{National and international freight transport models: An overview and ideas for future development}
+      \field{volume}{24}
+      \field{year}{2004}
+      \field{pages}{103\bibrangedash 124}
+      \range{pages}{22}
+      \verb{doi}
+      \verb 10.1080/0144164032000080494
+      \endverb
+    \endentry
+    \entry{Meersman2013}{incollection}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=28b2bbd392e7dbfe05c05353c89b6f43}{%
+           family={Meersman},
+           familyi={M\bibinitperiod},
+           given={Hilde},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=ccae14ffdc200e8f2abe851edf82e876}{%
+           family={Van\bibnamedelimb de\bibnamedelima Voorde},
+           familyi={V\bibinitperiod\bibinitdelim d\bibinitperiod\bibinitdelim V\bibinitperiod},
+           given={Eddy},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+      }
+      \name{editor}{3}{}{%
+        {{hash=ae71bffa7de8934347def3ae5c72a02d}{%
+           family={Ben-Akiva},
+           familyi={B\bibinithyphendelim A\bibinitperiod},
+           given={Moshe},
+           giveni={M\bibinitperiod}}}%
+        {{hash=28b2bbd392e7dbfe05c05353c89b6f43}{%
+           family={Meersman},
+           familyi={M\bibinitperiod},
+           given={Hilde},
+           giveni={H\bibinitperiod}}}%
+        {{hash=ccae14ffdc200e8f2abe851edf82e876}{%
+           family={Van\bibnamedelimb de\bibnamedelima Voorde},
+           familyi={V\bibinitperiod\bibinitdelim d\bibinitperiod\bibinitdelim V\bibinitperiod},
+           given={Eddy},
+           giveni={E\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {Bingley}%
+      }
+      \list{publisher}{1}{%
+        {Emerald}%
+      }
+      \strng{namehash}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{fullhash}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{fullhashraw}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{bibnamehash}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{authorbibnamehash}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{authornamehash}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{authorfullhash}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{authorfullhashraw}{cf1f5e7e46d434eb07fd7e36c166d298}
+      \strng{editorbibnamehash}{d866822d92d56b471370add70d477beb}
+      \strng{editornamehash}{d866822d92d56b471370add70d477beb}
+      \strng{editorfullhash}{d866822d92d56b471370add70d477beb}
+      \strng{editorfullhashraw}{d866822d92d56b471370add70d477beb}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Freight Transport Modelling}
+      \field{title}{The relationship between economic activity and freight transport}
+      \field{year}{2013}
+      \field{pages}{17\bibrangedash 43}
+      \range{pages}{27}
+    \endentry
+    \entry{Rashed2017}{article}{}{}
+      \name{author}{4}{}{%
+        {{un=0,uniquepart=base,hash=d3055910cc9fb5370f5f6598b2b9037e}{%
+           family={Rashed},
+           familyi={R\bibinitperiod},
+           given={Yasmine},
+           giveni={Y\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=28b2bbd392e7dbfe05c05353c89b6f43}{%
+           family={Meersman},
+           familyi={M\bibinitperiod},
+           given={Hilde},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=ccae14ffdc200e8f2abe851edf82e876}{%
+           family={Van\bibnamedelimb de\bibnamedelima Voorde},
+           familyi={V\bibinitperiod\bibinitdelim d\bibinitperiod\bibinitdelim V\bibinitperiod},
+           given={Eddy},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f052c355e61275e31854b9c4efd10f56}{%
+           family={Vanelslander},
+           familyi={V\bibinitperiod},
+           given={Thierry},
+           giveni={T\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{aa125522a453f92a6227eb2cb45f43c4}
+      \strng{fullhash}{26f43b3e71151ee0348bf8e134e4dbd4}
+      \strng{fullhashraw}{26f43b3e71151ee0348bf8e134e4dbd4}
+      \strng{bibnamehash}{aa125522a453f92a6227eb2cb45f43c4}
+      \strng{authorbibnamehash}{aa125522a453f92a6227eb2cb45f43c4}
+      \strng{authornamehash}{aa125522a453f92a6227eb2cb45f43c4}
+      \strng{authorfullhash}{26f43b3e71151ee0348bf8e134e4dbd4}
+      \strng{authorfullhashraw}{26f43b3e71151ee0348bf8e134e4dbd4}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Maritime Economics \& Logistics}
+      \field{number}{4}
+      \field{title}{Short-term forecast of container throughput: An {ARIMA}-intervention model for the port of {A}ntwerp}
+      \field{volume}{19}
+      \field{year}{2017}
+      \field{pages}{749\bibrangedash 764}
+      \range{pages}{16}
+      \verb{doi}
+      \verb 10.1057/mel.2016.8
+      \endverb
+    \endentry
+    \entry{Sterman2000}{book}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=5a94a6f9bd043af36be76835a8bd7d9b}{%
+           family={Sterman},
+           familyi={S\bibinitperiod},
+           given={John\bibnamedelima D.},
+           giveni={J\bibinitperiod\bibinitdelim D\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{location}{1}{%
+        {Boston}%
+      }
+      \list{publisher}{1}{%
+        {McGraw-Hill}%
+      }
+      \strng{namehash}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{fullhash}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{fullhashraw}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{bibnamehash}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{authorbibnamehash}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{authornamehash}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{authorfullhash}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \strng{authorfullhashraw}{5a94a6f9bd043af36be76835a8bd7d9b}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Business Dynamics: Systems Thinking and Modeling for a Complex World}
+      \field{year}{2000}
+    \endentry
+    \entry{Fiorello2010}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=a660bfa01f5ef44f893474985bf4fd27}{%
+           family={Fiorello},
+           familyi={F\bibinitperiod},
+           given={Davide},
+           giveni={D\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=7b42d3a750130b9850bd23dd933ba8fd}{%
+           family={Fermi},
+           familyi={F\bibinitperiod},
+           given={Francesca},
+           giveni={F\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=73051ce7e45aaeed86c1fecdff0e72b3}{%
+           family={Bielanska},
+           familyi={B\bibinitperiod},
+           given={Dorota},
+           giveni={D\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{fullhash}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{fullhashraw}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{bibnamehash}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{authorbibnamehash}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{authornamehash}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{authorfullhash}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \strng{authorfullhashraw}{ec070f6ab62dda63de4dc8f32f080eb4}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{System Dynamics Review}
+      \field{number}{3}
+      \field{title}{The {ASTRA} model for strategic assessment of transport policies}
+      \field{volume}{26}
+      \field{year}{2010}
+      \field{pages}{283\bibrangedash 290}
+      \range{pages}{8}
+      \verb{doi}
+      \verb 10.1002/sdr.452
+      \endverb
+    \endentry
+    \entry{SanchezDiaz2016}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=fcfc16f3cfac01f7b95194bb3c404eaf}{%
+           family={Sánchez-Díaz},
+           familyi={S\bibinithyphendelim D\bibinitperiod},
+           given={Iván},
+           giveni={I\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=00f18efae0a0f578314239f538f19a97}{%
+           family={Holguín-Veras},
+           familyi={H\bibinithyphendelim V\bibinitperiod},
+           given={José},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=1,uniquepart=given,hash=f642ce1ec35e27f6f876d4f99c4c6f4f}{%
+           family={Wang},
+           familyi={W\bibinitperiod},
+           given={Xiaokun},
+           giveni={X\bibinitperiod},
+           givenun=1}}%
+      }
+      \strng{namehash}{4710181fa1caf98e038766e712bc5971}
+      \strng{fullhash}{4710181fa1caf98e038766e712bc5971}
+      \strng{fullhashraw}{4710181fa1caf98e038766e712bc5971}
+      \strng{bibnamehash}{4710181fa1caf98e038766e712bc5971}
+      \strng{authorbibnamehash}{4710181fa1caf98e038766e712bc5971}
+      \strng{authornamehash}{4710181fa1caf98e038766e712bc5971}
+      \strng{authorfullhash}{4710181fa1caf98e038766e712bc5971}
+      \strng{authorfullhashraw}{4710181fa1caf98e038766e712bc5971}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation}
+      \field{number}{1}
+      \field{title}{An exploratory analysis of spatial effects on freight trip attraction}
+      \field{volume}{43}
+      \field{year}{2016}
+      \field{pages}{177\bibrangedash 196}
+      \range{pages}{20}
+      \verb{doi}
+      \verb 10.1007/s11116-014-9570-1
+      \endverb
+    \endentry
+    \entry{HolguinVeras2011}{article}{}{}
+      \name{author}{6}{}{%
+        {{un=0,uniquepart=base,hash=00f18efae0a0f578314239f538f19a97}{%
+           family={Holguín-Veras},
+           familyi={H\bibinithyphendelim V\bibinitperiod},
+           given={José},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=958eabd1e6226f531a129bd391b1c89b}{%
+           family={Jaller},
+           familyi={J\bibinitperiod},
+           given={Miguel},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=354aec4b0478eb4b9d683f6592d82c38}{%
+           family={Destro},
+           familyi={D\bibinitperiod},
+           given={Lisa},
+           giveni={L\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=59e518faf13fa541514049bddfea6861}{%
+           family={Ban},
+           familyi={B\bibinitperiod},
+           given={Xuegang},
+           giveni={X\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=84c5cc47e1bc1ee8a0f7f085c6cda2b6}{%
+           family={Lawson},
+           familyi={L\bibinitperiod},
+           given={Catherine},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=64388ea203fc7109e8f8e7ff73d217d7}{%
+           family={Levinson},
+           familyi={L\bibinitperiod},
+           given={Herbert\bibnamedelima S.},
+           giveni={H\bibinitperiod\bibinitdelim S\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{0f8028a1ffe500f66b64ad31dd938349}
+      \strng{fullhash}{21c158f848d26eb19057884c1a333cb5}
+      \strng{fullhashraw}{21c158f848d26eb19057884c1a333cb5}
+      \strng{bibnamehash}{0f8028a1ffe500f66b64ad31dd938349}
+      \strng{authorbibnamehash}{0f8028a1ffe500f66b64ad31dd938349}
+      \strng{authornamehash}{0f8028a1ffe500f66b64ad31dd938349}
+      \strng{authorfullhash}{21c158f848d26eb19057884c1a333cb5}
+      \strng{authorfullhashraw}{21c158f848d26eb19057884c1a333cb5}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research Record}
+      \field{number}{1}
+      \field{title}{Freight generation, freight trip generation, and perils of using constant trip rates}
+      \field{volume}{2224}
+      \field{year}{2011}
+      \field{pages}{68\bibrangedash 81}
+      \range{pages}{14}
+      \verb{doi}
+      \verb 10.3141/2224-09
+      \endverb
+    \endentry
+    \entry{Miller2009}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=608c448f286576678bafd9b83d12626a}{%
+           family={Miller},
+           familyi={M\bibinitperiod},
+           given={Ronald\bibnamedelima E.},
+           giveni={R\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=07fb3345bb389928eec8d837aeff4645}{%
+           family={Blair},
+           familyi={B\bibinitperiod},
+           given={Peter\bibnamedelima D.},
+           giveni={P\bibinitperiod\bibinitdelim D\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {Cambridge University Press}%
+      }
+      \strng{namehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{fullhash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{fullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{bibnamehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authorbibnamehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authornamehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authorfullhash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authorfullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{edition}{2}
+      \field{title}{Input-Output Analysis: Foundations and Extensions}
+      \field{year}{2009}
+    \endentry
+    \entry{Cascetta2008}{incollection}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=d5252923ec855a419947d5530a089596}{%
+           family={Cascetta},
+           familyi={C\bibinitperiod},
+           given={Ennio},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=2341cbfb8211fd470cc0b94c3d9a2a05}{%
+           family={Marzano},
+           familyi={M\bibinitperiod},
+           given={Vittorio},
+           giveni={V\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=dbeb7ed4b9f854751ce3a999f2873025}{%
+           family={Papola},
+           familyi={P\bibinitperiod},
+           given={Andrea},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+      }
+      \name{editor}{3}{}{%
+        {{hash=ae71bffa7de8934347def3ae5c72a02d}{%
+           family={Ben-Akiva},
+           familyi={B\bibinithyphendelim A\bibinitperiod},
+           given={Moshe},
+           giveni={M\bibinitperiod}}}%
+        {{hash=28b2bbd392e7dbfe05c05353c89b6f43}{%
+           family={Meersman},
+           familyi={M\bibinitperiod},
+           given={Hilde},
+           giveni={H\bibinitperiod}}}%
+        {{hash=ccae14ffdc200e8f2abe851edf82e876}{%
+           family={Van\bibnamedelimb de\bibnamedelima Voorde},
+           familyi={V\bibinitperiod\bibinitdelim d\bibinitperiod\bibinitdelim V\bibinitperiod},
+           given={Eddy},
+           giveni={E\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {Bingley}%
+      }
+      \list{publisher}{1}{%
+        {Emerald}%
+      }
+      \strng{namehash}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{fullhash}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{fullhashraw}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{bibnamehash}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{authorbibnamehash}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{authornamehash}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{authorfullhash}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{authorfullhashraw}{635b5f13f1d804660ac0541a3d39216d}
+      \strng{editorbibnamehash}{d866822d92d56b471370add70d477beb}
+      \strng{editornamehash}{d866822d92d56b471370add70d477beb}
+      \strng{editorfullhash}{d866822d92d56b471370add70d477beb}
+      \strng{editorfullhashraw}{d866822d92d56b471370add70d477beb}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Recent Developments in Transport Modelling: Lessons for the Freight Sector}
+      \field{title}{Multi-regional input-output models for freight demand simulation at a national level}
+      \field{year}{2008}
+      \field{pages}{93\bibrangedash 116}
+      \range{pages}{24}
+      \verb{doi}
+      \verb 10.1108/9781786359537-006
+      \endverb
+    \endentry
+    \entry{Wilson1967}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=5fa3da00b0f642833c92bd938e165206}{%
+           family={Wilson},
+           familyi={W\bibinitperiod},
+           given={Alan\bibnamedelima G.},
+           giveni={A\bibinitperiod\bibinitdelim G\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{5fa3da00b0f642833c92bd938e165206}
+      \strng{fullhash}{5fa3da00b0f642833c92bd938e165206}
+      \strng{fullhashraw}{5fa3da00b0f642833c92bd938e165206}
+      \strng{bibnamehash}{5fa3da00b0f642833c92bd938e165206}
+      \strng{authorbibnamehash}{5fa3da00b0f642833c92bd938e165206}
+      \strng{authornamehash}{5fa3da00b0f642833c92bd938e165206}
+      \strng{authorfullhash}{5fa3da00b0f642833c92bd938e165206}
+      \strng{authorfullhashraw}{5fa3da00b0f642833c92bd938e165206}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research}
+      \field{number}{3}
+      \field{title}{A statistical theory of spatial distribution models}
+      \field{volume}{1}
+      \field{year}{1967}
+      \field{pages}{253\bibrangedash 269}
+      \range{pages}{17}
+      \verb{doi}
+      \verb 10.1016/0041-1647(67)90035-4
+      \endverb
+    \endentry
+    \entry{Anderson2003}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=698a0bb775e87a0470cd7b92a0a5cd24}{%
+           family={Anderson},
+           familyi={A\bibinitperiod},
+           given={James\bibnamedelima E.},
+           giveni={J\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=e3c0b200e02cd8b0fa7bad64abd3587a}{%
+           family={Wincoop},
+           familyi={W\bibinitperiod},
+           given={Eric},
+           giveni={E\bibinitperiod},
+           givenun=0,
+           prefix={van},
+           prefixi={v\bibinitperiod},
+           prefixun=0}}%
+      }
+      \strng{namehash}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{fullhash}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{fullhashraw}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{bibnamehash}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{authorbibnamehash}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{authornamehash}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{authorfullhash}{b66054bfc8f30f7edccc640a40e95837}
+      \strng{authorfullhashraw}{b66054bfc8f30f7edccc640a40e95837}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{American Economic Review}
+      \field{number}{1}
+      \field{title}{Gravity with gravitas: A solution to the border puzzle}
+      \field{volume}{93}
+      \field{year}{2003}
+      \field{pages}{170\bibrangedash 192}
+      \range{pages}{23}
+      \verb{doi}
+      \verb 10.1257/000282803321455214
+      \endverb
+    \endentry
+    \entry{Cai2021}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=23ad16dc7ddaf72d4835bc9d5f9e4c27}{%
+           family={Cai},
+           familyi={C\bibinitperiod},
+           given={Mattia},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{fullhash}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{fullhashraw}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{bibnamehash}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{authorbibnamehash}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{authornamehash}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{authorfullhash}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \strng{authorfullhashraw}{23ad16dc7ddaf72d4835bc9d5f9e4c27}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Papers in Regional Science}
+      \field{number}{2}
+      \field{title}{Doubly constrained gravity models for interregional trade estimation}
+      \field{volume}{100}
+      \field{year}{2021}
+      \field{pages}{455\bibrangedash 474}
+      \range{pages}{20}
+      \verb{doi}
+      \verb 10.1111/pirs.12581
+      \endverb
+    \endentry
+    \entry{McFadden1974}{incollection}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=1327829299e572b76be93fafcdca8d7b}{%
+           family={McFadden},
+           familyi={M\bibinitperiod},
+           given={Daniel},
+           giveni={D\bibinitperiod},
+           givenun=0}}%
+      }
+      \name{editor}{1}{}{%
+        {{hash=7c760a153321d2739781505792c7b334}{%
+           family={Zarembka},
+           familyi={Z\bibinitperiod},
+           given={Paul},
+           giveni={P\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {Academic Press}%
+      }
+      \strng{namehash}{1327829299e572b76be93fafcdca8d7b}
+      \strng{fullhash}{1327829299e572b76be93fafcdca8d7b}
+      \strng{fullhashraw}{1327829299e572b76be93fafcdca8d7b}
+      \strng{bibnamehash}{1327829299e572b76be93fafcdca8d7b}
+      \strng{authorbibnamehash}{1327829299e572b76be93fafcdca8d7b}
+      \strng{authornamehash}{1327829299e572b76be93fafcdca8d7b}
+      \strng{authorfullhash}{1327829299e572b76be93fafcdca8d7b}
+      \strng{authorfullhashraw}{1327829299e572b76be93fafcdca8d7b}
+      \strng{editorbibnamehash}{7c760a153321d2739781505792c7b334}
+      \strng{editornamehash}{7c760a153321d2739781505792c7b334}
+      \strng{editorfullhash}{7c760a153321d2739781505792c7b334}
+      \strng{editorfullhashraw}{7c760a153321d2739781505792c7b334}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Frontiers in Econometrics}
+      \field{title}{Conditional logit analysis of qualitative choice behavior}
+      \field{year}{1974}
+      \field{pages}{105\bibrangedash 142}
+      \range{pages}{38}
+    \endentry
+    \entry{Tavasszy2014}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=f340a5028f1b3ea5343710f93d945516}{%
+           family={Tavasszy},
+           familyi={T\bibinitperiod},
+           given={Lóránt\bibnamedelima A.},
+           giveni={L\bibinitperiod\bibinitdelim A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1f56a3a99d1028d184ea451ac40204a3}{%
+           family={Jong},
+           familyi={J\bibinitperiod},
+           given={Gerard},
+           giveni={G\bibinitperiod},
+           givenun=0,
+           prefix={de},
+           prefixi={d\bibinitperiod},
+           prefixun=0}}%
+      }
+      \list{publisher}{1}{%
+        {Elsevier}%
+      }
+      \strng{namehash}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{fullhash}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{fullhashraw}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{bibnamehash}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{authorbibnamehash}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{authornamehash}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{authorfullhash}{8a6f85a65f76eb844135664fb0e0fede}
+      \strng{authorfullhashraw}{8a6f85a65f76eb844135664fb0e0fede}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Modelling Freight Transport}
+      \field{year}{2014}
+    \endentry
+    \entry{Rich2009}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=d6a88215b25be2e3b47c8d7d66ccfdeb}{%
+           family={Rich},
+           familyi={R\bibinitperiod},
+           given={Jeppe},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=e0a3e4719c6cdd4c4f4fd952975604b6}{%
+           family={Holmblad},
+           familyi={H\bibinitperiod},
+           given={Peter\bibnamedelima Mikkel},
+           giveni={P\bibinitperiod\bibinitdelim M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1cbd7849cf61fb3d35ec233276df985a}{%
+           family={Hansen},
+           familyi={H\bibinitperiod},
+           given={Christian\bibnamedelima Overg{å}rd},
+           giveni={C\bibinitperiod\bibinitdelim O\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{fullhash}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{fullhashraw}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{bibnamehash}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{authorbibnamehash}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{authornamehash}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{authorfullhash}{23d2df9d64043871fd7e1f279cf3cc66}
+      \strng{authorfullhashraw}{23d2df9d64043871fd7e1f279cf3cc66}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research Part E: Logistics and Transportation Review}
+      \field{number}{6}
+      \field{title}{A weighted logit freight mode-choice model}
+      \field{volume}{45}
+      \field{year}{2009}
+      \field{pages}{1006\bibrangedash 1015}
+      \range{pages}{10}
+      \verb{doi}
+      \verb 10.1016/j.tre.2009.02.001
+      \endverb
+    \endentry
+    \entry{Wardrop1952}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=a21535b4bd402e916bb16ce6ec9f49a9}{%
+           family={Wardrop},
+           familyi={W\bibinitperiod},
+           given={John\bibnamedelima Glen},
+           giveni={J\bibinitperiod\bibinitdelim G\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{fullhash}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{fullhashraw}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{bibnamehash}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{authorbibnamehash}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{authornamehash}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{authorfullhash}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \strng{authorfullhashraw}{a21535b4bd402e916bb16ce6ec9f49a9}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Proceedings of the Institution of Civil Engineers}
+      \field{number}{3}
+      \field{title}{Some theoretical aspects of road traffic research}
+      \field{volume}{1}
+      \field{year}{1952}
+      \field{pages}{325\bibrangedash 362}
+      \range{pages}{38}
+      \verb{doi}
+      \verb 10.1680/ipeds.1952.11259
+      \endverb
+    \endentry
+    \entry{Beckmann1956}{book}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=dcc69497b5484086501fea46b39d2e87}{%
+           family={Beckmann},
+           familyi={B\bibinitperiod},
+           given={Martin},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=db2a7b1c4b7330bd1861b6c973aa8625}{%
+           family={McGuire},
+           familyi={M\bibinitperiod},
+           given={C.\bibnamedelimi B.},
+           giveni={C\bibinitperiod\bibinitdelim B\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f5ea54b94613186ea879be5d7eeca635}{%
+           family={Winsten},
+           familyi={W\bibinitperiod},
+           given={Christopher\bibnamedelima B.},
+           giveni={C\bibinitperiod\bibinitdelim B\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{location}{1}{%
+        {New Haven}%
+      }
+      \list{publisher}{1}{%
+        {Yale University Press}%
+      }
+      \strng{namehash}{57363e4de5493472a68ed527c386a157}
+      \strng{fullhash}{57363e4de5493472a68ed527c386a157}
+      \strng{fullhashraw}{57363e4de5493472a68ed527c386a157}
+      \strng{bibnamehash}{57363e4de5493472a68ed527c386a157}
+      \strng{authorbibnamehash}{57363e4de5493472a68ed527c386a157}
+      \strng{authornamehash}{57363e4de5493472a68ed527c386a157}
+      \strng{authorfullhash}{57363e4de5493472a68ed527c386a157}
+      \strng{authorfullhashraw}{57363e4de5493472a68ed527c386a157}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Studies in the Economics of Transportation}
+      \field{year}{1956}
+    \endentry
+    \entry{Sheffi1985}{book}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=fb78cd3d8556549c0bf9f86d2273ba92}{%
+           family={Sheffi},
+           familyi={S\bibinitperiod},
+           given={Yosef},
+           giveni={Y\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{location}{1}{%
+        {Englewood Cliffs}%
+      }
+      \list{publisher}{1}{%
+        {Prentice-Hall}%
+      }
+      \strng{namehash}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{fullhash}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{fullhashraw}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{bibnamehash}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{authorbibnamehash}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{authornamehash}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{authorfullhash}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \strng{authorfullhashraw}{fb78cd3d8556549c0bf9f86d2273ba92}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Urban Transportation Networks: Equilibrium Analysis with Mathematical Programming Methods}
+      \field{year}{1985}
+    \endentry
+    \entry{BPR1964}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=1bfc1c4d19f4734d411398e928dc165d}{%
+           family={{Bureau of Public Roads}},
+           familyi={B\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {U.S. Department of Commerce, Urban Planning Division}%
+      }
+      \list{location}{1}{%
+        {Washington, DC}%
+      }
+      \strng{namehash}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{fullhash}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{fullhashraw}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{bibnamehash}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{authorbibnamehash}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{authornamehash}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{authorfullhash}{1bfc1c4d19f4734d411398e928dc165d}
+      \strng{authorfullhashraw}{1bfc1c4d19f4734d411398e928dc165d}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Traffic Assignment Manual for Application with a Large, High Speed Computer}
+      \field{type}{techreport}
+      \field{year}{1964}
+    \endentry
+    \entry{Jourquin1996}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=ce41fdca25a6328b209e37976d67f93a}{%
+           family={Jourquin},
+           familyi={J\bibinitperiod},
+           given={Bart},
+           giveni={B\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=90fcadad350f0bc8a5391479affcc7d3}{%
+           family={Beuthe},
+           familyi={B\bibinitperiod},
+           given={Michel},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{fullhash}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{fullhashraw}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{bibnamehash}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{authorbibnamehash}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{authornamehash}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{authorfullhash}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \strng{authorfullhashraw}{6e9802a9770dc0bfe5951d96f03d9bc9}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research Part C: Emerging Technologies}
+      \field{number}{6}
+      \field{title}{Transportation policy analysis with a geographic information system: The virtual network of freight transportation in {E}urope}
+      \field{volume}{4}
+      \field{year}{1996}
+      \field{pages}{359\bibrangedash 371}
+      \range{pages}{13}
+      \verb{doi}
+      \verb 10.1016/S0968-090X(96)00019-8
+      \endverb
+    \endentry
+    \entry{NISR2023}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=719615e049db54f5c4e06a3f81652ac1}{%
+           family={{National Institute of Statistics of Rwanda (NISR)}},
+           familyi={N\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {République du Rwanda}%
+      }
+      \list{location}{1}{%
+        {Kigali}%
+      }
+      \strng{namehash}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{fullhash}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{fullhashraw}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{bibnamehash}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{authorbibnamehash}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{authornamehash}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{authorfullhash}{719615e049db54f5c4e06a3f81652ac1}
+      \strng{authorfullhashraw}{719615e049db54f5c4e06a3f81652ac1}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Fifth Rwanda Population and Housing Census, 2022 --- Main Indicators Report}
+      \field{type}{techreport}
+      \field{year}{2023}
+      \verb{urlraw}
+      \verb https://www.statistics.gov.rw/sites/default/files/documents/2025-02/RPHC5_MainIndicatorsReport_Final.pdf
+      \endverb
+      \verb{url}
+      \verb https://www.statistics.gov.rw/sites/default/files/documents/2025-02/RPHC5_MainIndicatorsReport_Final.pdf
+      \endverb
+    \endentry
+    \entry{MININFRA2021}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=196214c67b4a47f1e8439be0c1e69eb7}{%
+           family={{Ministry of Infrastructure (MININFRA)}},
+           familyi={M\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {République du Rwanda}%
+      }
+      \list{location}{1}{%
+        {Kigali}%
+      }
+      \strng{namehash}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{fullhash}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{fullhashraw}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{bibnamehash}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{authorbibnamehash}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{authornamehash}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{authorfullhash}{196214c67b4a47f1e8439be0c1e69eb7}
+      \strng{authorfullhashraw}{196214c67b4a47f1e8439be0c1e69eb7}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{month}{4}
+      \field{title}{National Transport Policy and Strategy for Rwanda}
+      \field{type}{techreport}
+      \field{year}{2021}
+      \verb{urlraw}
+      \verb https://www.mininfra.gov.rw/fileadmin/user_upload/Mininfra/Publications/Policies/Transport/NATIONAL_TRANSPORT_POLICY_AND_STRATEGY_APRIL_2021.pdf
+      \endverb
+      \verb{url}
+      \verb https://www.mininfra.gov.rw/fileadmin/user_upload/Mininfra/Publications/Policies/Transport/NATIONAL_TRANSPORT_POLICY_AND_STRATEGY_APRIL_2021.pdf
+      \endverb
+    \endentry
+    \entry{NCTTCA2018}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=446816fd193efd1999159d49f85b77c9}{%
+           family={{Northern Corridor Transit and Transport Coordination Authority (NCTTCA)}},
+           familyi={N\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {NCTTCA}%
+      }
+      \list{location}{1}{%
+        {Mombasa}%
+      }
+      \strng{namehash}{446816fd193efd1999159d49f85b77c9}
+      \strng{fullhash}{446816fd193efd1999159d49f85b77c9}
+      \strng{fullhashraw}{446816fd193efd1999159d49f85b77c9}
+      \strng{bibnamehash}{446816fd193efd1999159d49f85b77c9}
+      \strng{authorbibnamehash}{446816fd193efd1999159d49f85b77c9}
+      \strng{authornamehash}{446816fd193efd1999159d49f85b77c9}
+      \strng{authorfullhash}{446816fd193efd1999159d49f85b77c9}
+      \strng{authorfullhashraw}{446816fd193efd1999159d49f85b77c9}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Northern Corridor Transport Observatory Report, 13th Edition (April 2018 -- September 2018)}
+      \field{type}{techreport}
+      \field{year}{2018}
+      \verb{urlraw}
+      \verb https://www.ttcanc.org/
+      \endverb
+      \verb{url}
+      \verb https://www.ttcanc.org/
+      \endverb
+    \endentry
+    \entry{Limao2001}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=e0073e9284ded31249cb141038a26149}{%
+           family={Limão},
+           familyi={L\bibinitperiod},
+           given={Nuno},
+           giveni={N\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=8439e59065381dcf4bdd913e708f694b}{%
+           family={Venables},
+           familyi={V\bibinitperiod},
+           given={Anthony\bibnamedelima J.},
+           giveni={A\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{fullhash}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{fullhashraw}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{bibnamehash}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{authorbibnamehash}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{authornamehash}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{authorfullhash}{f14166b1f4a5f08d78365aca75871b00}
+      \strng{authorfullhashraw}{f14166b1f4a5f08d78365aca75871b00}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{The World Bank Economic Review}
+      \field{number}{3}
+      \field{title}{Infrastructure, geographical disadvantage, transport costs, and trade}
+      \field{volume}{15}
+      \field{year}{2001}
+      \field{pages}{451\bibrangedash 479}
+      \range{pages}{29}
+      \verb{doi}
+      \verb 10.1093/wber/15.3.451
+      \endverb
+    \endentry
+    \entry{Storeygard2016}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=acda91dac77106c338b7df7f51eebb52}{%
+           family={Storeygard},
+           familyi={S\bibinitperiod},
+           given={Adam},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{acda91dac77106c338b7df7f51eebb52}
+      \strng{fullhash}{acda91dac77106c338b7df7f51eebb52}
+      \strng{fullhashraw}{acda91dac77106c338b7df7f51eebb52}
+      \strng{bibnamehash}{acda91dac77106c338b7df7f51eebb52}
+      \strng{authorbibnamehash}{acda91dac77106c338b7df7f51eebb52}
+      \strng{authornamehash}{acda91dac77106c338b7df7f51eebb52}
+      \strng{authorfullhash}{acda91dac77106c338b7df7f51eebb52}
+      \strng{authorfullhashraw}{acda91dac77106c338b7df7f51eebb52}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{The Review of Economic Studies}
+      \field{number}{3}
+      \field{title}{Farther on down the road: Transport costs, trade and urban growth in sub-{S}aharan {A}frica}
+      \field{volume}{83}
+      \field{year}{2016}
+      \field{pages}{1263\bibrangedash 1295}
+      \range{pages}{33}
+      \verb{doi}
+      \verb 10.1093/restud/rdw020
+      \endverb
+    \endentry
+    \entry{WorldBank2020}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=f6c39ad1600ad3d1f419189803388200}{%
+           family={{Banque mondiale}},
+           familyi={B\bibinitperiod}}}%
+        {{un=0,uniquepart=base,hash=bfbef9a75e63743005d5f2faadc57ae5}{%
+           family={{Gouvernement du Rwanda}},
+           familyi={G\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {Washington, DC}%
+      }
+      \list{publisher}{1}{%
+        {Banque mondiale}%
+      }
+      \strng{namehash}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{fullhash}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{fullhashraw}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{bibnamehash}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{authorbibnamehash}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{authornamehash}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{authorfullhash}{5b8be1adfea300e3275f0ffa26689eb7}
+      \strng{authorfullhashraw}{5b8be1adfea300e3275f0ffa26689eb7}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Future Drivers of Growth in Rwanda: Innovation, Integration, Agglomeration, and Competition}
+      \field{year}{2020}
+      \verb{urlraw}
+      \verb https://openknowledge.worldbank.org/handle/10986/30732
+      \endverb
+      \verb{url}
+      \verb https://openknowledge.worldbank.org/handle/10986/30732
+      \endverb
+    \endentry
+    \entry{WorldBank2024CEM}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=f6c39ad1600ad3d1f419189803388200}{%
+           family={{Banque mondiale}},
+           familyi={B\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {Banque mondiale}%
+      }
+      \list{location}{1}{%
+        {Washington, DC}%
+      }
+      \strng{namehash}{f6c39ad1600ad3d1f419189803388200}
+      \strng{fullhash}{f6c39ad1600ad3d1f419189803388200}
+      \strng{fullhashraw}{f6c39ad1600ad3d1f419189803388200}
+      \strng{bibnamehash}{f6c39ad1600ad3d1f419189803388200}
+      \strng{authorbibnamehash}{f6c39ad1600ad3d1f419189803388200}
+      \strng{authornamehash}{f6c39ad1600ad3d1f419189803388200}
+      \strng{authorfullhash}{f6c39ad1600ad3d1f419189803388200}
+      \strng{authorfullhashraw}{f6c39ad1600ad3d1f419189803388200}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Rwanda Country Economic Memorandum: Pathways to Sustainable and Inclusive Growth in Rwanda}
+      \field{type}{techreport}
+      \field{year}{2024}
+      \verb{urlraw}
+      \verb https://documents.worldbank.org/en/publication/documents-reports/documentdetail/099111224145514415
+      \endverb
+      \verb{url}
+      \verb https://documents.worldbank.org/en/publication/documents-reports/documentdetail/099111224145514415
+      \endverb
+    \endentry
+    \entry{IFPRI2023SAM}{report}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=c460519bedbbb017f33d1cff343f8690}{%
+           family={{International Food Policy Research Institute (IFPRI)}},
+           familyi={I\bibinitperiod}}}%
+        {{un=0,uniquepart=base,hash=38cd2610e860eb86399712aa176de393}{%
+           family={{Ministry of Finance and Economic Planning (MINECOFIN)}},
+           familyi={M\bibinitperiod}}}%
+        {{un=0,uniquepart=base,hash=719615e049db54f5c4e06a3f81652ac1}{%
+           family={{National Institute of Statistics of Rwanda (NISR)}},
+           familyi={N\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {IFPRI}%
+      }
+      \list{location}{1}{%
+        {Washington, DC}%
+      }
+      \strng{namehash}{2f6dca6d44166bebb9edce836a604364}
+      \strng{fullhash}{2f6dca6d44166bebb9edce836a604364}
+      \strng{fullhashraw}{2f6dca6d44166bebb9edce836a604364}
+      \strng{bibnamehash}{2f6dca6d44166bebb9edce836a604364}
+      \strng{authorbibnamehash}{2f6dca6d44166bebb9edce836a604364}
+      \strng{authornamehash}{2f6dca6d44166bebb9edce836a604364}
+      \strng{authorfullhash}{2f6dca6d44166bebb9edce836a604364}
+      \strng{authorfullhashraw}{2f6dca6d44166bebb9edce836a604364}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{2021 Social Accounting Matrix for Rwanda: A Nexus Project SAM}
+      \field{type}{Data Paper}
+      \field{year}{2023}
+      \verb{doi}
+      \verb 10.2499/p15738coll2.136514
+      \endverb
+    \endentry
+    \entry{MINECOFIN2023}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=38cd2610e860eb86399712aa176de393}{%
+           family={{Ministry of Finance and Economic Planning (MINECOFIN)}},
+           familyi={M\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {République du Rwanda}%
+      }
+      \list{location}{1}{%
+        {Kigali}%
+      }
+      \strng{namehash}{38cd2610e860eb86399712aa176de393}
+      \strng{fullhash}{38cd2610e860eb86399712aa176de393}
+      \strng{fullhashraw}{38cd2610e860eb86399712aa176de393}
+      \strng{bibnamehash}{38cd2610e860eb86399712aa176de393}
+      \strng{authorbibnamehash}{38cd2610e860eb86399712aa176de393}
+      \strng{authornamehash}{38cd2610e860eb86399712aa176de393}
+      \strng{authorfullhash}{38cd2610e860eb86399712aa176de393}
+      \strng{authorfullhashraw}{38cd2610e860eb86399712aa176de393}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Recovery needs assessment following the May 2023 floods and landslides --- 82nd Development Partners Coordination Group}
+      \field{type}{techreport}
+      \field{year}{2023}
+      \verb{urlraw}
+      \verb https://www.minecofin.gov.rw/news-detail/frw-51858-billion-needed-to-recover-from-impact-of-recent-floods-and-landslides
+      \endverb
+      \verb{url}
+      \verb https://www.minecofin.gov.rw/news-detail/frw-51858-billion-needed-to-recover-from-impact-of-recent-floods-and-landslides
+      \endverb
+    \endentry
+    \entry{Stevens2015}{article}{}{}
+      \name{author}{4}{}{%
+        {{un=0,uniquepart=base,hash=6c7687996ebd01431b603489220dbda3}{%
+           family={Stevens},
+           familyi={S\bibinitperiod},
+           given={Forrest\bibnamedelima R.},
+           giveni={F\bibinitperiod\bibinitdelim R\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=5a97185894d9f8e416201b0b78033e95}{%
+           family={Gaughan},
+           familyi={G\bibinitperiod},
+           given={Andrea\bibnamedelima E.},
+           giveni={A\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1196a5dd158830f4ddcfd217a6a64d41}{%
+           family={Linard},
+           familyi={L\bibinitperiod},
+           given={Catherine},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=74438a101caea6ec34867c145dc30811}{%
+           family={Tatem},
+           familyi={T\bibinitperiod},
+           given={Andrew\bibnamedelima J.},
+           giveni={A\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{3857cc114207fa20dba64c34ce6c8f85}
+      \strng{fullhash}{1d70b4e44618c62ef2a72627181fff8f}
+      \strng{fullhashraw}{1d70b4e44618c62ef2a72627181fff8f}
+      \strng{bibnamehash}{3857cc114207fa20dba64c34ce6c8f85}
+      \strng{authorbibnamehash}{3857cc114207fa20dba64c34ce6c8f85}
+      \strng{authornamehash}{3857cc114207fa20dba64c34ce6c8f85}
+      \strng{authorfullhash}{1d70b4e44618c62ef2a72627181fff8f}
+      \strng{authorfullhashraw}{1d70b4e44618c62ef2a72627181fff8f}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{PLOS ONE}
+      \field{number}{2}
+      \field{title}{Disaggregating census data for population mapping using random forests with remotely-sensed and ancillary data}
+      \field{volume}{10}
+      \field{year}{2015}
+      \field{pages}{e0107042}
+      \range{pages}{-1}
+      \verb{doi}
+      \verb 10.1371/journal.pone.0107042
+      \endverb
+    \endentry
+    \entry{Chi2022}{article}{}{}
+      \name{author}{4}{}{%
+        {{un=0,uniquepart=base,hash=d4b4ef4cc48aebba7967ace9c91b0842}{%
+           family={Chi},
+           familyi={C\bibinitperiod},
+           given={Guanghua},
+           giveni={G\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=31b601ca0becd0697b1237e03ec8427f}{%
+           family={Fang},
+           familyi={F\bibinitperiod},
+           given={Han},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=225d0c64bc582e380c1334293c4db1a3}{%
+           family={Chatterjee},
+           familyi={C\bibinitperiod},
+           given={Sourav},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=7c903c72cf88893a6fa586bb74bcdb41}{%
+           family={Blumenstock},
+           familyi={B\bibinitperiod},
+           given={Joshua\bibnamedelima E.},
+           giveni={J\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{36562130c22efb1c228bc73014879354}
+      \strng{fullhash}{de7f657e74663fa9e04b259f66632611}
+      \strng{fullhashraw}{de7f657e74663fa9e04b259f66632611}
+      \strng{bibnamehash}{36562130c22efb1c228bc73014879354}
+      \strng{authorbibnamehash}{36562130c22efb1c228bc73014879354}
+      \strng{authornamehash}{36562130c22efb1c228bc73014879354}
+      \strng{authorfullhash}{de7f657e74663fa9e04b259f66632611}
+      \strng{authorfullhashraw}{de7f657e74663fa9e04b259f66632611}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Proceedings of the National Academy of Sciences}
+      \field{number}{3}
+      \field{title}{Microestimates of wealth for all low- and middle-income countries}
+      \field{volume}{119}
+      \field{year}{2022}
+      \field{pages}{e2113658119}
+      \range{pages}{-1}
+      \verb{doi}
+      \verb 10.1073/pnas.2113658119
+      \endverb
+    \endentry
+    \entry{Ortuzar2011}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=f38ddf9d5d399e56d7f74e635d4482a2}{%
+           family={Ortúzar},
+           familyi={O\bibinitperiod},
+           given={Juan\bibnamedelimb de\bibnamedelima Dios},
+           giveni={J\bibinitperiod\bibinitdelim d\bibinitperiod\bibinitdelim D\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=df76e52e1ed54b671f6b8fbb75d9a39c}{%
+           family={Willumsen},
+           familyi={W\bibinitperiod},
+           given={Luis\bibnamedelima G.},
+           giveni={L\bibinitperiod\bibinitdelim G\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {Wiley}%
+      }
+      \strng{namehash}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{fullhash}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{fullhashraw}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{bibnamehash}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{authorbibnamehash}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{authornamehash}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{authorfullhash}{2f511aed9eb1b8bb6045137cec17b11b}
+      \strng{authorfullhashraw}{2f511aed9eb1b8bb6045137cec17b11b}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{edition}{4}
+      \field{title}{Modelling Transport}
+      \field{year}{2011}
+    \endentry
+    \entry{Tavasszy2012}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=f340a5028f1b3ea5343710f93d945516}{%
+           family={Tavasszy},
+           familyi={T\bibinitperiod},
+           given={Lóránt\bibnamedelima A.},
+           giveni={L\bibinitperiod\bibinitdelim A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=b14c3e78461a8efae3db2d2aa7d1f842}{%
+           family={Ruijgrok},
+           familyi={R\bibinitperiod},
+           given={Kees},
+           giveni={K\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=9539a4088d763986495eaf7bf61ab984}{%
+           family={Davydenko},
+           familyi={D\bibinitperiod},
+           given={Igor},
+           giveni={I\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{fullhash}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{fullhashraw}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{bibnamehash}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{authorbibnamehash}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{authornamehash}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{authorfullhash}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \strng{authorfullhashraw}{8f7a9d0b1d451a23bef5cd8a686adefc}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transport Reviews}
+      \field{number}{2}
+      \field{title}{Incorporating logistics in freight transport demand models: State-of-the-art and research opportunities}
+      \field{volume}{32}
+      \field{year}{2012}
+      \field{pages}{203\bibrangedash 219}
+      \range{pages}{17}
+      \verb{doi}
+      \verb 10.1080/01441647.2011.644640
+      \endverb
+    \endentry
+    \entry{Baumol1970}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=0a3c59b3d3592d69d450a0995609e64c}{%
+           family={Baumol},
+           familyi={B\bibinitperiod},
+           given={William\bibnamedelima J.},
+           giveni={W\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=0098f6babd58172004e7f88964a3e69b}{%
+           family={Vinod},
+           familyi={V\bibinitperiod},
+           given={H.\bibnamedelimi D.},
+           giveni={H\bibinitperiod\bibinitdelim D\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{fullhash}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{fullhashraw}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{bibnamehash}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{authorbibnamehash}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{authornamehash}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{authorfullhash}{a26829a80d93092cebfdf1103c093a9b}
+      \strng{authorfullhashraw}{a26829a80d93092cebfdf1103c093a9b}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Management Science}
+      \field{number}{7}
+      \field{title}{An inventory theoretic model of freight transport demand}
+      \field{volume}{16}
+      \field{year}{1970}
+      \field{pages}{413\bibrangedash 421}
+      \range{pages}{9}
+      \verb{doi}
+      \verb 10.1287/mnsc.16.7.413
+      \endverb
+    \endentry
+    \entry{Combes2012}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=bcb0cbd4274203966898818da372755d}{%
+           family={Combes},
+           familyi={C\bibinitperiod},
+           given={François},
+           giveni={F\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{bcb0cbd4274203966898818da372755d}
+      \strng{fullhash}{bcb0cbd4274203966898818da372755d}
+      \strng{fullhashraw}{bcb0cbd4274203966898818da372755d}
+      \strng{bibnamehash}{bcb0cbd4274203966898818da372755d}
+      \strng{authorbibnamehash}{bcb0cbd4274203966898818da372755d}
+      \strng{authornamehash}{bcb0cbd4274203966898818da372755d}
+      \strng{authorfullhash}{bcb0cbd4274203966898818da372755d}
+      \strng{authorfullhashraw}{bcb0cbd4274203966898818da372755d}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research Record}
+      \field{title}{An empirical evaluation of the EOQ model of choice of shipment size in freight transport}
+      \field{volume}{2269}
+      \field{year}{2012}
+      \field{pages}{92\bibrangedash 98}
+      \range{pages}{7}
+      \verb{doi}
+      \verb 10.3141/2269-11
+      \endverb
+    \endentry
+    \entry{Jenelius2015}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=af6fc9ee35fbf101ab664e1a1d2f759d}{%
+           family={Jenelius},
+           familyi={J\bibinitperiod},
+           given={Erik},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=49701d1995c2142b35f9992d550f8a88}{%
+           family={Mattsson},
+           familyi={M\bibinitperiod},
+           given={Lars-Göran},
+           giveni={L\bibinithyphendelim G\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{fullhash}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{fullhashraw}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{bibnamehash}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{authorbibnamehash}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{authornamehash}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{authorfullhash}{15932e6a5ec0f844d8b7e4678df2661a}
+      \strng{authorfullhashraw}{15932e6a5ec0f844d8b7e4678df2661a}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Computers, Environment and Urban Systems}
+      \field{title}{Road network vulnerability analysis: Conceptualization, implementation and application}
+      \field{volume}{49}
+      \field{year}{2015}
+      \field{pages}{136\bibrangedash 147}
+      \range{pages}{12}
+      \verb{doi}
+      \verb 10.1016/j.compenvurbsys.2014.02.003
+      \endverb
+    \endentry
+    \entry{Koks2019}{article}{}{}
+      \true{moreauthor}
+      \true{morelabelname}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=665031aac008f87b171955e66607279e}{%
+           family={Koks},
+           familyi={K\bibinitperiod},
+           given={Elco\bibnamedelima E.},
+           giveni={E\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=fd8fffee36850c59183a20584aa5a750}{%
+           family={Rozenberg},
+           familyi={R\bibinitperiod},
+           given={Julie},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=6d36199ee63815d8f05dd15625e93fef}{%
+           family={Zorn},
+           familyi={Z\bibinitperiod},
+           given={Conrad},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{19a7441551a2237a54184599496356c4}
+      \strng{fullhash}{19a7441551a2237a54184599496356c4}
+      \strng{fullhashraw}{19a7441551a2237a54184599496356c4}
+      \strng{bibnamehash}{19a7441551a2237a54184599496356c4}
+      \strng{authorbibnamehash}{19a7441551a2237a54184599496356c4}
+      \strng{authornamehash}{19a7441551a2237a54184599496356c4}
+      \strng{authorfullhash}{19a7441551a2237a54184599496356c4}
+      \strng{authorfullhashraw}{19a7441551a2237a54184599496356c4}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Nature Communications}
+      \field{title}{A global multi-hazard risk analysis of road and railway infrastructure assets}
+      \field{volume}{10}
+      \field{year}{2019}
+      \field{pages}{2677}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.1038/s41467-019-10442-3
+      \endverb
+    \endentry
+    \entry{Colon2021}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=9425cb5bdf1cd3666ab20e4e1424fa1e}{%
+           family={Colon},
+           familyi={C\bibinitperiod},
+           given={Célian},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
+           family={Hallegatte},
+           familyi={H\bibinitperiod},
+           given={Stéphane},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=fd8fffee36850c59183a20584aa5a750}{%
+           family={Rozenberg},
+           familyi={R\bibinitperiod},
+           given={Julie},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{fullhash}{797463152a8e1770509ed3f591674bbb}
+      \strng{fullhashraw}{797463152a8e1770509ed3f591674bbb}
+      \strng{bibnamehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authorbibnamehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authornamehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authorfullhash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authorfullhashraw}{797463152a8e1770509ed3f591674bbb}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Nature Sustainability}
+      \field{title}{Criticality analysis of a country's transport network via an agent-based supply chain model}
+      \field{volume}{4}
+      \field{year}{2021}
+      \field{pages}{209\bibrangedash 215}
+      \range{pages}{7}
+      \verb{doi}
+      \verb 10.1038/s41893-020-00649-4
+      \endverb
+    \endentry
+    \entry{Botzen2019}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=7f98b71e2a4ebcb73b46c707c4ca48dc}{%
+           family={Botzen},
+           familyi={B\bibinitperiod},
+           given={W.\bibnamedelimi J.\bibnamedelimi W.},
+           giveni={W\bibinitperiod\bibinitdelim J\bibinitperiod\bibinitdelim W\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=7d07676f4b87d4bb408f7a44e53feb6b}{%
+           family={Deschenes},
+           familyi={D\bibinitperiod},
+           given={Olivier},
+           giveni={O\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=d27e44af5241b8006e2de513676226f4}{%
+           family={Sanders},
+           familyi={S\bibinitperiod},
+           given={Mark},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{fullhash}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{fullhashraw}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{bibnamehash}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{authorbibnamehash}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{authornamehash}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{authorfullhash}{2fd3351d4052e7c31673a9aacef72269}
+      \strng{authorfullhashraw}{2fd3351d4052e7c31673a9aacef72269}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Review of Environmental Economics and Policy}
+      \field{number}{2}
+      \field{title}{The economic impacts of natural disasters: A review of models and empirical studies}
+      \field{volume}{13}
+      \field{year}{2019}
+      \field{pages}{167\bibrangedash 188}
+      \range{pages}{22}
+      \verb{doi}
+      \verb 10.1093/reep/rez004
+      \endverb
+    \endentry
+    \entry{Otto2017}{article}{}{}
+      \name{author}{5}{}{%
+        {{un=0,uniquepart=base,hash=c6b6910b6fb99fcfd313f5e15ad2f2cc}{%
+           family={Otto},
+           familyi={O\bibinitperiod},
+           given={Christian},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=d6a45d11e4896bcd13716fec10774db9}{%
+           family={Willner},
+           familyi={W\bibinitperiod},
+           given={Sven\bibnamedelima N.},
+           giveni={S\bibinitperiod\bibinitdelim N\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=0929c0f997ad78150ea74d12d7362928}{%
+           family={Wenz},
+           familyi={W\bibinitperiod},
+           given={Leonie},
+           giveni={L\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=05315ac79677cd23f2ebab5ab31ee4e0}{%
+           family={Frieler},
+           familyi={F\bibinitperiod},
+           given={Katja},
+           giveni={K\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=d1dc78c6f6524f281ef0f7648f28cb00}{%
+           family={Levermann},
+           familyi={L\bibinitperiod},
+           given={Anders},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{2399afe123d40cd98e1e0d450d741699}
+      \strng{fullhash}{4a283b713afb2a80444e83a9950111a4}
+      \strng{fullhashraw}{4a283b713afb2a80444e83a9950111a4}
+      \strng{bibnamehash}{2399afe123d40cd98e1e0d450d741699}
+      \strng{authorbibnamehash}{2399afe123d40cd98e1e0d450d741699}
+      \strng{authornamehash}{2399afe123d40cd98e1e0d450d741699}
+      \strng{authorfullhash}{4a283b713afb2a80444e83a9950111a4}
+      \strng{authorfullhashraw}{4a283b713afb2a80444e83a9950111a4}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Economic Dynamics and Control}
+      \field{title}{Modeling loss propagation in the global supply network: The dynamic agent-based model acclimate}
+      \field{volume}{83}
+      \field{year}{2017}
+      \field{pages}{232\bibrangedash 269}
+      \range{pages}{38}
+      \verb{doi}
+      \verb 10.1016/j.jedc.2017.08.001
+      \endverb
+    \endentry
+    \entry{Leontief1936}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=7fba8a21a79da7f09bad272143e8adc7}{%
+           family={Leontief},
+           familyi={L\bibinitperiod},
+           given={Wassily},
+           giveni={W\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{fullhash}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{fullhashraw}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{bibnamehash}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{authorbibnamehash}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{authornamehash}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{authorfullhash}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{authorfullhashraw}{7fba8a21a79da7f09bad272143e8adc7}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Review of Economics and Statistics}
+      \field{number}{3}
+      \field{title}{Quantitative input and output relations in the economic system of the United States}
+      \field{volume}{18}
+      \field{year}{1936}
+      \field{pages}{105\bibrangedash 125}
+      \range{pages}{21}
+      \verb{doi}
+      \verb 10.2307/1927837
+      \endverb
+    \endentry
+    \entry{Okuyama2007}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=60ff8a181743217356c59ac4f263e604}{%
+           family={Okuyama},
+           familyi={O\bibinitperiod},
+           given={Yasuhide},
+           giveni={Y\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{60ff8a181743217356c59ac4f263e604}
+      \strng{fullhash}{60ff8a181743217356c59ac4f263e604}
+      \strng{fullhashraw}{60ff8a181743217356c59ac4f263e604}
+      \strng{bibnamehash}{60ff8a181743217356c59ac4f263e604}
+      \strng{authorbibnamehash}{60ff8a181743217356c59ac4f263e604}
+      \strng{authornamehash}{60ff8a181743217356c59ac4f263e604}
+      \strng{authorfullhash}{60ff8a181743217356c59ac4f263e604}
+      \strng{authorfullhashraw}{60ff8a181743217356c59ac4f263e604}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Economic Systems Research}
+      \field{number}{2}
+      \field{title}{Economic modeling for disaster impact analysis: Past, present, and future}
+      \field{volume}{19}
+      \field{year}{2007}
+      \field{pages}{115\bibrangedash 124}
+      \range{pages}{10}
+      \verb{doi}
+      \verb 10.1080/09535310701328435
+      \endverb
+    \endentry
+    \entry{Carvalho2021}{article}{}{}
+      \name{author}{4}{}{%
+        {{un=0,uniquepart=base,hash=92331a0cd5cdb556a6fb551d7762c051}{%
+           family={Carvalho},
+           familyi={C\bibinitperiod},
+           given={Vasco\bibnamedelima M.},
+           giveni={V\bibinitperiod\bibinitdelim M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=dd84a85646fa4fc0060208e8621ecea3}{%
+           family={Nirei},
+           familyi={N\bibinitperiod},
+           given={Makoto},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=6288c7690bb6291af959ff22411ac985}{%
+           family={Saito},
+           familyi={S\bibinitperiod},
+           given={Yukiko\bibnamedelima U.},
+           giveni={Y\bibinitperiod\bibinitdelim U\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=36f43dd3d18c58095e5aa6bbc89a670c}{%
+           family={Tahbaz-Salehi},
+           familyi={T\bibinithyphendelim S\bibinitperiod},
+           given={Alireza},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{daf7a92727e21247a68096b5b9a4d108}
+      \strng{fullhash}{d1c370b465aab40a99c58ffbc2e30989}
+      \strng{fullhashraw}{d1c370b465aab40a99c58ffbc2e30989}
+      \strng{bibnamehash}{daf7a92727e21247a68096b5b9a4d108}
+      \strng{authorbibnamehash}{daf7a92727e21247a68096b5b9a4d108}
+      \strng{authornamehash}{daf7a92727e21247a68096b5b9a4d108}
+      \strng{authorfullhash}{d1c370b465aab40a99c58ffbc2e30989}
+      \strng{authorfullhashraw}{d1c370b465aab40a99c58ffbc2e30989}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Quarterly Journal of Economics}
+      \field{number}{2}
+      \field{title}{Supply chain disruptions: Evidence from the Great East Japan earthquake}
+      \field{volume}{136}
+      \field{year}{2021}
+      \field{pages}{1255\bibrangedash 1321}
+      \range{pages}{67}
+      \verb{doi}
+      \verb 10.1093/qje/qjaa044
+      \endverb
+    \endentry
+    \entry{Inoue2019}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=0b732bbf2c1d2e3ebdf72cc533449cd1}{%
+           family={Inoue},
+           familyi={I\bibinitperiod},
+           given={Hiroyasu},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=4e74010492c889baa46530718102989f}{%
+           family={Todo},
+           familyi={T\bibinitperiod},
+           given={Yasuyuki},
+           giveni={Y\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{fullhash}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{fullhashraw}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{bibnamehash}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{authorbibnamehash}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{authornamehash}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{authorfullhash}{99779bf4968713cd5f4aa0ea08fb431e}
+      \strng{authorfullhashraw}{99779bf4968713cd5f4aa0ea08fb431e}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Nature Sustainability}
+      \field{title}{Firm-level propagation of shocks through supply-chain networks}
+      \field{volume}{2}
+      \field{year}{2019}
+      \field{pages}{841\bibrangedash 847}
+      \range{pages}{7}
+      \verb{doi}
+      \verb 10.1038/s41893-019-0351-x
+      \endverb
+    \endentry
+    \entry{Barrot2016}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=f5da0b6d8d6a69752a402d10f6a50448}{%
+           family={Barrot},
+           familyi={B\bibinitperiod},
+           given={Jean-Noël},
+           giveni={J\bibinithyphendelim N\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=d393e03cf2dea7bf8e81124c33906f2c}{%
+           family={Sauvagnat},
+           familyi={S\bibinitperiod},
+           given={Julien},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{fullhash}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{fullhashraw}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{bibnamehash}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{authorbibnamehash}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{authornamehash}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{authorfullhash}{a22690f3e4ee79d11397a0766f5b8f56}
+      \strng{authorfullhashraw}{a22690f3e4ee79d11397a0766f5b8f56}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Quarterly Journal of Economics}
+      \field{number}{3}
+      \field{title}{Input specificity and the propagation of idiosyncratic shocks in production networks}
+      \field{volume}{131}
+      \field{year}{2016}
+      \true{nocite}
+      \field{pages}{1543\bibrangedash 1592}
+      \range{pages}{50}
+      \verb{doi}
+      \verb 10.1093/qje/qjw018
+      \endverb
+    \endentry
+    \entry{BenAkiva2013}{incollection}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=ae71bffa7de8934347def3ae5c72a02d}{%
+           family={Ben-Akiva},
+           familyi={B\bibinithyphendelim A\bibinitperiod},
+           given={Moshe},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1f56a3a99d1028d184ea451ac40204a3}{%
+           family={Jong},
+           familyi={J\bibinitperiod},
+           given={Gerard},
+           giveni={G\bibinitperiod},
+           givenun=0,
+           prefix={de},
+           prefixi={d\bibinitperiod},
+           prefixun=0}}%
+      }
+      \name{editor}{3}{}{%
+        {{hash=ae71bffa7de8934347def3ae5c72a02d}{%
+           family={Ben-Akiva},
+           familyi={B\bibinithyphendelim A\bibinitperiod},
+           given={Moshe},
+           giveni={M\bibinitperiod}}}%
+        {{hash=28b2bbd392e7dbfe05c05353c89b6f43}{%
+           family={Meersman},
+           familyi={M\bibinitperiod},
+           given={Hilde},
+           giveni={H\bibinitperiod}}}%
+        {{hash=ccae14ffdc200e8f2abe851edf82e876}{%
+           family={Van\bibnamedelimb de\bibnamedelima Voorde},
+           familyi={V\bibinitperiod\bibinitdelim d\bibinitperiod\bibinitdelim V\bibinitperiod},
+           given={Eddy},
+           giveni={E\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {Emerald}%
+      }
+      \strng{namehash}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{fullhash}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{fullhashraw}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{bibnamehash}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{authorbibnamehash}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{authornamehash}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{authorfullhash}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{authorfullhashraw}{e1f354d6fbd8404560cbb48f98c92fd8}
+      \strng{editorbibnamehash}{d866822d92d56b471370add70d477beb}
+      \strng{editornamehash}{d866822d92d56b471370add70d477beb}
+      \strng{editorfullhash}{d866822d92d56b471370add70d477beb}
+      \strng{editorfullhashraw}{d866822d92d56b471370add70d477beb}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Freight Transport Modelling}
+      \field{title}{The aggregate--disaggregate--aggregate (ADA) freight model system}
+      \field{year}{2013}
+      \true{nocite}
+    \endentry
+    \entry{deJong2013}{article}{}{}
+      \name{author}{4}{ul=2}{%
+        {{un=0,uniquepart=base,hash=1f56a3a99d1028d184ea451ac40204a3}{%
+           family={Jong},
+           familyi={J\bibinitperiod},
+           given={Gerard},
+           giveni={G\bibinitperiod},
+           givenun=0,
+           prefix={de},
+           prefixi={d\bibinitperiod},
+           prefixun=0}}%
+        {{un=0,uniquepart=base,hash=cffd8adf6750db73077bb27f419491ed}{%
+           family={Vierth},
+           familyi={V\bibinitperiod},
+           given={Inge},
+           giveni={I\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=8ed44401d4d0195a4beb27c2e32920cc}{%
+           family={Tavasszy},
+           familyi={T\bibinitperiod},
+           given={Lóránt},
+           giveni={L\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=ae71bffa7de8934347def3ae5c72a02d}{%
+           family={Ben-Akiva},
+           familyi={B\bibinithyphendelim A\bibinitperiod},
+           given={Moshe},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{f8265721bd14201048445f8d2d544efc}
+      \strng{fullhash}{a2102330f9c14cccc202ff34ed2a7a99}
+      \strng{fullhashraw}{a2102330f9c14cccc202ff34ed2a7a99}
+      \strng{bibnamehash}{f8265721bd14201048445f8d2d544efc}
+      \strng{authorbibnamehash}{f8265721bd14201048445f8d2d544efc}
+      \strng{authornamehash}{f8265721bd14201048445f8d2d544efc}
+      \strng{authorfullhash}{a2102330f9c14cccc202ff34ed2a7a99}
+      \strng{authorfullhashraw}{a2102330f9c14cccc202ff34ed2a7a99}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation}
+      \field{number}{2}
+      \field{title}{Recent developments in national and international freight models within Europe}
+      \field{volume}{40}
+      \field{year}{2013}
+      \true{nocite}
+      \field{pages}{347\bibrangedash 371}
+      \range{pages}{25}
+      \verb{doi}
+      \verb 10.1007/s11116-012-9422-9
+      \endverb
+    \endentry
+    \entry{Dietzenbacher2013}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=35a7743030411b809424cdb0935d3414}{%
+           family={Dietzenbacher},
+           familyi={D\bibinitperiod},
+           given={Erik},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=63dbf7ce48d102a1f495fef6494d0819}{%
+           family={Lahr},
+           familyi={L\bibinitperiod},
+           given={Michael\bibnamedelima L.},
+           giveni={M\bibinitperiod\bibinitdelim L\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{8510c44184096474638387941616eeec}
+      \strng{fullhash}{8510c44184096474638387941616eeec}
+      \strng{fullhashraw}{8510c44184096474638387941616eeec}
+      \strng{bibnamehash}{8510c44184096474638387941616eeec}
+      \strng{authorbibnamehash}{8510c44184096474638387941616eeec}
+      \strng{authornamehash}{8510c44184096474638387941616eeec}
+      \strng{authorfullhash}{8510c44184096474638387941616eeec}
+      \strng{authorfullhashraw}{8510c44184096474638387941616eeec}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Economic Systems Research}
+      \field{number}{3}
+      \field{title}{Expanding extractions}
+      \field{volume}{25}
+      \field{year}{2013}
+      \true{nocite}
+      \field{pages}{341\bibrangedash 360}
+      \range{pages}{20}
+      \verb{doi}
+      \verb 10.1080/09535314.2013.774266
+      \endverb
+    \endentry
+    \entry{Felbermayr2014}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=350bfa8972eb45ef21090af585384f9d}{%
+           family={Felbermayr},
+           familyi={F\bibinitperiod},
+           given={Gabriel},
+           giveni={G\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=9634d32cee4e889d37a15299e787b194}{%
+           family={Gröschl},
+           familyi={G\bibinitperiod},
+           given={Jasmin},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{0b71f172740a60c38474608b95cf8600}
+      \strng{fullhash}{0b71f172740a60c38474608b95cf8600}
+      \strng{fullhashraw}{0b71f172740a60c38474608b95cf8600}
+      \strng{bibnamehash}{0b71f172740a60c38474608b95cf8600}
+      \strng{authorbibnamehash}{0b71f172740a60c38474608b95cf8600}
+      \strng{authornamehash}{0b71f172740a60c38474608b95cf8600}
+      \strng{authorfullhash}{0b71f172740a60c38474608b95cf8600}
+      \strng{authorfullhashraw}{0b71f172740a60c38474608b95cf8600}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Development Economics}
+      \field{title}{Naturally negative: The growth effects of natural disasters}
+      \field{volume}{111}
+      \field{year}{2014}
+      \true{nocite}
+      \field{pages}{92\bibrangedash 106}
+      \range{pages}{15}
+      \verb{doi}
+      \verb 10.1016/j.jdeveco.2014.07.004
+      \endverb
+    \endentry
+    \entry{Gabaix2011}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=b53634e8226ff6b3b6e290047a5cb42c}{%
+           family={Gabaix},
+           familyi={G\bibinitperiod},
+           given={Xavier},
+           giveni={X\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{fullhash}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{fullhashraw}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{bibnamehash}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{authorbibnamehash}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{authornamehash}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{authorfullhash}{b53634e8226ff6b3b6e290047a5cb42c}
+      \strng{authorfullhashraw}{b53634e8226ff6b3b6e290047a5cb42c}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Econometrica}
+      \field{number}{3}
+      \field{title}{The granular origins of aggregate fluctuations}
+      \field{volume}{79}
+      \field{year}{2011}
+      \true{nocite}
+      \field{pages}{733\bibrangedash 772}
+      \range{pages}{40}
+      \verb{doi}
+      \verb 10.3982/ECTA8769
+      \endverb
+    \endentry
+    \entry{Guan2020}{article}{}{}
+      \true{moreauthor}
+      \true{morelabelname}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=91567640db3fd92fcaec67c441ab3c25}{%
+           family={Guan},
+           familyi={G\bibinitperiod},
+           given={Dabo},
+           giveni={D\bibinitperiod},
+           givenun=0}}%
+        {{un=1,uniquepart=given,hash=f26700af8f485f06986f8a8b9ff18ca8}{%
+           family={Wang},
+           familyi={W\bibinitperiod},
+           given={Daoping},
+           giveni={D\bibinitperiod},
+           givenun=1}}%
+        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
+           family={Hallegatte},
+           familyi={H\bibinitperiod},
+           given={Stéphane},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{fullhash}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{fullhashraw}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{bibnamehash}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{authorbibnamehash}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{authornamehash}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{authorfullhash}{c76c6987a3f502d782ccb2f1c609f883}
+      \strng{authorfullhashraw}{c76c6987a3f502d782ccb2f1c609f883}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Nature Human Behaviour}
+      \field{title}{Global supply-chain effects of COVID-19 control measures}
+      \field{volume}{4}
+      \field{year}{2020}
+      \true{nocite}
+      \field{pages}{577\bibrangedash 587}
+      \range{pages}{11}
+      \verb{doi}
+      \verb 10.1038/s41562-020-0896-8
+      \endverb
+    \endentry
+    \entry{Guilbault2009}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=99477914476ff68d25e0f4c0674e466a}{%
+           family={Guilbault},
+           familyi={G\bibinitperiod},
+           given={Michel},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=805837aab7ab54cdd1a972ecf4171874}{%
+           family={Soppé},
+           familyi={S\bibinitperiod},
+           given={Martin},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {INRETS}%
+      }
+      \strng{namehash}{60687f0db553127521769061a9cf93f1}
+      \strng{fullhash}{60687f0db553127521769061a9cf93f1}
+      \strng{fullhashraw}{60687f0db553127521769061a9cf93f1}
+      \strng{bibnamehash}{60687f0db553127521769061a9cf93f1}
+      \strng{authorbibnamehash}{60687f0db553127521769061a9cf93f1}
+      \strng{authornamehash}{60687f0db553127521769061a9cf93f1}
+      \strng{authorfullhash}{60687f0db553127521769061a9cf93f1}
+      \strng{authorfullhashraw}{60687f0db553127521769061a9cf93f1}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Apports des enquêtes chargeurs. Connaissance des chaînes de transport de marchandises et de leurs déterminants logistiques (enquête ECHO)}
+      \field{year}{2009}
+      \true{nocite}
+    \endentry
+    \entry{Hallegatte2013}{article}{}{}
+      \name{author}{4}{ul=2}{%
+        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
+           family={Hallegatte},
+           familyi={H\bibinitperiod},
+           given={Stéphane},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=df816dc51dc67ad96b01565d142754c4}{%
+           family={Green},
+           familyi={G\bibinitperiod},
+           given={Colin},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=351c82fd8df362ed518ace4f595d7e94}{%
+           family={Nicholls},
+           familyi={N\bibinitperiod},
+           given={Robert\bibnamedelima J.},
+           giveni={R\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1f6d8d7881fbda6f2cc946e52cfca475}{%
+           family={Corfee-Morlot},
+           familyi={C\bibinithyphendelim M\bibinitperiod},
+           given={Jan},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{4e6eada38fb231430ae537a23e64f1a4}
+      \strng{fullhash}{4181c89681f6c7a77e2486faaf202b6f}
+      \strng{fullhashraw}{4181c89681f6c7a77e2486faaf202b6f}
+      \strng{bibnamehash}{4e6eada38fb231430ae537a23e64f1a4}
+      \strng{authorbibnamehash}{4e6eada38fb231430ae537a23e64f1a4}
+      \strng{authornamehash}{4e6eada38fb231430ae537a23e64f1a4}
+      \strng{authorfullhash}{4181c89681f6c7a77e2486faaf202b6f}
+      \strng{authorfullhashraw}{4181c89681f6c7a77e2486faaf202b6f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Nature Climate Change}
+      \field{title}{Future flood losses in major coastal cities}
+      \field{volume}{3}
+      \field{year}{2013}
+      \true{nocite}
+      \field{pages}{802\bibrangedash 806}
+      \range{pages}{5}
+      \verb{doi}
+      \verb 10.1038/nclimate1979
+      \endverb
+    \endentry
+    \entry{Hallegatte2017}{book}{}{}
+      \name{author}{4}{ul=2}{%
+        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
+           family={Hallegatte},
+           familyi={H\bibinitperiod},
+           given={Stéphane},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=232989d8cf997f8f2f41706fb32e35e7}{%
+           family={Vogt-Schilb},
+           familyi={V\bibinithyphendelim S\bibinitperiod},
+           given={Adrien},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=4c7f931a99d26dd116261f4151887aec}{%
+           family={Bangalore},
+           familyi={B\bibinitperiod},
+           given={Mook},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=fd8fffee36850c59183a20584aa5a750}{%
+           family={Rozenberg},
+           familyi={R\bibinitperiod},
+           given={Julie},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {Banque mondiale}%
+      }
+      \strng{namehash}{452d5bea666dd3068ef994122cf9f0d1}
+      \strng{fullhash}{a544973b4d9ae9f2e11e7fe0c385bfb5}
+      \strng{fullhashraw}{a544973b4d9ae9f2e11e7fe0c385bfb5}
+      \strng{bibnamehash}{452d5bea666dd3068ef994122cf9f0d1}
+      \strng{authorbibnamehash}{452d5bea666dd3068ef994122cf9f0d1}
+      \strng{authornamehash}{452d5bea666dd3068ef994122cf9f0d1}
+      \strng{authorfullhash}{a544973b4d9ae9f2e11e7fe0c385bfb5}
+      \strng{authorfullhashraw}{a544973b4d9ae9f2e11e7fe0c385bfb5}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Unbreakable: Building the Resilience of the Poor in the Face of Natural Disasters}
+      \field{year}{2017}
+      \true{nocite}
+      \verb{urlraw}
+      \verb https://openknowledge.worldbank.org/handle/10986/25335
+      \endverb
+      \verb{url}
+      \verb https://openknowledge.worldbank.org/handle/10986/25335
+      \endverb
+    \endentry
+    \entry{Henriet2012}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=fd665987709b8cd9751aa2e5880ae95c}{%
+           family={Henriet},
+           familyi={H\bibinitperiod},
+           given={Fanny},
+           giveni={F\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
+           family={Hallegatte},
+           familyi={H\bibinitperiod},
+           given={Stéphane},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=250baaecd007e4ea9e288d2b52d0077f}{%
+           family={Tabourier},
+           familyi={T\bibinitperiod},
+           given={Lionel},
+           giveni={L\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{fullhash}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{fullhashraw}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{bibnamehash}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{authorbibnamehash}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{authornamehash}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{authorfullhash}{28d3a76cb3953407d71f5aa42889226f}
+      \strng{authorfullhashraw}{28d3a76cb3953407d71f5aa42889226f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Economic Dynamics and Control}
+      \field{number}{1}
+      \field{title}{Firm-network characteristics and economic robustness to natural disasters}
+      \field{volume}{36}
+      \field{year}{2012}
+      \true{nocite}
+      \field{pages}{150\bibrangedash 167}
+      \range{pages}{18}
+      \verb{doi}
+      \verb 10.1016/j.jedc.2011.10.001
+      \endverb
+    \endentry
+    \entry{Hsiang2010}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=9c37f9be8b7b6442deeabe02fddb8480}{%
+           family={Hsiang},
+           familyi={H\bibinitperiod},
+           given={Solomon\bibnamedelima M.},
+           giveni={S\bibinitperiod\bibinitdelim M\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{fullhash}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{fullhashraw}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{bibnamehash}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{authorbibnamehash}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{authornamehash}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{authorfullhash}{9c37f9be8b7b6442deeabe02fddb8480}
+      \strng{authorfullhashraw}{9c37f9be8b7b6442deeabe02fddb8480}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Proceedings of the National Academy of Sciences}
+      \field{number}{35}
+      \field{title}{Temperatures and cyclones strongly associated with economic production in the Caribbean and Central America}
+      \field{volume}{107}
+      \field{year}{2010}
+      \true{nocite}
+      \field{pages}{15367\bibrangedash 15372}
+      \range{pages}{6}
+      \verb{doi}
+      \verb 10.1073/pnas.1009510107
+      \endverb
+    \endentry
+    \entry{Koks2016}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=665031aac008f87b171955e66607279e}{%
+           family={Koks},
+           familyi={K\bibinitperiod},
+           given={Elco\bibnamedelima E.},
+           giveni={E\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=95c505489bad3089ba45c48cad4d317b}{%
+           family={Thissen},
+           familyi={T\bibinitperiod},
+           given={Mark},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{fullhash}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{fullhashraw}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{bibnamehash}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{authorbibnamehash}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{authornamehash}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{authorfullhash}{96b1f11810ec7dc030c5e9bc5609f113}
+      \strng{authorfullhashraw}{96b1f11810ec7dc030c5e9bc5609f113}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Economic Systems Research}
+      \field{number}{4}
+      \field{title}{A multiregional impact assessment model for disaster analysis}
+      \field{volume}{28}
+      \field{year}{2016}
+      \true{nocite}
+      \field{pages}{429\bibrangedash 449}
+      \range{pages}{21}
+      \verb{doi}
+      \verb 10.1080/09535314.2016.1232701
+      \endverb
+    \endentry
+    \entry{Liedtke2009}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=84a74de9b715390ef2b3e157ab15770e}{%
+           family={Liedtke},
+           familyi={L\bibinitperiod},
+           given={Gernot},
+           giveni={G\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{fullhash}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{fullhashraw}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{bibnamehash}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{authorbibnamehash}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{authornamehash}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{authorfullhash}{84a74de9b715390ef2b3e157ab15770e}
+      \strng{authorfullhashraw}{84a74de9b715390ef2b3e157ab15770e}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research Part E: Logistics and Transportation Review}
+      \field{number}{5}
+      \field{title}{Principles of micro-behavior commodity transport modeling}
+      \field{volume}{45}
+      \field{year}{2009}
+      \true{nocite}
+      \field{pages}{795\bibrangedash 809}
+      \range{pages}{15}
+      \verb{doi}
+      \verb 10.1016/j.tre.2008.07.002
+      \endverb
+    \endentry
+    \entry{Lucas1977}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=d75b1c25901858e9d7cbfbb24d9dc0de}{%
+           family={Lucas},
+           familyi={L\bibinitperiod},
+           given={Robert\bibnamedelima E.},
+           giveni={R\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{fullhash}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{fullhashraw}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{bibnamehash}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{authorbibnamehash}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{authornamehash}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{authorfullhash}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \strng{authorfullhashraw}{d75b1c25901858e9d7cbfbb24d9dc0de}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Carnegie-Rochester Conference Series on Public Policy}
+      \field{title}{Understanding Business Cycles}
+      \field{volume}{5}
+      \field{year}{1977}
+      \true{nocite}
+      \field{pages}{7\bibrangedash 29}
+      \range{pages}{23}
+      \verb{doi}
+      \verb 10.1016/0167-2231(77)90002-1
+      \endverb
+    \endentry
+    \entry{Maoh2008}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=a77a6a9de6fd4d335a3dfcea0ee99483}{%
+           family={Maoh},
+           familyi={M\bibinitperiod},
+           given={Hanna},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=5c49b674d149047e7b20c776fdfd1745}{%
+           family={Kanaroglou},
+           familyi={K\bibinitperiod},
+           given={Pavlos},
+           giveni={P\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=e66dcdc1c0d7d10811fccb1d0c84b4a9}{%
+           family={Woudsma},
+           familyi={W\bibinitperiod},
+           given={Clarence},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{fullhash}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{fullhashraw}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{bibnamehash}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{authorbibnamehash}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{authornamehash}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{authorfullhash}{a067da6837d3741dfeb0a84e1e6e7560}
+      \strng{authorfullhashraw}{a067da6837d3741dfeb0a84e1e6e7560}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Transportation Research Record}
+      \field{title}{Simulation model for assessing the impact of climate change on transportation and the economy in Canada}
+      \field{volume}{2067}
+      \field{year}{2008}
+      \true{nocite}
+      \field{pages}{84\bibrangedash 92}
+      \range{pages}{9}
+      \verb{doi}
+      \verb 10.3141/2067-10
+      \endverb
+    \endentry
+    \entry{Okuyama2014}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=60ff8a181743217356c59ac4f263e604}{%
+           family={Okuyama},
+           familyi={O\bibinitperiod},
+           given={Yasuhide},
+           giveni={Y\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=286ec449da6fbfdfdfc7d79e709cc28a}{%
+           family={Santos},
+           familyi={S\bibinitperiod},
+           given={Joost\bibnamedelima R.},
+           giveni={J\bibinitperiod\bibinitdelim R\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{fullhash}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{fullhashraw}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{bibnamehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{authorbibnamehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{authornamehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{authorfullhash}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \strng{authorfullhashraw}{e699ba5bc03b19d99d12e4f0c08d1e04}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Economic Systems Research}
+      \field{number}{1}
+      \field{title}{Disaster impact and input-output analysis}
+      \field{volume}{26}
+      \field{year}{2014}
+      \true{nocite}
+      \field{pages}{1\bibrangedash 12}
+      \range{pages}{12}
+      \verb{doi}
+      \verb 10.1080/09535314.2013.871505
+      \endverb
+    \endentry
+    \entry{Pichler2022}{article}{}{}
+      \name{author}{5}{}{%
+        {{un=0,uniquepart=base,hash=76fe13e6d39491ca726b2dc880da2901}{%
+           family={Pichler},
+           familyi={P\bibinitperiod},
+           given={Anton},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=fcb24f800a6f1f6114a7d3b2d3238e7e}{%
+           family={Pangallo},
+           familyi={P\bibinitperiod},
+           given={Marco},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1a0b7eca4ec63cd3cef3099e71d1c42b}{%
+           family={Rio-Chanona},
+           familyi={R\bibinithyphendelim C\bibinitperiod},
+           given={R.\bibnamedelimi Maria},
+           giveni={R\bibinitperiod\bibinitdelim M\bibinitperiod},
+           givenun=0,
+           prefix={del},
+           prefixi={d\bibinitperiod},
+           prefixun=0}}%
+        {{un=0,uniquepart=base,hash=d7741bcd20d2d82b902794b7ca250e76}{%
+           family={Lafond},
+           familyi={L\bibinitperiod},
+           given={François},
+           giveni={F\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=8989d3ee480656dd3eb385ab19b9d332}{%
+           family={Farmer},
+           familyi={F\bibinitperiod},
+           given={J.\bibnamedelimi Doyne},
+           giveni={J\bibinitperiod\bibinitdelim D\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{cc890b2b5d1744bd0bf3ace53ec5997e}
+      \strng{fullhash}{94da1aefcbf3cef250b3f322f3a8d535}
+      \strng{fullhashraw}{94da1aefcbf3cef250b3f322f3a8d535}
+      \strng{bibnamehash}{cc890b2b5d1744bd0bf3ace53ec5997e}
+      \strng{authorbibnamehash}{cc890b2b5d1744bd0bf3ace53ec5997e}
+      \strng{authornamehash}{cc890b2b5d1744bd0bf3ace53ec5997e}
+      \strng{authorfullhash}{94da1aefcbf3cef250b3f322f3a8d535}
+      \strng{authorfullhashraw}{94da1aefcbf3cef250b3f322f3a8d535}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Economic Dynamics and Control}
+      \field{title}{Forecasting the propagation of pandemic shocks with a dynamic input-output model}
+      \field{volume}{144}
+      \field{year}{2022}
+      \true{nocite}
+      \field{pages}{104527}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.1016/j.jedc.2022.104527
+      \endverb
+    \endentry
+    \entry{Poledna2018}{article}{}{}
+      \name{author}{11}{}{%
+        {{un=0,uniquepart=base,hash=ec4c3a9e70e558b4116ff33eee3e72ab}{%
+           family={Poledna},
+           familyi={P\bibinitperiod},
+           given={Sebastian},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1eb106e309790247bd78eba8288648cc}{%
+           family={Hochrainer-Stigler},
+           familyi={H\bibinithyphendelim S\bibinitperiod},
+           given={Stefan},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=d7ef3bb19769b99a00b8c29bf8e5ea2f}{%
+           family={Miess},
+           familyi={M\bibinitperiod},
+           given={Michael\bibnamedelima G.},
+           giveni={M\bibinitperiod\bibinitdelim G\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=4f079d66cdeaa43d0f9296aad64e2c51}{%
+           family={Klimek},
+           familyi={K\bibinitperiod},
+           given={Peter},
+           giveni={P\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=18888e00e0f27265273a56dfe8472a15}{%
+           family={Schmelzer},
+           familyi={S\bibinitperiod},
+           given={Stefan},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=78b616ac04bf1e3e6dd3e282bfde92e4}{%
+           family={Sorger},
+           familyi={S\bibinitperiod},
+           given={Johannes},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=89dbce5a5568978338bc9fb334af12b8}{%
+           family={Shchekinova},
+           familyi={S\bibinitperiod},
+           given={Elena},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=dd56aae6076ebab0e49e14d9bc52d815}{%
+           family={Rovenskaya},
+           familyi={R\bibinitperiod},
+           given={Elena},
+           giveni={E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=145f9e54c81815c9bcaf97420bea2f72}{%
+           family={Linnerooth-Bayer},
+           familyi={L\bibinithyphendelim B\bibinitperiod},
+           given={Joanne},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=874f15c525e51c2b786d5382c67156ea}{%
+           family={Dieckmann},
+           familyi={D\bibinitperiod},
+           given={Ulf},
+           giveni={U\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=4fa19d0ca5a4eb853a39db621ae6d005}{%
+           family={Thurner},
+           familyi={T\bibinitperiod},
+           given={Stefan},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{e2f5e3b8060e2604cd748c9e3c57cccc}
+      \strng{fullhash}{4cf266280ec456edc7597174931b06a1}
+      \strng{fullhashraw}{4cf266280ec456edc7597174931b06a1}
+      \strng{bibnamehash}{e2f5e3b8060e2604cd748c9e3c57cccc}
+      \strng{authorbibnamehash}{e2f5e3b8060e2604cd748c9e3c57cccc}
+      \strng{authornamehash}{e2f5e3b8060e2604cd748c9e3c57cccc}
+      \strng{authorfullhash}{4cf266280ec456edc7597174931b06a1}
+      \strng{authorfullhashraw}{4cf266280ec456edc7597174931b06a1}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{arXiv preprint}
+      \field{title}{When does a disaster become a systemic event? Estimating indirect economic losses from natural disasters}
+      \field{year}{2018}
+      \true{nocite}
+      \verb{doi}
+      \verb 10.48550/arXiv.1801.09740
+      \endverb
+    \endentry
+    \entry{Rose2007}{article}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=046ce92d9a330edf185c3bc6d28f18c2}{%
+           family={Rose},
+           familyi={R\bibinitperiod},
+           given={Adam},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{fullhash}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{fullhashraw}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{bibnamehash}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{authorbibnamehash}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{authornamehash}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{authorfullhash}{046ce92d9a330edf185c3bc6d28f18c2}
+      \strng{authorfullhashraw}{046ce92d9a330edf185c3bc6d28f18c2}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Environmental Hazards}
+      \field{number}{4}
+      \field{title}{Economic resilience to natural and man-made disasters: Multidisciplinary origins and contextual dimensions}
+      \field{volume}{7}
+      \field{year}{2007}
+      \true{nocite}
+      \field{pages}{383\bibrangedash 398}
+      \range{pages}{16}
+      \verb{doi}
+      \verb 10.1016/j.envhaz.2007.10.001
+      \endverb
+    \endentry
+    \entry{Rose2005}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=046ce92d9a330edf185c3bc6d28f18c2}{%
+           family={Rose},
+           familyi={R\bibinitperiod},
+           given={Adam},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=859253cefb81cd7e52ba277ad96017a1}{%
+           family={Liao},
+           familyi={L\bibinitperiod},
+           given={Shu-Yi},
+           giveni={S\bibinithyphendelim Y\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{fullhash}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{fullhashraw}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{bibnamehash}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{authorbibnamehash}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{authornamehash}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{authorfullhash}{288a97fbb0131f6630c71ed64aa1d179}
+      \strng{authorfullhashraw}{288a97fbb0131f6630c71ed64aa1d179}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Regional Science}
+      \field{number}{1}
+      \field{title}{Modeling regional economic resilience to disasters: A computable general equilibrium analysis of water service disruptions}
+      \field{volume}{45}
+      \field{year}{2005}
+      \true{nocite}
+      \field{pages}{75\bibrangedash 112}
+      \range{pages}{38}
+      \verb{doi}
+      \verb 10.1111/j.0022-4146.2005.00365.x
+      \endverb
+    \endentry
+    \entry{Rozenberg2019}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=fd8fffee36850c59183a20584aa5a750}{%
+           family={Rozenberg},
+           familyi={R\bibinitperiod},
+           given={Julie},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=73c130f450c433d6f1e1ee9b92ae5dad}{%
+           family={Fay},
+           familyi={F\bibinitperiod},
+           given={Marianne},
+           giveni={M\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {Banque mondiale}%
+      }
+      \strng{namehash}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{fullhash}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{fullhashraw}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{bibnamehash}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{authorbibnamehash}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{authornamehash}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{authorfullhash}{af8e917d6ad2e74daaef971bd3189426}
+      \strng{authorfullhashraw}{af8e917d6ad2e74daaef971bd3189426}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Beyond the Gap: How Countries Can Afford the Infrastructure They Need while Protecting the Planet}
+      \field{year}{2019}
+      \true{nocite}
+      \verb{urlraw}
+      \verb https://openknowledge.worldbank.org/handle/10986/31291
+      \endverb
+      \verb{url}
+      \verb https://openknowledge.worldbank.org/handle/10986/31291
+      \endverb
+    \endentry
+    \entry{Santos2004}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=286ec449da6fbfdfdfc7d79e709cc28a}{%
+           family={Santos},
+           familyi={S\bibinitperiod},
+           given={Joost\bibnamedelima R.},
+           giveni={J\bibinitperiod\bibinitdelim R\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=cf0a6ea825844fc35a72852afcaa22f0}{%
+           family={Haimes},
+           familyi={H\bibinitperiod},
+           given={Yacov\bibnamedelima Y.},
+           giveni={Y\bibinitperiod\bibinitdelim Y\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{0a7987a599decfe65f7e4db08494903c}
+      \strng{fullhash}{0a7987a599decfe65f7e4db08494903c}
+      \strng{fullhashraw}{0a7987a599decfe65f7e4db08494903c}
+      \strng{bibnamehash}{0a7987a599decfe65f7e4db08494903c}
+      \strng{authorbibnamehash}{0a7987a599decfe65f7e4db08494903c}
+      \strng{authornamehash}{0a7987a599decfe65f7e4db08494903c}
+      \strng{authorfullhash}{0a7987a599decfe65f7e4db08494903c}
+      \strng{authorfullhashraw}{0a7987a599decfe65f7e4db08494903c}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Risk Analysis}
+      \field{number}{6}
+      \field{title}{Modeling the demand reduction input-output (I-O) inoperability due to terrorism of interconnected infrastructures}
+      \field{volume}{24}
+      \field{year}{2004}
+      \true{nocite}
+      \field{pages}{1437\bibrangedash 1451}
+      \range{pages}{15}
+      \verb{doi}
+      \verb 10.1111/j.0272-4332.2004.00540.x
+      \endverb
+    \endentry
+    \entry{Tsuchiya2007}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=58c967fc3b85e5213bd7fee7a5ea9f66}{%
+           family={Tsuchiya},
+           familyi={T\bibinitperiod},
+           given={Satoshi},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=6339a1d0333da14620fcb4fde7866909}{%
+           family={Tatano},
+           familyi={T\bibinitperiod},
+           given={Hirokazu},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=15bfa770fb4ff8cafc719a52cf779c92}{%
+           family={Okada},
+           familyi={O\bibinitperiod},
+           given={Norio},
+           giveni={N\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{6ce09389910924308431843c83e3b399}
+      \strng{fullhash}{6ce09389910924308431843c83e3b399}
+      \strng{fullhashraw}{6ce09389910924308431843c83e3b399}
+      \strng{bibnamehash}{6ce09389910924308431843c83e3b399}
+      \strng{authorbibnamehash}{6ce09389910924308431843c83e3b399}
+      \strng{authornamehash}{6ce09389910924308431843c83e3b399}
+      \strng{authorfullhash}{6ce09389910924308431843c83e3b399}
+      \strng{authorfullhashraw}{6ce09389910924308431843c83e3b399}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Economic Systems Research}
+      \field{number}{2}
+      \field{title}{Economic loss assessment due to railroad and highway disruptions}
+      \field{volume}{19}
+      \field{year}{2007}
+      \true{nocite}
+      \field{pages}{147\bibrangedash 162}
+      \range{pages}{16}
+      \verb{doi}
+      \verb 10.1080/09535310701328567
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+
