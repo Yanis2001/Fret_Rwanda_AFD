@@ -152,7 +152,9 @@ afficher_ram("après nettoyage")
 paires_actives <- which(flux_tonnes_total > SEUIL_FLUX_TONNES, arr.ind = TRUE)
 paires_actives <- paires_actives[paires_actives[, 1] != paires_actives[, 2], ]
 
-CACHE_AFFECTATION      <- file.path(DIR_CACHE, "affectation_cache.rds")
+# Cache isolé par scénario (cf. DIR_CACHE_SCENARIO dans 00_parametres.R) :
+# l'affectation dépend des coûts et de la matrice OD, donc des paramètres testés.
+CACHE_AFFECTATION      <- file.path(DIR_CACHE_SCENARIO, "affectation_cache.rds")
 cache_affectation_valide <- FALSE
 
 # Empreinte (hash) des entrées du calcul. Si l'une d'entre elles change,

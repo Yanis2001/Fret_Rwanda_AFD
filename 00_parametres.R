@@ -142,6 +142,56 @@ NOM_SCENARIO_MANUEL  <- NULL
 NOM_PAYS <- "Rwanda"
 
 # ==============================================================================
+# TESTS DE SENSIBILITÉ — déclaration du scénario
+# ==============================================================================
+# OBJECTIF : pouvoir relancer tout le modèle en modifiant un ou plusieurs
+# paramètres (betas gravitaires, valeur du temps, conversion valeur→tonnes…)
+# SANS écraser les cartes, graphiques et exports du run de référence.
+#
+# FONCTIONNEMENT
+#   - SCENARIO_ID       : identifiant technique. "reference" = run normal.
+#                         Toute autre valeur bascule le run en mode sensibilité :
+#                         les sorties partent dans un sous-dossier dédié et les
+#                         figures reçoivent une mention "Test de sensibilité".
+#   - SCENARIO_LIBELLE  : phrase lisible affichée sur les figures.
+#   - SENSIBILITE       : liste nommée des paramètres à surcharger. La surcharge
+#                         est appliquée TOUT À LA FIN de ce fichier (bloc final),
+#                         une fois que tous les paramètres ont été définis.
+#                         Chaque élément peut être :
+#                           • une VALEUR      → remplace le paramètre
+#                           • une FONCTION    → reçoit la valeur actuelle et
+#                                               renvoie la nouvelle (pratique
+#                                               pour les variations relatives)
+#
+# EXEMPLE (à écrire dans run_sensibilite.R, pas ici) :
+#   SCENARIO_ID      <- "beta_plus20"
+#   SCENARIO_LIBELLE <- "Betas gravitaires +20 %"
+#   SENSIBILITE      <- list(BETA_SECTEUR = function(b) b * 1.2)
+#
+# Les trois objets ne sont définis ici QUE s'ils n'existent pas déjà : cela
+# permet à run_sensibilite.R de les fixer AVANT de sourcer 00_parametres.R.
+# ==============================================================================
+
+if (!exists("SCENARIO_ID"))      SCENARIO_ID      <- "reference"
+if (!exists("SCENARIO_LIBELLE")) SCENARIO_LIBELLE <- NULL
+if (!exists("SENSIBILITE"))      SENSIBILITE      <- list()
+
+# Drapeau utilisé partout en aval : TRUE dès que l'on n'est plus sur la référence
+EST_SENSIBILITE <- !identical(SCENARIO_ID, "reference")
+
+# Libellé de repli : si aucun libellé lisible n'est fourni, on affiche l'ID
+if (EST_SENSIBILITE && is.null(SCENARIO_LIBELLE)) SCENARIO_LIBELLE <- SCENARIO_ID
+
+# Suffixe ajouté au nom des fichiers de figures ("" en référence).
+SUFFIXE_SCENARIO <- if (EST_SENSIBILITE) paste0("_", SCENARIO_ID) else ""
+
+# Mention portée par toutes les figures du scénario (NULL en référence).
+MENTION_SENSIBILITE <- if (EST_SENSIBILITE) {
+  paste0("TEST DE SENSIBILITÉ — ", SCENARIO_LIBELLE,
+         " (les valeurs diffèrent du run de référence)")
+} else NULL
+
+# ==============================================================================
 # Chemins et fichiers
 # ==============================================================================
 
@@ -154,9 +204,51 @@ DIR_CARTES  <- file.path(DIR_OUTPUT, "cartes")
 DIR_EXPORTS <- file.path(DIR_OUTPUT, "exports")
 DIR_RASTERS <- file.path(DIR_OUTPUT, "rasters")
 
+# ── Redirection des sorties en mode sensibilité ───────────────────────────────
+# Tout ce qui DÉPEND des paramètres surchargés est isolé dans un sous-dossier
+# propre au scénario, pour que le run de référence reste intact :
+#   outputs/cartes/sensibilite/<id>/   figures et graphiques
+#   outputs/exports/sensibilite/<id>/  exports CSV / Parquet / GeoPackage
+#   outputs/persist/sensibilite/<id>/  objets intermédiaires entre modules
+#   outputs/cache/sensibilite/<id>/    caches OD et affectation
+#
+# En revanche DIR_CACHE (caches lourds du module 01 : réseau corrigé, pentes,
+# landuse, RWI) reste PARTAGÉ : ces caches décrivent la géographie du Rwanda et
+# ne dépendent d'aucun paramètre économique. C'est ce partage qui rend un test
+# de sensibilité rapide (~25 min économisées sur le module 01).
+DIR_CACHE_SCENARIO <- DIR_CACHE   # caches OD / affectation (dépendants des paramètres)
+
+if (EST_SENSIBILITE) {
+  DIR_CARTES         <- file.path(DIR_CARTES,  "sensibilite", SCENARIO_ID)
+  DIR_EXPORTS        <- file.path(DIR_EXPORTS, "sensibilite", SCENARIO_ID)
+  DIR_PERSIST_REF    <- DIR_PERSIST                                        # référence
+  DIR_PERSIST        <- file.path(DIR_PERSIST, "sensibilite", SCENARIO_ID)
+  DIR_CACHE_SCENARIO <- file.path(DIR_CACHE,   "sensibilite", SCENARIO_ID)
+}
+
 # Création de tous les sous-dossiers
-for (d in c(DIR_CACHE, DIR_PERSIST, DIR_CARTES, DIR_EXPORTS, DIR_RASTERS)) {
+for (d in c(DIR_CACHE, DIR_CACHE_SCENARIO, DIR_PERSIST, DIR_CARTES,
+            DIR_EXPORTS, DIR_RASTERS)) {
   dir.create(d, showWarnings = FALSE, recursive = TRUE)
+}
+
+# ── Amorçage du dossier persist du scénario ───────────────────────────────────
+# Les modules lisent et écrivent les mêmes chemins PERSIST_*. Si l'on ne relance
+# pas le module 01 (cas normal : la géographie ne change pas), les objets qu'il
+# produit manqueraient au scénario. On copie donc depuis la référence tout
+# fichier persist absent : les modules effectivement relancés (02→05) écraseront
+# ensuite leur propre copie, sans jamais toucher aux fichiers de la référence.
+if (EST_SENSIBILITE && dir.exists(DIR_PERSIST_REF)) {
+  .a_copier <- setdiff(
+    list.files(DIR_PERSIST_REF, pattern = "\\.rds$"),
+    list.files(DIR_PERSIST,     pattern = "\\.rds$")
+  )
+  if (length(.a_copier) > 0) {
+    file.copy(file.path(DIR_PERSIST_REF, .a_copier), DIR_PERSIST)
+    cat("  ✓ Scénario", SCENARIO_ID, ": ", length(.a_copier),
+        "fichier(s) persist copié(s) depuis la référence\n")
+  }
+  rm(.a_copier)
 }
 
 # URL publique et stable du PBF OSM (date fixe = reproductibilité).
@@ -1536,4 +1628,150 @@ PERSIST_RESEAU_FRET  <- file.path(DIR_PERSIST, "persist_reseau_fret.rds")
 PERSIST_VULNERAB     <- file.path(DIR_PERSIST, "persist_vulnerabilite.rds")
 PERSIST_DIAG_RES     <- file.path(DIR_PERSIST, "persist_diag_reseau.rds")
 
+# ==============================================================================
+# TESTS DE SENSIBILITÉ — application des surcharges
+# ==============================================================================
+# Ce bloc est volontairement placé À LA FIN du fichier : tous les paramètres
+# existent alors, et les surcharges écrasent la valeur de référence juste avant
+# que les modules 01→05 ne commencent à les utiliser.
+#
+# Pour chaque entrée nommée de SENSIBILITE :
+#   1. on vérifie que le paramètre EXISTE déjà (garde-fou contre les fautes de
+#      frappe : sans cela, "BETA_SECTEURS" créerait silencieusement un objet
+#      inutile et le test tournerait sur les valeurs de référence) ;
+#   2. si la valeur fournie est une fonction, on l'applique à la valeur
+#      courante (variations relatives : function(b) b * 1.2) ; sinon on
+#      remplace directement ;
+#   3. on trace dans la console l'ancienne et la nouvelle valeur.
+# ==============================================================================
+
+if (length(SENSIBILITE) > 0) {
+
+  if (!EST_SENSIBILITE) {
+    stop("SENSIBILITE est non vide mais SCENARIO_ID vaut encore \"reference\" : ",
+         "les sorties du run de référence seraient écrasées par un test de ",
+         "sensibilité. Donnez un SCENARIO_ID distinct.")
+  }
+
+  cat("\n=== TEST DE SENSIBILITÉ :", SCENARIO_ID, "===\n")
+  cat("  Libellé :", SCENARIO_LIBELLE, "\n")
+
+  for (.nom in names(SENSIBILITE)) {
+
+    # 1. Garde-fou : le paramètre doit déjà exister dans 00_parametres.R
+    if (!exists(.nom, envir = globalenv(), inherits = FALSE)) {
+      stop("SENSIBILITE : le paramètre '", .nom, "' n'existe pas dans ",
+           "00_parametres.R. Vérifiez l'orthographe.")
+    }
+
+    .ancien <- get(.nom, envir = globalenv())
+    .modif  <- SENSIBILITE[[.nom]]
+
+    # 2. Fonction = transformation de la valeur courante ; sinon remplacement
+    .nouveau <- if (is.function(.modif)) .modif(.ancien) else .modif
+    assign(.nom, .nouveau, envir = globalenv())
+
+    # 3. Trace console (les objets volumineux ne sont pas affichés en entier)
+    .apercu <- function(x) {
+      if (is.numeric(x) && !is.null(names(x)) && length(x) <= 15) {
+        paste(names(x), round(x, 4), sep = "=", collapse = ", ")
+      } else if (is.numeric(x) && length(x) == 1) {
+        as.character(round(x, 4))
+      } else {
+        .taille <- if (is.null(dim(x))) length(x) else dim(x)
+        paste0("<", class(x)[1], " de dimension ",
+               paste(.taille, collapse = "x"), ">")
+      }
+    }
+    cat("  • ", .nom, "\n",
+        "      avant : ", .apercu(.ancien),  "\n",
+        "      après : ", .apercu(.nouveau), "\n", sep = "")
+  }
+
+  # ── Recalcul des grandeurs DÉRIVÉES ─────────────────────────────────────────
+  # Certains paramètres en alimentent d'autres, calculés plus haut dans ce
+  # fichier. Les surcharger sans recalculer les dérivés produirait un modèle
+  # incohérent (ex. : nouvelles valeurs unitaires mais anciens tonnages).
+
+  # VALEUR_RWF_PAR_TONNE → tonnes par milliard de RWF → liste des secteurs de fret
+  if ("VALEUR_RWF_PAR_TONNE" %in% names(SENSIBILITE)) {
+    TONNES_PAR_mrd_RWF <- 1e9 / VALEUR_RWF_PAR_TONNE
+    SECTEURS_FRET      <- SECTEURS[TONNES_PAR_mrd_RWF[SECTEURS] > 0]
+    stopifnot(setequal(names(BETA_SECTEUR), SECTEURS_FRET))
+    cat("  ↳ dérivés recalculés : TONNES_PAR_mrd_RWF, SECTEURS_FRET\n")
+  }
+
+  # params_flotte_df (valeur du temps, consommation, capacités…) → table DuckDB
+  # La table params_flotte est lue en SQL par 02_couts.R : il faut la réécrire.
+  if ("params_flotte_df" %in% names(SENSIBILITE)) {
+    duck_write(params_flotte_df, "params_flotte")
+    VEHICULES_IDS <- duck_query("SELECT vehicule_id, nom FROM params_flotte")
+    cat("  ↳ dérivés recalculés : table DuckDB params_flotte\n")
+  }
+
+  # BETA_SECTEUR : cohérence avec les secteurs effectivement transportés
+  if ("BETA_SECTEUR" %in% names(SENSIBILITE)) {
+    stopifnot(setequal(names(BETA_SECTEUR), SECTEURS_FRET))
+  }
+
+  rm(.nom, .ancien, .modif, .nouveau, .apercu)
+
+  cat("  Sorties dirigées vers :", DIR_CARTES, "\n")
+  cat("=== fin des surcharges ===\n\n")
+}
+
+# ==============================================================================
+# TESTS DE SENSIBILITÉ — marquage automatique des figures
+# ==============================================================================
+# On redéfinit ggsave() dans l'environnement global. Comme les scripts viz_*.R
+# sont sourcés dans ce même environnement, TOUS leurs appels à ggsave() passent
+# désormais par cette version, sans avoir à modifier une seule ligne de viz.
+#
+# En mode sensibilité, chaque figure enregistrée reçoit :
+#   - un suffixe de fichier "_<SCENARIO_ID>" (en plus du sous-dossier dédié),
+#     pour rester identifiable si l'image est déplacée dans un rapport ;
+#   - une mention en bas de graphique rappelant qu'il s'agit d'un test.
+# En mode référence, la fonction se contente de relayer ggplot2::ggsave().
+# ==============================================================================
+
+ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
+
+  if (EST_SENSIBILITE) {
+
+    # ── Suffixe : "carte_x.png" → "carte_x_beta_plus20.png" (extension gardée)
+    .rep <- dirname(filename)
+    .fic <- basename(filename)
+    .ext <- tools::file_ext(.fic)
+    filename <- file.path(
+      .rep,
+      paste0(tools::file_path_sans_ext(.fic), SUFFIXE_SCENARIO,
+             if (nzchar(.ext)) paste0(".", .ext) else "")
+    )
+
+    # ── Mention en bas de figure. Si le graphique porte déjà un caption
+    #    (source des données…), on ajoute la mention à la ligne plutôt que de
+    #    l'écraser.
+    if (inherits(plot, "ggplot")) {
+      .caption_actuel <- plot$labels$caption
+      plot <- plot +
+        ggplot2::labs(caption = if (is.null(.caption_actuel)) {
+          MENTION_SENSIBILITE
+        } else {
+          paste0(.caption_actuel, "\n", MENTION_SENSIBILITE)
+        }) +
+        ggplot2::theme(
+          plot.caption = ggplot2::element_text(
+            hjust = 0, face = "bold", size = 8, colour = "#B22222"
+          )
+        )
+    }
+  }
+
+  ggplot2::ggsave(filename = filename, plot = plot, ...)
+}
+
 cat("✓ 00_parametres.R chargé\n")
+if (EST_SENSIBILITE) {
+  cat("⚠ MODE SENSIBILITÉ ACTIF —", SCENARIO_LIBELLE, "\n")
+  cat("  Les sorties du run de référence ne seront PAS écrasées.\n\n")
+}

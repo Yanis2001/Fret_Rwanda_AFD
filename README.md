@@ -63,6 +63,7 @@ Les résultats (cartes, CSV, Parquet, GeoPackage) sont écrits dans le dossier `
 | Fichier | Rôle |
 |---|---|
 | `run_all.R` | Point d'entrée — orchestre tous les modules |
+| `run_sensibilite.R` | Tests de sensibilité — rejoue le modèle avec des paramètres modifiés, dans des sorties séparées |
 | `setup.R` | Configuration unique du token GitHub |
 | `00_parametres.R` | Paramètres globaux du modèle (packages, DuckDB, palettes) |
 | `01_reseau.R` | Construction du réseau routier depuis OSM + pentes SRTM |
@@ -72,6 +73,20 @@ Les résultats (cartes, CSV, Parquet, GeoPackage) sont écrits dans le dossier `
 | `05_vulnerabilite.R` | Analyse de criticité et scénarios de perturbation |
 | `viz_*.R` | Scripts de visualisation (cartes, Sankey, graphiques) |
 | `outputs/` | Résultats générés (non versionnés) |
+
+### Tests de sensibilité
+
+`run_sensibilite.R` rejoue le modèle avec un ou plusieurs paramètres modifiés
+(betas gravitaires, valeur du temps, conversion valeur→tonnes, ou n'importe quel
+autre paramètre de `00_parametres.R`). Les sorties **s'ajoutent** à celles du run
+de référence, sans les écraser :
+
+- fichiers dans `outputs/cartes/sensibilite/<scenario>/`, nom suffixé `_<scenario>` ;
+- mention « TEST DE SENSIBILITÉ — … » en bas de chaque figure ;
+- le module `01_reseau.R` n'est pas relancé (la géographie ne dépend pas de ces
+  paramètres), d'où un gain d'environ 25 min par scénario.
+
+Un run de référence complet (`run_all.R`) doit avoir été exécuté au préalable.
 
 ---
 

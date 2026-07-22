@@ -45,8 +45,9 @@ max_idx_mm            <- .map$max_idx_mm
 n_aretes_physiques    <- length(.map$lookup_type[.map$lookup_type == "route"]) / .mm$n_vehicules
 node_multi <- function(v_idx, n_id) as.integer((v_idx - 1L) * n_noeuds + n_id)
 
-# Chargement de la matrice OD de référence (cache existant)
-.od_cache <- readRDS(file.path(DIR_CACHE, "od_cache.rds"))
+# Chargement de la matrice OD produite par 03 (cache du scénario courant :
+# DIR_CACHE_SCENARIO vaut DIR_CACHE en run de référence)
+.od_cache <- readRDS(file.path(DIR_CACHE_SCENARIO, "od_cache.rds"))
 od_long   <- .od_cache$od_long
 rm(.geo, .ent, .mm, .map, .fret, .od_cache)
 

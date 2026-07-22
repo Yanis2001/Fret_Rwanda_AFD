@@ -23,12 +23,21 @@ token <- Sys.getenv("GITHUB_PAT")
 if (nchar(token) > 0) {
   # Credential helper : transmet le token à Git sans mot de passe interactif
   system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
-  # Remotes : dépôt principal + miroir GEMMES-AFD.
-  # set-url --push (sans --add) réinitialise la liste des push URLs à une seule
-  # entrée, puis --add --push ajoute le miroir. Cela évite l'accumulation de
-  # doublons à chaque relance de run_all.R.
+  # Remotes : dépôt principal (fetch) + push simultané vers le dépôt principal
+  # ET le miroir GEMMES-AFD.
+  #
+  # La liste des push URLs est REMISE À ZÉRO avant d'être reconstruite, sinon
+  # elle s'allonge d'une entrée à chaque exécution de run_all.R. En effet
+  # `set-url --push` (sans --add) ne sait remplacer qu'une valeur unique : dès
+  # que la clé remote.origin.pushurl en contient plusieurs, Git refuse
+  # ("has multiple values") et la ligne échoue, tandis que le `--add --push`
+  # suivant, lui, réussit toujours et empile un doublon de plus.
+  # `--unset-all` supprime toutes les valeurs d'un coup ; il renvoie un code
+  # d'erreur si la clé n'existe pas encore (premier lancement), d'où le
+  # `|| true` qui neutralise ce cas parfaitement normal.
   system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
-  system("git remote set-url --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
+  system("git config --unset-all remote.origin.pushurl || true")
+  system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
   system("git remote set-url --add --push origin https://github.com/GEMMES-AFD/Transport.git")
   system("git remote -v")
 } else {
@@ -109,12 +118,15 @@ if (!exists("RESET_CACHES")) RESET_CACHES <- FALSE
 
 if (RESET_CACHES) {
   .dir_cache <- if (exists("DIR_CACHE")) DIR_CACHE else file.path("outputs", "cache")
+  # Les caches OD et affectation vivent dans le dossier du scénario courant
+  # (identique à DIR_CACHE en run de référence, cf. 00_parametres.R).
+  .dir_cache_sc <- if (exists("DIR_CACHE_SCENARIO")) DIR_CACHE_SCENARIO else .dir_cache
   .caches <- c(
-    file.path(.dir_cache, "reseau_corrige_cache.rds"),
-    file.path(.dir_cache, "pentes_cache.rds"),
-    file.path(.dir_cache, "landuse_cache.rds"),
-    file.path(.dir_cache, "od_cache.rds"),
-    file.path(.dir_cache, "affectation_cache.rds")
+    file.path(.dir_cache,    "reseau_corrige_cache.rds"),
+    file.path(.dir_cache,    "pentes_cache.rds"),
+    file.path(.dir_cache,    "landuse_cache.rds"),
+    file.path(.dir_cache_sc, "od_cache.rds"),
+    file.path(.dir_cache_sc, "affectation_cache.rds")
   )
   cat("=== RESET COMPLET DES CACHES ===\n")
   for (.f in .caches) {
@@ -125,7 +137,7 @@ if (RESET_CACHES) {
       cat("  — Absent  :", basename(.f), "\n")
     }
   }
-  rm(.dir_cache, .caches, .f)
+  rm(.dir_cache, .dir_cache_sc, .caches, .f)
   cat("\n⚠ RESET_CACHES = TRUE — pensez à le remettre à FALSE\n")
   cat("  Temps de recalcul estimé : ~50 min selon la machine\n\n")
 }

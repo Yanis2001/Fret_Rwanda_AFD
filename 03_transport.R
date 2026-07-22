@@ -96,7 +96,11 @@ idx     <- 0
 # on charge directement le fichier sauvegardé — le calcul est alors instantané.
 # Pour forcer un recalcul complet (ex : après avoir ajouté des zones ou modifié
 # le réseau), il suffit de supprimer le fichier "outputs/od_cache.rds".
-CACHE_OD <- file.path(DIR_CACHE, "od_cache.rds")
+# DIR_CACHE_SCENARIO = DIR_CACHE en run de référence, et un sous-dossier dédié
+# en test de sensibilité : la matrice OD dépend des paramètres surchargés
+# (betas, valeur du temps, tonnages), elle ne doit donc jamais écraser le cache
+# de référence.
+CACHE_OD <- file.path(DIR_CACHE_SCENARIO, "od_cache.rds")
 cache_od_valide <- FALSE
 
 # Colonnes attendues dans od_long — à mettre à jour si la structure change
