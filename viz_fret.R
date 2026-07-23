@@ -824,79 +824,8 @@ zone_court <- function(z) str_trunc(str_remove(str_remove(z, " - .*"), " \\(.*")
 
 
 # ============================================================
-# GRAPHIQUE 2 : Offre vs Demande par zone
+# GRAPHIQUE 2 : Offre vs Demande par zone (en tonnes)
 # ============================================================
-
-# ── Zones au sommet d'offre / demande (pour mise en évidence sur le graphique) ──
-# zone_court() est la même troncature lisible que celle utilisée dans Zone_court
-# ci-dessous, pour que la comparaison de libellés (contour) reste cohérente.
-ref_offre_court   <- zone_court(recap_zones$zone[which.max(recap_zones$offre_totale_mrd_rwf)])
-ref_demande_court <- zone_court(recap_zones$zone[which.max(recap_zones$demande_totale_mrd_rwf)])
-
-g2 <- recap_zones %>%
-  pivot_longer(
-    cols      = c(offre_totale_mrd_rwf, demande_totale_mrd_rwf),
-    names_to  = "Type_flux",
-    values_to = "Valeur"
-  ) %>%
-  mutate(
-    Zone_court = zone_court(zone),
-    # Population de la zone : sert à ordonner les barres (population décroissante).
-    Pop        = pop_par_zone[zone],
-    Type_flux  = recode(Type_flux,
-                        "offre_totale_mrd_rwf"   = "offre",
-                        "demande_totale_mrd_rwf" = "demande")
-  ) %>%
-  ggplot(aes(x = reorder(Zone_court, Pop),
-             y = Valeur,
-             fill = Type_flux)) +
-  geom_col(position = "dodge", width = 0.7) +
-  # Contour bleu sur la zone à la plus forte offre (cohérent avec fill offre = bleu)
-  geom_col(
-    data = ~ filter(., Zone_court == ref_offre_court, Type_flux == "offre"),
-    aes(x = reorder(Zone_court, Pop), y = Valeur),
-    fill = NA, color = "#1976D2", linewidth = 1.3,
-    position = "dodge", width = 0.7,
-    inherit.aes = FALSE
-  ) +
-  # Contour rouge sur la zone à la plus forte demande (cohérent avec fill demande = rouge)
-  geom_col(
-    data = ~ filter(., Zone_court == ref_demande_court, Type_flux == "demande"),
-    aes(x = reorder(Zone_court, Pop), y = Valeur),
-    fill = NA, color = "#D32F2F", linewidth = 1.3,
-    position = "dodge", width = 0.7,
-    inherit.aes = FALSE
-  ) +
-  coord_flip() +
-  scale_fill_manual(values = c("offre" = "#1976D2", "demande" = "#D32F2F")) +
-  labs(
-    title    = "Offre et Demande par zone économique",
-    subtitle = paste0(
-      "Modèle gravitaire — ", NOM_PAYS, "\n",
-      "Contour bleu = max offre ('", ref_offre_court, "') | ",
-      "Contour rouge = max demande ('", ref_demande_court, "')"
-    ),
-    x    = NULL,
-    y    = "Valeur (milliards RWF)",
-    fill = NULL
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    plot.title         = element_text(face = "bold", size = 14),
-    plot.subtitle      = element_text(color = "#666666", size = 9),
-    # Texte d'axe Y réduit : avec ~91 zones empilées, une petite taille évite que
-    # les libellés d'entrepôts ne se chevauchent verticalement.
-    axis.text.y        = element_text(size = 7),
-    legend.position    = "top",
-    panel.grid.major.y = element_blank()
-  )
-
-# height = 18 : ~91 zones × 2 barres (dodge) → grande hauteur pour espacer les
-# libellés de l'axe Y et garantir leur lisibilité (pas de chevauchement vertical).
-ggsave(file.path(DIR_CARTES, "graphique_offre_demande_mrd_rwf.png"),
-       g2, width = 13, height = 18, dpi = 300)
-cat("✓ Graphique offre/demande (mrd RWF) sauvegardé\n")
-
 
 # ── Version en tonnes ─────────────────────────────────────────────────────────
 # Les tables offre_zones et demande_zones dans DuckDB sont en mrd RWF par secteur.
@@ -1207,21 +1136,7 @@ graphe_brut3 <- function(mat, unite, sel, rang, titre, soustitre, fichier) {
 hach_ok <- exists("e_zones") && exists("m_zones")
 if (!hach_ok) cat("  ⚠ e_zones/m_zones absents — relancer 03_transport.R pour les hachures commerce ext.\n")
 
-# ── 1) OFFRE — surplus net (aplat) + imports (hachuré), à 100%, en valeur ─────
-# (ex-« graphique_composition_sectorielle » ; descriptif clarifié.)
-graphe_compo_100(
-  offre_zones,
-  "Composition sectorielle — surplus net (aplat) + imports (hachuré), par zone — valeur",
-  paste0("Modèle MRIO — ", NOM_PAYS,
-         " · aplat = surplus domestique max(0, x−d) [jambe domestique] · ",
-         "hachuré = imports τ_M·d [jambe import], en valeur (mrd RWF)\n",
-         "Totaux sectoriels identiques au graphe demande (identité ressources-emplois)."),
-  "graphique_composition_sectorielle.png",
-  mat_hachure = if (hach_ok) m_zones else NULL,
-  lab_solide = "surplus domestique", lab_hachure = "imports"
-)
-
-# ── 2) OFFRE — idem en tonnage physique ───────────────────────────────────────
+# ── 1) OFFRE — surplus net (aplat) + imports (hachuré), à 100%, en tonnage ────
 graphe_compo_100(
   en_tonnes(offre_zones),
   "Composition sectorielle — surplus net (aplat) + imports (hachuré), par zone — tonnes",
@@ -1232,20 +1147,7 @@ graphe_compo_100(
   lab_solide = "surplus domestique", lab_hachure = "imports"
 )
 
-# ── 3) DEMANDE — déficit net (aplat) + exports (hachuré), à 100%, en valeur ───
-graphe_compo_100(
-  demande_zones,
-  "Composition sectorielle — déficit net (aplat) + exports (hachuré), par zone — valeur",
-  paste0("Modèle MRIO — ", NOM_PAYS,
-         " · aplat = déficit domestique max(0, d−x) [jambe domestique] · ",
-         "hachuré = exports τ_E·x [jambe export], en valeur (mrd RWF)\n",
-         "Totaux sectoriels identiques au graphe offre (identité ressources-emplois)."),
-  "graphique_demande_composition_mrd_rwf.png",
-  mat_hachure = if (hach_ok) e_zones else NULL,
-  lab_solide = "déficit domestique", lab_hachure = "exports"
-)
-
-# ── 4) DEMANDE — idem en tonnage physique ─────────────────────────────────────
+# ── 2) DEMANDE — déficit net (aplat) + exports (hachuré), à 100%, en tonnage ──
 graphe_compo_100(
   en_tonnes(demande_zones),
   "Composition sectorielle — déficit net (aplat) + exports (hachuré), par zone — tonnes",
@@ -1267,15 +1169,7 @@ if (exists("prod_zones") && exists("dem_zones")) {
   sel_dem  <- c(ord_d[length(ord_d)], ord_d[ceiling(length(ord_d) / 2)], ord_d[1])
   rang_dem <- c("Demande max", "Demande médiane", "Demande min")
 
-  # 4a) OFFRE brute (production locale x) sur les 3 entrepôts de la demande — valeur.
-  graphe_brut3(
-    prod_zones, "mrd RWF", sel_dem, rang_dem,
-    "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande) — valeur",
-    paste0("Modèle MRIO — ", NOM_PAYS,
-           " · production brute x[i,s] avant netting · mêmes entrepôts que le graphe demande"),
-    "graphique_offre_brut_mrd_rwf_3entrepots.png"
-  )
-  # 4b) OFFRE brute sur les mêmes 3 entrepôts — tonnage physique.
+  # 4) OFFRE brute (production locale x) sur les 3 entrepôts de la demande — tonnes.
   graphe_brut3(
     en_tonnes(prod_zones), "tonnes", sel_dem, rang_dem,
     "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande) — tonnes",
@@ -1283,15 +1177,7 @@ if (exists("prod_zones") && exists("dem_zones")) {
            " · production brute convertie en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
     "graphique_offre_brut_tonnes_3entrepots.png"
   )
-  # 5) DEMANDE brute (demande totale d) sur les mêmes 3 entrepôts — valeur.
-  graphe_brut3(
-    dem_zones, "mrd RWF", sel_dem, rang_dem,
-    "Flux brut par secteur — demande totale (entrepôts min/médian/max de la demande) — valeur",
-    paste0("Modèle MRIO — ", NOM_PAYS,
-           " · demande brute d[i,s] (interm. + finale) avant netting"),
-    "graphique_demande_brut_mrd_rwf_3entrepots.png"
-  )
-  # 6) DEMANDE brute sur les mêmes 3 entrepôts — tonnage physique.
+  # 5) DEMANDE brute (demande totale d) sur les mêmes 3 entrepôts — tonnes.
   graphe_brut3(
     en_tonnes(dem_zones), "tonnes", sel_dem, rang_dem,
     "Flux brut par secteur — demande totale (entrepôts min/médian/max de la demande) — tonnes",

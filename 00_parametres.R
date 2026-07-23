@@ -219,6 +219,7 @@ DIR_RASTERS <- file.path(DIR_OUTPUT, "rasters")
 DIR_CACHE_SCENARIO <- DIR_CACHE   # caches OD / affectation (dépendants des paramètres)
 
 if (EST_SENSIBILITE) {
+  DIR_CARTES_REF     <- DIR_CARTES                                        # référence
   DIR_CARTES         <- file.path(DIR_CARTES,  "sensibilite", SCENARIO_ID)
   DIR_EXPORTS        <- file.path(DIR_EXPORTS, "sensibilite", SCENARIO_ID)
   DIR_PERSIST_REF    <- DIR_PERSIST                                        # référence
@@ -249,6 +250,21 @@ if (EST_SENSIBILITE && dir.exists(DIR_PERSIST_REF)) {
         "fichier(s) persist copié(s) depuis la référence\n")
   }
   rm(.a_copier)
+
+  # Cas particulier : persist_fond_carte.rds est le seul objet persistant écrit
+  # par 01_reseau dans DIR_CARTES (et non DIR_PERSIST). Les scripts viz_*.R le
+  # relisent depuis DIR_CARTES ; comme 01 n'est pas relancé en sensibilité et que
+  # DIR_CARTES du scénario est créé vide, ce fichier manquerait et readRDS
+  # échouerait ("cannot open the connection"). On le copie donc depuis la
+  # référence s'il est absent — le fond de carte est purement géographique et
+  # ne dépend d'aucun paramètre économique testé.
+  .fond_ref <- file.path(DIR_CARTES_REF, "persist_fond_carte.rds")
+  .fond_sc  <- file.path(DIR_CARTES,     "persist_fond_carte.rds")
+  if (file.exists(.fond_ref) && !file.exists(.fond_sc)) {
+    file.copy(.fond_ref, .fond_sc)
+    cat("  ✓ Scénario", SCENARIO_ID, ": persist_fond_carte.rds copié depuis la référence\n")
+  }
+  rm(.fond_ref, .fond_sc)
 }
 
 # URL publique et stable du PBF OSM (date fixe = reproductibilité).
