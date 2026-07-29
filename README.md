@@ -74,17 +74,28 @@ Les résultats (cartes, CSV, Parquet, GeoPackage) sont écrits dans le dossier `
 | `viz_*.R` | Scripts de visualisation (cartes, Sankey, graphiques) |
 | `outputs/` | Résultats générés (non versionnés) |
 
-### Tests de sensibilité
+### Analyse de sensibilité (hypercube latin)
 
-`run_sensibilite.R` rejoue le modèle avec un ou plusieurs paramètres modifiés
-(betas gravitaires, valeur du temps, conversion valeur→tonnes, ou n'importe quel
-autre paramètre de `00_parametres.R`). Les sorties **s'ajoutent** à celles du run
-de référence, sans les écraser :
+`run_sensibilite.R` teste l'incertitude sur les deux familles de paramètres les
+moins bien connues — les élasticités gravitaires (`BETA_SECTEUR`) et les valeurs
+unitaires (`VALEUR_RWF_PAR_TONNE`). Plutôt que d'appliquer un même coefficient à
+*tous* les betas, un **hypercube latin** (`lhs::randomLHS`) tire `SENS_LHS_N`
+combinaisons dans lesquelles **chaque secteur** voit son beta et sa valeur/tonne
+varier **indépendamment** (amplitudes réglées dans `00_parametres.R` :
+`SENS_LHS_AMPLITUDE_BETA`, `SENS_LHS_AMPLITUDE_VALEUR_TONNE`). Les sorties
+**s'ajoutent** à celles du run de référence, sans les écraser :
 
-- fichiers dans `outputs/cartes/sensibilite/<scenario>/`, nom suffixé `_<scenario>` ;
-- mention « TEST DE SENSIBILITÉ — … » en bas de chaque figure ;
+- un scénario par tirage dans `outputs/cartes/sensibilite/lhs_NN/`, nom suffixé
+  `_lhs_NN`, avec mention « TEST DE SENSIBILITÉ — … » en bas de figure ;
+- plan d'expérience (multiplicateurs par scénario) dans
+  `outputs/exports/sensibilite/plan_lhs.csv` ;
 - le module `01_reseau.R` n'est pas relancé (la géographie ne dépend pas de ces
   paramètres), d'où un gain d'environ 25 min par scénario.
+
+`viz_sensibilite.R` (lancé automatiquement en fin de `run_sensibilite.R`) produit
+la **synthèse comparative** dans `outputs/cartes/sensibilite/_synthese/` :
+enveloppe d'incertitude des indicateurs agrégés, indices de sensibilité
+(paramètre → sortie), volatilité sectorielle et carte de robustesse spatiale.
 
 Un run de référence complet (`run_all.R`) doit avoir été exécuté au préalable.
 

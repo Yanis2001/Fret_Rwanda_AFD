@@ -35,14 +35,13 @@ cat("✓ Objets chargés\n\n")
 
 # ==============================================================================
 # V.1 : Coûts généralisés par véhicule (SQL DuckDB)
-# Requête SQL chaînée en 5 CTEs : vitesse → pente → consommation → coût.
+# Requête SQL chaînée en 4 CTEs : vitesse → consommation → coût.
 # Produit la table aretes_couts_tous (N_arêtes × N_véhicules lignes).
 # cost_per_tkm = (carburant + usure × facteur_urbain + temps × facteur_urbain)
 #                / (capacite_tonnes × length_km)
 # ==============================================================================
 
 # Formules appliquées :
-#   speed_kmh     = vitesse_base × facteur_pente
 #   conso (L/100km) = conso_base × facteur_surface × (1 + slope × FACTEUR / 100)
 #   cost_fuel     = (length_km × conso/100) × prix_carburant
 #   cost_wear     = length_km × usure_rwf_km
@@ -130,7 +129,7 @@ duck_query("
   avec_vitesse AS (
     SELECT
       ax.*,
-      COALESCE(v.vitesse_kmh, 30) AS vitesse_base, -- COALESCE : remplace les valeurs NULL par 30
+      COALESCE(v.vitesse_kmh, 30) AS speed_kmh, -- COALESCE : remplace les valeurs NULL par 30
       COALESCE(ps.facteur_conso_route, pu.facteur_conso_route) AS facteur_surface,
       COALESCE(ps.usure_rwf_km,        pu.usure_rwf_km)        AS usure_rwf_km
     FROM aretes_x_vehicules ax
@@ -150,22 +149,7 @@ duck_query("
       AND pu.surface     = 'unpaved'
   ),
 
-  -- Étape 3 : application du facteur de pente sur la vitesse
-  -- vitesse_effective = vitesse_base × facteur_pente
-  -- Ex : sur une pente forte, un camion lourd va à 0.45 × sa vitesse de base.
-  avec_vitesse_pente AS (
-     SELECT
-      av.*,
-      av.vitesse_base * COALESCE(pp.facteur_pente, 1.0) AS speed_kmh
-      -- COALESCE : si slope_category est NULL (arête topologique),
-      -- facteur_pente = 1.0 (pas de modification de vitesse)
-     FROM avec_vitesse av
-     LEFT JOIN facteurs_pente_flotte pp
-       ON  av.vehicule_id    = pp.vehicule_id
-       AND av.slope_category = pp.slope_category
-    ),
-
-  -- Étape 4 : consommation de carburant (surconso en montée uniquement)
+  -- Étape 3 : consommation de carburant (surconso en montée uniquement)
   -- La surconsommation s'applique uniquement quand slope_mean > 0 (montée).
   -- En descente, le moteur freine légèrement mais on ne modélise pas de gain.
   avec_conso AS (
@@ -178,10 +162,10 @@ duck_query("
             THEN 1.0 + (slope_mean * facteur_conso_pente / 100.0)
             ELSE 1.0
           END AS conso_L_per_100km
-    FROM avec_vitesse_pente
+    FROM avec_vitesse
   ),
 
--- Étape 5 : conversion unités + calcul des composantes de coût
+-- Étape 4 : conversion unités + calcul des composantes de coût
 -- NULLIF(x, 0) : renvoie NULL si x vaut 0, sinon x.
 -- Cela évite les divisions par zéro (ex : longueur_m = 0 → length_km = NULL).
   avec_couts AS (

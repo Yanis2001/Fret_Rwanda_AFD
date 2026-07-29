@@ -44,7 +44,8 @@ packages_requis <- c(
   "ggalluvial",    # Diagrammes de Sankey pour les flux de fret (viz_fret.R)
   "ggpattern",     # Remplissages hachurés (composition sectorielle : exports/imports vs domestique)
   "RColorBrewer",  # Palettes de couleurs pour les cartes et graphiques sectoriels
-  "readxl"         # Lecture des fichiers Excel (.xlsx) — utilisé pour la SAM IFPRI 2021
+  "readxl",        # Lecture des fichiers Excel (.xlsx) — utilisé pour la SAM IFPRI 2021
+  "lhs"            # Plans d'expérience par hypercube latin (run_sensibilite.R)
 )
 
 # Cette fonction vérifie quels packages de la liste ne sont pas encore installés
@@ -888,8 +889,43 @@ stopifnot(setequal(names(TONNES_PAR_mrd_RWF), SECTEURS))
 # tableaux/cartes de fret.
 SECTEURS_FRET <- SECTEURS[TONNES_PAR_mrd_RWF[SECTEURS] > 0]
 
-# Garde-fou : BETA_SECTEUR doit couvrir exactement les secteurs de fret 
+# Garde-fou : BETA_SECTEUR doit couvrir exactement les secteurs de fret
 stopifnot(setequal(names(BETA_SECTEUR), SECTEURS_FRET))
+
+# ==============================================================================
+# Paramètres des tests de sensibilité par HYPERCUBE LATIN (run_sensibilite.R)
+# ==============================================================================
+# Objectif : mesurer comment les résultats du modèle réagissent à l'incertitude
+# sur les deux familles de paramètres les moins bien connues — les élasticités
+# gravitaires (BETA_SECTEUR) et les valeurs unitaires (VALEUR_RWF_PAR_TONNE).
+#
+# Pourquoi un hypercube latin plutôt qu'un coefficient uniforme ?
+#   Multiplier TOUS les betas (ou toutes les valeurs/tonne) par un même facteur
+#   ne teste qu'une seule direction de variation et confond l'effet des
+#   secteurs. Ici, CHAQUE secteur voit son beta ET sa valeur/tonne varier
+#   INDÉPENDAMMENT. Le plan d'expérience est un hypercube latin
+#   (lhs::randomLHS) : pour N tirages et d paramètres, chaque paramètre est
+#   découpé en N intervalles de même probabilité et chacun n'est visité qu'une
+#   fois. On obtient une couverture homogène de l'espace des paramètres avec
+#   peu de tirages, là où un tirage purement aléatoire laisserait des trous.
+#
+# Les valeurs tirées sont des MULTIPLICATEURS appliqués aux valeurs de
+# référence de ce fichier : 1 → inchangé, 1.3 → +30 %, 0.8 → −20 %.
+
+# Nombre de tirages = nombre de scénarios de sensibilité générés. Chaque tirage
+# relance les modules 02→05 + les visualisations (quelques minutes chacun) :
+# 20 est un compromis raisonnable entre couverture de l'espace et temps total.
+SENS_LHS_N <- 20
+
+# Amplitude de variation RELATIVE (± autour de la référence), par famille.
+#   0.30 → chaque beta de secteur est tiré dans [0.70 ; 1.30] × sa valeur de réf.
+SENS_LHS_AMPLITUDE_BETA         <- 0.30
+#   0.30 → chaque valeur unitaire (RWF/tonne) est tirée dans [0.70 ; 1.30].
+SENS_LHS_AMPLITUDE_VALEUR_TONNE <- 0.30
+
+# Graine aléatoire : rend le plan LHS reproductible d'une exécution à l'autre
+# (mêmes scénarios → figures de synthèse comparables et réexécutables).
+SENS_LHS_GRAINE <- 123
 
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
@@ -1235,12 +1271,12 @@ cat("✓ Palettes de couleurs définies\n\n")
 
 # ==============================================================================
 # I.5 : Paramètres de la flotte de véhicules
-# Définit les 3 tables DuckDB décrivant la flotte (coûts, vitesses, pentes,
+# Définit les tables DuckDB décrivant la flotte (coûts, vitesses,
 # transbordements, coûts pré-frontière). Pour ajouter un véhicule :
 # modifier uniquement ce bloc, le reste du script s'adapte automatiquement.
 # ==============================================================================
 
-# Cette section crée cinq tableaux qui décrivent la flotte de véhicules utilisée
+# Cette section crée quatre tableaux qui décrivent la flotte de véhicules utilisée
 # dans le modèle. Chaque tableau est d'abord créé en R avec tribble() — une
 # façon pratique de saisir un tableau ligne par ligne —, puis envoyé dans
 # DuckDB avec duck_write() pour pouvoir être interrogé en SQL plus tard.
@@ -1380,30 +1416,7 @@ params_flotte_type_route_df <- tribble(
 )
 duck_write(params_flotte_type_route_df, "params_flotte_type_route")
 
-# ── Table 3 : facteurs de pente par véhicule × catégorie ──────────────────────
-# Un camion chargé en côte monte beaucoup plus lentement qu'en terrain plat.
-# Ces facteurs multiplicatifs réduisent la vitesse de référence en fonction
-# de l'inclinaison de la route et du type de véhicule.
-# Ex : facteur_pente = 0.45 pour camion_lourd en pente forte
-#   → vitesse réelle = vitesse_base × 0.45 (55% de ralentissement !)
-facteurs_pente_df <- tribble(
-  ~vehicule_id,   ~slope_category, ~facteur_pente,
-  "camionnette",  "plat",           1.00,
-  "camionnette",  "legere",         0.95,
-  "camionnette",  "moderee",        0.85,
-  "camionnette",  "forte",          0.72,
-  "camion_moyen", "plat",           1.00,
-  "camion_moyen", "legere",         0.90,
-  "camion_moyen", "moderee",        0.75,
-  "camion_moyen", "forte",          0.60,
-  "camion_lourd", "plat",           1.00,
-  "camion_lourd", "legere",         0.82,
-  "camion_lourd", "moderee",        0.62,
-  "camion_lourd", "forte",          0.45
-)
-duck_write(facteurs_pente_df, "facteurs_pente_flotte")
-
-# ── Table 4 : coûts de transbordement entre véhicules ─────────────────────────
+# ── Table 3 : coûts de transbordement entre véhicules ─────────────────────────
 # Coût fixe en RWF pour transférer la cargaison d'un type de véhicule à un autre
 # dans un entrepôt (manutention, attente, administration).
 # Pour ajouter une combinaison : ajouter une ligne dans ce tribble.
@@ -1421,7 +1434,7 @@ couts_transbordement_df <- tribble(
 )
 duck_write(couts_transbordement_df, "couts_transbordement")
 
-# ── Table 5 : coûts de transport pré-frontière par pays et par secteur ────────
+# ── Table 4 : coûts de transport pré-frontière par pays et par secteur ────────
 # Ces coûts représentent le coût moyen de transport d'une marchandise
 # depuis son point d'origine dans le pays étranger jusqu'à la frontière du pays étudié.
 # Ils s'ajoutent au coût de transport interne dans le modèle gravitaire.
