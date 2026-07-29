@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  22 JUL 2026 15:59
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  27 JUL 2026 00:40
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -865,7 +865,7 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has
 been already used, duplicate ignored
 <to be read again> 
                    \relax 
-l.62 ...onction de friction}{31}{subsection.5.3.1}
+l.63 ...merce international}{34}{subsection.5.3.2}
                                                   % [1
 
 ])
@@ -886,12 +886,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 
 ]
 Chapitre 1.
-<images/evol_hist_precip.png, id=253, 1052.93375pt x 440.64626pt>
+<images/evol_hist_precip.png, id=248, 1052.93375pt x 440.64626pt>
 File: images/evol_hist_precip.png Graphic file (type png)
 <use images/evol_hist_precip.png>
 Package pdftex.def Info: images/evol_hist_precip.png  used on input line 82.
 (pdftex.def)             Requested size: 218.51521pt x 91.44247pt.
-<images/evol_prevue_precip.png, id=257, 537.00626pt x 642.4pt>
+<images/evol_prevue_precip.png, id=252, 537.00626pt x 642.4pt>
 File: images/evol_prevue_precip.png Graphic file (type png)
 <use images/evol_prevue_precip.png>
 Package pdftex.def Info: images/evol_prevue_precip.png  used on input line 90.
@@ -913,52 +913,28 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 
 [5]
 Chapitre 2.
+<images/carte_relief.png, id=271, 720.6925pt x 662.475pt>
+File: images/carte_relief.png Graphic file (type png)
+<use images/carte_relief.png>
+Package pdftex.def Info: images/carte_relief.png  used on input line 119.
+(pdftex.def)             Requested size: 318.66948pt x 292.92531pt.
 [6
 
 ]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[7]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[8]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[9]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[10]
-Chapitre 3.
-[11
-
-]
-Overfull \hbox (46.56064pt too wide) in paragraph at lines 199--200
+Overfull \hbox (46.56064pt too wide) in paragraph at lines 131--132
 \T1/cmr/m/sc/12 Coordination Authority (NCTTCA) [][][]\T1/cmr/m/n/12 2018[][] ;
  [][]\T1/cmr/m/sc/12 Ministry of Infrastructure (MININFRA)
  []
 
 
-Overfull \hbox (7.85558pt too wide) in paragraph at lines 208--208
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[7 <./images/carte_relief.png>]
+Overfull \hbox (7.85558pt too wide) in paragraph at lines 138--138
 |[]\T1/cmr/bx/n/17.28 Une ex-po-si-tion mar-quÈe aux alÈas hydro-climatiques| 
  []
 
@@ -969,20 +945,51 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
+[8]
+Chapitre 3.
+[9
+
+]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[10]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[11]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
 [12]
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.49998pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
 (fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [13]
-Chapitre 4.
-[14
 
-{/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc}]
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
+[14]
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -999,13 +1006,10 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [16]
+Chapitre 4.
+[17
 
-Package caption Warning: \label without proper reference on input line 333.
-See the caption package documentation for explanation.
-
-
-LaTeX Warning: Reference `fig:reseau_rwanda' on page 17 undefined on input line
- 322.
+{/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc}]
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1014,30 +1018,46 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[17]
-<images/schema_graphe.png, id=446, 309.155pt x 174.6525pt>
+[18]
+Overfull \hbox (2.18155pt too wide) in paragraph at lines 330--331
+[]\T1/cmr/m/n/12 Tout d'abord, ex-pli-quons ra-pi-de-ment com-ment fonc-tionnen
+t les don-nÈes gÈo-gra-phiques.
+ []
+
+<images/illustration_raster.png, id=414, 323.2075pt x 245.91875pt>
+File: images/illustration_raster.png Graphic file (type png)
+<use images/illustration_raster.png>
+Package pdftex.def Info: images/illustration_raster.png  used on input line 334
+.
+(pdftex.def)             Requested size: 273.14923pt x 207.84239pt.
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[19]
+<images/schema_graphe.png, id=425, 309.155pt x 174.6525pt>
 File: images/schema_graphe.png Graphic file (type png)
 <use images/schema_graphe.png>
-Package pdftex.def Info: images/schema_graphe.png  used on input line 330.
+Package pdftex.def Info: images/schema_graphe.png  used on input line 355.
 (pdftex.def)             Requested size: 218.51521pt x 123.44981pt.
-<images/carte_routes_hors_geante.png, id=447, 424.58624pt x 339.2675pt>
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[20 <./images/illustration_raster.png>]
+<images/carte_routes_hors_geante.png, id=433, 424.58624pt x 339.2675pt>
 File: images/carte_routes_hors_geante.png Graphic file (type png)
 <use images/carte_routes_hors_geante.png>
 Package pdftex.def Info: images/carte_routes_hors_geante.png  used on input lin
-e 350.
+e 376.
 (pdftex.def)             Requested size: 273.14923pt x 218.26935pt.
-<images/local_routes_hors_geante.png, id=448, 332.24126pt x 129.48375pt>
-File: images/local_routes_hors_geante.png Graphic file (type png)
-<use images/local_routes_hors_geante.png>
-Package pdftex.def Info: images/local_routes_hors_geante.png  used on input lin
-e 359.
-(pdftex.def)             Requested size: 218.51521pt x 85.16118pt.
-<images/types_routes_hors_geante.png, id=449, 360.34625pt x 196.735pt>
-File: images/types_routes_hors_geante.png Graphic file (type png)
-<use images/types_routes_hors_geante.png>
-Package pdftex.def Info: images/types_routes_hors_geante.png  used on input lin
-e 366.
-(pdftex.def)             Requested size: 218.51521pt x 119.2997pt.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1046,56 +1066,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[18 <./images/schema_graphe.png> <./images/carte_routes_hors_geante.png>]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[19 <./images/local_routes_hors_geante.png> <./images/types_routes_hors_geante.
-png>]
-Overfull \hbox (25.39009pt too wide) detected at line 425
-[][][][][] \OT1/cmr/m/n/12 = ([] \OMS/cmsy/m/n/12 ^^B [] ^^B \OT1/cmr/m/n/12 (1
- + [] \OMS/cmsy/m/n/12 ^^B []\OT1/cmr/m/n/12 ) \OMS/cmsy/m/n/12 ^^B [][]\OT1/cm
-r/m/n/12 ) \OMS/cmsy/m/n/12 ^^B [][]
- []
-
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[20]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[21]
-Underfull \hbox (badness 10000) in paragraph at lines 474--475
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 489--490
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 496--497
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 503--504
-
- []
+[21 <./images/schema_graphe.png> <./images/carte_routes_hors_geante.png>]
+<images/prorata_air.png, id=443, 740.7675pt x 424.58624pt>
+File: images/prorata_air.png Graphic file (type png)
+<use images/prorata_air.png>
+Package pdftex.def Info: images/prorata_air.png  used on input line 416.
+(pdftex.def)             Requested size: 273.14923pt x 156.5632pt.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1105,8 +1081,10 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [22]
-Underfull \hbox (badness 10000) in paragraph at lines 509--510
-
+Overfull \hbox (117.42165pt too wide) detected at line 442
+[][][][][][][] \OT1/cmr/m/n/12 = ([][] \OMS/cmsy/m/n/12 ^^B [][] ^^B \OT1/cmr/m
+/n/12 (1 + [][] \OMS/cmsy/m/n/12 ^^B []\OT1/cmr/m/n/12 ) \OMS/cmsy/m/n/12 ^^B [
+][]\OT1/cmr/m/n/12 ) \OMS/cmsy/m/n/12 ^^B [][]
  []
 
 
@@ -1116,7 +1094,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[23]
+[23 <./images/prorata_air.png>]
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1125,12 +1103,27 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [24]
-Underfull \hbox (badness 10000) in paragraph at lines 601--602
+Underfull \hbox (badness 10000) in paragraph at lines 495--496
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 611--612
+Underfull \hbox (badness 10000) in paragraph at lines 504--505
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 511--512
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 518--519
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 520--521
 
  []
 
@@ -1150,6 +1143,20 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [26]
+Underfull \hbox (badness 10000) in paragraph at lines 581--583
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 596--597
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 608--609
+
+ []
+
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1158,12 +1165,17 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [27]
-Underfull \hbox (badness 10000) in paragraph at lines 758--759
+Underfull \hbox (badness 10000) in paragraph at lines 637--639
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 770--771
+Underfull \hbox (badness 10000) in paragraph at lines 642--644
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 656--658
 
  []
 
@@ -1183,7 +1195,19 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [29]
-Overfull \hbox (83.6824pt too wide) in paragraph at lines 846--847
+Underfull \hbox (badness 10000) in paragraph at lines 754--755
+
+ []
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[30]
+Overfull \hbox (83.6824pt too wide) in paragraph at lines 829--830
 \T1/cmr/m/n/12 ta-tion ini-tiale pour les paires qui Èchangent des vo-lumes su-
 pÈ-rieurs ‡ $[]$
  []
@@ -1195,9 +1219,17 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[30]
+[31]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[32]
 Chapitre 5.
-[31
+[33
 
 ]
 
@@ -1207,56 +1239,23 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[32]
+[34]
 Chapitre 6.
-[33
-
-]
-Chapitre 7.
-[34
-
-]
-Overfull \hbox (3.83688pt too wide) in paragraph at lines 954--954
-[][][]\T1/cmr/m/sc/12 Rashed[]\T1/cmr/m/n/12 , Yas-mine et al. (2017). ``Short-
-term fo-re-cast of contai-ner through-put : An ARIMA-
- []
-
 [35
 
 ]
-Overfull \hbox (30.7774pt too wide) in paragraph at lines 954--954
+Chapitre 7.
+[36
+
+]
+Overfull \hbox (30.7774pt too wide) in paragraph at lines 937--937
 [][][]\T1/cmr/m/sc/12 Northern Corridor Transit and Transport Coordination Auth
 ority (NCTTCA)
  []
 
+[37
 
-Overfull \hbox (5.30142pt too wide) in paragraph at lines 954--954
-[][][]\T1/cmr/m/sc/12 International Food Policy Research Institute (IFPRI)[]\T1
-/cmr/m/n/12 , []\T1/cmr/m/sc/12 Ministry of Finance
- []
-
-
-Overfull \hbox (4.33382pt too wide) in paragraph at lines 954--954
-\T1/cmr/m/sc/12 and Economic Planning (MINECOFIN) []\T1/cmr/m/n/12 et []\T1/cmr
-/m/sc/12 National Institute of Statistics
- []
-
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.49998pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.49998pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
-
-[36]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.49998pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.49998pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
-
-[37]
+]
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.49998pt, for example:
@@ -1273,33 +1272,58 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [39]
-Chapitre 8.
-[40
 
-] (./meÃÅmoire fret rwanda.aux)
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[40]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[41]
+Chapitre 8.
+<images/local_routes_hors_geante.png, id=723, 332.24126pt x 129.48375pt>
+File: images/local_routes_hors_geante.png Graphic file (type png)
+<use images/local_routes_hors_geante.png>
+Package pdftex.def Info: images/local_routes_hors_geante.png  used on input lin
+e 950.
+(pdftex.def)             Requested size: 218.51521pt x 85.16118pt.
+<images/types_routes_hors_geante.png, id=724, 360.34625pt x 196.735pt>
+File: images/types_routes_hors_geante.png Graphic file (type png)
+<use images/types_routes_hors_geante.png>
+Package pdftex.def Info: images/types_routes_hors_geante.png  used on input lin
+e 957.
+(pdftex.def)             Requested size: 218.51521pt x 119.2997pt.
+[42
+
+ <./images/local_routes_hors_geante.png> <./images/types_routes_hors_geante.png
+>] (./meÃÅmoire fret rwanda.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
-
-
-LaTeX Warning: There were undefined references.
-
 Package rerunfilecheck Info: File `"meÃÅmoire fret rwanda".out' has not changed
 .
-(rerunfilecheck)             Checksum: A78E45AB849BC46D2988606DCA4E56B7;9666.
+(rerunfilecheck)             Checksum: 31CAF95EF81F57E1B04C2A1911E89DF4;9354.
 Package logreq Info: Writing requests to '"meÃÅmoire fret rwanda".run.xml'.
 \openout1 = `"meÃÅmoire fret rwanda.run.xml"'.
 
  ) 
 Here is how much of TeX's memory you used:
- 24371 strings out of 467525
- 424740 string characters out of 5418983
- 1277013 words of memory out of 5000000
- 52833 multiletter control sequences out of 15000+600000
+ 24338 strings out of 467525
+ 423939 string characters out of 5418983
+ 1275745 words of memory out of 5000000
+ 52793 multiletter control sequences out of 15000+600000
  645340 words of font info for 84 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,12n,79p,1665b,2237s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,12n,81p,1926b,2237s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb
 ></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex8.
 pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.p
@@ -1321,10 +1345,10 @@ texmf-dist/fonts/type1/public/cm-super/sfrm1440.pfb></usr/local/texlive/2026/te
 xmf-dist/fonts/type1/public/cm-super/sfrm2074.pfb></usr/local/texlive/2026/texm
 f-dist/fonts/type1/public/cm-super/sfti1200.pfb></usr/local/texlive/2026/texmf-
 dist/fonts/type1/public/cm-super/sftt1200.pfb>
-Output written on "meÃÅmoire fret rwanda.pdf" (41 pages, 1154877 bytes).
+Output written on "meÃÅmoire fret rwanda.pdf" (43 pages, 1473976 bytes).
 PDF statistics:
- 901 PDF objects out of 1000 (max. 8388607)
- 793 compressed objects within 8 object streams
- 197 named destinations out of 1000 (max. 500000)
- 391 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 872 PDF objects out of 1000 (max. 8388607)
+ 755 compressed objects within 8 object streams
+ 204 named destinations out of 1000 (max. 500000)
+ 398 words of extra memory for PDF output out of 10000 (max. 10000000)
 
