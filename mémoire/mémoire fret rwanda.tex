@@ -124,7 +124,7 @@
 	\section{Un système de transport entièrement routier}
 	\label{sec:tout_routier}
 
-	Le Rwanda ne dispose ni de réseau ferroviaire, ni de transport fluvial marchand d'ampleur, ni d'oléoduc en service. La politique nationale des transports est explicite : en l'absence de rail et de voies navigables, l'ensemble des marchandises entrant, sortant ou transitant par le pays est déplacé par camion (\cite{MININFRA2021}). Les projets ferroviaires reliant Kigali aux ports de la région restent, à la date de rédaction, à l'état de planification. Le fret rwandais est donc, en pratique, un fret routier.
+	Le Rwanda ne dispose ni de réseau ferroviaire, ni de transport fluvial marchand d'ampleur, ni d'oléoduc en service. La politique nationale des transports est explicite : en l'absence de rail et de voies navigables, l'ensemble des marchandises entrant, sortant ou transitant par le pays est déplacé par camion (\cite{MININFRA2021}). Les projets ferroviaires reliant Kigali aux ports de la région restent, à la date de rédaction, à l'état de planification. Le fret rwandais est donc, en pratique, un fret routier, la politique nationale des transports chiffrant à plus de 90~\% la part de la route dans le fret total, le solde résiduel étant assuré essentiellement par le transport aérien de produits d'exportation à haute valeur ajoutée (\cite{MININFRA2021}).
 
 	Ce réseau routier est par ailleurs très hétérogène. Il comptait à la fin des années 2010 environ 44~671~km, dont seulement 1~973~km revêtus, 72~\% de ce linéaire bitumé correspondant aux routes nationales (\cite{MININFRA2021}). Le fret longue distance se concentre donc sur une ossature bitumée étroite, tandis que l'essentiel du linéaire est sans revêtement. Un tronçon revêtu interrompu par une inondation n'a donc fréquemment pour report qu'une piste de qualité très inférieure.
 
@@ -837,30 +837,295 @@
 	\section{Scénario de référence}
 	\label{sec:ref}
 	
+	Le scénario de référence désigne l'exécution du modèle avec les valeurs de paramètres retenues au chapitre précédent, sur un réseau intact. Il sert de point de comparaison à l'ensemble des scénarios de rupture et des tests de sensibilité. Nous en présentons d'abord les flux origine-destination, puis leur affectation sur le réseau.
+
 	\subsection{Génération Offre-Demande}
 	\label{subsec:OD}
-	
-	[À développer avec résultats et visualisations]
-	
+
+	\subsubsection{Convergence et cohérence comptable}
+
+	Le réseau retenu compte 28\,145 nœuds et 35\,594 arêtes, en une seule composante connexe. Les 121 candidats-entrepôts initiaux sont ramenés à 91 nœuds origine-destination après la fusion à 4 km décrite en \ref{subsubsec:affectation_prod}, dont 5 postes frontières protégés de la fusion. Ces 91 zones couvrent une population de 12\,908\,867 habitants, cohérente avec le recensement RPHC5 de 2022.
+
+	L'algorithme de Furness converge pour les huit secteurs porteurs de fret, en 4 à 11 itérations selon le secteur, avec une erreur maximale sur les marges inférieure à $10^{-4}$\,\%. La vérification du bilan ressources-emplois au prix de base laisse un résidu maximal de $10^{-6}$ milliard de RWF, soit une fermeture comptable exacte aux erreurs d'arrondi près~: les tonnages produits par le modèle gravitaire sont donc bien ceux qu'implique la matrice de comptabilité sociale, sans fuite ni création de matière.
+
+	La matrice de coûts est complète~: les 8\,190 paires origine-destination possibles sont toutes connectées par au moins un chemin routier, pour un coût généralisé moyen de 6\,213 RWF par tonne.
+
+	\subsubsection{Structure des flux}
+
+	Le modèle produit un tonnage total de 11\,672\,525 tonnes par an, réparties sur 5\,637 paires actives. Le tableau \ref{tab:flux_secteur_ref} en donne la ventilation sectorielle.
+
+	\begin{table}[H]
+		\centering
+		\caption{Flux annuels par secteur — scénario de référence}
+		\label{tab:flux_secteur_ref}
+		\begin{tabular}{lrrr}
+			\toprule
+			Secteur & $\beta$ & Flux (tonnes) & Part du tonnage \\
+			\midrule
+			Construction     & 2,5 & 4\,352\,364 & 37,3\,\% \\
+			Manufactures     & 1,6 & 2\,131\,597 & 18,3\,\% \\
+			Chimie/pétrole   & 1,5 & 1\,718\,406 & 14,7\,\% \\
+			Agro-industrie   & 1,8 & 1\,624\,767 & 13,9\,\% \\
+			Mines            & 1,2 &   871\,398 &  7,5\,\% \\
+			Agriculture      & 2,3 &   634\,621 &  5,4\,\% \\
+			Commerce         & 1,7 &   294\,887 &  2,5\,\% \\
+			Cultures d'exportation & 1,4 & 44\,484 & 0,4\,\% \\
+			\midrule
+			\textbf{Total}   &     & \textbf{11\,672\,525} & \textbf{100\,\%} \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+
+	La Construction domine largement le tonnage. Ce résultat est attendu et tient à la nature physique des biens plutôt qu'à leur poids économique~: avec 9\,009 tonnes par milliard de RWF, ce secteur affiche le taux de conversion monnaie-tonne le plus élevé du modèle, près de douze fois celui du Commerce. Un pays en phase d'équipement en infrastructures déplace d'abord des granulats, du ciment et des matériaux de remblai.
+
+	Les trois secteurs suivants — Manufactures, Chimie/pétrole et Agro-industrie — représentent ensemble 46,9\,\% du tonnage. Leur particularité est d'être massivement importés~: le bilan ressources-emplois montre une offre domestique nulle pour les Manufactures et la Chimie/pétrole, dont la totalité de l'approvisionnement provient de l'extérieur. Ces flux naissent donc aux postes frontières et non dans les zones de production intérieures, ce qui aura des conséquences directes sur la géographie du trafic.
+
+	Cette asymétrie se lit dans le classement des zones par activité totale. Le poste frontière de Rusumo, porte d'entrée du corridor central vers Dar es Salaam, traite à lui seul 3\,514 milliers de tonnes, soit davantage que le hub central de Kigali (1\,736 milliers de tonnes). Viennent ensuite Gatuna (1\,550), tête du corridor nord vers Mombasa, puis Kigali-OSM (905) et Rubavu/Goma (832). Quatre des cinq premières zones du pays sont des points de franchissement frontalier~: le fret rwandais est avant tout un fret d'importation en transit vers la capitale.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.9\linewidth]{images/ref_graphique_flux_secteurs.png}
+		\caption{Flux échangés par secteur — scénario de référence}
+		\label{fig:flux_secteurs_ref}
+	\end{figure}
+
 	\subsection{Affectation du fret}
 	\label{subsec:affectation_ref}
-	
-	[À développer avec résultats et visualisations]
+
+	\subsubsection{Volume affecté et longueur des acheminements}
+
+	L'affectation ne retient que les paires dépassant le seuil de 50 tonnes, soit 3\,379 paires sur les 5\,637 actives. Ce filtre écarte 40,2\,\% des paires mais seulement 0,27\,\% du tonnage~: il élimine une longue traîne d'échanges négligeables sans altérer les résultats agrégés.
+
+	L'affectation à l'équilibre produit 1\,507\,601\,749 tonnes-kilomètres, soit une distance moyenne d'acheminement de 129 km. Ce chiffre est élevé au regard des dimensions du pays (environ 250 km dans sa plus grande diagonale), et s'explique précisément par le poids des flux d'importation~: une tonne entrée à Rusumo doit traverser la moitié du territoire pour atteindre Kigali.
+
+	Le trafic emprunte 4\,062 arêtes, soit 11,4\,\% du réseau. Cette concentration est une propriété du modèle autant qu'une réalité géographique~: l'affectation étant déterministe, tous les flux d'une même paire origine-destination suivent l'unique chemin de coût minimal, ce qui concentre le trafic sur un petit nombre d'axes. Le volume maximal atteint 3\,514\,036 tonnes sur les tronçons de la route de Rusumo, contre 440\,132 tonnes en moyenne sur les arêtes actives.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.9\linewidth]{images/ref_carte_trafic_fret.png}
+		\caption{Intensité du trafic de fret sur le réseau — scénario de référence}
+		\label{fig:trafic_ref}
+	\end{figure}
+
+	\subsubsection{Composition sectorielle du trafic}
+
+	La ventilation sectorielle des tonnes-kilomètres diffère nettement de celle des tonnes, et c'est là que le modèle produit son résultat le plus instructif. Le tableau \ref{tab:tkm_secteur_ref} met en regard les deux mesures.
+
+	\begin{table}[H]
+		\centering
+		\caption{Tonnes-kilomètres et distance moyenne par secteur — scénario de référence}
+		\label{tab:tkm_secteur_ref}
+		\begin{tabular}{lrrr}
+			\toprule
+			Secteur & Part des t$\cdot$km & Part des tonnes & Distance moyenne \\
+			\midrule
+			Manufactures     & 24,2\,\% & 18,3\,\% & 171 km \\
+			Construction     & 22,7\,\% & 37,3\,\% &  79 km \\
+			Chimie/pétrole   & 19,9\,\% & 14,7\,\% & 175 km \\
+			Agro-industrie   & 16,2\,\% & 13,9\,\% & 150 km \\
+			Mines            &  9,7\,\% &  7,5\,\% & 168 km \\
+			Agriculture      &  5,0\,\% &  5,4\,\% & 120 km \\
+			Commerce         &  1,7\,\% &  2,5\,\% &  88 km \\
+			Cultures d'exportation & 0,5\,\% & 0,4\,\% & 166 km \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+
+	Deux régimes d'acheminement se dégagent. Les secteurs liés au commerce extérieur — Chimie/pétrole, Manufactures, Mines, Cultures d'exportation — parcourent en moyenne 165 à 175 km, distance qui correspond à un trajet frontière-intérieur. Les secteurs domestiques — Construction et Commerce — se contentent de 79 et 88 km, distances de desserte locale entre carrières, chantiers et marchés. L'Agriculture et l'Agro-industrie occupent une position intermédiaire, cohérente avec leur double nature de production locale partiellement exportée.
+
+	La conséquence est un renversement de hiérarchie~: la Construction, premier secteur en tonnage avec 37,3\,\%, ne représente que 22,7\,\% de l'effort de transport, tandis que les Manufactures passent de 18,3\,\% à 24,2\,\%. Rapporté au travail effectivement demandé au réseau routier, le fret rwandais est d'abord un fret d'importation.
+
+	Cette structure se projette sur la hiérarchie du réseau (figure \ref{fig:compo_route_ref}). Le long des quatre niveaux classés, on observe un basculement régulier~: la part des Manufactures et de la Chimie/pétrole décroît de 41,4\,\% sur les routes \textit{trunk} à 29,5\,\% sur les routes \textit{tertiary}, tandis que celle de la Construction progresse en sens inverse de 26,4\,\% à 43,4\,\%. Les axes structurants portent les flux d'importation venus des frontières~; les routes secondaires et tertiaires portent la desserte locale de matériaux.
+
+	Ce gradient s'interrompt toutefois sur la catégorie \textit{unclassified}, où les Manufactures et la Chimie/pétrole représentent 53,6\,\% du tonnage et la Construction seulement 14,9\,\%. Cette anomalie ne traduit vraisemblablement pas un fait économique mais une limite de la source~: dans OpenStreetMap, l'étiquette \textit{unclassified} est la catégorie par défaut des voies sans classification administrative renseignée. Elle mélange donc de véritables routes de desserte et des tronçons non renseignés d'itinéraires interurbains structurants — ce qui explique déjà qu'elle concentre 97\,\% du linéaire écarté lors de l'extraction de la composante géante (annexe \ref{subsubsec:annexe_composante_geante}). La lecture du niveau hiérarchique comme indicateur de la nature du flux ne vaut donc que sur les catégories effectivement classées.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/ref_graphique_compo_secteurs_type_route.png}
+		\caption{Composition sectorielle du trafic par niveau hiérarchique du réseau}
+		\label{fig:compo_route_ref}
+	\end{figure}
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.85\linewidth]{images/ref_carte_secteur_dominant.png}
+		\caption{Secteur dominant en tonnage sur chaque arête du réseau}
+		\label{fig:secteur_dominant_ref}
+	\end{figure}
+
+	\subsubsection{Congestion et saturation}
+
+	L'équilibre BPR/MSA converge en 3 itérations, pour un critère d'arrêt fixé à un écart relatif de 1\,\%. La première passe, équivalente à une affectation tout-ou-rien, place 18 arêtes en situation de sur-capacité ($V/C > 1$)~; le report d'itinéraire opéré par les itérations suivantes ramène ce nombre à 8. L'écart relatif passe de 1,0000 à 0,0168 puis 0,0056, ce qui traduit une redistribution réelle mais rapidement stabilisée.
+
+	Le taux de saturation maximal s'établit à 1,67, atteint sur les tronçons du corridor de Rusumo. Seules 8 arêtes sur 35\,594 dépassent le seuil de saturation, et aucune ne se situe dans la zone intermédiaire ($0{,}8 < V/C < 1$)~: le réseau est globalement fluide, avec quelques points de rupture nettement identifiés. Ce résultat doit toutefois être lu avec prudence, la capacité en unités de véhicule particulier par type de route n'ayant pas fait l'objet d'une calibration sur données de comptage rwandaises.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.9\linewidth]{images/ref_carte_saturation_reseau.png}
+		\caption{Taux de saturation $V/C$ du réseau — scénario de référence}
+		\label{fig:saturation_ref}
+	\end{figure}
+
+	\subsubsection{Choix modal}
+
+	La répartition modale du trafic est dégénérée~: la totalité des tonnes-kilomètres est réalisée par le camion lourd, aucun flux n'étant affecté à la camionnette ou au camion moyen, et aucun transbordement n'étant réalisé sur les 546 arêtes prévues à cet effet.
+
+	Ce résultat n'est pas un artefact de calcul mais une conséquence directe de la structure de coûts retenue. Le camion lourd présente le coût unitaire le plus bas sur les trois postes simultanément~: 79,97 RWF par tonne-kilomètre contre 108,48 pour le camion moyen et 124,32 pour la camionnette, et 3\,952 RWF par tonne de manutention contre 6\,587 et 9\,880. En l'absence de contrainte de taille de lot, de fréquence de livraison ou d'accessibilité de la voirie, aucun mécanisme ne peut faire préférer un véhicule plus petit. Le graphe multimodal à trois couches et les arêtes de transbordement restent donc inutilisés dans le scénario de référence. Nous revenons sur cette limite au chapitre \ref{sec:sensibilite} et en discussion.
+
+	\subsubsection{Émissions et validation}
+
+	Le fret modélisé émet 77\,742 tonnes de CO$_2$, 23\,207 kg de NO$_x$ et 2\,611 kg de PM2,5 par an, soit une intensité moyenne de 0,052 kg de CO$_2$ par tonne-kilomètre. Cette valeur est cohérente avec les facteurs d'émission usuels des poids lourds, ce qui est attendu puisque l'ensemble du trafic est affecté à cette catégorie de véhicule.
+
+	Le coût de transport impliqué par le modèle s'élève à 68,6 milliards de RWF, à rapprocher des 1\,394,7 milliards de marges de distribution (poste \textit{trc}) de la matrice de comptabilité sociale, soit 4,9\,\% (figure \ref{fig:validation_trc_ref}). L'écart est considérable mais son sens était attendu~: le poste \textit{trc} agrège le transport routier, les marges de gros et de détail, le transport de voyageurs et le dernier kilomètre, dont aucun n'est modélisé ici. Le modèle ne capture que l'acheminement inter-entrepôts de marchandises sur le réseau interurbain. Cette confrontation ne constitue donc pas une validation au sens strict, mais un test de vraisemblance de l'ordre de grandeur~: elle indique que le coût modélisé reste inférieur à sa borne supérieure comptable, sans permettre de conclure sur sa justesse.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.75\linewidth]{images/ref_graphique_validation_trc.png}
+		\caption{Coût de transport modélisé rapporté aux marges de distribution de la SAM}
+		\label{fig:validation_trc_ref}
+	\end{figure}
 	
 	\section{Scénarios d'inondations}
 	\label{sec:scenario}
 	
 	La modélisation des impacts des inondations sur les réseaux de transport s'appuie sur les travaux de \cite{Botzen2019} et \cite{Otto2017} qui analysent les impacts économiques des catastrophes naturelles et la propagation des chocs dans les chaînes d'approvisionnement.
 	
+	\subsubsection{Construction du scénario}
+
+	L'aléa retenu est la carte d'inondation fluviale mondiale produite par le Centre commun de recherche de la Commission européenne dans le cadre du service Copernicus de gestion des urgences \parencite{Baugh2024}. Ces cartes sont issues du couplage d'un modèle hydrologique (LISFLOOD) et d'un modèle hydraulique bidimensionnel (LISFLOOD-FP) appliqués au modèle numérique de terrain MERIT. Elles fournissent, à une résolution de 3 secondes d'arc (environ 90 m), la hauteur d'eau en mètres pour sept périodes de retour. Nous retenons la crue centennale.
+
+	Deux masques fournis par le producteur sont appliqués avant usage. Le premier retire les plans d'eau permanents~: les cartes d'aléa du JRC les intègrent par construction, si bien que le lac Kivu et les lacs de l'Akagera apparaîtraient comme inondés à toutes les périodes de retour. Sans ce retrait, l'étendue submergée ne varierait quasiment pas entre la crue décennale et la crue quincentennale — 375\,000 contre 380\,000 pixels — et la gradation par période de retour perdrait tout sens. Après masquage, la progression redevient monotone~: 54\,826, 67\,637 et 73\,264 pixels au-delà de 50 cm d'eau pour les périodes de retour de 10, 100 et 500 ans. Le second masque écarte les zones de profondeur aberrante que le JRC signale lui-même, où le modèle prédit plus de 10 m d'eau dans de petits chenaux — artefacts fréquents sur un relief aussi marqué que celui du Rwanda.
+
+	Une route est déclarée submergée lorsque plus de 30\,\% de sa longueur se trouve sous plus de 50 cm d'eau, profondeur au-delà de laquelle un poids lourd ne franchit plus l'ouvrage de façon fiable. Ce critère retient 211 tronçons. Nous n'en coupons ensuite que 70\,\%, tirés aléatoirement à graine fixe. Ce tirage n'est pas une commodité de calcul~: le raster décrit la lame d'eau au sol sans connaître la cote de la chaussée, et une route remblayée, un pont ou un ouvrage de drainage restent praticables là où le pixel est inondé. Le tirage représente cette incertitude sur l'exposition réelle de l'ouvrage.
+
+	Le scénario final coupe 153 tronçons, soit 102 km et 0,43\,\% du linéaire du réseau, répartis sur les cinq niveaux hiérarchiques et les trois types de revêtement. La durée de la perturbation est fixée à 14 jours.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/rupt_alea_glofas.png}
+		\caption{Aléa d'inondation fluviale de période de retour 100 ans et tronçons exposés}
+		\label{fig:alea_glofas}
+	\end{figure}
+
 	\subsection{Impacts}
 	\label{subsec:impacts}
-	
-	[À développer avec résultats et visualisations]
-	
+
+	\subsubsection{Une lecture par paires trompeuse}
+
+	Le tableau \ref{tab:impacts_rupture} classe les 8\,190 paires origine-destination selon l'ampleur du surcoût subi, en les pondérant d'abord par leur nombre puis par le tonnage qu'elles portent.
+
+	\begin{table}[H]
+		\centering
+		\caption{Distribution des impacts du scénario de rupture}
+		\label{tab:impacts_rupture}
+		\begin{tabular}{lrrrr}
+			\toprule
+			Type d'impact & Paires & Part des paires & Part du tonnage & Surcoût médian \\
+			\midrule
+			Inchangé              &    2 &  0,0\,\% &  0,0\,\% & — \\
+			Faible ($<$10\,\%)     & 3\,772 & 46,1\,\% & 57,9\,\% &   0,0\,\% \\
+			Modéré (10--50\,\%)    & 1\,780 & 21,7\,\% & 22,2\,\% &  30,1\,\% \\
+			Fort (50--100\,\%)     &   938 & 11,5\,\% &  8,4\,\% &  71,2\,\% \\
+			Très fort ($>$100\,\%) &   838 & 10,2\,\% &  7,2\,\% & 135,1\,\% \\
+			Déconnecté            &   860 & 10,5\,\% &  4,3\,\% & — \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+
+	Les deux pondérations racontent des histoires différentes, et c'est le principal enseignement de ce scénario. En nombre de paires, l'événement paraît sévère~: seules 2 paires sur 8\,190 restent strictement inchangées, et plus d'un cinquième subit un surcoût supérieur à 50\,\%. Pondéré par le tonnage, il l'est beaucoup moins~: 57,9\,\% des tonnes ne subissent qu'un surcoût inférieur à 10\,\%, et les paires déconnectées, qui représentent 10,5\,\% des liaisons, ne portent que 4,3\,\% du fret, soit 501\,489 tonnes.
+
+	Cette divergence tient à la structure spatiale des flux décrite en \ref{subsec:OD}~: le tonnage est concentré sur un petit nombre de liaisons frontière-capitale, tandis que la longue traîne des paires faiblement chargées relie des zones périphériques bien plus exposées à la coupure. Raisonner en nombre de paires revient donc à donner autant de poids à un flux de quelques dizaines de tonnes qu'au corridor de Rusumo. Nous privilégions par conséquent les grandeurs pondérées par le tonnage dans tout ce qui suit.
+
+	Le fait que 2 paires seulement demeurent inchangées mérite par ailleurs une explication. Il ne signifie pas que la quasi-totalité des itinéraires traverse la zone inondée, mais que la coupure modifie l'équilibre de congestion sur l'ensemble du réseau~: le trafic reporté renchérit des arêtes situées loin du choc, et pratiquement tout chemin voit son coût bouger à la marge. C'est précisément la classe « faible », qui rassemble 46,1\,\% des paires pour un surcoût médian nul.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/rupt_graphique_surcouts.png}
+		\caption{Distribution des surcoûts relatifs de transport par paire origine-destination}
+		\label{fig:surcouts_rupture}
+	\end{figure}
+
+	\subsubsection{Coût agrégé et report de trafic}
+
+	En pondérant chaque paire par le tonnage qu'elle échange, le surcoût de transport atteint 17,6 milliards de RWF en équivalent annuel, soit 25,6\,\% du coût de transport du scénario de référence. Rapporté aux 14 jours de perturbation, l'ordre de grandeur est de 675 millions de RWF. Cette conversion suppose que le fret est réparti uniformément dans l'année et que les volumes échangés ne réagissent pas au choc — deux hypothèses fortes sur lesquelles nous revenons en discussion.
+
+	L'allongement des itinéraires représente 331 millions de tonnes-kilomètres supplémentaires, soit 22\,\% de l'effort de transport de référence. Les émissions correspondantes s'élèvent à 18\,338 tonnes de CO$_2$ en équivalent annuel, soit environ 703 tonnes sur la durée de l'événement, auxquelles s'ajoutent 5\,474 kg de NO$_x$ et 616 kg de PM2,5.
+
+	Ce surcroît d'émissions est proportionnellement supérieur à l'allongement du transport~: 23,6\,\% d'émissions supplémentaires pour 22\,\% de tonnes-kilomètres en plus. L'écart tient à la nature des itinéraires de substitution. Les émissions sont calculées avec l'intensité propre à chaque tronçon emprunté, or les routes de contournement sont en moyenne plus étroites, moins bien revêtues et plus pentues que les axes qu'elles remplacent~: une tonne-kilomètre de détour émet davantage qu'une tonne-kilomètre de trajet nominal.
+
+	Le report de trafic se lit enfin dans la congestion. Sur le réseau intact, l'équilibre place 8 arêtes en sur-capacité~; sur le réseau amputé, elles sont 16, pour une saturation maximale comparable (1,62 contre 1,67). La coupure de 0,43\,\% du linéaire double donc le nombre de points de saturation, le trafic dévié se concentrant sur les itinéraires de contournement disponibles (figure \ref{fig:detours_rupture}).
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/rupt_carte_detours.png}
+		\caption{Itinéraires de contournement — couleur : surcoût moyen des flux reroutés ; épaisseur : volume détourné}
+		\label{fig:detours_rupture}
+	\end{figure}
+
 	\subsection{Analyse de vulnérabilité}
 	\label{subsec:vulneralibilite}
-	
-	[À développer avec résultats et visualisations]
+
+	\subsubsection{L'enclave de Bugesera}
+
+	Les 860 paires déconnectées ne se répartissent pas sur l'ensemble du territoire~: elles se réduisent intégralement à cinq zones. Rilima, Ramiro, Kayumbo Centre, la zone industrielle 19 et la zone économique spéciale de Bugesera perdent chacune l'accès à 86 de leurs 90 partenaires, ne restant connectées qu'entre elles. Ces cinq zones, comprises entre 30,06 et 30,23 degrés de longitude est et entre 2,10 et 2,30 degrés de latitude sud, forment un ensemble contigu correspondant au district de Bugesera.
+
+	Le résultat est géographiquement cohérent. Bugesera est bordé au nord et à l'ouest par la Nyabarongo, au sud par l'Akanyaru et la frontière burundaise, et parsemé de lacs~: le district ne communique avec le reste du pays que par un nombre restreint de franchissements, tous situés en fond de vallée et donc exposés à la crue. La submersion simultanée de ces points de passage suffit à isoler le district, alors même que le scénario ne coupe que 0,43\,\% du réseau national. L'enjeu n'est pas mince, ce district accueillant une zone économique spéciale et le futur aéroport international de Bugesera.
+
+	Cette configuration illustre une propriété générale des réseaux peu maillés~: la vulnérabilité n'est pas proportionnelle à l'ampleur du dommage physique, mais dépend de la position des tronçons atteints dans la topologie du graphe. Quelques centaines de mètres de chaussée submergée en fond de vallée produisent un effet sans commune mesure avec plusieurs kilomètres coupés sur un axe doublé.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/rupt_carte_reseau_degrade.png}
+		\caption{Réseau dégradé et impact par zone. L'enclavement fait l'objet d'une classe distincte (en noir) et non du haut de l'échelle de surcoût~: une zone déconnectée n'a pas de surcoût défini, et son surcoût moyen apparent, calculé sur les seules liaisons qui lui restent, serait trompeusement faible.}
+		\label{fig:reseau_degrade}
+	\end{figure}
+
+	Hors déconnexion, les zones les plus pénalisées se situent dans le corridor central, entre Kigali et Huye~: Runda subit un surcoût relatif moyen de 195\,\%, Musambira de 132\,\%, Muhanga de 90\,\% et Ruhango de 79\,\%. Ce sont des zones dont les itinéraires vers la capitale franchissent la Nyabarongo et dont le contournement impose un long détour amont.
+
+	\subsubsection{Criticité des axes}
+
+	L'analyse de criticité procède différemment~: plutôt que de simuler un événement, elle coupe une à une les 50 arêtes les plus chargées du réseau et mesure le surcoût agrégé qu'entraîne chaque suppression isolée, pondéré par les tonnages échangés. Les résultats sont agrégés par voie, la criticité d'une route étant définie comme le maximum sur ses tronçons — couper un seul tronçon suffit à interrompre l'itinéraire.
+
+	\begin{table}[H]
+		\centering
+		\caption{Cinq routes les plus critiques du réseau}
+		\label{tab:criticite}
+		\begin{tabular}{llrrrr}
+			\toprule
+			Rang & Route & Tronçons & Long. (km) & Volume (t) & Criticité \\
+			\midrule
+			1 & Liaison Ngoma--Rusumo & 20 & 36,2 & 3\,514\,036 & 3\,022\,476 \\
+			2 & KK 3 Rd (Kigali)      &  5 &  3,0 & 3\,205\,427 &   238\,232 \\
+			3 & (sans nom, Kigali)    &  3 &  1,9 & 3\,097\,727 &   226\,086 \\
+			4 & KK 3 Rd (Kigali)      &  3 &  1,2 & 3\,205\,427 &   208\,374 \\
+			5 & KK 3 Rd (Kigali)      &  2 &  1,1 & 3\,205\,427 &   208\,374 \\
+			\bottomrule
+		\end{tabular}
+
+		\vspace{0.3em}
+		{\footnotesize Criticité en milliers de RWF $\times$ tonnes.}
+	\end{table}
+
+	Le classement est écrasé par un axe unique. La liaison de 36 km qui relie la région de Ngoma au poste frontière de Rusumo porte 3,5 millions de tonnes, présente une criticité douze fois supérieure à celle de la deuxième route du classement, et sa coupure déconnecterait à elle seule 180 paires origine-destination — alors qu'aucune des quatre routes suivantes n'en déconnecte une seule. Cet axe est le débouché rwandais du corridor central vers Dar es Salaam, par lequel transite l'essentiel des importations du pays.
+
+	Ce résultat pointe une vulnérabilité structurelle plutôt qu'un risque d'inondation~: cette route n'est pas particulièrement exposée à la crue, mais le pays n'a pas d'itinéraire de substitution comparable vers la Tanzanie. Les routes suivantes du classement sont, elles, des tronçons urbains de Kigali dont la criticité tient au volume qu'ils portent et non à l'absence d'alternative, comme le montre leur absence de déconnexion.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/rupt_carte_criticite_aretes.png}
+		\caption{Arêtes les plus critiques du réseau, classées par surcoût pondéré}
+		\label{fig:criticite}
+	\end{figure}
+
+	\subsubsection{Portée et limites de l'exercice}
+
+	Trois réserves encadrent la lecture de ces résultats.
+
+	D'abord, le coût de la déconnexion n'est pas valorisé. Une paire déconnectée reçoit un surcoût non défini et sort des moyennes~: les 501\,489 tonnes privées d'accès ne contribuent donc pas au chiffrage de 675 millions de RWF, qui constitue de ce fait une borne inférieure. Une évaluation complète supposerait de valoriser la production perdue ou substituée dans les zones isolées, ce qui relève du couplage avec un modèle économique évoqué en discussion.
+
+	Ensuite, l'aléa mobilisé est strictement fluvial. Les cartes du JRC ne représentent ni les crues éclair ni les glissements de terrain, or ce sont eux qui ont causé l'essentiel des dommages routiers lors des inondations de mai 2023 dans l'ouest du pays. La vulnérabilité des districts de l'Ouest est donc vraisemblablement sous-estimée par ce scénario.
+
+	Enfin, le seuil de submersion et la proportion de routes effectivement coupées sont des paramètres de jugement, non des grandeurs mesurées. Les capacités de voirie qui déterminent la congestion n'ont pas davantage été calibrées sur des comptages rwandais. Les ordres de grandeur présentés ici doivent donc être lus comme la démonstration d'un mécanisme et d'une chaîne de calcul, non comme une prévision chiffrée du coût d'une crue centennale au Rwanda.
 	
 	\section{Tests de sensibilité}
 	\label{sec:sensibilite}

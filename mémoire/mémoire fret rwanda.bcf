@@ -2382,20 +2382,20 @@
     <bcf:citekey order="6" intorder="1">NISR2023</bcf:citekey>
     <bcf:citekey order="7" intorder="1">MININFRA2021</bcf:citekey>
     <bcf:citekey order="8" intorder="1">MININFRA2021</bcf:citekey>
-    <bcf:citekey order="9" intorder="1">NCTTCA2018</bcf:citekey>
-    <bcf:citekey order="9" intorder="2">MININFRA2021</bcf:citekey>
-    <bcf:citekey order="10" intorder="1">MININFRA2021</bcf:citekey>
-    <bcf:citekey order="11" intorder="1">WorldBank2020</bcf:citekey>
-    <bcf:citekey order="11" intorder="2">WorldBank2024CEM</bcf:citekey>
-    <bcf:citekey order="12" intorder="1">MININFRA2021</bcf:citekey>
-    <bcf:citekey order="13" intorder="1">MINECOFIN2023</bcf:citekey>
-    <bcf:citekey order="14" intorder="1">Tavasszy2011</bcf:citekey>
-    <bcf:citekey order="15" intorder="1">deJong2013</bcf:citekey>
-    <bcf:citekey order="16" intorder="1">Liedtke2009</bcf:citekey>
-    <bcf:citekey order="17" intorder="1">Colon2021</bcf:citekey>
-    <bcf:citekey order="18" intorder="1">Karlaftis2011</bcf:citekey>
-    <bcf:citekey order="19" intorder="1">Vlahogianni2014</bcf:citekey>
-    <bcf:citekey order="20" intorder="1">deJong2004</bcf:citekey>
+    <bcf:citekey order="9" intorder="1">MININFRA2021</bcf:citekey>
+    <bcf:citekey order="10" intorder="1">NCTTCA2018</bcf:citekey>
+    <bcf:citekey order="10" intorder="2">MININFRA2021</bcf:citekey>
+    <bcf:citekey order="11" intorder="1">MININFRA2021</bcf:citekey>
+    <bcf:citekey order="12" intorder="1">WorldBank2020</bcf:citekey>
+    <bcf:citekey order="12" intorder="2">WorldBank2024CEM</bcf:citekey>
+    <bcf:citekey order="13" intorder="1">MININFRA2021</bcf:citekey>
+    <bcf:citekey order="14" intorder="1">MINECOFIN2023</bcf:citekey>
+    <bcf:citekey order="15" intorder="1">Tavasszy2011</bcf:citekey>
+    <bcf:citekey order="16" intorder="1">deJong2013</bcf:citekey>
+    <bcf:citekey order="17" intorder="1">Liedtke2009</bcf:citekey>
+    <bcf:citekey order="18" intorder="1">Colon2021</bcf:citekey>
+    <bcf:citekey order="19" intorder="1">Karlaftis2011</bcf:citekey>
+    <bcf:citekey order="20" intorder="1">Vlahogianni2014</bcf:citekey>
     <bcf:citekey order="21" intorder="1">deJong2004</bcf:citekey>
     <bcf:citekey order="22" intorder="1">deJong2004</bcf:citekey>
     <bcf:citekey order="23" intorder="1">deJong2004</bcf:citekey>
@@ -2410,59 +2410,61 @@
     <bcf:citekey order="32" intorder="1">deJong2004</bcf:citekey>
     <bcf:citekey order="33" intorder="1">deJong2004</bcf:citekey>
     <bcf:citekey order="34" intorder="1">deJong2004</bcf:citekey>
-    <bcf:citekey order="35" intorder="1">Wardrop1952</bcf:citekey>
-    <bcf:citekey order="36" intorder="1">BPR1964</bcf:citekey>
-    <bcf:citekey order="37" intorder="1">Sheffi1985</bcf:citekey>
-    <bcf:citekey order="38" intorder="1">Hijmans2026geodata</bcf:citekey>
-    <bcf:citekey order="39" intorder="1">Chi2022</bcf:citekey>
-    <bcf:citekey order="40" intorder="1">HolguinVeras2011</bcf:citekey>
-    <bcf:citekey order="41" intorder="1">Ortuzar2011</bcf:citekey>
-    <bcf:citekey order="42" intorder="1">Dijkstra1959</bcf:citekey>
-    <bcf:citekey order="43" intorder="1">Csardi2026igraph</bcf:citekey>
-    <bcf:citekey order="44" intorder="1">Cascetta2008</bcf:citekey>
-    <bcf:citekey order="45" intorder="1">Wilson1967</bcf:citekey>
-    <bcf:citekey order="46" intorder="1">BPR1964</bcf:citekey>
-    <bcf:citekey order="47" intorder="1">Sheffi1985</bcf:citekey>
-    <bcf:citekey order="48" intorder="1">Baumol1970</bcf:citekey>
-    <bcf:citekey order="49" intorder="1">Combes2012</bcf:citekey>
-    <bcf:citekey order="50" intorder="1">Jenelius2015</bcf:citekey>
-    <bcf:citekey order="51" intorder="1">Colon2021</bcf:citekey>
-    <bcf:citekey order="52" intorder="1">Botzen2019</bcf:citekey>
-    <bcf:citekey order="53" intorder="1">Otto2017</bcf:citekey>
-    <bcf:citekey order="54" intorder="1">Miller2009</bcf:citekey>
-    <bcf:citekey order="54" intorder="2">Leontief1936</bcf:citekey>
-    <bcf:citekey order="54" intorder="3">Okuyama2007</bcf:citekey>
-    <bcf:citekey order="55" intorder="1">Carvalho2021</bcf:citekey>
-    <bcf:citekey order="56" intorder="1">Inoue2019</bcf:citekey>
-    <bcf:citekey order="57" intorder="1" nocite="1">Barrot2016</bcf:citekey>
-    <bcf:citekey order="58" intorder="2" nocite="1">BenAkiva2013</bcf:citekey>
-    <bcf:citekey order="59" intorder="3">Combes2012</bcf:citekey>
-    <bcf:citekey order="60" intorder="4">deJong2013</bcf:citekey>
-    <bcf:citekey order="61" intorder="5" nocite="1">Dietzenbacher2013</bcf:citekey>
-    <bcf:citekey order="62" intorder="6" nocite="1">Felbermayr2014</bcf:citekey>
-    <bcf:citekey order="63" intorder="7" nocite="1">Gabaix2011</bcf:citekey>
-    <bcf:citekey order="64" intorder="8" nocite="1">Guan2020</bcf:citekey>
-    <bcf:citekey order="65" intorder="9" nocite="1">Guilbault2009</bcf:citekey>
-    <bcf:citekey order="66" intorder="10" nocite="1">Hallegatte2013</bcf:citekey>
-    <bcf:citekey order="67" intorder="11" nocite="1">Hallegatte2017</bcf:citekey>
-    <bcf:citekey order="68" intorder="12" nocite="1">Henriet2012</bcf:citekey>
-    <bcf:citekey order="69" intorder="13" nocite="1">Hsiang2010</bcf:citekey>
-    <bcf:citekey order="70" intorder="14" nocite="1">Koks2016</bcf:citekey>
-    <bcf:citekey order="71" intorder="15">Liedtke2009</bcf:citekey>
-    <bcf:citekey order="72" intorder="16" nocite="1">Lucas1977</bcf:citekey>
-    <bcf:citekey order="73" intorder="17" nocite="1">Maoh2008</bcf:citekey>
-    <bcf:citekey order="74" intorder="18" nocite="1">McFadden1974</bcf:citekey>
-    <bcf:citekey order="75" intorder="19" nocite="1">MINIRENA2011</bcf:citekey>
-    <bcf:citekey order="76" intorder="20" nocite="1">Okuyama2014</bcf:citekey>
-    <bcf:citekey order="77" intorder="21">Ortuzar2011</bcf:citekey>
-    <bcf:citekey order="78" intorder="22" nocite="1">Pichler2022</bcf:citekey>
-    <bcf:citekey order="79" intorder="23" nocite="1">Poledna2018</bcf:citekey>
-    <bcf:citekey order="80" intorder="24" nocite="1">Rose2007</bcf:citekey>
-    <bcf:citekey order="81" intorder="25" nocite="1">Rose2005</bcf:citekey>
-    <bcf:citekey order="82" intorder="26" nocite="1">Rozenberg2019</bcf:citekey>
-    <bcf:citekey order="83" intorder="27" nocite="1">Santos2004</bcf:citekey>
-    <bcf:citekey order="84" intorder="28" nocite="1">Tavasszy2014</bcf:citekey>
-    <bcf:citekey order="85" intorder="29" nocite="1">Tsuchiya2007</bcf:citekey>
+    <bcf:citekey order="35" intorder="1">deJong2004</bcf:citekey>
+    <bcf:citekey order="36" intorder="1">Wardrop1952</bcf:citekey>
+    <bcf:citekey order="37" intorder="1">BPR1964</bcf:citekey>
+    <bcf:citekey order="38" intorder="1">Sheffi1985</bcf:citekey>
+    <bcf:citekey order="39" intorder="1">Hijmans2026geodata</bcf:citekey>
+    <bcf:citekey order="40" intorder="1">Chi2022</bcf:citekey>
+    <bcf:citekey order="41" intorder="1">HolguinVeras2011</bcf:citekey>
+    <bcf:citekey order="42" intorder="1">Ortuzar2011</bcf:citekey>
+    <bcf:citekey order="43" intorder="1">Dijkstra1959</bcf:citekey>
+    <bcf:citekey order="44" intorder="1">Csardi2026igraph</bcf:citekey>
+    <bcf:citekey order="45" intorder="1">Cascetta2008</bcf:citekey>
+    <bcf:citekey order="46" intorder="1">Wilson1967</bcf:citekey>
+    <bcf:citekey order="47" intorder="1">BPR1964</bcf:citekey>
+    <bcf:citekey order="48" intorder="1">Sheffi1985</bcf:citekey>
+    <bcf:citekey order="49" intorder="1">Baumol1970</bcf:citekey>
+    <bcf:citekey order="50" intorder="1">Combes2012</bcf:citekey>
+    <bcf:citekey order="51" intorder="1">Jenelius2015</bcf:citekey>
+    <bcf:citekey order="52" intorder="1">Colon2021</bcf:citekey>
+    <bcf:citekey order="53" intorder="1">Botzen2019</bcf:citekey>
+    <bcf:citekey order="54" intorder="1">Otto2017</bcf:citekey>
+    <bcf:citekey order="55" intorder="1">Baugh2024</bcf:citekey>
+    <bcf:citekey order="56" intorder="1">Miller2009</bcf:citekey>
+    <bcf:citekey order="56" intorder="2">Leontief1936</bcf:citekey>
+    <bcf:citekey order="56" intorder="3">Okuyama2007</bcf:citekey>
+    <bcf:citekey order="57" intorder="1">Carvalho2021</bcf:citekey>
+    <bcf:citekey order="58" intorder="1">Inoue2019</bcf:citekey>
+    <bcf:citekey order="59" intorder="1" nocite="1">Barrot2016</bcf:citekey>
+    <bcf:citekey order="60" intorder="2" nocite="1">BenAkiva2013</bcf:citekey>
+    <bcf:citekey order="61" intorder="3">Combes2012</bcf:citekey>
+    <bcf:citekey order="62" intorder="4">deJong2013</bcf:citekey>
+    <bcf:citekey order="63" intorder="5" nocite="1">Dietzenbacher2013</bcf:citekey>
+    <bcf:citekey order="64" intorder="6" nocite="1">Felbermayr2014</bcf:citekey>
+    <bcf:citekey order="65" intorder="7" nocite="1">Gabaix2011</bcf:citekey>
+    <bcf:citekey order="66" intorder="8" nocite="1">Guan2020</bcf:citekey>
+    <bcf:citekey order="67" intorder="9" nocite="1">Guilbault2009</bcf:citekey>
+    <bcf:citekey order="68" intorder="10" nocite="1">Hallegatte2013</bcf:citekey>
+    <bcf:citekey order="69" intorder="11" nocite="1">Hallegatte2017</bcf:citekey>
+    <bcf:citekey order="70" intorder="12" nocite="1">Henriet2012</bcf:citekey>
+    <bcf:citekey order="71" intorder="13" nocite="1">Hsiang2010</bcf:citekey>
+    <bcf:citekey order="72" intorder="14" nocite="1">Koks2016</bcf:citekey>
+    <bcf:citekey order="73" intorder="15">Liedtke2009</bcf:citekey>
+    <bcf:citekey order="74" intorder="16" nocite="1">Lucas1977</bcf:citekey>
+    <bcf:citekey order="75" intorder="17" nocite="1">Maoh2008</bcf:citekey>
+    <bcf:citekey order="76" intorder="18" nocite="1">McFadden1974</bcf:citekey>
+    <bcf:citekey order="77" intorder="19" nocite="1">MINIRENA2011</bcf:citekey>
+    <bcf:citekey order="78" intorder="20" nocite="1">Okuyama2014</bcf:citekey>
+    <bcf:citekey order="79" intorder="21">Ortuzar2011</bcf:citekey>
+    <bcf:citekey order="80" intorder="22" nocite="1">Pichler2022</bcf:citekey>
+    <bcf:citekey order="81" intorder="23" nocite="1">Poledna2018</bcf:citekey>
+    <bcf:citekey order="82" intorder="24" nocite="1">Rose2007</bcf:citekey>
+    <bcf:citekey order="83" intorder="25" nocite="1">Rose2005</bcf:citekey>
+    <bcf:citekey order="84" intorder="26" nocite="1">Rozenberg2019</bcf:citekey>
+    <bcf:citekey order="85" intorder="27" nocite="1">Santos2004</bcf:citekey>
+    <bcf:citekey order="86" intorder="28" nocite="1">Tavasszy2014</bcf:citekey>
+    <bcf:citekey order="87" intorder="29" nocite="1">Tsuchiya2007</bcf:citekey>
   </bcf:section>
   <!-- SORTING TEMPLATES -->
   <bcf:sortingtemplate name="none">

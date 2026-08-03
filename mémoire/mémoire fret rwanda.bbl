@@ -144,8 +144,8 @@
       \strng{authornamehash}{446816fd193efd1999159d49f85b77c9}
       \strng{authorfullhash}{446816fd193efd1999159d49f85b77c9}
       \strng{authorfullhashraw}{446816fd193efd1999159d49f85b77c9}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -519,8 +519,8 @@
       \strng{authornamehash}{09a516fb0fdd5a5a65a04c1d90932234}
       \strng{authorfullhash}{09a516fb0fdd5a5a65a04c1d90932234}
       \strng{authorfullhashraw}{09a516fb0fdd5a5a65a04c1d90932234}
-      \field{sortinit}{1}
-      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -766,8 +766,8 @@
       \strng{authornamehash}{36562130c22efb1c228bc73014879354}
       \strng{authorfullhash}{de7f657e74663fa9e04b259f66632611}
       \strng{authorfullhashraw}{de7f657e74663fa9e04b259f66632611}
-      \field{sortinit}{3}
-      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1163,8 +1163,8 @@
       \strng{authornamehash}{bcb0cbd4274203966898818da372755d}
       \strng{authorfullhash}{bcb0cbd4274203966898818da372755d}
       \strng{authorfullhashraw}{bcb0cbd4274203966898818da372755d}
-      \field{sortinit}{4}
-      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1319,6 +1319,79 @@
       \range{pages}{38}
       \verb{doi}
       \verb 10.1016/j.jedc.2017.08.001
+      \endverb
+    \endentry
+    \entry{Baugh2024}{report}{}{}
+      \name{author}{7}{}{%
+        {{un=0,uniquepart=base,hash=c079ac03ceee2e38f96963492a267a23}{%
+           family={Baugh},
+           familyi={B\bibinitperiod},
+           given={Calum},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=eba31d68cb74c42a7ddc7a0f5e6a1cb9}{%
+           family={Colonese},
+           familyi={C\bibinitperiod},
+           given={Juan},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=207b82e447106c8e5c89fb64eba9fa54}{%
+           family={D'Angelo},
+           familyi={D\bibinitperiod},
+           given={Claudia},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=156e11386a1c1e337e145fc96a65d9ab}{%
+           family={Dottori},
+           familyi={D\bibinitperiod},
+           given={Francesco},
+           giveni={F\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=1f1fa1b9463e19f3ef50b179b523bf02}{%
+           family={Neal},
+           familyi={N\bibinitperiod},
+           given={Jeffrey},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=5eb02e47b58782667d86ef770925ddd8}{%
+           family={Prudhomme},
+           familyi={P\bibinitperiod},
+           given={Christel},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=96b82dd7a74330735a89c5392d2ba0d8}{%
+           family={Salamon},
+           familyi={S\bibinitperiod},
+           given={Peter},
+           giveni={P\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{institution}{1}{%
+        {European Commission, Joint Research Centre (JRC)}%
+      }
+      \strng{namehash}{d1acfb68ece93882e9e15ef69062c21d}
+      \strng{fullhash}{da8cf1094975e6390d66c663fd3f4674}
+      \strng{fullhashraw}{da8cf1094975e6390d66c663fd3f4674}
+      \strng{bibnamehash}{d1acfb68ece93882e9e15ef69062c21d}
+      \strng{authorbibnamehash}{d1acfb68ece93882e9e15ef69062c21d}
+      \strng{authornamehash}{d1acfb68ece93882e9e15ef69062c21d}
+      \strng{authorfullhash}{da8cf1094975e6390d66c663fd3f4674}
+      \strng{authorfullhashraw}{da8cf1094975e6390d66c663fd3f4674}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{note}{Copernicus Emergency Management Service --- Global Flood Awareness System (GloFAS). Licence CC-BY 4.0}
+      \field{title}{Modelled flood inundation for different return period scenarios at the global scale}
+      \field{type}{Jeu de données}
+      \field{year}{2024}
+      \verb{urlraw}
+      \verb https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/
+      \endverb
+      \verb{url}
+      \verb https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/
       \endverb
     \endentry
     \entry{Miller2009}{book}{}{}
@@ -1607,8 +1680,8 @@
       \strng{editornamehash}{d866822d92d56b471370add70d477beb}
       \strng{editorfullhash}{d866822d92d56b471370add70d477beb}
       \strng{editorfullhashraw}{d866822d92d56b471370add70d477beb}
-      \field{sortinit}{5}
-      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1953,8 +2026,8 @@
       \strng{authornamehash}{28d3a76cb3953407d71f5aa42889226f}
       \strng{authorfullhash}{28d3a76cb3953407d71f5aa42889226f}
       \strng{authorfullhashraw}{28d3a76cb3953407d71f5aa42889226f}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1988,8 +2061,8 @@
       \strng{authornamehash}{9c37f9be8b7b6442deeabe02fddb8480}
       \strng{authorfullhash}{9c37f9be8b7b6442deeabe02fddb8480}
       \strng{authorfullhashraw}{9c37f9be8b7b6442deeabe02fddb8480}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2293,8 +2366,8 @@
       \strng{authornamehash}{cc890b2b5d1744bd0bf3ace53ec5997e}
       \strng{authorfullhash}{94da1aefcbf3cef250b3f322f3a8d535}
       \strng{authorfullhashraw}{94da1aefcbf3cef250b3f322f3a8d535}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2387,8 +2460,8 @@
       \strng{authornamehash}{e2f5e3b8060e2604cd748c9e3c57cccc}
       \strng{authorfullhash}{4cf266280ec456edc7597174931b06a1}
       \strng{authorfullhashraw}{4cf266280ec456edc7597174931b06a1}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}

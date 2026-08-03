@@ -54,20 +54,33 @@
 \contentsline {chapter}{\numberline {5}Résultats et tests de sensibilité}{33}{chapter.5}%
 \contentsline {section}{\numberline {5.1}Scénario de référence}{33}{section.5.1}%
 \contentsline {subsection}{\numberline {5.1.1}Génération Offre-Demande}{33}{subsection.5.1.1}%
-\contentsline {subsection}{\numberline {5.1.2}Affectation du fret}{33}{subsection.5.1.2}%
-\contentsline {section}{\numberline {5.2}Scénarios d'inondations}{33}{section.5.2}%
-\contentsline {subsection}{\numberline {5.2.1}Impacts}{33}{subsection.5.2.1}%
-\contentsline {subsection}{\numberline {5.2.2}Analyse de vulnérabilité}{33}{subsection.5.2.2}%
-\contentsline {section}{\numberline {5.3}Tests de sensibilité}{33}{section.5.3}%
-\contentsline {subsection}{\numberline {5.3.1}Paramètres de la fonction de friction}{33}{subsection.5.3.1}%
-\contentsline {subsection}{\numberline {5.3.2}Homogénéité de l'exposition au commerce international}{34}{subsection.5.3.2}%
-\contentsline {subsection}{\numberline {5.3.3}Valeur du temps}{34}{subsection.5.3.3}%
-\contentsline {subsection}{\numberline {5.3.4}Valeurs des taux de conversion monnaie-tonne}{34}{subsection.5.3.4}%
-\contentsline {chapter}{\numberline {6}Discussion}{35}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Limites du travail}{35}{section.6.1}%
-\contentsline {section}{\numberline {6.2}Extensions futures et recommandations}{35}{section.6.2}%
-\contentsline {chapter}{\numberline {7}Conclusion}{36}{chapter.7}%
-\contentsline {chapter}{Bibliographie}{37}{chapter*.9}%
-\contentsline {chapter}{\numberline {8}Annexes}{42}{chapter.8}%
-\contentsline {subsubsection}{Décomposition des routes non reliées à la composante géante}{42}{chapter.8}%
-\contentsline {subsubsection}{Quelques caractéristiques techniques du modèle}{42}{figure.caption.10}%
+\contentsline {subsubsection}{Convergence et cohérence comptable}{33}{subsection.5.1.1}%
+\contentsline {subsubsection}{Structure des flux}{33}{subsection.5.1.1}%
+\contentsline {subsection}{\numberline {5.1.2}Affectation du fret}{35}{subsection.5.1.2}%
+\contentsline {subsubsection}{Volume affecté et longueur des acheminements}{35}{subsection.5.1.2}%
+\contentsline {subsubsection}{Composition sectorielle du trafic}{36}{figure.caption.11}%
+\contentsline {subsubsection}{Congestion et saturation}{38}{figure.caption.14}%
+\contentsline {subsubsection}{Choix modal}{39}{figure.caption.15}%
+\contentsline {subsubsection}{Émissions et validation}{39}{figure.caption.15}%
+\contentsline {section}{\numberline {5.2}Scénarios d'inondations}{40}{section.5.2}%
+\contentsline {subsubsection}{Construction du scénario}{40}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Impacts}{42}{subsection.5.2.1}%
+\contentsline {subsubsection}{Une lecture par paires trompeuse}{42}{subsection.5.2.1}%
+\contentsline {subsubsection}{Coût agrégé et report de trafic}{43}{figure.caption.19}%
+\contentsline {subsection}{\numberline {5.2.2}Analyse de vulnérabilité}{44}{subsection.5.2.2}%
+\contentsline {subsubsection}{L'enclave de Bugesera}{44}{subsection.5.2.2}%
+\contentsline {subsubsection}{Criticité des axes}{45}{figure.caption.21}%
+\contentsline {subsubsection}{Portée et limites de l'exercice}{47}{figure.caption.23}%
+\contentsline {section}{\numberline {5.3}Tests de sensibilité}{48}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Paramètres de la fonction de friction}{48}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}Homogénéité de l'exposition au commerce international}{48}{subsection.5.3.2}%
+\contentsline {subsection}{\numberline {5.3.3}Valeur du temps}{48}{subsection.5.3.3}%
+\contentsline {subsection}{\numberline {5.3.4}Valeurs des taux de conversion monnaie-tonne}{48}{subsection.5.3.4}%
+\contentsline {chapter}{\numberline {6}Discussion}{49}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Limites du travail}{49}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Extensions futures et recommandations}{49}{section.6.2}%
+\contentsline {chapter}{\numberline {7}Conclusion}{50}{chapter.7}%
+\contentsline {chapter}{Bibliographie}{51}{chapter*.24}%
+\contentsline {chapter}{\numberline {8}Annexes}{56}{chapter.8}%
+\contentsline {subsubsection}{Décomposition des routes non reliées à la composante géante}{56}{chapter.8}%
+\contentsline {subsubsection}{Quelques caractéristiques techniques du modèle}{56}{figure.caption.25}%
