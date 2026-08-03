@@ -315,13 +315,30 @@ RWI_FICHIER <- "RWA_relative_wealth_index.csv"
 RWI_CSV_LOCAL  <- "data/raw/rwa_relative_wealth_index.csv"   
 RWI_ZIP_LOCAL  <- "data/raw/rwi_all_countries.zip"          
 
-# Chemin vers le fichier raster de risque (GeoTIFF ou format terra-compatible).
-# Exemples de sources de données :
-#   - JRC Global Surface Water  : https://global-surface-water.appspot.com/
-#   - HAND (Height Above Nearest Drainage) : https://www.earthenv.org/
-#   - NASA LSAF (glissements)   : https://pmm.nasa.gov/landslides
-#   - Modèles hydrologiques locaux (HEC-RAS, LISFLOOD-FP, etc.)
-CHEMIN_RASTER_RISQUE        <- "data/raw/zones_inondables.tif"  # À remplacer par le fichier du pays étudié
+# ── Raster d'aléa inondation (Mode C de l'analyse de vulnérabilité) ───────────
+#
+# Source : cartes d'aléa fluvial mondiales du JRC / Copernicus EMS (GloFAS),
+#   produites par les modèles LISFLOOD (hydrologie) et LISFLOOD-FP (hydraulique)
+#   sur MERIT-DEM. Résolution 3 arc-sec (~90 m), valeurs = hauteur d'eau en
+#   MÈTRES, licence CC-BY 4.0.
+#   Citation : Baugh, Colonese, D'Angelo, Dottori, Neal, Prudhomme, Salamon
+#   (2024), « Modelled flood inundation for different return period scenarios
+#   at the global scale », European Commission, Joint Research Centre.
+#
+# Les fichiers sont produits par preparer_raster_inondation.R, qui mosaïque les
+# deux tuiles couvrant le Rwanda, découpe sur l'emprise du pays et retire les
+# eaux permanentes (lac Kivu, lacs de l'Akagera) ainsi que les zones de
+# profondeur aberrante signalées par le JRC.
+#
+# Période de retour retenue pour le scénario de rupture. Les trois valeurs
+# disponibles définissent une gradation d'intensité :
+#   10  → crue fréquente     (~163 arêtes exposées, ~101 km)
+#   100 → crue centennale    (~211 arêtes exposées, ~143 km)
+#   500 → crue extrême       (~231 arêtes exposées, ~160 km)
+GLOFAS_PERIODE_RETOUR       <- 100
+
+CHEMIN_RASTER_RISQUE        <- sprintf(
+  "data/raw/zones_inondables_rwanda_glofas_rp%03d.tif", GLOFAS_PERIODE_RETOUR)
 
 # ==============================================================================
 # Paramètres DEM (Modèle Numérique de Terrain)
@@ -472,6 +489,14 @@ BUFFER_POIDS_RWI_M <- 1200
 
 # Chemin vers le fichier d'emploi sectoriel par district.
 RPHC5_EMPLOI_CSV_PATH   <- "data/raw/rwa_emploi_district_secteur_2022.csv"
+
+# Second fichier d'emploi sectoriel par district, à la même structure mais
+# d'une autre origine/vintage que RPHC5_EMPLOI_CSV_PATH. N'ALIMENTE AUCUN
+# CALCUL du modèle (seul RPHC5_EMPLOI_CSV_PATH est lu par 01_reseau.R) — sert
+# uniquement de point de comparaison dans viz_verif.R, les deux fichiers
+# donnant des répartitions sectorielles très différentes par district et
+# aucun n'étant une extraction confirmée du RPHC5 (cf. [[reference_sources_calibration]]).
+RPHC5_EMPLOI_CSV_PATH_ALT <- "data/raw/rwa_emploi_district_secteur_2022_source_nationale.csv"
 
 # Nom de la colonne "district" dans le fichier d'emploi (à adapter si besoin)
 RPHC5_COL_DISTRICT_EMPLOI <- "District"
@@ -790,13 +815,127 @@ stopifnot(
           - DEMANDE_FINALE_SAM)) < 1e-6
 )
 
-# ── Paramètres de la classification urbain/rural des zones ────────────────────
-# SEUIL_PART_URBAINE : une zone (cellule de Voronoï) est classée « urbaine » si la
-#   part de sa POPULATION vivant en zone de landuse urbain (LANDUSE_URBAIN) atteint
-#   ce seuil ; sinon « rurale ». 0.5 = majorité de la population en zone urbaine.
-#   Calculé en 01_reseau.R (colonne is_urbain de diag_population) à ajuster pour
-#   retrouver une part urbaine nationale réaliste (~17–27 % au Rwanda).
-SEUIL_PART_URBAINE <- 0.5
+# ── Quintiles de consommation de la SAM ───────────────────────────────────────
+# QUANTILES_MENAGES_SAM : bornes des quintiles de consommation, en part cumulée
+#   de la POPULATION. Les groupes de ménages de la SAM IFPRI 2021 (comptes
+#   « hhd-r1 »…« hhd-u5 ») proviennent de l'enquête EICV5 (2016/17), qui définit
+#   ses quintiles ainsi (EICV5 Main Indicators Report, p. iv ; formulation
+#   identique dans EICV4, p. vi) : on trie les ménages par consommation annuelle
+#   puis on découpe LA POPULATION en cinq parts égales.
+#
+#   DEUX CONSÉQUENCES, toutes deux appliquées par le modèle :
+#     1) Le découpage est national : les groupes « u1 »…« u5 » sont le
+#        croisement (strate × quintile national), et NON des quintiles calculés
+#        à l'intérieur de la strate urbaine. Le groupe u1 est minuscule parce
+#        qu'il y a très peu de citadins dans le quintile national le plus pauvre).
+#     2) Le découpage porte sur les individus, pas sur les ménages 
+QUANTILES_MENAGES_SAM <- c(0.2, 0.4, 0.6, 0.8)
+
+# ── Repères de validation issus de l'EICV5 (2016/17) ──────────────────────────
+# Valeurs publiées, utilisées UNIQUEMENT comme points de comparaison dans les
+# diagnostics (elles n'entrent dans aucun calcul du modèle).
+#   EICV5_PART_URBAINE_POP    : part de la population vivant en zone urbaine
+#                               (Poverty Profile Report, tableau 10.2 : 18 %).
+#   EICV5_CONSO_PAR_STRATE    : consommation annuelle par adulte-équivalent,
+#                               milliers de RWF, prix de janvier 2014
+#                               (Poverty Profile Report, tableau 7).
+#   EICV5_CONSO_PAR_QUINTILE  : idem, par quintile national.
+# Contrôle de cohérence interne de ces chiffres :
+#   0,18 × 570 + 0,82 × 216 = 279,7 ≈ moyenne nationale publiée (279). ✓
+EICV5_PART_URBAINE_POP   <- 0.18
+EICV5_CONSO_PAR_STRATE   <- c(urbain = 570, rural = 216)
+EICV5_CONSO_PAR_QUINTILE <- c(q1 = 86, q2 = 140, q3 = 192, q4 = 279, q5 = 699)
+
+# ── Repère de validation issu du RPHC5 (2022) ──────────────────────────────────
+# Part de la population classée urbaine sous la définition RÉVISÉE du recensement
+# 2022 (postérieure à l'EICV5 et à sa définition villageoise de 2012). Utilisée
+# UNIQUEMENT comme point de comparaison dans viz_verif.R, au même titre que le
+# bloc EICV5 ci-dessus — n'entre dans aucun calcul du modèle. Cf. discussion
+# détaillée sur l'écart avec l'EICV5 et avec PART_URBAINE_IMPLICITE_SAM plus bas
+# (bloc CIBLE_PART_URBAINE_POP).
+RPHC5_2022_PART_URBAINE_POP <- 0.279
+
+# ── Tailles de groupes implicites de la SAM (cible de validation) ─────────────
+# La SAM donne la consommation TOTALE de chaque groupe (C_g) mais pas sa
+# POPULATION (N_g). On reconstruit N_g sous une hypothèse explicite :
+#
+#   HYPOTHÈSE : à l'intérieur d'un même quintile national, la consommation par
+#   tête est la même en ville et à la campagne. C'est la conséquence directe de
+#   la définition des quintiles — ils sont découpés sur un classement unique de
+#   la consommation, donc deux ménages d'un même quintile ont, par construction,
+#   des niveaux de consommation voisins quelle que soit leur strate.
+#
+#   Sous cette hypothèse, la part urbaine d'un quintile est sa part dans la
+#   consommation du quintile, et chaque quintile pèse 20 % de la population :
+#       part_pop[u,q] = 0,20 × C[u,q] / (C[u,q] + C[r,q])
+#
+# LIMITE : l'hypothèse est fausse pour le quintile 5, ouvert vers le haut (les
+# riches urbains sont très au-dessus des riches ruraux). La part urbaine du Q5,
+# et donc la part urbaine nationale, sont surestimées. La valeur obtenue est
+# donc un MAJORANT — à lire comme tel dans les diagnostics.
+PART_POP_GROUPE_SAM_CIBLE <- local({
+  C  <- colSums(DEMANDE_FINALE_GROUPES_SAM)          # consommation totale par groupe
+  qs <- as.character(1:5)
+  parts <- setNames(numeric(10), c(paste0("r", qs), paste0("u", qs)))
+  for (q in qs) {
+    cu <- C[[paste0("u", q)]]; cr <- C[[paste0("r", q)]]
+    parts[[paste0("u", q)]] <- 0.20 * cu / (cu + cr)
+    parts[[paste0("r", q)]] <- 0.20 - parts[[paste0("u", q)]]
+  }
+  parts
+})
+PART_URBAINE_IMPLICITE_SAM <- sum(PART_POP_GROUPE_SAM_CIBLE[paste0("u", 1:5)])
+
+# ── Classification géo-sociale au niveau du pixel (01_reseau.R IV.5.B) ────────
+#
+# CIBLE_PART_URBAINE_POP : part de la population nationale que le masque urbain
+#   doit classer en « urbain ». Trois valeurs candidates, très différentes :
+#
+#     0,180  EICV5 2016/17 — l'enquête dont sont issus les groupes de la SAM,
+#            sous la classification villageoise du recensement 2012.
+#     0,279  RPHC5 2022 — définition révisée du recensement, postérieure à la SAM.
+#     0,269  PART_URBAINE_IMPLICITE_SAM — ce que la SAM elle-même implique
+#            (cf. supra), et qui tombe presque exactement sur le chiffre 2022.
+#
+#   POURQUOI PAS 0,18 : caler à 18 % imposerait au modèle un rapport de
+#   consommation par tête urbain/rural de 5,6, contre 2,6 mesuré par l'EICV5 —
+#   la SAM 2021 attribue 55 % de la consommation des ménages aux groupes urbains,
+#   ce qui est incompatible avec une population urbaine de 18 %. L'écart
+#   s'explique par les cinq années séparant l'enquête de la SAM, par le passage
+#   aux prix courants (l'EICV déflate par un indice spatial qui écrase l'écart
+#   ville/campagne) et par le calage de la SAM sur les comptes nationaux.
+#   Le modèle doit être cohérent avec la SAM qu'il utilise, pas avec une enquête
+#   antérieure : on retient donc la valeur implicite de la SAM.
+CIBLE_PART_URBAINE_POP <- PART_URBAINE_IMPLICITE_SAM
+
+# METHODE_MASQUE_URBAIN : comment désigner les pixels urbains.
+#   "densite" — on classe les pixels par densité de population locale
+#     décroissante et on retient les plus denses jusqu'à atteindre
+#     CIBLE_PART_URBAINE_POP. Reproductible et calé sur une cible documentée.
+#   "landuse" — appartenance à LANDUSE_URBAIN (OSM). Ancien comportement,
+#     conservé pour comparaison ; le landuse OSM est très inégalement renseigné
+#     hors de Kigali et ne permet aucun calage.
+# NOTE : la définition officielle rwandaise est ADMINISTRATIVE (un code posé sur
+#   chaque village lors de la cartographie censitaire de 2012) et ses critères ne
+#   sont pas publiés — ni dans les rapports RPHC4/RPHC5, ni dans les notes
+#   méthodologiques EICV. Elle n'est donc pas reproductible à partir de données
+#   géographiques ouvertes : le masque ne peut être qu'un proxy calé.
+METHODE_MASQUE_URBAIN <- "densite"
+
+# RAYON_DENSITE_URBAINE_M : rayon du disque sur lequel on somme la population
+#   pour mesurer la densité LOCALE d'un pixel (méthode "densite"). Un rayon trop
+#   petit classerait urbains des pixels isolés très denses ; trop grand, il
+#   diluerait les petits centres. 1 km ≈ échelle d'un quartier.
+RAYON_DENSITE_URBAINE_M <- 1000
+
+# AGREGATION_MASQUE_URBAIN_VIZ : facteur d'agrégation (en nombre de pixels
+#   WorldPop par côté) appliqué à la carte de contrôle qui compare le masque
+#   urbain du modèle au landuse urbain OSM (viz_verif.R). Le raster WorldPop
+#   fait ~100 m de résolution ; le pays compte alors plusieurs millions de
+#   pixels, trop pour un fichier de carte. Un facteur 10 ramène la carte à des
+#   cellules d'environ 1 km de côté (résolution comparable à
+#   RAYON_DENSITE_URBAINE_M), largement suffisante pour un diagnostic visuel.
+AGREGATION_MASQUE_URBAIN_VIZ <- 10
 
 # ── Pondération composite emploi × RWI dans le modèle MRIO ────────────────────
 #
@@ -883,11 +1022,43 @@ TONNES_PAR_mrd_RWF <- 1e9 / VALEUR_RWF_PAR_TONNE
 stopifnot(setequal(names(TONNES_PAR_mrd_RWF), SECTEURS))
 
 # ── Secteurs effectivement modélisés en FRET ──────────────────────────────────
-# Sous-ensemble de SECTEURS avec du fret physique 
+# Sous-ensemble de SECTEURS avec du fret physique
 # Les autres restent dans SECTEURS pour la comptabilité économique (matrice A,
-# demande finale, SAM) mais sont EXCLUS du modèle gravitaire et de tous les 
+# demande finale, SAM) mais sont EXCLUS du modèle gravitaire et de tous les
 # tableaux/cartes de fret.
 SECTEURS_FRET <- SECTEURS[TONNES_PAR_mrd_RWF[SECTEURS] > 0]
+
+# ── Repère de change pour la validation externe (viz_verif.R) ─────────────────
+# Taux de change moyen RWF/USD sur 2021, année de la SAM IFPRI utilisée par le
+# modèle. Sert UNIQUEMENT à convertir la valeur ajoutée sectorielle de la SAM
+# (mrd RWF) en USD courants pour la comparer à la valeur ajoutée sectorielle de
+# la Banque Mondiale (World Development Indicators, en USD courants) — aucun
+# calcul du modèle ne dépend de ce taux.
+# Source : Banque Mondiale, "Official exchange rate (LCU per US$, period
+# average)", Rwanda, 2021 (indicateur PA.NUS.FCRF) — moyenne annuelle ≈ 1001.
+TAUX_CHANGE_RWF_USD_2021 <- 1001
+
+# ── Correspondance SECTEURS → grandes catégories Banque Mondiale (diagnostic) ──
+# La Banque Mondiale ne publie la valeur ajoutée que sous 4 grandes catégories
+# (agriculture, industrie manufacturière, industrie y c. construction, services).
+# Cette table ventile les 11 secteurs du modèle vers ces 4 catégories pour
+# permettre une comparaison de parts sectorielles dans viz_verif.R. Ventilation
+# approximative (affectation qualitative, pas de clé de pondération infra-
+# sectorielle) — à lire comme un ordre de grandeur, pas une identité comptable.
+CORRESPONDANCE_SECTEURS_BANQUE_MONDIALE <- c(
+  Agriculture     = "agri",
+  Cultures_export = "agri",
+  Mines           = "indus",
+  Agro_industrie  = "manuf",
+  Chimie_petrole  = "manuf",
+  Manufactures    = "manuf",
+  Construction    = "indus",
+  Commerce        = "serv",
+  Transport       = "serv",
+  Energie_eau     = "indus",
+  Services        = "serv"
+)
+stopifnot(setequal(names(CORRESPONDANCE_SECTEURS_BANQUE_MONDIALE), SECTEURS))
 
 # Garde-fou : BETA_SECTEUR doit couvrir exactement les secteurs de fret
 stopifnot(setequal(names(BETA_SECTEUR), SECTEURS_FRET))
@@ -1011,11 +1182,13 @@ RAYON_PERTURBATION_M    <- 5000
 # ne perturber que les routes primaires et secondaires.
 TYPES_ROUTES_PERTURBES  <- NULL  
 
-# Seuil au-dessus duquel une route est considérée comme perturbée.
-# Si le raster contient des probabilités (0-1) : un seuil de 0.5 signifie
-# "routes dont plus de 50% de leur longueur est considérée comme à risque".
-# Si le raster contient des profondeurs (cm) : un seuil de 30 signifie
-# "routes à risque sont sous plus de 30cm d'eau" 
+# Seuil au-dessus duquel un point de la chaussée est considéré comme submergé.
+# L'unité suit celle du raster pointé par CHEMIN_RASTER_RISQUE :
+#   - raster GloFAS (celui utilisé ici) : hauteur d'eau en MÈTRES.
+#     0.5 = « plus de 50 cm d'eau sur la chaussée », profondeur au-delà de
+#     laquelle un poids lourd ne passe plus de façon fiable.
+#   - raster de probabilité (0-1), ex. celui de creer_raster_test.R :
+#     0.5 = « probabilité de submersion supérieure à 50 % ».
 SEUIL_RISQUE_RASTER         <- 0.5
 
 # Proportion minimale de la longueur d'une arête qui doit être en zone à risque
@@ -1024,10 +1197,10 @@ SEUIL_RISQUE_RASTER         <- 0.5
 PROPORTION_MIN_EXPOSEE      <- 0.3
 
 # Proportion des routes exposées (dépassant les seuils) effectivement inondées.
-# 1.0 = toutes les routes exposées sont coupées 
+# 1.0 = toutes les routes exposées sont coupées
 # 0.6 = 60% des routes exposées sont aléatoirement coupées
 PROP_ROUTES_INONDEES_BUFFER <- 1
-PROP_ROUTES_INONDEES_RASTER <- 0.7
+PROP_ROUTES_INONDEES_RASTER <- 1
 
 # Graine aléatoire pour la sélection des routes inondées.
 # Fixer cette valeur garantit la reproductibilité du scénario.
@@ -1265,6 +1438,26 @@ PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 # de laisser ggplot afficher des barres grises silencieusement.
 stopifnot(all(SECTEURS %in% names(.palette_secteurs_brut)))
 PALETTE_SECTEURS <- .palette_secteurs_brut[SECTEURS]   # réordonne selon SECTEURS
+
+# ── Source de la population par zone (diagnostic, viz_verif.R) ───────────────
+# Couleur par méthode d'estimation retenue pour population_zone (hiérarchie
+# WorldPop > NISR > plancher, cf. 01_reseau.R IV.6) : sert à cartographier où
+# le modèle s'appuie sur une source dégradée.
+PALETTE_SOURCE_POP <- c(
+  "WorldPop"  = "#1A9850",   # Vert  — raster WorldPop, source la plus fine
+  "NISR"      = "#FEE08B",   # Jaune — repli sur la population administrative par district
+  "Fallback"  = "#D73027"    # Rouge — aucune donnée, plancher minimal appliqué
+)
+
+# ── Masque urbain du modèle vs landuse OSM (diagnostic, viz_verif.R) ─────────
+# Couleur par catégorie de recouvrement entre le masque urbain retenu par le
+# modèle (densité ou landuse, cf. METHODE_MASQUE_URBAIN) et le landuse urbain
+# OSM : sert à voir où les deux méthodes s'accordent et où elles divergent.
+PALETTE_MASQUE_URBAIN <- c(
+  "Modèle seul"  = "#42A5F5",   # Bleu   — urbain pour le modèle, pas pour OSM
+  "OSM seul"      = "#FFA726",   # Orange — urbain pour OSM, pas pour le modèle
+  "Modèle + OSM" = "#1A9850"    # Vert   — les deux méthodes s'accordent
+)
 
 cat("✓ Palettes de couleurs définies\n\n")
 
@@ -1797,6 +1990,33 @@ ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
   }
 
   ggplot2::ggsave(filename = filename, plot = plot, ...)
+}
+
+# ==============================================================================
+# NOTE DE LECTURE — helper partagé par tous les viz_*.R
+# ==============================================================================
+# note_lecture() construit le texte affiché sous chaque carte/graphique pour
+# expliquer comment le lire (ce qui est comparé, ce qu'un écart signifierait),
+# sans avoir à rouvrir le code. Utilisé comme caption= dans labs() (ggplot2) ou
+# comme texte de tm_credits() (tmap).
+#
+# str_wrap() est indispensable : element_text() et tm_credits() ne font PAS de
+# retour à la ligne automatique — seuls les "\n" explicites comptent — donc une
+# note un peu longue déborde silencieusement du support et se retrouve tronquée
+# par le PNG plutôt que de provoquer une erreur.
+#
+# largeur_car est en CARACTÈRES, pas en pouces : ≈ 12 caractères par pouce de
+# largeur de figure à la taille de police par défaut (7.8 pt pour les captions
+# ggplot2, 0.65 pour les credits tmap). Une marge de sécurité est incluse : au
+# ras de la largeur réelle, un mot long isolé sur une ligne suffit à dépasser
+# et à être tronqué. Choisir largeur_car ≈ largeur_pouces × 12 (7 po → 82,
+# 8 po → 93, 9 po → 105) ; ne jamais dépasser ~12/po sans re-vérifier le rendu.
+THEME_NOTE_LECTURE <- theme(
+  plot.caption = element_text(hjust = 0, color = "#555555", size = 7.8,
+                               lineheight = 1.15, margin = margin(t = 10))
+)
+note_lecture <- function(texte, largeur_car = 105) {
+  str_wrap(paste0("Lecture : ", texte), width = largeur_car)
 }
 
 cat("✓ 00_parametres.R chargé\n")
