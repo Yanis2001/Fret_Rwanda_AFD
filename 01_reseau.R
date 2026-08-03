@@ -2325,63 +2325,6 @@ diag_population <- tibble(
   source          = source_pop_cellule
 )
 
-# ── Classification urbain/rural des cellules (pour la demande finale par groupe) ──
-# OBJECTIF : calculer pour chaque cellule de Voronoï sa PART URBAINE = part de sa
-# population vivant en zone de landuse urbain (zones_urbaines_union), puis un statut
-# is_urbain (part ≥ SEUIL_PART_URBAINE). Sert en 03_transport.R à rattacher chaque 
-# zone à un groupe de ménages SAM (strate urbain/rural × quintile).
-# On mesure une part de POPULATION (et non d'aire).
-part_urbaine_par_wid <- setNames(rep(0, n_warehouses), seq_len(n_warehouses))
-
-if (worldpop_ok && exists("zones_urbaines_union") &&
-    !is.null(zones_urbaines_union) && length(zones_urbaines_union) > 0) {
-  # Intersection de chaque cellule avec l'union des zones urbaines, puis somme des
-  # pixels WorldPop tombant dans la partie urbaine de la cellule.
-  inter_urb <- suppressWarnings(st_intersection(
-    zones_voronoi %>% select(warehouse_id),
-    st_make_valid(zones_urbaines_union) %>% st_transform(st_crs(zones_voronoi))
-  ))
-  # Comme pour le rognage des cellules, cette intersection peut produire des
-  # GEOMETRYCOLLECTION (polygone + arêtes de contact). On ne garde que la
-  # composante polygonale et on écarte les morceaux vides : sinon exact_extract()
-  # échoue avec « Mixed-type geometries not supported ». Les warehouse_id sont
-  # conservés (une cellule peut donner plusieurs morceaux, agrégés ensuite).
-  inter_urb <- suppressWarnings(
-    inter_urb %>%
-      st_make_valid() %>%
-      st_collection_extract("POLYGON")
-  )
-  inter_urb <- inter_urb[!st_is_empty(inter_urb), ]
-  if (nrow(inter_urb) > 0) {
-    pop_urb <- as.numeric(exactextractr::exact_extract(
-      raster_worldpop,
-      inter_urb %>% st_transform(st_crs(raster_worldpop)),
-      fun = "sum", progress = FALSE
-    ))
-    # tapply : agrège par warehouse_id (une cellule peut donner plusieurs morceaux).
-    pop_urb_agg <- tapply(pop_urb, inter_urb$warehouse_id, sum, na.rm = TRUE)
-    part_urbaine_par_wid[as.integer(names(pop_urb_agg))] <- as.numeric(pop_urb_agg)
-    # Part urbaine = pop urbaine / pop totale de la cellule, bornée à [0,1].
-    part_urbaine_par_wid <- pmin(1, part_urbaine_par_wid / pmax(pop_par_wid, 1))
-  }
-} else {
-  cat("  ⚠ WorldPop ou zones urbaines indisponibles → toutes les zones",
-      "classées rurales (part urbaine = 0)\n")
-}
-
-# Ajout à diag_population (lignes alignées sur l'ordre warehouse_id = 1..n).
-diag_population <- diag_population %>%
-  mutate(
-    part_urbaine = round(part_urbaine_par_wid, 3),
-    is_urbain    = part_urbaine_par_wid >= SEUIL_PART_URBAINE
-  )
-
-cat("  Zones urbaines (part pop ≥ ", SEUIL_PART_URBAINE, ") : ",
-    sum(diag_population$is_urbain), " / ", n_warehouses,
-    " | part pop urbaine nationale : ",
-    round(sum(pop_par_wid[diag_population$is_urbain]) / sum(pop_par_wid) * 100, 1),
-    " %\n", sep = "")
-
 cat("  Population par cellule : min =", round(min(pop_par_wid)),
     "| max =", round(max(pop_par_wid)), "\n")
 cat("  Somme des populations de cellules :",
@@ -2784,6 +2727,371 @@ cat("  • DuckDB         (table richesse_entrepots)\n")
 cat("  • entreposages_fictifs (colonnes rwi_brut, p_rwi, classe_rwi)\n\n")
 
 ################################################################################
+# PARTIE IV.5.B — CLASSES GÉO-SOCIALES AU NIVEAU DU PIXEL
+#
+# OBJECTIF : Construire pop_groupe_zone[i, g] — matrice n_warehouses × 10 donnant
+#   la population de chaque cellule de Voronoï i appartenant à chaque groupe de
+#   ménages g de la SAM (« r1 »…« u5 » = strate × quintile national). Elle
+#   alimente la demande finale des ménages en 03_transport.R :
+#       d_finale_menages[i, s] = Σ_g C[s, g] × pop_groupe_zone[i, g] / N[g]
+#   où C = DEMANDE_FINALE_GROUPES_SAM (panier de chaque groupe) et
+#   N[g] = Σ_i pop_groupe_zone[i, g] (population nationale du groupe).
+#
+# MÉTHODE (un seul passage sur une grille commune, celle de WorldPop) :
+#   1. Empiler quatre couches sur la grille WorldPop : population, cellule de
+#      Voronoï d'appartenance, score RWI, masque urbain.
+#   2. Découper la population nationale en quintiles sur un classement UNIQUE par
+#      RWI croissant (définition EICV5 — cf. QUANTILES_MENAGES_SAM), avec
+#      découpage fractionnaire du pixel à cheval sur une borne : chaque quintile
+#      pèse alors exactement 20 % de la population.
+#   3. Croiser quintile × strate → groupe, puis sommer par cellule de Voronoï.
+#
+# ENTRÉES  : raster_worldpop, zones_voronoi, rwi_sf, zones_urbaines_union
+# SORTIES  : pop_groupe_zone (matrice n_warehouses × 10)
+#            diag_classes_geo_sociales (tibble de diagnostic)
+#            DuckDB : table classes_geo_sociales
+################################################################################
+
+cat("\n")
+cat("═══════════════════════════════════════════════════════════════════════\n")
+cat("  PARTIE IV.5.B — CLASSES GÉO-SOCIALES AU NIVEAU DU PIXEL\n")
+cat("═══════════════════════════════════════════════════════════════════════\n\n")
+
+# Noms des 10 groupes SAM, dans l'ordre des colonnes de pop_groupe_zone.
+GROUPES_SAM_ORDRE <- c(paste0("r", 1:5), paste0("u", 1:5))
+
+# La méthode exige les deux sources fines : WorldPop donne la population au pixel,
+# le RWI donne la richesse relative qui sert de variable de classement. 
+if (!worldpop_ok || !rwi_ok) {
+  stop("Classification géo-sociale impossible : ",
+       if (!worldpop_ok) "raster WorldPop indisponible. " else "",
+       if (!rwi_ok)      "données RWI indisponibles. " else "",
+       "\n  → Ces deux sources sont nécessaires à la spatialisation de la demande ",
+       "finale des ménages (Partie IV.5.B).",
+       "\n  → WorldPop : voir WORLDPOP_LOCAL_PATH / WORLDPOP_URLS_CANDIDATES.",
+       "\n  → RWI      : voir RWI_CSV_LOCAL / RWI_ZIP_URL.")
+}
+
+
+# ── IV.5.B.1 : Empilement des quatre couches sur la grille WorldPop ─────────
+# Toutes les couches sont rasterisées sur raster_worldpop lui-même (même
+# emprise, même résolution, même CRS) : les quatre valeurs d'un pixel décrivent
+# donc rigoureusement le même morceau de territoire, sans ré-échantillonnage.
+crs_pop <- terra::crs(raster_worldpop)
+
+cat("── Rasterisation des couches sur la grille WorldPop ──────────────────\n")
+# Le raster WorldPop peut être en degrés (WGS84, fichier brut lu depuis le cache)
+# ou en mètres (UTM, chemin de téléchargement) : on affiche la résolution dans
+# l'unité effective plutôt que de supposer des mètres.
+if (terra::is.lonlat(raster_worldpop)) {
+  cat("  Grille :", terra::ncol(raster_worldpop), "×", terra::nrow(raster_worldpop),
+      "pixels | résolution :", signif(terra::res(raster_worldpop)[1], 3), "° (lon/lat)\n")
+} else {
+  cat("  Grille :", terra::ncol(raster_worldpop), "×", terra::nrow(raster_worldpop),
+      "pixels | résolution :", round(terra::res(raster_worldpop)[1]), "m\n")
+}
+
+# (a) Cellule de Voronoï d'appartenance de chaque pixel.
+r_wid <- terra::rasterize(
+  terra::vect(zones_voronoi %>% st_transform(crs_pop)),
+  raster_worldpop,
+  field = "warehouse_id"
+)
+
+# (b) Score RWI. Les points RWI forment une grille lâche (~2,4 km) : on
+# construit leur pavage de Voronoï pour couvrir tout le territoire sans trou ni
+# recouvrement, puis on rasterise. Chaque pixel hérite ainsi du RWI du point le
+# plus proche — la meilleure information disponible à cette position.
+# bnd doit englober TOUS les points RWI : dès qu'un seul point tombe hors de
+# bnd, terra::voronoi() supprime silencieusement la table d'attributs du
+# résultat (bug connu de terra) — d'où l'union avec l'étendue des points au
+# lieu de se limiter à l'étendue du raster WorldPop.
+rwi_vect  <- terra::vect(rwi_sf %>% select(rwi) %>% st_transform(crs_pop))
+ext_pop   <- terra::ext(raster_worldpop)
+ext_rwi   <- terra::ext(rwi_vect)
+bnd_rwi   <- terra::ext(
+  min(ext_pop[1], ext_rwi[1]), max(ext_pop[2], ext_rwi[2]),
+  min(ext_pop[3], ext_rwi[3]), max(ext_pop[4], ext_rwi[4])
+)
+rwi_vor   <- terra::voronoi(rwi_vect, bnd = bnd_rwi)
+r_rwi     <- terra::rasterize(rwi_vor, raster_worldpop, field = "rwi")
+
+# (c) Masque urbain OSM (utile dans les deux méthodes : valeur directe pour
+# "landuse", diagnostic de comparaison pour "densite").
+r_urb_osm <- NULL
+if (exists("zones_urbaines_union") && !is.null(zones_urbaines_union) &&
+    length(zones_urbaines_union) > 0) {
+  r_urb_osm <- terra::rasterize(
+    terra::vect(st_make_valid(zones_urbaines_union) %>% st_transform(crs_pop)),
+    raster_worldpop,
+    background = 0
+  )
+}
+
+# (d) Densité locale : pour chaque pixel, population totale dans un disque de
+# rayon RAYON_DENSITE_URBAINE_M autour de lui (sert à repérer les zones urbaines).
+#
+# 1. Le rayon doit être exprimé dans l'unité de la carte (focalMat() ne
+#    connaît pas les mètres). raster_worldpop étant en degrés, on convertit
+#    le rayon mètres -> degrés en divisant par ~111 320 m (longueur d'un
+#    degré de latitude, valable au Rwanda à mieux que 0,1 % près).
+# 2. focalMat(type="circle") dessine le disque mais normalise ses poids pour
+#    qu'ils somment à 1 (utile pour une moyenne). On remet ces poids à 1 pour
+#    en faire un simple masque "dans le disque / hors du disque".
+# 3. focal(..., fun="sum") additionne alors la population de tous les pixels
+#    du disque : on obtient bien une population cumulée.
+#    na.rm=TRUE évite que les pixels hors raster (NA), en bordure, ne fassent
+#    basculer la somme entière à NA.
+rayon_densite_carte <- if (terra::is.lonlat(raster_worldpop)) {
+  RAYON_DENSITE_URBAINE_M / 111320
+} else {
+  RAYON_DENSITE_URBAINE_M
+}
+noyau <- terra::focalMat(raster_worldpop, rayon_densite_carte, type = "circle")
+noyau[noyau > 0] <- 1
+r_dens <- terra::focal(raster_worldpop, w = noyau, fun = "sum", na.rm = TRUE)
+
+# ── IV.5.B.2 : Passage en table (une ligne = un pixel habité) ───────────────
+# as.data.frame(cells = TRUE) ne renvoie que les pixels où toutes les couches
+# ont une valeur. On filtre ensuite sur une population strictement positive :
+# les pixels vides ne portent aucun ménage et n'ont pas à être classés.
+pile <- c(raster_worldpop, r_wid, r_rwi, r_dens)
+names(pile) <- c("pop", "wid", "rwi", "dens")
+if (!is.null(r_urb_osm)) {
+  pile <- c(pile, r_urb_osm)
+  names(pile)[terra::nlyr(pile)] <- "urb_osm"
+}
+
+px <- terra::as.data.frame(pile, na.rm = FALSE)
+# Un pixel n'est retenu que si ses quatre informations sont disponibles :
+# population non nulle, cellule de rattachement, score RWI et densité locale.
+# (Sans le contrôle sur dens, un NA résiduel ferait silencieusement échouer le
+# calage du masque urbain, qui repose sur un tri par densité décroissante.)
+px <- px[!is.na(px$pop) & px$pop > 0 & !is.na(px$wid) &
+         !is.na(px$rwi) & !is.na(px$dens), , drop = FALSE]
+if (!"urb_osm" %in% names(px)) px$urb_osm <- 0
+px$urb_osm[is.na(px$urb_osm)] <- 0
+
+pop_px_totale <- sum(px$pop)
+cat("  Pixels habités retenus :", format(nrow(px), big.mark = " "),
+    "| population couverte :", format(round(pop_px_totale), big.mark = " "), "\n\n")
+
+# ── IV.5.B.3 : Masque urbain ───────────────────────────────────────────────
+# La classification officielle rwandaise est administrative (code posé sur
+# chaque village au recensement) et ses critères ne sont pas publiés : elle
+# n'est pas reproductible. On construit donc un proxy CALÉ sur une part urbaine
+# cible (cf. CIBLE_PART_URBAINE_POP dans 00_parametres.R).
+cat("── Masque urbain (méthode :", METHODE_MASQUE_URBAIN, ") ──────────────────────\n")
+
+if (identical(METHODE_MASQUE_URBAIN, "densite")) {
+  # Classement des pixels par densité locale décroissante ; on déclare urbains
+  # les plus denses jusqu'à atteindre la part de population visée. Le seuil de
+  # densité n'est donc pas fixé a priori : il se déduit de la cible.
+  o_dens <- order(px$dens, decreasing = TRUE)
+  part_cum <- cumsum(px$pop[o_dens]) / pop_px_totale
+  n_urbain <- sum(part_cum <= CIBLE_PART_URBAINE_POP)
+  px$urbain <- FALSE
+  px$urbain[o_dens[seq_len(max(n_urbain, 1L))]] <- TRUE
+  seuil_dens <- px$dens[o_dens[max(n_urbain, 1L)]]
+  cat("  Cible de part urbaine :", round(CIBLE_PART_URBAINE_POP * 100, 1), "%\n")
+  cat("  Seuil de densité atteint :", round(seuil_dens),
+      "hab. dans un rayon de", RAYON_DENSITE_URBAINE_M, "m\n")
+} else {
+  # Ancien comportement : appartenance au landuse urbain OSM, sans calage.
+  px$urbain <- px$urb_osm > 0
+  cat("  Masque = landuse OSM (aucun calage sur une cible)\n")
+}
+
+part_urb_obtenue <- sum(px$pop[px$urbain]) / pop_px_totale
+cat("  Part urbaine obtenue :", round(part_urb_obtenue * 100, 1), "%",
+    " | référence EICV5 2016/17 :", round(EICV5_PART_URBAINE_POP * 100, 1), "%\n")
+# Recouvrement avec le landuse OSM : indique si le proxy densité retrouve bien
+# les zones que OSM déclare urbaines (contrôle qualitatif, pas un critère).
+if (any(px$urb_osm > 0)) {
+  recouvrement <- sum(px$pop[px$urbain & px$urb_osm > 0]) /
+                  sum(px$pop[px$urb_osm > 0])
+  cat("  Part de la population taguée urbaine par OSM également classée urbaine dans le modèle :",
+      round(recouvrement * 100, 1), "%\n")
+
+  # Carte de contrôle (viz_verif.R) : où le masque urbain du modèle et le
+  # landuse urbain OSM se recouvrent-ils, et où divergent-ils ? On reconstruit
+  # la classification au niveau RASTER (et non plus depuis px, filtré et sans
+  # coordonnées) : r_urbain_modele reproduit la règle appliquée ci-dessus
+  # (seuil de densité si méthode "densite", sinon landuse OSM directement).
+  r_urbain_modele <- if (identical(METHODE_MASQUE_URBAIN, "densite")) {
+    r_dens >= seuil_dens
+  } else {
+    r_urb_osm > 0
+  }
+  r_osm_bin <- r_urb_osm > 0
+
+  # Code 1 = modèle seul, 2 = OSM seul, 3 = les deux, NA = ni l'un ni l'autre
+  # ou pixel inhabité (raster_worldpop > 0 exclut les pixels vides, comme pour px).
+  r_categorie_urbain <- terra::ifel(
+    raster_worldpop > 0,
+    terra::ifel(r_urbain_modele & r_osm_bin, 3,
+                terra::ifel(r_urbain_modele, 1,
+                            terra::ifel(r_osm_bin, 2, NA))),
+    NA
+  )
+  names(r_categorie_urbain) <- "categorie_code"
+
+  # Agrégation (fun="modal" = valeur majoritaire du bloc) : réduit le nombre
+  # de pixels d'un facteur AGREGATION_MASQUE_URBAIN_VIZ² avant export, sans
+  # quoi la carte de diagnostic pèserait plusieurs millions de points.
+  r_categorie_agg <- terra::aggregate(
+    r_categorie_urbain, fact = AGREGATION_MASQUE_URBAIN_VIZ,
+    fun = "modal", na.rm = TRUE
+  )
+
+  # Un point = un bloc agrégé où au moins un pixel est classé urbain par une
+  # méthode ou l'autre ; reprojection en 4326 pour rester cohérent avec les
+  # autres couches cartographiques (rwi_sf, entreposages_sf, fond_carte()).
+  diag_masque_urbain_sf <- terra::as.points(r_categorie_agg, na.rm = TRUE) %>%
+    sf::st_as_sf() %>%
+    mutate(categorie = factor(
+      categorie_code,
+      levels = c(1, 2, 3),
+      labels = c("Modèle seul", "OSM seul", "Modèle + OSM")
+    )) %>%
+    st_transform(4326)
+}
+cat("\n")
+
+# ── IV.5.B.4 : Quintiles nationaux de consommation ─────────────────────────
+# Classement UNIQUE de tous les pixels du pays par RWI croissant (et non par
+# strate : c'est la définition EICV5 des quintiles, cf. QUANTILES_MENAGES_SAM).
+# On découpe la population cumulée aux bornes des quintiles.
+#
+# DÉCOUPAGE FRACTIONNAIRE : un pixel à cheval sur une borne voit sa population
+# RÉPARTIE entre les deux quintiles, au lieu d'être versée en bloc dans l'un
+# d'eux. Chaque quintile pèse ainsi exactement 20 % de la population — condition
+# nécessaire pour que N[g] soit comparable aux effectifs de la SAM.
+cat("── Quintiles nationaux de consommation (classement RWI) ──────────────\n")
+
+px      <- px[order(px$rwi), , drop = FALSE]   # tri national par RWI croissant
+cum_hi  <- cumsum(px$pop)                      # borne haute de chaque pixel
+cum_lo  <- cum_hi - px$pop                     # borne basse
+bornes  <- c(0, QUANTILES_MENAGES_SAM, 1) * pop_px_totale
+
+# pop_quintile[k, q] = part de la population du pixel k tombant dans le
+# quintile q = longueur de l'intersection entre [cum_lo, cum_hi] et la tranche
+# de population [bornes[q], bornes[q+1]].
+pop_quintile <- matrix(0, nrow = nrow(px), ncol = 5)
+for (q in 1:5) {
+  pop_quintile[, q] <- pmax(0, pmin(cum_hi, bornes[q + 1]) - pmax(cum_lo, bornes[q]))
+}
+
+# ── IV.5.B.5 : Agrégation par cellule de Voronoï × groupe ───────────────────
+# rowsum() somme les lignes d'une matrice par groupe — ici par warehouse_id.
+# On le fait séparément pour chaque strate, puis on remplit les 10 colonnes.
+pop_groupe_zone <- matrix(
+  0, nrow = n_warehouses, ncol = 10,
+  dimnames = list(noeuds_entreposage$warehouse_name, GROUPES_SAM_ORDRE)
+)
+for (strate in c("r", "u")) {
+  sel <- if (strate == "u") px$urbain else !px$urbain
+  if (!any(sel)) next
+  agg <- rowsum(pop_quintile[sel, , drop = FALSE], group = px$wid[sel])
+  idx <- as.integer(rownames(agg))
+  for (q in 1:5) pop_groupe_zone[idx, paste0(strate, q)] <- agg[, q]
+}
+
+# ── IV.5.B.6 : Recalage sur la population officielle des cellules ───────────
+# pop_par_wid (IV.6) est calculée par exact_extract sur les polygones, avec un
+# plancher POP_FALLBACK_MIN ; la somme des pixels peut en différer légèrement
+# (rasterisation, plancher). On remet chaque ligne à l'échelle de pop_par_wid
+# pour que rowSums(pop_groupe_zone) == pop_par_wid exactement : le reste du
+# modèle (pop_i) reste ainsi parfaitement cohérent.
+somme_lignes <- rowSums(pop_groupe_zone)
+cellules_vides <- which(somme_lignes <= 0)
+if (length(cellules_vides) > 0) {
+  # Cellule sans aucun pixel habité (rare, cellules minuscules ou frontalières) :
+  # sa population plancher est répartie selon le MÉLANGE NATIONAL des groupes,
+  # choix neutre qui ne privilégie aucune classe sociale.
+  mix_national <- colSums(pop_groupe_zone)
+  mix_national <- mix_national / sum(mix_national)
+  for (i in cellules_vides) pop_groupe_zone[i, ] <- mix_national
+  somme_lignes <- rowSums(pop_groupe_zone)
+  cat("  Cellules sans pixel habité (mélange national appliqué) :",
+      length(cellules_vides), "\n")
+}
+# sweep(..., MARGIN = 1) : multiplie explicitement chaque ligne par son facteur.
+# (Un simple `matrice * vecteur` donnerait le même résultat par recyclage, mais
+# échouerait si pop_par_wid portait un attribut de dimension.)
+pop_groupe_zone <- sweep(pop_groupe_zone, 1, pop_par_wid / somme_lignes, "*")
+
+stopifnot(
+  nrow(pop_groupe_zone) == n_warehouses,
+  ncol(pop_groupe_zone) == 10,
+  all(pop_groupe_zone >= 0),
+  max(abs(rowSums(pop_groupe_zone) - pop_par_wid)) < 1e-6
+)
+
+# ── IV.5.B.7 : Diagnostic et validation contre la SAM ─────────────────────────
+# N_g = population nationale de chaque groupe, telle que le modèle la produit.
+# On la compare à PART_POP_GROUPE_SAM_CIBLE, reconstruite depuis la SAM sous
+# l'hypothèse « consommation par tête égale entre strates dans un quintile »
+# (cf. 00_parametres.R). Un écart important sur un groupe signale que le
+# classement RWI ne reproduit pas la distribution jointe richesse × strate.
+N_groupe_px  <- colSums(pop_groupe_zone)
+part_obtenue <- N_groupe_px / sum(N_groupe_px)
+conso_groupe <- colSums(DEMANDE_FINALE_GROUPES_SAM)[GROUPES_SAM_ORDRE]
+
+diag_classes_geo_sociales <- tibble(
+  groupe          = GROUPES_SAM_ORDRE,
+  population      = round(N_groupe_px),
+  part_pct        = round(part_obtenue * 100, 2),
+  part_cible_pct  = round(PART_POP_GROUPE_SAM_CIBLE[GROUPES_SAM_ORDRE] * 100, 2),
+  conso_mrd_rwf   = round(conso_groupe, 1),
+  # Consommation par tête implicite (milliers de RWF/an) : c'est elle qui doit
+  # présenter un gradient croissant en quintile et un écart ville/campagne
+  # plausible au regard de l'EICV5.
+  conso_par_tete  = round(conso_groupe * 1e9 / pmax(N_groupe_px, 1) / 1e3, 1)
+)
+
+cat("\n── Validation : tailles de groupes obtenues vs impliquées par la SAM ──\n")
+print(as.data.frame(diag_classes_geo_sociales))
+
+# Rapport de consommation par tête urbain/rural — comparable au 2,64 de l'EICV5
+# (avec la réserve que la SAM est en prix courants 2021 et l'EICV5 en prix réels
+# de janvier 2014, ce qui écrase mécaniquement l'écart mesuré par l'enquête).
+pop_u <- sum(N_groupe_px[paste0("u", 1:5)]); pop_r <- sum(N_groupe_px[paste0("r", 1:5)])
+c_u   <- sum(conso_groupe[paste0("u", 1:5)]); c_r  <- sum(conso_groupe[paste0("r", 1:5)])
+cat("\n  Consommation par tête urbain/rural — modèle :",
+    round((c_u / pop_u) / (c_r / pop_r), 2),
+    "| EICV5 (prix réels 2014) :",
+    round(EICV5_CONSO_PAR_STRATE[["urbain"]] / EICV5_CONSO_PAR_STRATE[["rural"]], 2), "\n")
+cat("  Écart max sur les parts de population (points de %) :",
+    round(max(abs(part_obtenue - PART_POP_GROUPE_SAM_CIBLE[GROUPES_SAM_ORDRE])) * 100, 2),
+    "\n\n")
+
+# Stockage DuckDB (table interrogeable par les Parties V à IX et les viz).
+duck_write(diag_classes_geo_sociales, "classes_geo_sociales")
+
+# ── Part urbaine de chaque zone (descriptif) ──────────────────────────────────
+part_urbaine_zone <- rowSums(pop_groupe_zone[, paste0("u", 1:5), drop = FALSE]) /
+                     rowSums(pop_groupe_zone)
+
+entreposages_fictifs <- entreposages_fictifs %>%
+  select(-any_of("part_urbaine")) %>%
+  mutate(part_urbaine = round(part_urbaine_zone, 3))
+duck_write(entreposages_fictifs, "zones_entreposage")
+
+cat("  Part urbaine par zone : ",
+    sum(part_urbaine_zone > 0.5), " zones majoritairement urbaines / ", n_warehouses,
+    " | zones mixtes (5–95 % urbain) : ",
+    sum(part_urbaine_zone > 0.05 & part_urbaine_zone < 0.95), "\n", sep = "")
+
+# Libération des objets raster intermédiaires (volumineux).
+rm(pile, px, pop_quintile, r_wid, r_rwi, r_dens, r_urb_osm, rwi_vor, rwi_vect)
+invisible(gc(verbose = FALSE))
+
+cat("✓ Partie IV.5.B terminée — pop_groupe_zone (", n_warehouses, "× 10) disponible dans :\n")
+cat("  • pop_groupe_zone (matrice population par cellule × groupe SAM)\n")
+cat("  • DuckDB          (table classes_geo_sociales)\n\n")
+
+################################################################################
 # PARTIE IV.4.F — EMPLOI SECTORIEL RPHC5 2022 (par nœud-entrepôt / Voronoï)
 #
 # OBJECTIF : Construire emploi_zone_secteur[i, s] — matrice n_warehouses ×
@@ -3063,9 +3371,14 @@ saveRDS(
     # Données démographiques
     diag_population               = diag_population,
     diag_rwi                      = diag_rwi,
+    pop_groupe_zone               = pop_groupe_zone,
+    diag_classes_geo_sociales     = diag_classes_geo_sociales,
     diag_emploi                   = if (exists("diag_emploi")) diag_emploi else NULL,
     rwi_ok                        = rwi_ok,
     rwi_sf                        = if (rwi_ok) rwi_sf else NULL,
+    # Carte de contrôle masque urbain (densité) vs landuse OSM (viz_verif.R) ;
+    # NULL si aucun landuse OSM n'a pu être rasterisé (cf. IV.5.B.3).
+    diag_masque_urbain_sf         = if (exists("diag_masque_urbain_sf")) diag_masque_urbain_sf else NULL,
     zone_to_prov_placeholder      = NULL
   ),
   PERSIST_ENTREPOSAGES
