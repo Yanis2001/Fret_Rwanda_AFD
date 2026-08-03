@@ -6,15 +6,6 @@
 #          • VALEUR_RWF_PAR_TONNE  — conversion valeur → tonnes.
 #        Aucune sortie du run de référence (run_all.R) n'est écrasée.
 #
-# CE QUI CHANGE PAR RAPPORT À L'ANCIENNE VERSION
-#   Auparavant, on multipliait TOUS les betas (ou toutes les valeurs/tonne) par
-#   un même coefficient (+20 %, −20 %…). Cela ne testait qu'une seule direction
-#   et empêchait de distinguer l'effet de chaque secteur.
-#   Désormais, un HYPERCUBE LATIN (lhs::randomLHS) tire SENS_LHS_N combinaisons
-#   dans lesquelles CHAQUE secteur voit son beta ET sa valeur/tonne varier
-#   INDÉPENDAMMENT, dans une plage ± définie dans 00_parametres.R
-#   (SENS_LHS_AMPLITUDE_BETA / SENS_LHS_AMPLITUDE_VALEUR_TONNE). On couvre ainsi
-#   l'espace des paramètres de façon homogène avec peu de tirages.
 #
 # PRINCIPE (inchangé pour chaque scénario)
 #   1. on fixe SCENARIO_ID / SCENARIO_LIBELLE / SENSIBILITE ;
