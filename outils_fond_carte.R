@@ -5,8 +5,8 @@
 #        (rwanda_provinces, rwanda_national, bbox_carto, lacs_raw/ok, parcs_raw/ok)
 #        dans l'environnement courant.
 # USAGE : source("outils_fond_carte.R")
-# APPELÉ PAR : 01_reseau.R, 02_couts.R, 03_transport.R, 05_vulnerabilite.R,
-#              05_ario.R, viz_reseau.R, viz_fret.R, viz_vulnerabilite.R, viz_ario.R
+# APPELÉ PAR : 01_reseau.R, 05_vulnerabilite.R, viz_reseau.R, viz_fret.R,
+#              viz_vulnerabilite.R
 ################################################################################
 
 # Vérifie que les objets nécessaires sont présents
