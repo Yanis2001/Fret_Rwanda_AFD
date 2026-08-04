@@ -98,9 +98,17 @@ cat("✓ Objets chargés\n\n")
 
 cat("── Identification des arêtes perturbées ──────────────────────────────\n\n")
 
-# On commence avec un ensemble vide d'osm_id perturbés.
-# character(0) est un vecteur de chaînes de caractères vide en R.
+# Deux accumulateurs, parce que les trois modes ne désignent pas la même chose :
+#
+#   osm_ids_perturbes  — Mode A uniquement. L'utilisateur fournit l'identifiant
+#     d'une VOIE OSM ; l'intention est bien de couper la voie entière, donc
+#     l'expansion vers tous ses tronçons est le comportement voulu.
+#
+#   indices_perturbes  — Modes B et C. Ces modes identifient des TRONÇONS
+#     précis, ceux qui intersectent le buffer ou dont la chaussée est sous
+#     l'eau. 
 osm_ids_perturbes <- character(0)
+indices_perturbes <- integer(0)
 
 # ── Mode A : identifiants manuels ─────────────────────────────────────────────
 if (length(OSM_IDS_PERTURBES_MANUEL) > 0) {
@@ -129,11 +137,15 @@ if (UTILISER_MODE_BUFFER) {
   zone_perturbation_buffer <- st_buffer(point_perturbation,
                                         dist = RAYON_PERTURBATION_M)
   
-  # Récupération de toutes les arêtes du réseau sous forme sf
+  # Récupération de toutes les arêtes du réseau sous forme sf.
+  # arete_idx_b est fixé AVANT tout filtrage : le filtre par type de route
+  # renumérote les lignes, et sans cette colonne les indices ne renverraient
+  # plus aux bonnes arêtes du réseau.
   aretes_sf_mode_b <- reseau %>%
     activate("edges") %>%
-    st_as_sf()
-  
+    st_as_sf() %>%
+    mutate(arete_idx_b = row_number())
+
   # Filtrage optionnel par type de route
   if (!is.null(TYPES_ROUTES_PERTURBES)) {
     aretes_sf_mode_b <- aretes_sf_mode_b %>%
@@ -148,27 +160,25 @@ if (UTILISER_MODE_BUFFER) {
   dans_buffer <- lengths(st_intersects(aretes_sf_mode_b,
                                        zone_perturbation_buffer)) > 0
   
-  # Récupération des osm_id des arêtes dans le buffer
-  # as.character() : conversion en texte pour la cohérence avec les autres modes
-  ids_mode_b <- as.character(aretes_sf_mode_b$osm_id[dans_buffer])
-  ids_mode_b <- ids_mode_b[!is.na(ids_mode_b)]  # Supprimer les NA éventuels
-  
+  # Indices des tronçons intersectant le buffer (pas leurs osm_id : voir le
+  # commentaire sur indices_perturbes plus haut).
+  idx_mode_b <- aretes_sf_mode_b$arete_idx_b[dans_buffer]
+
   # Tirage aléatoire : seule une proportion PROP_ROUTES_INONDEES des routes
   # dans le buffer est effectivement considérée comme inondée.
-  if (PROP_ROUTES_INONDEES_BUFFER < 1.0 && length(ids_mode_b) > 0) {
+  if (PROP_ROUTES_INONDEES_BUFFER < 1.0 && length(idx_mode_b) > 0) {
     set.seed(SEED_INONDATION)
-    n_inondees <- max(1, round(length(ids_mode_b) * PROP_ROUTES_INONDEES_BUFFER))
-    ids_mode_b <- sample(ids_mode_b, size = n_inondees, replace = FALSE)
+    n_inondees <- max(1, round(length(idx_mode_b) * PROP_ROUTES_INONDEES_BUFFER))
+    idx_mode_b <- sample(idx_mode_b, size = n_inondees, replace = FALSE)
     cat("  → Après tirage aléatoire (seed =", SEED_INONDATION,
         ", prop =", PROP_ROUTES_INONDEES_BUFFER, ") :",
-        length(ids_mode_b), "routes effectivement inondées\n")
+        length(idx_mode_b), "tronçons effectivement inondés\n")
   }
-  
-  # union() fusionne deux vecteurs sans doublons
-  osm_ids_perturbes <- union(osm_ids_perturbes, ids_mode_b)
-  
+
+  indices_perturbes <- union(indices_perturbes, idx_mode_b)
+
   cat("  Mode B (buffer", RAYON_PERTURBATION_M / 1000, "km) :",
-      length(ids_mode_b), "arêtes inondées\n")
+      length(idx_mode_b), "tronçons inondés\n")
 }
 
 # ── Mode C : raster de risque ─────────────────────────────────────────────────
@@ -244,46 +254,61 @@ if (UTILISER_MODE_RASTER) {
       pb_raster$tick()
     }
     
-    # Sélection des arêtes suffisamment exposées
-    ids_mode_c <- as.character(
-      aretes_sf_mode_c$osm_id[proportions_exposees >= PROPORTION_MIN_EXPOSEE]
-    )
-    ids_mode_c <- ids_mode_c[!is.na(ids_mode_c)]
-    
-    # Tirage aléatoire : seule une proportion PROP_ROUTES_INONDEES des routes
-    # exposées est effectivement considérée comme inondée.
-    if (PROP_ROUTES_INONDEES_RASTER < 1.0 && length(ids_mode_c) > 0) {
+    # Sélection des tronçons suffisamment exposés. On retient les indices
+    # d'arêtes, et non leurs osm_id : seuls les tronçons réellement sous l'eau
+    # doivent être coupés 
+    idx_mode_c <- aretes_sf_mode_c$arete_idx_c[
+      proportions_exposees >= PROPORTION_MIN_EXPOSEE
+    ]
+    cat("    Tronçons exposés (>", SEUIL_RISQUE_RASTER, "m d'eau sur >",
+        round(100 * PROPORTION_MIN_EXPOSEE), "% de leur longueur) :",
+        length(idx_mode_c), "\n")
+
+    # Tirage aléatoire : seule une proportion PROP_ROUTES_INONDEES des tronçons
+    # exposés est effectivement considérée comme coupée.
+    if (PROP_ROUTES_INONDEES_RASTER < 1.0 && length(idx_mode_c) > 0) {
       set.seed(SEED_INONDATION)
-      n_inondees <- max(1, round(length(ids_mode_c) * PROP_ROUTES_INONDEES_RASTER))
-      ids_mode_c <- sample(ids_mode_c, size = n_inondees, replace = FALSE)
+      n_inondees <- max(1, round(length(idx_mode_c) * PROP_ROUTES_INONDEES_RASTER))
+      idx_mode_c <- sample(idx_mode_c, size = n_inondees, replace = FALSE)
       cat("  → Après tirage aléatoire (seed =", SEED_INONDATION,
           ", prop =", PROP_ROUTES_INONDEES_RASTER, ") :",
-          length(ids_mode_c), "routes effectivement inondées\n")
+          length(idx_mode_c), "tronçons effectivement inondés\n")
     }
-    
-    osm_ids_perturbes <- union(osm_ids_perturbes, ids_mode_c)
-    
+
+    indices_perturbes <- union(indices_perturbes, idx_mode_c)
+
     cat("  Mode C (raster, seuil", SEUIL_RISQUE_RASTER, ") :",
-        length(ids_mode_c), "arêtes inondées\n")
+        length(idx_mode_c), "tronçons inondés\n")
   }
 }
 
 # ── Bilan : arêtes effectivement perturbées ───────────────────────────────────
-# On traduit maintenant les osm_id en indices d'arêtes dans le graphe igraph.
-# Ce sont ces indices qui seront utilisés pour supprimer les arêtes.
+# L'ensemble final est l'union de deux apports :
+#   • les indices collectés directement par les modes B et C (tronçons précis) ;
+#   • l'expansion des osm_id du mode A vers tous leurs tronçons (voie entière).
 aretes_reseau_sf <- reseau %>%
   activate("edges") %>%
   st_as_sf() %>%
   mutate(arete_idx = row_number())
 
-# match() : pour chaque osm_id perturbé, trouve son indice de ligne dans le réseau
-# !is.na() : supprime les osm_id non trouvés (hors réseau, déjà supprimés, etc.)
-indices_aretes_perturbees <- aretes_reseau_sf$arete_idx[
-  aretes_reseau_sf$osm_id %in% osm_ids_perturbes
-]
+# Expansion du mode A : tous les tronçons portant l'un des osm_id demandés.
+indices_mode_a <- if (length(osm_ids_perturbes) > 0) {
+  aretes_reseau_sf$arete_idx[
+    as.character(aretes_reseau_sf$osm_id) %in% osm_ids_perturbes
+  ]
+} else {
+  integer(0)
+}
+
+indices_aretes_perturbees <- union(indices_perturbes, indices_mode_a)
 indices_aretes_perturbees <- indices_aretes_perturbees[
   !is.na(indices_aretes_perturbees)
 ]
+
+if (length(osm_ids_perturbes) > 0) {
+  cat("  Mode A : ", length(osm_ids_perturbes), " osm_id → ",
+      length(indices_mode_a), " tronçons\n", sep = "")
+}
 
 n_perturb <- length(indices_aretes_perturbees)
 
@@ -342,9 +367,20 @@ cat("── Reconstruction du graphe dégradé ───────────
 # Cache des émissions par arête × véhicule (chargé une seule fois, hors fonction).
 # Utilisé dans recalculer_od() pour sommer CO2/NOx/PM le long de chaque chemin.
 # ══════════════════════════════════════════════════════════════════════════════
+# On lit les intensités (par tonne-kilomètre) 
 aretes_ems_cache <- duck_query(
-  "SELECT arete_id, vehicule_id, co2_kg, nox_g, pm25_g FROM aretes_couts_tous"
+  "SELECT arete_id, vehicule_id, length_km,
+          co2_kg_par_tkm, nox_g_par_tkm, pm25_g_par_tkm
+   FROM aretes_couts_tous"
 )
+
+# Émissions par TONNE transportée sur chaque arête × véhicule (kg/t et g/t) :
+# l'intensité au t·km multipliée par la longueur de l'arête. Sommées le long
+# d'un chemin, ces valeurs donnent l'émission par tonne acheminée sur ce trajet ;
+# il ne reste qu'à multiplier par le tonnage de la paire OD.
+aretes_ems_cache$co2_kg_par_t  <- aretes_ems_cache$co2_kg_par_tkm  * aretes_ems_cache$length_km
+aretes_ems_cache$nox_g_par_t   <- aretes_ems_cache$nox_g_par_tkm   * aretes_ems_cache$length_km
+aretes_ems_cache$pm25_g_par_t  <- aretes_ems_cache$pm25_g_par_tkm  * aretes_ems_cache$length_km
 aretes_ems_idx <- setNames(
   seq_len(nrow(aretes_ems_cache)),
   paste0(aretes_ems_cache$arete_id, "_", aretes_ems_cache$vehicule_id)
@@ -469,9 +505,11 @@ for (i in seq_along(warehouse_nodes_base)) {
           cles_ems     <- paste0(idx_phys_deg, "_", veh_id_deg)
           idx_ems      <- aretes_ems_idx[cles_ems]
           valides_ems  <- !is.na(idx_ems)
-          co2_kg_degrade <- sum(aretes_ems_cache$co2_kg[idx_ems[valides_ems]], na.rm = TRUE)
-          nox_g_degrade  <- sum(aretes_ems_cache$nox_g[idx_ems[valides_ems]],  na.rm = TRUE)
-          pm25_g_degrade <- sum(aretes_ems_cache$pm25_g[idx_ems[valides_ems]], na.rm = TRUE)
+          # Émissions PAR TONNE acheminée sur ce chemin (kg/t et g/t) : la
+          # multiplication par le tonnage de la paire est faite en IX.3.
+          co2_kg_degrade <- sum(aretes_ems_cache$co2_kg_par_t[idx_ems[valides_ems]],  na.rm = TRUE)
+          nox_g_degrade  <- sum(aretes_ems_cache$nox_g_par_t[idx_ems[valides_ems]],   na.rm = TRUE)
+          pm25_g_degrade <- sum(aretes_ems_cache$pm25_g_par_t[idx_ems[valides_ems]],  na.rm = TRUE)
         }
 
         # Accumulation pour les itinéraires de contournement (seulement en appel
@@ -701,57 +739,90 @@ od_compare <- od_reference %>%
 # de CO2 supplémentaires générées par l'allongement du trajet.
 od_compare <- od_compare %>%
   mutate(
-    
-    # ── Distance réelle du détour (km supplémentaires) ────────────────────────
-    # Positive si le chemin dégradé est plus long, nulle si inchangé,
-    # NA si la zone est déconnectée.
+
+    # ── Tonnage annuel échangé par la paire ───────────────────────────────────
+    # Sert à pondérer distances et émissions : sans lui, une liaison portant
+    # 50 tonnes pèserait autant qu'un corridor d'importation de 170 000 tonnes.
+    tonnage_paire = flux_tonnes_total[cbind(id_origine, id_destination)],
+
+    # ── Détour par trajet et détour pondéré par le tonnage ────────────────────
+    # delta_distance_km       : allongement d'UN trajet (km), pour lecture directe
+    # delta_tkm               : allongement × tonnage (t·km), directement
+    #                           comparable aux t·km du scénario de référence
     delta_distance_km = case_when(
       type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
       TRUE                        ~ distance_km_degrade - distance_km
     ),
-    
+    delta_tkm = delta_distance_km * tonnage_paire,
+
     # ── Émissions supplémentaires ─────────────────────────────────────────────
+    # co2_kg_trajet et co2_kg_degrade sont des émissions PAR TONNE acheminée
+    # (cf. le cache d'intensités en IX.2). On les multiplie ici par le tonnage
+    # de la paire pour obtenir un surcoût d'émissions annuel, homogène au bilan
+    # du 04 qui calcule « intensité × tonnage × km ».
     co2_surcout_kg = case_when(
       type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      !is.na(co2_kg_degrade)      ~ pmax(0, co2_kg_degrade - co2_kg_trajet),
+      !is.na(co2_kg_degrade)      ~ pmax(0, co2_kg_degrade - co2_kg_trajet) * tonnage_paire,
       TRUE                        ~ 0
     ),
     nox_surcout_g = case_when(
       type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      !is.na(nox_g_degrade)      ~ pmax(0, nox_g_degrade - nox_g_trajet),
+      !is.na(nox_g_degrade)       ~ pmax(0, nox_g_degrade - nox_g_trajet) * tonnage_paire,
       TRUE                        ~ 0
     ),
     pm25_surcout_g = case_when(
       type_impact == "deconnecte" ~ NA_real_,
       type_impact == "inchange"   ~ 0,
-      !is.na(pm25_g_degrade)      ~ pmax(0, pm25_g_degrade - pm25_g_trajet),
+      !is.na(pm25_g_degrade)      ~ pmax(0, pm25_g_degrade - pm25_g_trajet) * tonnage_paire,
       TRUE                        ~ 0
-    )
+    ),
+
+    # ── Surcoût monétaire pondéré par le tonnage ──────────────────────────────
+    # cout_rwf est un coût par tonne : multiplié par le tonnage, il donne le
+    # surcoût annuel réellement supporté sur cette liaison.
+    surcout_pondere_rwf = surcout_absolu_rwf * tonnage_paire
   )
 
-# Rapport global enrichi
+# ── Rapport global : surcoûts pondérés par le tonnage ─────────────────────────
+# Toutes les grandeurs ci-dessous sont des ÉQUIVALENTS ANNUELS : elles supposent
+# que la configuration dégradée vaut toute l'année. La conversion sur la durée
+# réelle de l'événement se fait au prorata (DUREE_JOURS / 365), en supposant le
+# fret réparti uniformément dans l'année.
 co2_surcout_total_kg  <- sum(od_compare$co2_surcout_kg,  na.rm = TRUE)
 nox_surcout_total_g   <- sum(od_compare$nox_surcout_g,   na.rm = TRUE)
 pm25_surcout_total_g  <- sum(od_compare$pm25_surcout_g,  na.rm = TRUE)
 dist_surcout_total_km <- sum(od_compare$delta_distance_km, na.rm = TRUE)
+tkm_surcout_total     <- sum(od_compare$delta_tkm,         na.rm = TRUE)
+surcout_pondere_total <- sum(od_compare$surcout_pondere_rwf, na.rm = TRUE)
+
+prorata <- DUREE_JOURS / 365
 
 n_paires_na <- sum(is.na(od_compare$co2_surcout_kg))
 
-cat("── Émissions supplémentaires (émissions réelles des arêtes) ───\n")
-cat("  Km supplémentaires total :",
-    format(round(dist_surcout_total_km), big.mark = " "), "km\n")
+cat("── Surcoûts pondérés par le tonnage (équivalent annuel) ───────\n")
+cat("  Allongement des trajets  :",
+    format(round(dist_surcout_total_km), big.mark = " "),
+    "km (somme des détours, non pondérée) |",
+    format(round(tkm_surcout_total / 1e6, 1), big.mark = " "),
+    "M t.km (pondéré)\n")
+cat("  Surcoût de transport     :",
+    round(surcout_pondere_total / 1e9, 2), "mrd RWF/an |",
+    format(round(surcout_pondere_total * prorata / 1e6), big.mark = " "),
+    "M RWF sur", DUREE_JOURS, "jours\n")
 cat("  CO2  supplémentaire      :",
-    round(co2_surcout_total_kg  / 1000, 1), "tonnes\n")
+    format(round(co2_surcout_total_kg / 1000), big.mark = " "), "t/an |",
+    round(co2_surcout_total_kg  * prorata / 1000), "t sur", DUREE_JOURS, "jours\n")
 cat("  NOx  supplémentaire      :",
-    round(nox_surcout_total_g   / 1000, 1), "kg\n")
+    format(round(nox_surcout_total_g / 1000), big.mark = " "), "kg/an\n")
 cat("  PM2.5 supplémentaire     :",
-    round(pm25_surcout_total_g  / 1000, 1), "kg\n")
-cat("  ⚠ Paires déconnectées (émissions non calculables) :",
-    n_paires_na, "\n")
-cat("  sur", DUREE_JOURS, "jours de perturbation\n\n")
+    format(round(pm25_surcout_total_g / 1000), big.mark = " "), "kg/an\n")
+cat("  ⚠ Paires déconnectées (surcoût non valorisé) :", n_paires_na,
+    "— soit", format(round(sum(od_compare$tonnage_paire[is.na(od_compare$co2_surcout_kg)])),
+                     big.mark = " "), "tonnes sans accès\n")
+cat("  → Le surcoût ci-dessus est donc une BORNE INFÉRIEURE.\n\n")
 
 # ── Sauvegarde dans DuckDB ────────────────────────────────────────────────────
 # On stocke la table de comparaison dans DuckDB pour des requêtes SQL ultérieures.
@@ -995,16 +1066,42 @@ criticite_df <- criticite_df %>%
 # ── Sauvegarde de la table de criticité dans DuckDB ───────────────────────────
 duck_write(criticite_df, paste0("criticite_aretes_", NOM_SCENARIO))
 
-cat("\n✓ Top 10 des arêtes les plus critiques :\n")
+# ── Agrégation par route ──────────────────────────────────────────────────────
+# Le classement par arête est peu lisible : les arêtes candidates étant les plus
+# chargées du réseau, elles appartiennent souvent à la même voie, et le top 10
+# affiche alors dix tronçons d'une seule route. On agrège donc par osm_id.
+# La criticité d'une ROUTE est le MAXIMUM sur ses tronçons, et non la somme :
+# couper un seul tronçon suffit à interrompre la circulation sur l'itinéraire,
+# additionner reviendrait à compter plusieurs fois la même coupure.
+criticite_routes_df <- criticite_df %>%
+  group_by(osm_id, name, road_type) %>%
+  summarise(
+    n_troncons        = n(),
+    longueur_km       = round(sum(longueur_m, na.rm = TRUE) / 1000, 2),
+    volume_tonnes     = max(volume_tonnes, na.rm = TRUE),
+    surcout_pondere   = max(surcout_pondere, na.rm = TRUE),
+    n_deconnexions_caus = max(n_deconnexions_caus, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(surcout_pondere)) %>%
+  mutate(
+    rang              = row_number(),
+    surcout_pondere_k = round(surcout_pondere / 1000, 1)   # En milliers RWF×tonnes
+  )
+
+duck_write(criticite_routes_df, paste0("criticite_routes_", NOM_SCENARIO))
+
+cat("\n✓ Top 10 des routes les plus critiques (agrégé par osm_id) :\n")
 print(
-  criticite_df %>%
+  criticite_routes_df %>%
     slice_head(n = 10) %>%
-    select(rang, osm_id, name, road_type, longueur_km,
+    select(rang, osm_id, name, road_type, n_troncons, longueur_km,
            volume_tonnes, surcout_pondere_k, n_deconnexions_caus) %>%
     rename(Rang        = rang,
            OSM_ID      = osm_id,
            Nom         = name,
            Type        = road_type,
+           Troncons    = n_troncons,
            Long_km     = longueur_km,
            Vol_t       = volume_tonnes,
            Criticite_k = surcout_pondere_k,
@@ -1026,6 +1123,13 @@ dbExecute(con, paste0(
 dbExecute(con, paste0(
   "COPY (SELECT * FROM criticite_aretes_", NOM_SCENARIO, ") TO '",
   file.path(DIR_EXPORTS, paste0("criticite_aretes_", NOM_SCENARIO, ".csv")),
+  "' (FORMAT CSV, HEADER)"
+))
+
+# Export de la table de criticité agrégée par route
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM criticite_routes_", NOM_SCENARIO, ") TO '",
+  file.path(DIR_EXPORTS, paste0("criticite_routes_", NOM_SCENARIO, ".csv")),
   "' (FORMAT CSV, HEADER)"
 ))
 
@@ -1065,13 +1169,15 @@ cat("SURCOÛT MOYEN (paires affectées) :",
 cat("SURCOÛT RELATIF MOYEN            :",
     round(mean(od_compare$surcout_relatif_pct, na.rm = TRUE), 1), "%\n\n")
 
-cat("ARÊTES LES PLUS CRITIQUES (top 5) :\n")
+cat("ROUTES LES PLUS CRITIQUES (top 5) :\n")
 print(
-  criticite_df %>%
+  criticite_routes_df %>%
     slice_head(n = 5) %>%
-    select(rang, road_type, longueur_km, volume_tonnes, surcout_pondere_k) %>%
-    rename(Rang = rang, Type = road_type, Long_km = longueur_km,
-           Vol_t = volume_tonnes, Criticite = surcout_pondere_k)
+    select(rang, name, road_type, n_troncons, longueur_km,
+           volume_tonnes, surcout_pondere_k) %>%
+    rename(Rang = rang, Nom = name, Type = road_type, Troncons = n_troncons,
+           Long_km = longueur_km, Vol_t = volume_tonnes,
+           Criticite = surcout_pondere_k)
 )
 
 cat("\nFICHIERS GÉNÉRÉS (Partie IX) :\n")
@@ -1090,7 +1196,8 @@ saveRDS(
   list(
     od_compare                = od_compare,
     od_degrade                = od_degrade,
-    criticite_df              = criticite_df,
+    criticite_df              = criticite_df,          # par arête (alimente la carte B)
+    criticite_routes_df       = criticite_routes_df,   # agrégé par osm_id (tableaux du mémoire)
     indices_aretes_perturbees = indices_aretes_perturbees,
     aretes_perturbees_sf      = aretes_perturbees_sf,    
     fraction_perdue_zone      = fraction_perdue_zone,    
