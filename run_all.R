@@ -25,16 +25,6 @@ if (nchar(token) > 0) {
   system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
   # Remotes : dépôt principal (fetch) + push simultané vers le dépôt principal
   # ET le miroir GEMMES-AFD.
-  #
-  # La liste des push URLs est REMISE À ZÉRO avant d'être reconstruite, sinon
-  # elle s'allonge d'une entrée à chaque exécution de run_all.R. En effet
-  # `set-url --push` (sans --add) ne sait remplacer qu'une valeur unique : dès
-  # que la clé remote.origin.pushurl en contient plusieurs, Git refuse
-  # ("has multiple values") et la ligne échoue, tandis que le `--add --push`
-  # suivant, lui, réussit toujours et empile un doublon de plus.
-  # `--unset-all` supprime toutes les valeurs d'un coup ; il renvoie un code
-  # d'erreur si la clé n'existe pas encore (premier lancement), d'où le
-  # `|| true` qui neutralise ce cas parfaitement normal.
   system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
   system("git config --unset-all remote.origin.pushurl || true")
   system("git remote set-url --add --push origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
@@ -54,7 +44,7 @@ if (nchar(token) > 0) {
 
 # Recalcul forcé de tous les caches (réseau, pentes, OD, affectation).
 # Remettre à FALSE après un reset pour bénéficier des caches (~30 min gagnés).
-RESET_CACHES     <- TRUE  # ← passer à TRUE pour tout recalculer depuis zéro
+RESET_CACHES     <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
 
 RUN_PARAMETRES   <- TRUE   # 00 — < 1 min  — packages, DuckDB, palettes
 RUN_RESEAU       <- TRUE   # 01 — ~25 min  — réseau OSM, pentes, démographie
