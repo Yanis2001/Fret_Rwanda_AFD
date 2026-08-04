@@ -169,6 +169,11 @@ if (!requireNamespace("digest", quietly = TRUE)) {
 empreinte_entrees <- digest::digest(
   list(
     flux_tonnes_total = flux_tonnes_total,    # dépend de BETA, TONNES, DEMANDE_FINALE_SAM, RoW
+    # Les matrices SECTORIELLES sont ce qui détermine réellement les volumes
+    # affectés : flux_tonnes_total ne sert qu'à sélectionner les paires actives.
+    # Sans elles dans l'empreinte, une modification de la ventilation sectorielle
+    # (ou de la projection RoW) laisserait le cache d'affectation valide à tort.
+    flux_gravitaire   = flux_gravitaire,
     seuil             = SEUIL_FLUX_TONNES,
     n_aretes          = n_aretes_physiques,
     n_warehouses      = n_warehouses,
