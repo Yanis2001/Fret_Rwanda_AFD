@@ -808,6 +808,10 @@ cat("  Population par groupe SAM (milliers) :\n")
 print(round(N_groupe / 1e3, 1))
 cat("\n")
 
+# Demande publique (gov, s-i, marges Commerce) : sans dimension revenu/strate,
+# spatialisée par pop × RWI (z[i]) plutôt que par groupe.
+demande_finale_pub_eff <- DEMANDE_FINALE_PUBLIQUE_SAM[SECTEURS]
+
 for (i in seq_len(n_warehouses)) {
 
   # ── Production locale x[i,s] ────────────────────────────────────────────────
