@@ -1123,7 +1123,10 @@ TYPE_EVENEMENT        <- "inondation"
 # L'activation des modes B/C se fait dans la section CHOIX DU MODE (tête de script).
 
 # Mettre l'identifiant OSM de la ou des routes affectées (mode manuel)
-OSM_IDS_PERTURBES_MANUEL <- c(479687569)
+#   - character(0)       → Mode A désactivé (aucune arête perturbée par cette voie)
+#   - c(479687569)       → Mode A activé, route(s) OSM listée(s) coupée(s)
+#     (exemple : c(479687569) coupe la voie OSM 479687569 et tous ses tronçons)
+OSM_IDS_PERTURBES_MANUEL <- character(0)
 
 # Nom du scénario, construit selon NOM_SCENARIO_MANUEL (défini dans CHOIX DU MODE) :
 #   NULL   → automatique : nom dérivé des noms OSM des arêtes perturbées
