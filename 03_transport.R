@@ -756,72 +756,56 @@ cat("  RWI total zones actives :", round(rwi_total, 3),
     "| z_totale (pop×rwi) :", round(z_totale), "\n\n")
 
 # ── Demande finale par groupe de ménages ──────────────────────────────────────
-# Chaque zone est rattachée à un GROUPE SAM (strate urbain/rural × quintile de
-# revenu) et reçoit le PANIER de consommation de ce groupe (DEMANDE_FINALE_GROUPES_SAM) :
-# la composition sectorielle de la demande finale varie ainsi selon la richesse et
-# le caractère urbain de la zone. La consommation
-# publique (gov, s-i, marges Commerce), sans dimension revenu/urbain, reste
-# spatialisée par le poids pop × RWI (z[i]).
+# Chaque zone reçoit un MÉLANGE de paniers de consommation : sa population est
+# répartie entre les 10 groupes de ménages de la SAM (strate urbain/rural ×
+# quintile national de consommation), et elle consomme le panier de chaque groupe
+# au prorata de la population qu'elle y détient :
+#     d_finale_menages[i, s] = Σ_g C[s, g] × pop_groupe_zone[i, g] / N[g]
+# avec C = DEMANDE_FINALE_GROUPES_SAM et N[g] = Σ_i pop_groupe_zone[i, g].
+# Par construction Σ_i d_finale_menages[i, s] = Σ_g C[s, g] : le total national
+# par secteur est exactement préservé.
+#
+# La consommation publique (gov, s-i, marges Commerce), sans dimension
+# revenu/strate, reste spatialisée par le poids pop × RWI (z[i]).
 
-# La classification urbain/rural (is_urbain) est produite par 01_reseau.R dans
-# diag_population. Si la colonne est absente, le persist est obsolète : on s'arrête
-# avec un message explicite plutôt que de produire une demande finale incohérente.
-if (!"is_urbain" %in% names(diag_population)) {
-  stop("diag_population ne contient pas la colonne 'is_urbain' — relancer ",
-       "01_reseau.R (puis 02_couts.R et 03_transport.R) : la demande finale ",
-       "par groupe en a besoin.")
+groupes_sam <- colnames(DEMANDE_FINALE_GROUPES_SAM)
+
+
+# On réordonne les colonnes sur l'ordre des groupes de la SAM et on vérifie que la
+# population par zone est cohérente avec pop_i (le recalage a été fait en 01 ;
+# on ne fait que le contrôler ici).
+pop_groupe_zone <- pop_groupe_zone[, groupes_sam, drop = FALSE]
+ecart_pop <- max(abs(rowSums(pop_groupe_zone) - pop_i))
+if (ecart_pop > 1e-3) {
+  stop("pop_groupe_zone incohérente avec pop_i (écart max = ", round(ecart_pop, 3),
+       ") — relancer 01_reseau.R.")
 }
 
-# Attribue un quintile de revenu (1 = plus pauvre … 5 = plus riche) à chaque zone :
-# SÉPARÉMENT au sein des zones urbaines et des zones rurales, on classe les zones par
-# p_rwi croissant et on découpe la POPULATION cumulée en 5 tranches de ~20 %
-# (position = point médian de l'intervalle de population de la zone). Le découpage
-# par strate est cohérent avec les quintiles urbains/ruraux de la SAM et garantit
-# que chaque strate peuple ses 5 quintiles.
-assigner_quintiles_rwi <- function(p_rwi, pop, is_urbain) {
-  quint <- integer(length(p_rwi))
-  for (idx in split(seq_along(p_rwi), is_urbain)) {  # un groupe d'indices par strate
-    if (length(idx) == 0) next
-    o   <- idx[order(p_rwi[idx])]        # zones de la strate, p_rwi croissant
-    w   <- pop[o]
-    pos <- (cumsum(w) - w / 2) / sum(w)  # position population-pondérée ∈ ]0,1[
-    quint[o] <- findInterval(pos, c(.2, .4, .6, .8)) + 1L
-  }
-  pmin(pmax(quint, 1L), 5L)
-}
-
-# Statut urbain/rural par zone (depuis diag_population, calculé en 01_reseau.R).
-is_urbain_zones <- diag_population$is_urbain[
-  match(noeuds_entreposage$warehouse_name, diag_population$nom_zone)
-]
-is_urbain_zones <- replace_na(is_urbain_zones, FALSE)
-
-# Quintile de revenu par zone, puis clé de groupe « r1 »…« u5 ».
-quintile_zones <- assigner_quintiles_rwi(p_rwi_zones, pop_i, is_urbain_zones)
-groupe_zones   <- paste0(ifelse(is_urbain_zones, "u", "r"), quintile_zones)
+# Nombre de groupes effectivement représentés dans chaque zone : mesure directe de
+# ce que la méthode apporte (1 = équivalent à une classification par cellule).
+n_groupes_par_zone <- rowSums(pop_groupe_zone > 0)
+cat("  Groupes représentés par zone : médiane =", median(n_groupes_par_zone),
+    "| min =", min(n_groupes_par_zone), "| max =", max(n_groupes_par_zone), "\n")
 
 # Population nationale par groupe = dénominateur d'allocation des paniers.
-N_groupe <- tapply(pop_i, groupe_zones, sum)
+N_groupe <- colSums(pop_groupe_zone)
 
-# Groupes SAM sans aucune zone (orphelins, ex. quintile urbain absent) : leur
-# consommation ne peut être spatialisée par population → on la verse dans la
-# demande publique (allouée par pop × RWI). Préserve le total national par secteur.
-groupes_sam       <- colnames(DEMANDE_FINALE_GROUPES_SAM)
-groupes_orphelins <- setdiff(groupes_sam, names(N_groupe))
-conso_orpheline   <- if (length(groupes_orphelins) > 0) {
-  rowSums(DEMANDE_FINALE_GROUPES_SAM[, groupes_orphelins, drop = FALSE])
-} else {
-  setNames(rep(0, N_SECTEURS), SECTEURS)
-}
-demande_finale_pub_eff <- DEMANDE_FINALE_PUBLIQUE_SAM[SECTEURS] +
-                          conso_orpheline[SECTEURS]
 
-cat("  Demande finale par groupe — nombre de zones par groupe SAM :\n")
-print(table(groupe_zones))
-if (length(groupes_orphelins) > 0) {
-  cat("  ⚠ Groupes SAM sans zone (conso basculée en demande publique) :",
-      paste(groupes_orphelins, collapse = ", "), "\n")
-}
+# ── Demande finale des ménages, calculée en une fois pour toutes les zones ─────
+# part_groupe[i,g] = pop_groupe_zone[i,g] / N[g] = part de la zone i dans la
+# population du groupe g (Σ_i part_groupe[i,g] = 1 pour tout groupe peuplé).
+# Le produit matriciel C × t(part_groupe) donne directement la matrice
+# (secteur × zone) de la demande finale des ménages.
+part_groupe <- sweep(pop_groupe_zone, 2, pmax(N_groupe, 1), "/")
+d_finale_menages_mat <- DEMANDE_FINALE_GROUPES_SAM[SECTEURS, groupes_sam, drop = FALSE] %*%
+                        t(part_groupe)
+
+# Contrôle : le total national par secteur doit être exactement conservé.
+stopifnot(max(abs(rowSums(d_finale_menages_mat) -
+                  rowSums(DEMANDE_FINALE_GROUPES_SAM[SECTEURS, , drop = FALSE]))) < 1e-6)
+
+cat("  Population par groupe SAM (milliers) :\n")
+print(round(N_groupe / 1e3, 1))
 cat("\n")
 
 for (i in seq_len(n_warehouses)) {
@@ -844,12 +828,12 @@ for (i in seq_len(n_warehouses)) {
   names(d_inter_i) <- SECTEURS
 
   # ── Demande finale d_finale[i,s] ────────────────────────────────────────────
-  # Panier du groupe de la zone, alloué au prorata de la part de la zone dans la
-  # population de son groupe (Σ_{i∈g} pop_i/N_g = 1), AUQUEL s'ajoute la demande
-  # publique (gov, s-i, groupes orphelins) spatialisée par pop × RWI.
+  # Mélange des paniers des groupes présents dans la zone, chacun alloué au
+  # prorata de la part de la zone dans la population de son groupe
+  # (Σ_i pop_groupe_zone[i,g]/N_g = 1), AUQUEL s'ajoute la demande publique
+  # (gov, s-i) spatialisée par pop × RWI.
   # Par construction Σ_i d_finale[i,s] = demande_finale[s] (total national inchangé).
-  g <- groupe_zones[i]
-  d_finale_menages_i <- DEMANDE_FINALE_GROUPES_SAM[, g] * (pop_i[i] / N_groupe[[g]])
+  d_finale_menages_i <- d_finale_menages_mat[, i]
   d_finale_pub_i     <- demande_finale_pub_eff * (z_demande[i] / z_totale)
   d_finale_i <- d_finale_menages_i + d_finale_pub_i
   names(d_finale_i) <- SECTEURS
@@ -1689,66 +1673,133 @@ cat("  Nombre de paires actives:", nrow(flux_total_long), "\n\n")
 #   du pays étudié.
 #
 # RÉSULTAT :
-#   flux_tonnes_total : matrice (n_warehouses × n_warehouses) pour l'affectation.
-#   Les flux RoW sont absorbés dans les lignes/colonnes des postes frontières.
+#   flux_gravitaire[[s]] : matrices (n_warehouses × n_warehouses) PROJETÉES,
+#     une par secteur. Ce sont elles que 04/05 lisent pour affecter les volumes.
+#   flux_tonnes_total    : leur somme, utilisée pour sélectionner les paires OD
+#     actives et pour l'empreinte du cache d'affectation.
+#   flux_gravitaire_ext  : les matrices d'origine (n_total × n_total, RoW en
+#     lignes/colonnes séparées), conservées pour les diagnostics et les exports.
+#
+# POURQUOI LA PROJECTION EST FAITE SECTEUR PAR SECTEUR :
+#   L'affectation lit flux_gravitaire[[s]][i, j] sur des indices 1..n_warehouses
+#   issus de flux_tonnes_total. Si les matrices sectorielles restaient en
+#   n_total × n_total, tout le bloc RoW (lignes/colonnes n_warehouses+1..n_total)
+#   ne serait jamais lu : le tonnage importé et exporté disparaîtrait de
+#   l'affectation, et d'autant plus fortement que le secteur dépend du commerce
+#   extérieur. La projection doit donc produire directement les matrices
+#   sectorielles utilisées en aval, et non seulement leur somme.
 # ==============================================================================
 
 cat("── Projection des flux RoW sur les postes frontières ──────────────────\n")
 
-# flux_gravitaire[[s]] est déjà en tonnes (O_s et D_s ont été convertis avant
-# Furness) : on somme directement les secteurs sans conversion supplémentaire.
-flux_tonnes_total_ext <- matrix(
-  0,
-  nrow = n_total, ncol = n_total,
-  dimnames = list(noms_total, noms_total)
-)
+# ── Choix du poste frontière par pays et par zone ─────────────────────────────
+# Pour chaque pays k et chaque zone j : b*(j) = argmin_b C_road[b, j] sur les
+# postes frontières du pays k. C_ij ne dépend pas du secteur (le coût routier
+# est le même quelle que soit la marchandise), donc ce choix est calculé UNE
+# FOIS ici et réutilisé pour tous les secteurs — d'où deux tables d'indices :
+#   b_import[k, j] : poste d'entrée du flux RoW_k → j
+#   b_export[k, j] : poste de sortie du flux j → RoW_k
+# NA signifie « aucun poste frontière connu pour ce pays » : le flux est alors
+# ignoré (comptabilisé plus bas comme tonnage non projeté).
+b_import <- matrix(NA_integer_, nrow = length(pays_row), ncol = n_warehouses)
+b_export <- matrix(NA_integer_, nrow = length(pays_row), ncol = n_warehouses)
 
-for (s in SECTEURS_FRET) {
-  flux_tonnes_total_ext <- flux_tonnes_total_ext + flux_gravitaire[[s]]
+# Sélection du poste le moins coûteux parmi une liste de candidats. Une zone
+# peut n'être reliée à aucun poste frontière du pays par une route connue :
+# C_ij vaut alors NA ou Inf pour tous les candidats, et which.min() renverrait
+# un vecteur vide. On renvoie NA dans ce cas — le flux correspondant sera
+# ignoré à la projection et signalé par le contrôle de conservation.
+choisir_poste <- function(couts, idxs_b) {
+  finis <- which(is.finite(couts))
+  if (length(finis) == 0) return(NA_integer_)
+  as.integer(idxs_b[finis[which.min(couts[finis])]])
 }
 
-# Projection des lignes/colonnes RoW sur les postes frontières correspondants.
-# Pour chaque pays k : b*(j) = argmin sur les frontières du pays de C_road[b, j].
-# Le même passage est utilisé pour les flux entrants (import) et sortants (export).
-# Note : C_ij est sector-independent → argmin b ne dépend pas du secteur.
-# Initialisation depuis le bloc domestique-domestique de la matrice étendue
-flux_tonnes_total <- flux_tonnes_total_ext[1:n_warehouses, 1:n_warehouses]
-
 for (k in seq_along(pays_row)) {
-  pays_k <- pays_row[k]
-  idx_k  <- n_warehouses + k
-  idxs_b <- idx_frontiere_par_pays %>% filter(pays == pays_k) %>% pull(idx)
-
+  idxs_b <- idx_frontiere_par_pays %>% filter(pays == pays_row[k]) %>% pull(idx)
   if (length(idxs_b) == 0) next
-
   for (j in seq_len(n_warehouses)) {
-    # Flux RoW_k → j (import)
-    vol_import <- flux_tonnes_total_ext[idx_k, j]
-    if (vol_import > 0) {
-      couts_b <- C_ij[idxs_b, j]
-      b_star  <- idxs_b[which.min(couts_b)]
-      if (!is.na(b_star)) {
-        flux_tonnes_total[b_star, j] <- flux_tonnes_total[b_star, j] + vol_import
-      }
-    }
-
-    # Flux j → RoW_k (export)
-    vol_export <- flux_tonnes_total_ext[j, idx_k]
-    if (vol_export > 0) {
-      couts_b <- C_ij[j, idxs_b]
-      b_star  <- idxs_b[which.min(couts_b)]
-      if (!is.na(b_star)) {
-        flux_tonnes_total[j, b_star] <- flux_tonnes_total[j, b_star] + vol_export
-      }
-    }
+    b_import[k, j] <- choisir_poste(C_ij[idxs_b, j], idxs_b)
+    b_export[k, j] <- choisir_poste(C_ij[j, idxs_b], idxs_b)
   }
 }
 
-rm(flux_tonnes_total_ext)
+# ── Projection d'une matrice étendue vers le réseau domestique ────────────────
+# Prend une matrice n_total × n_total et renvoie sa version n_warehouses ×
+# n_warehouses : le bloc domestique est repris tel quel, et chaque flux
+# impliquant un nœud RoW est réinjecté sur le poste frontière retenu ci-dessus.
+projeter_row_sur_frontieres <- function(M_ext) {
 
+  M <- M_ext[seq_len(n_warehouses), seq_len(n_warehouses), drop = FALSE]
+
+  for (k in seq_along(pays_row)) {
+    idx_k <- n_warehouses + k
+
+    for (j in seq_len(n_warehouses)) {
+      # Import RoW_k → j : le trafic naît au poste frontière b_import
+      vol_import <- M_ext[idx_k, j]
+      if (vol_import > 0 && !is.na(b_import[k, j])) {
+        M[b_import[k, j], j] <- M[b_import[k, j], j] + vol_import
+      }
+      # Export j → RoW_k : le trafic s'arrête au poste frontière b_export
+      vol_export <- M_ext[j, idx_k]
+      if (vol_export > 0 && !is.na(b_export[k, j])) {
+        M[j, b_export[k, j]] <- M[j, b_export[k, j]] + vol_export
+      }
+    }
+  }
+
+  M
+}
+
+# ── Application secteur par secteur ───────────────────────────────────────────
+# On conserve les matrices étendues sous flux_gravitaire_ext (diagnostics,
+# export CSV, lecture des échanges avec chaque pays), et flux_gravitaire devient
+# la version projetée : c'est le seul objet lu par 04_affectation.R et
+# 05_vulnerabilite.R.
+flux_gravitaire_ext <- flux_gravitaire
+flux_gravitaire     <- lapply(flux_gravitaire_ext, projeter_row_sur_frontieres)
+names(flux_gravitaire) <- names(flux_gravitaire_ext)
+
+# flux_gravitaire[[s]] est déjà en tonnes (O_s et D_s ont été convertis avant
+# Furness) : la somme sectorielle donne directement la matrice d'affectation.
+flux_tonnes_total <- Reduce(`+`, flux_gravitaire)
+
+# ── Contrôle de conservation du tonnage ───────────────────────────────────────
+# La projection est un simple déplacement de masse : rien ne doit se perdre,
+# sauf les flux d'un pays sans poste frontière renseigné. Un écart inattendu
+# signalerait une désynchronisation entre les matrices sectorielles et la
+# matrice d'affectation — exactement le défaut que cette section corrige.
+tonnage_avant <- sum(sapply(flux_gravitaire_ext, sum))
 tonnage_total <- sum(flux_tonnes_total)
+ecart_projection <- tonnage_avant - tonnage_total
+
+cat("  Tonnage sectoriel avant projection  :",
+    format(round(tonnage_avant), big.mark = " "), "tonnes\n")
 cat("  Tonnage domestique après projection :",
-    format(round(tonnage_total), big.mark = " "), "tonnes\n\n")
+    format(round(tonnage_total), big.mark = " "), "tonnes\n")
+
+if (abs(ecart_projection) > 1e-6 * max(1, tonnage_avant)) {
+  warning(sprintf(
+    paste0("Projection RoW : %s tonnes non projetees (%.3f %% du total). ",
+           "Verifier que chaque pays RoW dispose d'au moins un poste frontiere ",
+           "dans idx_frontiere_par_pays."),
+    format(round(ecart_projection), big.mark = " "),
+    100 * ecart_projection / tonnage_avant
+  ))
+} else {
+  cat("  ✓ Conservation du tonnage vérifiée (écart nul)\n")
+}
+
+# Les dimensions doivent être cohérentes : c'est l'invariant sur lequel repose
+# l'indexation de flux_gravitaire[[s]][i, j] dans l'affectation.
+stopifnot(
+  all(sapply(flux_gravitaire, nrow) == n_warehouses),
+  all(sapply(flux_gravitaire, ncol) == n_warehouses),
+  identical(dim(flux_tonnes_total), c(n_warehouses, n_warehouses))
+)
+cat("  ✓ Matrices sectorielles projetées :", length(flux_gravitaire), "secteurs en",
+    n_warehouses, "×", n_warehouses, "\n\n")
 
 
 ################################################################################
@@ -1759,9 +1810,10 @@ cat("=== Sauvegarde des objets persistants (03_transport) ===\n")
 
 saveRDS(
   list(
-    flux_gravitaire     = flux_gravitaire,
+    flux_gravitaire     = flux_gravitaire,     # liste par secteur, n_warehouses × n_warehouses (PROJETÉ) — lu par 04/05
+    flux_gravitaire_ext = flux_gravitaire_ext,  # liste par secteur, n_total × n_total (RoW séparés) — diagnostics
     flux_total          = flux_total,          # n_total × n_total (inclut RoW)
-    flux_tonnes_total   = flux_tonnes_total,   # n_warehouses × n_warehouses (projeté)
+    flux_tonnes_total   = flux_tonnes_total,   # n_warehouses × n_warehouses (somme des secteurs projetés)
     offre_zones         = offre_zones,         # n_warehouses × N_SECTEURS (domestique, NET : max(0,x−d))
     demande_zones       = demande_zones,       # n_warehouses × N_SECTEURS (domestique, NET : max(0,d−x))
     prod_zones          = prod_zones,          # n_warehouses × N_SECTEURS (production locale BRUTE x[i,s], avant netting)
@@ -1791,7 +1843,7 @@ cat("✓ persist_flux_fret.rds\n\n")
 cat("── Nettoyage final ─────────────────────────────────────────────────────\n")
 
 objets_fin <- c(
-  "flux_gravitaire", "flux_total", "flux_tonnes_total",
+  "flux_gravitaire", "flux_gravitaire_ext", "flux_total", "flux_tonnes_total",
   "offre_zones", "demande_zones", "prod_zones", "dem_zones",
   "e_zones", "m_zones", "offre_total", "demande_total",
   "flux_par_secteur_df", "recap_zones", "A", "recap_io",
