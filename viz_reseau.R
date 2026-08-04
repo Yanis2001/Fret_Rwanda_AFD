@@ -90,6 +90,11 @@ local({
 # une couleur différente (définie dans PALETTE_ROAD_TYPE).
 # tm_lines() : représente les lignes (routes) avec une couleur selon "road_type".
 # tm_scale() : définit comment mapper les valeurs de "road_type" aux couleurs.
+# Exemple chiffré repris dans la note de lecture ci-dessous.
+tab_routes_v      <- table(routes$road_type)
+type_dominant_v   <- names(which.max(tab_routes_v))
+pct_dominant_v    <- round(100 * max(tab_routes_v) / sum(tab_routes_v), 1)
+
 carte_verif_routes <- fond_carte() +
   tm_shape(routes) +
   tm_lines(
@@ -99,6 +104,14 @@ carte_verif_routes <- fond_carte() +
     lwd = 1.2
   ) +
   tm_title(paste0("Réseau Routier — ", NOM_PAYS, "\nContrôle post-nettoyage")) +
+  tm_credits(
+    note_lecture(sprintf(
+      "%s %% des segments du réseau sont de type « %s ».",
+      pct_dominant_v, type_dominant_v
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position = c("right", "top"))
@@ -152,6 +165,14 @@ carte_aretes_perdues <- fond_carte() +
   tm_title(paste0("Arêtes exclues de la composante géante\n(",
                   round(nrow(aretes_perdues) / n_aretes_avant * 100, 1),
                   "% du réseau)")) +
+  tm_credits(
+    note_lecture(sprintf(
+      "%d arêtes et %d nœuds (points rouges) sont exclus de la composante connexe principale du réseau.",
+      nrow(aretes_perdues), nrow(noeuds_hors_geante)
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -206,6 +227,15 @@ carte_population <- fond_carte() +
   ) +
 
   tm_title("Distribution démographique des zones d'entrepôt\nSources : NISR 2022 / WorldPop 2020") +
+  tm_credits(
+    note_lecture(sprintf(
+      "la zone la plus peuplée, %s, compte %s habitants.",
+      str_remove(entrepots_pop_sf$warehouse_name[which.max(entrepots_pop_sf$population_zone)], " - .*"),
+      format(round(max(entrepots_pop_sf$population_zone)), big.mark = " ")
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -233,10 +263,26 @@ g_pop <- diag_population %>%
     Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 25),
     Zone_court = make.unique(Zone_court, sep = " #"),   # rend les labels uniques
     Zone_court = factor(Zone_court, levels = rev(Zone_court)),
-    est_reference   = (nom_zone == zone_ref_pop_approx)
+    est_reference   = (nom_zone == zone_ref_pop_approx),
+    # Catégorie de source par préfixe plutôt que par valeur exacte : `source`
+    # inclut le plancher POP_FALLBACK_MIN dans son libellé ("Fallback_1000"),
+    # qui change si ce paramètre change — matcher sur le préfixe évite que
+    # cette échelle se désynchronise silencieusement de 01_reseau.R (comme
+    # c'était le cas ici : les libellés "NISR_2022"/"WorldPop_2020" ci-dessous
+    # ne correspondaient plus aux valeurs réelles depuis le passage aux
+    # cellules de Voronoï, cf. [[project_voronoi_entrepots]]).
+    source_cat = factor(
+      case_when(
+        str_detect(source, "^WorldPop")  ~ "WorldPop",
+        str_detect(source, "^NISR")      ~ "NISR",
+        str_detect(source, "^Fallback")  ~ "Plancher",
+        TRUE ~ "Autre"
+      ),
+      levels = c("WorldPop", "NISR", "Plancher", "Autre")
+    )
   ) %>%
   ggplot(aes(x = Zone_court, y = population_zone / 1000,
-             fill = type_zone, alpha = source)) +
+             fill = type_zone, alpha = source_cat)) +
   geom_col(width = 0.75) +
   # Surlignage de la barre de référence par un contour rouge épais
   geom_col(
@@ -261,31 +307,38 @@ g_pop <- diag_population %>%
   ) +
   coord_flip() +
   scale_alpha_manual(
-    values = c("NISR_2022"     = 1.0,
-               "WorldPop_2020" = 0.8,
-               "Fallback_1000" = 0.35),
-    name   = "Source"
+    values = c("WorldPop"  = 1.0,
+               "NISR"      = 0.7,
+               "Plancher"  = 0.35,
+               "Autre"     = 0.35),
+    name   = "Source",
+    drop   = FALSE
   ) +
   scale_fill_manual(values = PALETTE_ZONE_TYPE, name = "Type de zone") +
   scale_y_continuous(labels = scales::label_number(suffix = " k")) +
   labs(
     title    = "Population par zone d'entrepôt",
     subtitle = paste0(
-      "Transparence = fiabilité de la source (opaque = NISR officiel)\n",
+      "Transparence = source retenue (opaque = WorldPop, la plus fine ; voir hiérarchie ci-dessous)\n",
       "Contour rouge = zone de population maximale (référence MRIO)"
     ),
     x = NULL,
-    y = "Population (milliers d'habitants)"
+    y = "Population (milliers d'habitants)",
+    caption = note_lecture(sprintf(
+      "la zone encadrée en rouge, %s, sert de référence de demande dans le modèle MRIO : c'est la zone la plus peuplée, avec %s habitants.",
+      zone_ref_pop_label, format(round(max(diag_population$population_zone)), big.mark = " ")
+    ), largeur_car = 144)
   ) +
   theme_minimal(base_size = 11) +
   theme(
     plot.title = element_text(face = "bold"),
     legend.position = "right"
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "graphique_population_zones.png"),
-  g_pop, width = 12, height = 8, dpi = 300
+  g_pop, width = 12, height = 8.6, dpi = 300
 )
 cat("  ✓ graphique_population_zones.png\n\n")
 
@@ -350,6 +403,15 @@ carte_rwi <- fond_carte() +
     "Relative Wealth Index — Meta / CIESIN ",
     "(moyenne par cellule de Voronoï, pondérée population)"
   )) +
+  tm_credits(
+    note_lecture(sprintf(
+      "la zone la plus riche, %s, a un score de richesse relative de %.2f sur 1.",
+      str_remove(entrepots_rwi_sf$warehouse_name[which.max(entrepots_rwi_sf$p_rwi)], " - .*"),
+      max(entrepots_rwi_sf$p_rwi)
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -394,10 +456,18 @@ if (rwi_ok && nrow(rwi_sf) > 0) {
     ) +
     
     tm_title(paste0("Données RWI brutes — ", NOM_PAYS, "\n(chaque point = cellule de ~2,4 km²)")) +
+    tm_credits(
+      note_lecture(sprintf(
+        "la grille RWI brute compte %s cellules d'environ 2,4 km² sur l'ensemble du pays.",
+        format(nrow(rwi_sf), big.mark = " ")
+      )),
+      position = tm_pos_out("center", "bottom", "left", "top"),
+      size     = 0.65
+    ) +
     tm_layout(legend.outside = TRUE, frame = TRUE) +
     tm_scalebar(position = c("left", "bottom")) +
     tm_compass(position  = c("right", "top"))
-  
+
   tmap_save(
     carte_rwi_raster,
     file.path(DIR_CARTES, "carte_rwi_brut.png"),
@@ -413,7 +483,7 @@ if (rwi_ok && nrow(rwi_sf) > 0) {
 # car les zones frontalières peuvent avoir une population élevée et un RWI faible.
 if ("population_zone" %in% names(entreposages_fictifs)) {
   
-  g_rwi_pop <- diag_rwi %>%
+  df_rwi_pop_v <- diag_rwi %>%
     left_join(
       entreposages_fictifs %>%
         select(nom, population_zone),
@@ -423,7 +493,10 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
     mutate(
       Zone_court = str_trunc(str_remove(nom_zone, " - .*"), 22),
       pop_log    = log10(population_zone)
-    ) %>%
+    )
+  zone_rwi_pop_exemple_v <- df_rwi_pop_v %>% arrange(desc(population_zone)) %>% slice(1)
+
+  g_rwi_pop <- df_rwi_pop_v %>%
     ggplot(aes(x = pop_log, y = p_rwi,
                color = type_zone, label = Zone_court)) +
     
@@ -457,14 +530,21 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
       subtitle = paste0(
         "Les zones en haut à droite (riches ET peuplées) génèrent la plus forte demande\n",
         "Sources : Meta RWI (2021), NISR RPHC-5 (2022)"
-      )
+      ),
+      caption = note_lecture(sprintf(
+        "la zone la plus peuplée, %s (%s habitants), a un score de richesse relative de %.2f.",
+        zone_rwi_pop_exemple_v$Zone_court,
+        format(round(zone_rwi_pop_exemple_v$population_zone), big.mark = " "),
+        zone_rwi_pop_exemple_v$p_rwi
+      ), largeur_car = 144)
     ) +
     theme_minimal(base_size = 12) +
     theme(
       plot.title    = element_text(face = "bold"),
       plot.subtitle = element_text(color = "#555555", size = 10),
       legend.position = "right"
-    )+
+    ) +
+    THEME_NOTE_LECTURE +
     # Cercle rouge autour du point de référence
     geom_point(
       data = ~ filter(., str_trunc(str_remove(nom_zone, " - .*"), 22) ==
@@ -491,7 +571,7 @@ if ("population_zone" %in% names(entreposages_fictifs)) {
   
   ggsave(
     file.path(DIR_CARTES, "graphique_rwi_vs_population.png"),
-    g_rwi_pop, width = 12, height = 7, dpi = 300
+    g_rwi_pop, width = 12, height = 7.8, dpi = 300
   )
   cat("  ✓ graphique_rwi_vs_population.png\n\n")
 }
@@ -539,11 +619,19 @@ for (i in seq_len(nrow(VEHICULES_IDS))) {
       lwd = 1.5
     ) +
     tm_shape(entreposages_sf) + tm_dots(fill="black", size=0.2) +
-    tm_title(paste("Coûts de Transport —", nom_veh)) +
+    tm_title(paste0("Coûts de Transport — ", nom_veh, "\nCoût généralisé par tonne-kilomètre transportée")) +
+    tm_credits(
+      note_lecture(sprintf(
+        "la moitié des tronçons ont un coût de transport en %s inférieur à %.1f RWF par tonne-kilomètre.",
+        nom_veh, median(couts_veh$cost_per_tkm, na.rm = TRUE)
+      )),
+      position = tm_pos_out("center", "bottom", "left", "top"),
+      size     = 0.65
+    ) +
     tm_layout(legend.outside=TRUE, frame=TRUE) +
     tm_scalebar(position=c("left","bottom")) +
     tm_compass(position=c("right","top"))
-  
+
   nom_fichier <- paste0("carte_couts_", id_veh, ".png")
   tmap_save(carte, file.path(DIR_CARTES, nom_fichier), width=3000, height=2400, dpi=300)
   cat("  ✓", nom_fichier, "\n")
@@ -630,10 +718,18 @@ if (nrow(ratio_df) > 0) {
       lwd = 1.5
     ) +
     tm_title("Surcoût relatif — Camion lourd vs Camionnette") +
+    tm_credits(
+      note_lecture(sprintf(
+        "sur la moitié des tronçons, le camion lourd coûte moins de %.2f fois le coût de la camionnette par tonne-km.",
+        median(ratio_df$ratio_lourd_vs_legere, na.rm = TRUE)
+      )),
+      position = tm_pos_out("center", "bottom", "left", "top"),
+      size     = 0.65
+    ) +
     tm_layout(legend.outside=TRUE, frame=TRUE) +
     tm_scalebar(position=c("left","bottom")) +
     tm_compass(position=c("right","top"))
-  
+
   tmap_save(carte_ratio, file.path(DIR_CARTES,"carte_ratio_vehicules.png"),
             width=3000, height=2400, dpi=300)
   cat("  ✓ carte_ratio_vehicules.png\n")
@@ -674,10 +770,18 @@ if (nrow(ratio_moyen_df) > 0) {
       lwd = 1.5
     ) +
     tm_title("Surcoût relatif — Camion moyen vs Camionnette") +
+    tm_credits(
+      note_lecture(sprintf(
+        "sur la moitié des tronçons, le camion moyen coûte moins de %.2f fois le coût de la camionnette par tonne-km.",
+        median(ratio_moyen_df$ratio_moyen_vs_camionnette, na.rm = TRUE)
+      )),
+      position = tm_pos_out("center", "bottom", "left", "top"),
+      size     = 0.65
+    ) +
     tm_layout(legend.outside=TRUE, frame=TRUE) +
     tm_scalebar(position=c("left","bottom")) +
     tm_compass(position=c("right","top"))
-  
+
   tmap_save(carte_ratio_moyen,
             file.path(DIR_CARTES,"carte_ratio_moyen_camionnette.png"),
             width=3000, height=2400, dpi=300)
@@ -700,6 +804,20 @@ carte_pentes <- fond_carte() +
            col.scale = tm_scale(values = PALETTE_PENTE),
            col.legend=tm_legend(title="Catégorie de pente"), lwd=1.5) +
   tm_title("Pentes du Réseau Routier") +
+  tm_credits(
+    note_lecture({
+      km_par_pente_v <- reseau %>% activate("edges") %>% as_tibble() %>%
+        group_by(slope_category) %>% summarise(km = sum(length_km, na.rm = TRUE), .groups = "drop")
+      sprintf(
+        "%s %% du linéaire routier (%s km) a une pente classée « %s ».",
+        round(100 * max(km_par_pente_v$km) / sum(km_par_pente_v$km), 1),
+        format(round(max(km_par_pente_v$km)), big.mark = " "),
+        km_par_pente_v$slope_category[which.max(km_par_pente_v$km)]
+      )
+    }),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside=TRUE, frame=TRUE) +
   tm_scalebar(position=c("left","bottom")) +
   tm_compass(position=c("right","top"))
@@ -740,6 +858,14 @@ carte_co2 <- fond_carte() +
   tm_title(paste0("Intensité carbone du réseau — ", VEHICULES_IDS$nom[
     VEHICULES_IDS$vehicule_id == VEHICULE_REFERENCE
   ])) +
+  tm_credits(
+    note_lecture(sprintf(
+      "sur la moitié des tronçons, transporter une tonne sur un km émet moins de %.3f kg de CO₂.",
+      median(reseau %>% activate("edges") %>% pull(co2_kg_par_tkm), na.rm = TRUE)
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -764,7 +890,17 @@ carte_nox <- fond_carte() +
     lwd        = 1.5
   ) +
   tm_shape(entreposages_sf) + tm_dots(fill = "black", size = 0.2) +
-  tm_title("Intensité NOx du réseau (pollution locale)") +
+  tm_title(paste0("Intensité NOx du réseau (pollution locale) — ", VEHICULES_IDS$nom[
+    VEHICULES_IDS$vehicule_id == VEHICULE_REFERENCE
+  ])) +
+  tm_credits(
+    note_lecture(sprintf(
+      "sur la moitié des tronçons, transporter une tonne sur un km émet moins de %.3f g de NOx.",
+      median(reseau %>% activate("edges") %>% pull(nox_g_par_tkm), na.rm = TRUE)
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -835,17 +971,23 @@ g_emissions <- ggplot(emissions_long,
     subtitle = "Normalisé par rapport au véhicule le plus émetteur de chaque polluant (100%)",
     x        = NULL,
     y        = "Niveau relatif d'émission",
-    fill     = "Polluant"
+    fill     = "Polluant",
+    caption  = note_lecture(sprintf(
+      "sur le réseau complet, le %s émet %s tonnes de CO₂, le plus haut total des trois véhicules.",
+      emissions_par_vehicule$vehicule_nom[which.max(emissions_par_vehicule$co2_total_t)],
+      format(emissions_par_vehicule$co2_total_t[which.max(emissions_par_vehicule$co2_total_t)], big.mark = " ")
+    ), largeur_car = 120)
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title    = element_text(face = "bold"),
     plot.subtitle = element_text(color = "#666666"),
     legend.position = "top"
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(file.path(DIR_CARTES, "graphique_emissions_par_vehicule.png"),
-       g_emissions, width = 10, height = 6, dpi = 300)
+       g_emissions, width = 10, height = 6.8, dpi = 300)
 cat("  ✓ graphique_emissions_par_vehicule.png\n\n")
 
 

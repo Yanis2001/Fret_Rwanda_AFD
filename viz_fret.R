@@ -178,6 +178,14 @@ carte_fret <- fond_carte() +
   ) +
   
   tm_title(paste0("Intensité du Trafic Fret\nModèle gravitaire — ", NOM_PAYS)) +
+  tm_credits(
+    note_lecture(sprintf(
+      "le tronçon le plus chargé porte %s tonnes de fret, tous secteurs confondus.",
+      format(round(max(aretes_fret$volume_tonnes)), big.mark = " ")
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position = c("right", "top"))
@@ -245,6 +253,14 @@ if ("taux_saturation" %in% colonnes_aretes) {
 
     tm_title(paste0("Saturation du réseau de fret (V/C)\nFonction d'encombrement — ",
                     NOM_PAYS)) +
+    tm_credits(
+      note_lecture(sprintf(
+        "%d tronçons sont saturés (V/C ≥ 1), sur %d tronçons chargés de fret.",
+        sum(aretes_saturation$taux_saturation > 1, na.rm = TRUE), nrow(aretes_saturation)
+      )),
+      position = tm_pos_out("center", "bottom", "left", "top"),
+      size     = 0.65
+    ) +
     tm_layout(legend.outside = TRUE, frame = TRUE) +
     tm_scalebar(position = c("left", "bottom")) +
     tm_compass(position  = c("right", "top"))
@@ -353,6 +369,14 @@ for (s in SECTEURS_FRET) {
     
     tm_title(paste0("Intensité du Trafic Fret — Secteur ", s,
                     "\nModèle gravitaire — ", NOM_PAYS)) +
+    tm_credits(
+      note_lecture(sprintf(
+        "le tronçon le plus chargé en %s porte %s tonnes.",
+        s, format(round(max(aretes_fret_s$vol_t)), big.mark = " ")
+      )),
+      position = tm_pos_out("center", "bottom", "left", "top"),
+      size     = 0.65
+    ) +
     tm_layout(legend.outside = TRUE, frame = TRUE) +
     tm_scalebar(position = c("left", "bottom")) +
     tm_compass(position  = c("right", "top"))
@@ -443,6 +467,15 @@ carte_dominant <- fond_carte() +
   ) +
   
   tm_title("Secteur dominant par arête\n(secteur le plus représenté en tonnes)") +
+  tm_credits(
+    note_lecture(sprintf(
+      "le secteur %s domine sur %d tronçons, plus qu'aucun autre secteur.",
+      names(which.max(table(aretes_dominant_sf$secteur_dominant))),
+      max(table(aretes_dominant_sf$secteur_dominant))
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -483,6 +516,14 @@ carte_ges_affecte <- fond_carte() +
           fill.legend = tm_legend(title = "Type de zone"),
           size = 0.4) +
   tm_title("Émissions CO₂ du Fret — Répartition sur le réseau") +
+  tm_credits(
+    note_lecture(sprintf(
+      "le tronçon le plus émetteur cumule %s tonnes de CO₂.",
+      format(round(max(aretes_ges$emissions_co2_t)), big.mark = " ")
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -573,7 +614,13 @@ g_top_aretes <- ggplot(top_aretes_long,
     title    = "Top 20 des arêtes les plus chargées × composition sectorielle",
     subtitle = "Volumes affichés en milliers de tonnes",
     x        = "Secteur",
-    y        = NULL
+    y        = NULL,
+    caption  = note_lecture(sprintf(
+      "sur l'arête « %s », le secteur %s porte %s tonnes, la case la plus chargée du graphique.",
+      top_aretes_long$label[which.max(top_aretes_long$Volume_t)],
+      top_aretes_long$Secteur[which.max(top_aretes_long$Volume_t)],
+      format(round(max(top_aretes_long$Volume_t)), big.mark = " ")
+    ), largeur_car = 144)
   ) +
   theme_minimal(base_size = 10) +
   theme(
@@ -581,12 +628,13 @@ g_top_aretes <- ggplot(top_aretes_long,
     plot.title    = element_text(face = "bold", size = 13),
     plot.subtitle = element_text(color = "#666666"),
     panel.grid    = element_blank()
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "heatmap_top_aretes_secteurs.png"),
   g_top_aretes,
-  width = 12, height = 9, dpi = 300
+  width = 12, height = 9.8, dpi = 300
 )
 cat("  ✓ heatmap_top_aretes_secteurs.png\n\n")
 
@@ -658,19 +706,26 @@ g_compo_route <- ggplot(compo_par_type_route,
                       "par niveau hiérarchique du réseau"),
     x        = "Type de route",
     y        = "Part sectorielle (%)",
-    fill     = "Secteur"
+    fill     = "Secteur",
+    caption  = note_lecture(sprintf(
+      "sur les routes %s, le secteur %s représente %s %% du tonnage transporté.",
+      compo_par_type_route$road_type[which.max(compo_par_type_route$part_pct)],
+      compo_par_type_route$Secteur[which.max(compo_par_type_route$part_pct)],
+      round(compo_par_type_route$part_pct[which.max(compo_par_type_route$part_pct)], 1)
+    ), largeur_car = 132)
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title    = element_text(face = "bold"),
     plot.subtitle = element_text(color = "#666666"),
     axis.text.x   = element_text(angle = 20, hjust = 1)
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "graphique_compo_secteurs_type_route.png"),
   g_compo_route,
-  width = 11, height = 6, dpi = 300
+  width = 11, height = 6.8, dpi = 300
 )
 cat("  ✓ graphique_compo_secteurs_type_route.png\n\n")
 
@@ -719,7 +774,12 @@ g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
     subtitle = paste0("Échelle log — une distribution étroite indique une ",
                       "concentration du trafic sur quelques axes"),
     x        = "Volume par arête (tonnes, échelle log)",
-    y        = "Nombre d'arêtes"
+    y        = "Nombre d'arêtes",
+    caption  = note_lecture(sprintf(
+      "le secteur %s compte %d arêtes actives, contre %d pour le secteur %s.",
+      names(which.max(table(distrib_secteurs$Secteur))), max(table(distrib_secteurs$Secteur)),
+      min(table(distrib_secteurs$Secteur)), names(which.min(table(distrib_secteurs$Secteur)))
+    ), largeur_car = 156)
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -727,12 +787,13 @@ g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
     plot.subtitle = element_text(color = "#666666"),
     strip.text    = element_text(face = "bold"),
     axis.text.x   = element_text(angle = 30, hjust = 1)
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "distribution_trafic_par_secteur.png"),
   g_distrib,
-  width = 13, height = 7, dpi = 300
+  width = 13, height = 7.8, dpi = 300
 )
 cat("  ✓ distribution_trafic_par_secteur.png\n\n")
 
@@ -758,6 +819,14 @@ carte_modal <- fond_carte() +
     lwd = 1.5
   ) +
   tm_title("Répartition modale — Part du camion lourd") +
+  tm_credits(
+    note_lecture(sprintf(
+      "sur la moitié des tronçons chargés de fret, le camion lourd assure plus de %.0f %% du tonnage transporté.",
+      median(aretes_avec_trafic$part_camion_lourd, na.rm = TRUE)
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left","bottom")) +
   tm_compass(position  = c("right","top"))
@@ -788,7 +857,12 @@ g1 <- flux_par_secteur_df %>%
     title    = "Flux commerciaux interzonaux par secteur",
     subtitle = paste0("Modèle gravitaire — ", NOM_PAYS),
     x        = NULL,
-    y        = "Flux total inter-zones (milliers de tonnes)"
+    y        = "Flux total inter-zones (milliers de tonnes)",
+    caption  = note_lecture(sprintf(
+      "le secteur %s totalise %s kt de flux inter-zones, le plus élevé des secteurs de fret.",
+      flux_par_secteur_df$Secteur[which.max(flux_par_secteur_df$Flux_total_tonnes)],
+      format(round(max(flux_par_secteur_df$Flux_total_tonnes) / 1000), big.mark = " ")
+    ), largeur_car = 132)
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -796,10 +870,11 @@ g1 <- flux_par_secteur_df %>%
     plot.subtitle      = element_text(color = "#666666"),
     panel.grid.major.y = element_blank(),
     panel.grid.minor   = element_blank()
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(file.path(DIR_CARTES,"graphique_flux_secteurs.png"),
-       g1, width = 11, height = 6, dpi = 300)
+       g1, width = 11, height = 6.8, dpi = 300)
 cat("✓ Graphique flux secteurs sauvegardé\n")
 
 
@@ -890,7 +965,12 @@ g2_tonnes <- recap_zones_tonnes %>%
     ),
     x    = NULL,
     y    = "Valeur (milliers de tonnes)",
-    fill = NULL
+    fill = NULL,
+    caption = note_lecture(sprintf(
+      "la zone %s a la plus forte offre nette, avec %s kt ; la zone %s a la plus forte demande nette, avec %s kt.",
+      ref_offre_t_court, format(round(max(recap_zones_tonnes$offre_totale_tonnes) / 1000), big.mark = " "),
+      ref_demande_t_court, format(round(max(recap_zones_tonnes$demande_totale_tonnes) / 1000), big.mark = " ")
+    ), largeur_car = 156)
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -901,12 +981,13 @@ g2_tonnes <- recap_zones_tonnes %>%
     axis.text.y        = element_text(size = 7),
     legend.position    = "top",
     panel.grid.major.y = element_blank()
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 # height = 18 : ~91 zones × 2 barres (dodge) → grande hauteur pour espacer les
 # libellés de l'axe Y et garantir leur lisibilité (pas de chevauchement vertical).
 ggsave(file.path(DIR_CARTES, "graphique_offre_demande_tonnes.png"),
-       g2_tonnes, width = 13, height = 18, dpi = 300)
+       g2_tonnes, width = 13, height = 18.8, dpi = 300)
 cat("✓ Graphique offre/demande (tonnes) sauvegardé\n")
 
 
@@ -958,7 +1039,13 @@ g3 <- ggplot(flux_heatmap,
     title    = "Matrice des flux commerciaux interzonaux",
     subtitle = paste0("Modèle gravitaire — ", NOM_PAYS, " (log₁₀ tonnes)"),
     x        = "Destination",
-    y        = "Origine"
+    y        = "Origine",
+    caption  = note_lecture(sprintf(
+      "de %s vers %s, le flux atteint %s tonnes, le plus élevé de la matrice.",
+      flux_heatmap$Origine[which.max(flux_heatmap$Flux)],
+      flux_heatmap$Destination[which.max(flux_heatmap$Flux)],
+      format(round(max(flux_heatmap$Flux, na.rm = TRUE)), big.mark = " ")
+    ), largeur_car = 156)
   ) +
   theme_minimal(base_size = 10) +
   theme(
@@ -968,10 +1055,11 @@ g3 <- ggplot(flux_heatmap,
     plot.subtitle   = element_text(color = "#666666"),
     panel.grid      = element_blank(),
     legend.position = "right"
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(file.path(DIR_CARTES,"heatmap_flux_od.png"),
-       g3, width = 13, height = 11, dpi = 300)
+       g3, width = 13, height = 11.8, dpi = 300)
 cat("✓ Heatmap flux OD sauvegardée\n")
 
 
@@ -1080,14 +1168,20 @@ graphe_compo_100 <- function(mat, titre, soustitre, fichier,
     scale_fill_manual(values = PALETTE_SECTEURS) +
     scale_y_continuous(labels = scales::percent_format(scale = 1)) +
     labs(title = titre, subtitle = soustitre, x = NULL,
-         y = "Part dans le total de la zone (%)", fill = "Secteur") +
+         y = "Part dans le total de la zone (%)", fill = "Secteur",
+         caption = note_lecture({
+           .rmax <- df_long[which.max(df_long$Part), ]
+           sprintf("dans la zone %s, le secteur %s représente %s %% du total.",
+                   .rmax$Zone, .rmax$Secteur, round(.rmax$Part, 1))
+         }, largeur_car = 168)) +
     theme_minimal(base_size = 11) +
     theme(plot.title    = element_text(face = "bold", size = 13),
           plot.subtitle = element_text(color = "#666666", size = 9),
-          legend.position = "right")
+          legend.position = "right") +
+    THEME_NOTE_LECTURE
   # Barres plus hautes quand il y a des hachures, pour qu'elles restent visibles.
   ggsave(file.path(DIR_CARTES, fichier), g,
-         width = 14, height = if (is.null(mat_hachure)) 8 else 11, dpi = 300)
+         width = 14, height = if (is.null(mat_hachure)) 8.8 else 11.8, dpi = 300)
   cat("  ✓", fichier, "\n")
 }
 
@@ -1120,12 +1214,19 @@ graphe_brut3 <- function(mat, unite, sel, rang, titre, soustitre, fichier) {
     scale_fill_manual(values = PALETTE_SECTEURS, guide = "none") +
     scale_y_continuous(labels = scales::label_number(big.mark = " ")) +
     labs(title = titre, subtitle = soustitre, x = NULL,
-         y = paste0("Flux brut (", unite, ")")) +
+         y = paste0("Flux brut (", unite, ")"),
+         caption = note_lecture({
+           .rmax <- df_long[which.max(df_long$Valeur), ]
+           sprintf("pour %s, le secteur %s totalise %s %s.",
+                   as.character(.rmax$Zone), .rmax$Secteur,
+                   format(round(.rmax$Valeur), big.mark = " "), unite)
+         }, largeur_car = 132)) +
     theme_minimal(base_size = 11) +
     theme(plot.title    = element_text(face = "bold", size = 13),
           plot.subtitle = element_text(color = "#666666", size = 9),
-          strip.text    = element_text(face = "bold"))
-  ggsave(file.path(DIR_CARTES, fichier), g, width = 11, height = 8, dpi = 300)
+          strip.text    = element_text(face = "bold")) +
+    THEME_NOTE_LECTURE
+  ggsave(file.path(DIR_CARTES, fichier), g, width = 11, height = 8.8, dpi = 300)
   cat("  ✓", fichier, "\n")
 }
 
@@ -1275,7 +1376,14 @@ g_sankey <- ggplot(
       "Agrégation par type de zone et secteur économique · ",
       format(round(sum(sankey_raw$flux_t) / 1e6, 1)), " Mt modélisées"
     ),
-    x = NULL
+    x = NULL,
+    caption = note_lecture(sprintf(
+      "le plus gros ruban relie les zones « %s », via le secteur %s, aux zones « %s », avec %s kt.",
+      sankey_raw$type_origine[which.max(sankey_raw$flux_t)],
+      sankey_raw$secteur[which.max(sankey_raw$flux_t)],
+      sankey_raw$type_destination[which.max(sankey_raw$flux_t)],
+      format(round(max(sankey_raw$flux_t) / 1000), big.mark = " ")
+    ), largeur_car = 168)
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -1285,13 +1393,14 @@ g_sankey <- ggplot(
     axis.text.x     = element_text(size = 11, face = "bold"),
     axis.text.y     = element_text(size = 9),
     legend.position = "right"
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "sankey_flux_fret.png"),
   g_sankey,
   width  = 14,
-  height = 8,
+  height = 8.8,
   dpi    = 300
 )
 cat("✓ sankey_flux_fret.png\n\n")
@@ -1419,7 +1528,13 @@ g_prod_ech <- ggplot(df_mrio_comp,
       "Annotation = écart résiduel (mrd RWF) ; doit être ≈ 0 si la SAM est équilibrée."
     ),
     x = NULL,
-    y = "Volume agrégé (mrd RWF)"
+    y = "Volume agrégé (mrd RWF)",
+    caption = note_lecture(sprintf(
+      "pour le secteur %s, l'offre totale atteint %s mrd RWF, contre %s mrd RWF de demande totale.",
+      df_mrio$Secteur[which.max(df_mrio$offre_totale_mrd_rwf)],
+      round(df_mrio$offre_totale_mrd_rwf[which.max(df_mrio$offre_totale_mrd_rwf)], 0),
+      round(df_mrio$demande_totale_mrd_rwf[which.max(df_mrio$offre_totale_mrd_rwf)], 0)
+    ), largeur_car = 144)
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -1427,13 +1542,14 @@ g_prod_ech <- ggplot(df_mrio_comp,
     plot.subtitle      = element_text(color = "#666666", size = 9),
     legend.position    = "top",
     panel.grid.major.y = element_blank()
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "graphique_bilan_mrio.png"),
   g_prod_ech,
   width  = 12,
-  height = 7,
+  height = 7.8,
   dpi    = 300
 )
 cat("✓ graphique_bilan_mrio.png\n\n")
@@ -1573,20 +1689,25 @@ g_valid_compar <- ggplot(df_compar_val, aes(x = source, y = valeur, fill = sourc
       "coût modélisé < trc est attendu."
     ),
     x = NULL,
-    y = "Valeur (mrd RWF)"
+    y = "Valeur (mrd RWF)",
+    caption = note_lecture(sprintf(
+      "le coût de transport modélisé, %s mrd RWF, représente %s %% des marges trc de la SAM.",
+      round(cout_model_mrd, 0), round(part_transport, 1)
+    ), largeur_car = 96)
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title    = element_text(face = "bold", size = 14),
     plot.subtitle = element_text(color = "#666666", size = 9),
     axis.text.x   = element_text(size = 11)
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "graphique_validation_trc.png"),
   g_valid_compar,
   width  = 8,
-  height = 6,
+  height = 6.8,
   dpi    = 300
 )
 cat("✓ graphique_validation_trc.png\n")
@@ -1617,20 +1738,26 @@ g_valid_sec <- ggplot(cout_sec_df,
       "  (", round(part_transport, 1), "% du trc SAM).\n"
     ),
     x = NULL,
-    y = "Coût de transport (mrd RWF)"
+    y = "Coût de transport (mrd RWF)",
+    caption = note_lecture(sprintf(
+      "le secteur %s représente %s mrd RWF de coût de transport, le plus élevé des secteurs de fret.",
+      cout_sec_df$secteur[which.max(cout_sec_df$cout_mrd)],
+      round(max(cout_sec_df$cout_mrd), 1)
+    ), largeur_car = 120)
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title         = element_text(face = "bold", size = 14),
     plot.subtitle      = element_text(color = "#666666", size = 9),
     panel.grid.major.y = element_blank()
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, "graphique_validation_trc_secteurs.png"),
   g_valid_sec,
   width  = 10,
-  height = 6,
+  height = 6.8,
   dpi    = 300
 )
 cat("✓ graphique_validation_trc_secteurs.png\n\n")
@@ -1640,50 +1767,50 @@ cat("✓ graphique_validation_trc_secteurs.png\n\n")
 #
 # OBJECTIF : Visualiser la segmentation géo-sociale du territoire utilisée par
 # le modèle MRIO pour spatialiser la demande finale des ménages.
-# Chaque cellule de Voronoï est colorée selon son groupe SAM :
-#   strate urbain/rural (U / R) × quintile de revenu RWI (1 = plus pauvre … 5)
 #
-# Les quintiles sont attribués séparément au sein de chaque strate (urbain,
-# rural) en pondérant par la population (méthode identique à 03_transport.R).
-# Le RWI (Relative Wealth Index) mesure le niveau de vie relatif de la zone.
+# CE QUE REPRÉSENTE LA CARTE : depuis le passage à la classification au PIXEL
+# (01_reseau.R IV.5.B), une cellule de Voronoï ne porte plus UN groupe SAM mais
+# un MÉLANGE : sa population est répartie entre les 10 groupes (strate urbain /
+# rural × quintile national de consommation). On produit donc deux vues :
+#   • carte_classes_geosociales      : le groupe MAJORITAIRE de chaque cellule
+#     (lecture catégorielle, comparable aux versions précédentes de la figure) ;
+#   • carte_quintile_moyen           : le quintile MOYEN pondéré par la
+#     population, qui restitue le dégradé continu que produit la nouvelle
+#     méthode et que la carte catégorielle écrase.
+#
+# Le RWI (Relative Wealth Index) mesure le niveau de vie relatif ; il sert de
+# variable de classement pour le découpage en quintiles nationaux.
 ################################################################################
 
 cat("=== VIII.10 : Carte des classes géo-sociales ===\n")
 
-# ── Reconstruction des groupes géo-sociaux ────────────────────────────────────
-# Reproduit exactement la logique de 03_transport.R afin que la carte soit
-# cohérente avec les groupes effectivement utilisés dans le modèle de transport.
-
-# Fonction d'attribution des quintiles : tri par p_rwi croissant au sein de
-# chaque strate, puis découpage en 5 tranches de population équi-peuplées.
-assigner_quintiles_rwi_viz <- function(p_rwi, pop, is_urbain) {
-  quint <- integer(length(p_rwi))
-  for (idx in split(seq_along(p_rwi), is_urbain)) {
-    if (length(idx) == 0) next
-    o   <- idx[order(p_rwi[idx])]
-    w   <- pop[o]
-    pos <- (cumsum(w) - w / 2) / sum(w)
-    quint[o] <- findInterval(pos, c(.2, .4, .6, .8)) + 1L
-  }
-  pmin(pmax(quint, 1L), 5L)
+# ── Composition géo-sociale de chaque cellule ─────────────────────────────────
+# On réutilise directement pop_groupe_zone produite par 01_reseau.R : la carte
+# montre alors EXACTEMENT ce que le modèle de transport utilise, sans reproduire
+# de logique de classification (source unique de vérité).
+if (!exists("pop_groupe_zone") || is.null(pop_groupe_zone) ||
+    !is.matrix(pop_groupe_zone) ||
+    nrow(pop_groupe_zone) != nrow(noeuds_entreposage)) {
+  stop("pop_groupe_zone absente du persist — relancer 01_reseau.R : la carte des ",
+       "classes géo-sociales repose sur la classification au pixel (IV.5.B).")
 }
 
-# Statut urbain/rural de chaque zone (calculé dans 01_reseau.R, persisté dans
-# diag_population). NA → rural par défaut (cohérent avec 03_transport.R).
-is_urbain_viz <- diag_population$is_urbain[
-  match(noeuds_entreposage$warehouse_name, diag_population$nom_zone)
-]
-is_urbain_viz <- replace_na(is_urbain_viz, FALSE)
+pgz <- pop_groupe_zone[, c(paste0("r", 1:5), paste0("u", 1:5)), drop = FALSE]
 
-# RWI normalisé [0,1] par zone (calculé dans 01_reseau.R, persisté dans diag_rwi).
-# NA → médiane (cohérent avec 03_transport.R).
-p_rwi_viz <- diag_rwi$p_rwi[
-  match(noeuds_entreposage$warehouse_name, diag_rwi$nom_zone)
-]
-p_rwi_viz <- replace_na(p_rwi_viz, median(p_rwi_viz, na.rm = TRUE))
+# Groupe majoritaire = colonne de population maximale ; part_majoritaire mesure
+# à quel point la cellule est homogène (1 = une seule classe, 0,2 = très mixte).
+idx_max          <- max.col(pgz, ties.method = "first")
+groupe_code      <- colnames(pgz)[idx_max]
+part_majoritaire <- pgz[cbind(seq_len(nrow(pgz)), idx_max)] / rowSums(pgz)
 
-quintile_viz <- assigner_quintiles_rwi_viz(p_rwi_viz, pop_i, is_urbain_viz)
-groupe_viz   <- paste0(ifelse(is_urbain_viz, "Urbain Q", "Rural Q"), quintile_viz)
+# Quintile moyen pondéré : Σ_q q × pop[q] / pop_totale, toutes strates confondues.
+quintile_num  <- as.integer(sub("^[ru]", "", colnames(pgz)))
+quintile_moy  <- as.vector(pgz %*% quintile_num) / rowSums(pgz)
+# Part de la population de la cellule vivant en strate urbaine.
+part_urbaine_cellule <- rowSums(pgz[, paste0("u", 1:5), drop = FALSE]) / rowSums(pgz)
+
+groupe_viz <- paste0(ifelse(substr(groupe_code, 1, 1) == "u", "Urbain Q", "Rural Q"),
+                     sub("^[ru]", "", groupe_code))
 
 # ── Jointure avec zones_voronoi ───────────────────────────────────────────────
 # noeuds_entreposage est ordonné comme warehouse_id = row_number() → jointure
@@ -1695,8 +1822,9 @@ voronoi_geo <- zones_voronoi %>%
       warehouse_name = noeuds_entreposage$warehouse_name,
       warehouse_type = noeuds_entreposage$warehouse_type,
       groupe_geosocial = groupe_viz,
-      strate = ifelse(is_urbain_viz, "Urbain", "Rural"),
-      quintile = quintile_viz
+      quintile_moyen   = quintile_moy,
+      part_majoritaire = part_majoritaire,
+      part_urbaine     = part_urbaine_cellule
     ),
     by = "warehouse_id"
   ) %>%
@@ -1737,12 +1865,16 @@ carte_geosocial <- fond_carte() +
     lwd        = 0.2,
     col_alpha  = 0.6
   ) +
-  tm_title("Classes géo-sociales — strate urbain/rural × quintile de revenu (RWI)") +
+  tm_title("Classes géo-sociales — groupe majoritaire de chaque zone") +
   tm_credits(
-    paste0("Quintiles calculés séparément au sein de chaque strate ",
-           "(urbain / rural), pondérés par la population WorldPop.\n",
-           "RWI = Relative Wealth Index (Meta / Chi et al., 2022)."),
-    position = tm_pos_out("left", "bottom"),
+    paste0(
+      "Groupe MAJORITAIRE : chaque zone porte en réalité un mélange de groupes ",
+      "(classification au pixel).\nPart moyenne du groupe majoritaire : ",
+      round(mean(voronoi_geo$part_majoritaire) * 100), " %.\n",
+      "Quintiles de consommation découpés sur un classement NATIONAL unique ",
+      "(définition EICV5), pondérés par la population WorldPop.\n",
+      "RWI = Relative Wealth Index (Meta / Chi et al., 2022)."),
+    position = tm_pos_out("center", "bottom", "left", "top"),
     size     = 0.65
   )
 
@@ -1753,5 +1885,40 @@ tmap_save(
   height = 1800,
   dpi    = 300
 )
-cat("  ✓ carte_classes_geosociales.png\n\n")
+cat("  ✓ carte_classes_geosociales.png\n")
+
+# ── Carte du quintile moyen (dégradé continu) ─────────────────────────────────
+# La carte catégorielle ci-dessus écrase l'apport de la méthode : elle ne montre
+# que la classe dominante. Celle-ci restitue le mélange, en moyennant le numéro
+# de quintile par la population de la zone.
+carte_quintile_moyen <- fond_carte() +
+  tm_shape(voronoi_geo) +
+  tm_polygons(
+    fill        = "quintile_moyen",
+    fill.scale  = tm_scale_continuous(values = "brewer.yl_gn_bu"),
+    fill.legend = tm_legend(
+      title    = "Quintile moyen\n(pondéré population)",
+      position = tm_pos_out("right", "center")
+    ),
+    col        = "#FFFFFF",
+    lwd        = 0.2,
+    col_alpha  = 0.6
+  ) +
+  tm_title("Niveau de vie moyen par zone — quintile national pondéré par la population") +
+  tm_credits(
+    paste0("Moyenne du numéro de quintile (1 = plus pauvre … 5 = plus riche) ",
+           "sur la population de la zone.\n",
+           "Valeur non entière = zone socialement mixte."),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  )
+
+tmap_save(
+  carte_quintile_moyen,
+  file.path(DIR_CARTES, "carte_quintile_moyen.png"),
+  width  = 2200,
+  height = 1800,
+  dpi    = 300
+)
+cat("  ✓ carte_quintile_moyen.png\n\n")
 

@@ -157,18 +157,23 @@ gA <- ggplot(agg_long, aes(x = indicateur, y = ecart_pct)) +
     subtitle = sprintf("Écart à la référence sur %d tirages (hypercube latin) — la ligne rouge est la référence (0 %%)",
                        length(res_scen)),
     x = NULL, y = "Écart à la référence",
-    caption = sprintf("Betas ±%d %% et valeurs/tonne ±%d %%, variés par secteur indépendamment.",
-                      round(100 * SENS_LHS_AMPLITUDE_BETA),
-                      round(100 * SENS_LHS_AMPLITUDE_VALEUR_TONNE))
+    caption = note_lecture({
+      .etendue_v <- agg_long %>% dplyr::group_by(indicateur) %>%
+        dplyr::summarise(etendue = diff(range(ecart_pct)), .groups = "drop") %>%
+        dplyr::arrange(dplyr::desc(etendue)) %>% dplyr::slice(1)
+      sprintf("l'indicateur « %s » est le plus dispersé : ses tirages s'étendent sur %.0f points d'écart à la référence.",
+              .etendue_v$indicateur, .etendue_v$etendue)
+    }, largeur_car = 132)
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title   = element_text(face = "bold"),
     plot.subtitle = element_text(color = "#666666"),
     axis.text.x  = element_text(angle = 15, hjust = 1)
-  )
+  ) +
+  THEME_NOTE_LECTURE
 ggsave(file.path(DIR_SYNTHESE, "sensibilite_enveloppe_indicateurs.png"),
-       gA, width = 11, height = 6, dpi = 300)
+       gA, width = 11, height = 6.8, dpi = 300)
 cat("  ✓ A. sensibilite_enveloppe_indicateurs.png\n")
 
 # ==============================================================================
@@ -232,14 +237,19 @@ if (indic_principal %in% colnames(sorties_mat)) {
     labs(
       title    = paste0("Indices de sensibilité — ", indic_principal),
       subtitle = "Corrélation de rang (Spearman) entre chaque paramètre et la sortie",
-      x = "Corrélation avec l'indicateur", y = NULL
+      x = "Corrélation avec l'indicateur", y = NULL,
+      caption = note_lecture(sprintf(
+        "le paramètre le plus influent sur %s est %s, avec une corrélation de %.2f.",
+        indic_principal, tor$entree_lbl[which.max(abs(tor$corr))], tor$corr[which.max(abs(tor$corr))]
+      ), largeur_car = 108)
     ) +
     theme_minimal(base_size = 12) +
     theme(plot.title = element_text(face = "bold"),
           plot.subtitle = element_text(color = "#666666"),
-          legend.position = "top")
+          legend.position = "top") +
+    THEME_NOTE_LECTURE
   ggsave(file.path(DIR_SYNTHESE, "sensibilite_tornado_tkm.png"),
-         gB, width = 9, height = 8, dpi = 300)
+         gB, width = 9, height = 8.8, dpi = 300)
   cat("  ✓ B. sensibilite_tornado_tkm.png\n")
 }
 
@@ -261,14 +271,20 @@ gC <- ggplot(indices, aes(x = sortie, y = entree_lbl, fill = abscorr)) +
   labs(
     title    = "Carte de sensibilité : influence de chaque paramètre sur chaque sortie",
     subtitle = "Valeur affichée = corrélation signée ; couleur = intensité |corr|",
-    x = NULL, y = NULL
+    x = NULL, y = NULL,
+    caption = note_lecture(sprintf(
+      "la corrélation la plus forte du graphique est entre %s et %s, à %.2f.",
+      indices$entree_lbl[which.max(indices$abscorr)], indices$sortie[which.max(indices$abscorr)],
+      indices$corr[which.max(indices$abscorr)]
+    ), largeur_car = 120)
   ) +
   theme_minimal(base_size = 11) +
   theme(plot.title = element_text(face = "bold"),
         plot.subtitle = element_text(color = "#666666"),
-        axis.text.x = element_text(angle = 20, hjust = 1))
+        axis.text.x = element_text(angle = 20, hjust = 1)) +
+  THEME_NOTE_LECTURE
 ggsave(file.path(DIR_SYNTHESE, "sensibilite_heatmap_indices.png"),
-       gC, width = 10, height = 8, dpi = 300)
+       gC, width = 10, height = 8.8, dpi = 300)
 cat("  ✓ C. sensibilite_heatmap_indices.png\n")
 
 # ==============================================================================
@@ -303,14 +319,19 @@ gD <- ggplot(sect_long, aes(x = secteur, y = ecart_pct, fill = secteur)) +
     title    = "Volatilité du tonnage sectoriel face aux incertitudes de paramètres",
     subtitle = sprintf("Écart à la référence du tonnage total transporté par secteur — %d tirages",
                        length(res_scen)),
-    x = NULL, y = "Écart à la référence"
+    x = NULL, y = "Écart à la référence",
+    caption = note_lecture(sprintf(
+      "le secteur %s est le plus volatil : son tonnage varie sur %.0f points d'écart à la référence selon les tirages.",
+      ordre_sect$secteur[1], ordre_sect$etendue[1]
+    ), largeur_car = 132)
   ) +
   theme_minimal(base_size = 12) +
   theme(plot.title = element_text(face = "bold"),
         plot.subtitle = element_text(color = "#666666"),
-        axis.text.x = element_text(angle = 20, hjust = 1))
+        axis.text.x = element_text(angle = 20, hjust = 1)) +
+  THEME_NOTE_LECTURE
 ggsave(file.path(DIR_SYNTHESE, "sensibilite_divergence_sectorielle.png"),
-       gD, width = 11, height = 6, dpi = 300)
+       gD, width = 11, height = 6.8, dpi = 300)
 cat("  ✓ D. sensibilite_divergence_sectorielle.png\n")
 
 # ==============================================================================
@@ -368,17 +389,18 @@ if (!file.exists(f_gpkg)) {
       labs(
         title    = "Robustesse spatiale des flux face aux incertitudes de paramètres",
         subtitle = "Coefficient de variation du volume par arête sur l'ensemble des tirages LHS\n(vert = corridor robuste, rouge = corridor très sensible aux hypothèses)",
-        caption  = sprintf("Arêtes de volume moyen > %d t. %d tirages, betas ±%d %% et valeurs/tonne ±%d %% par secteur.",
-                          SEUIL_FLUX_TONNES, length(res_scen),
-                          round(100 * SENS_LHS_AMPLITUDE_BETA),
-                          round(100 * SENS_LHS_AMPLITUDE_VALEUR_TONNE))
+        caption  = note_lecture(sprintf(
+          "l'arête la plus sensible a un coefficient de variation de %.0f %% sur les %d tirages.",
+          100 * max(reseau_cv$cv_volume, na.rm = TRUE), length(res_scen)
+        ), largeur_car = 120)
       ) +
       theme_minimal(base_size = 12) +
       theme(plot.title = element_text(face = "bold"),
             plot.subtitle = element_text(color = "#666666"),
-            axis.text = element_blank(), panel.grid = element_blank())
+            axis.text = element_blank(), panel.grid = element_blank()) +
+      THEME_NOTE_LECTURE
     ggsave(file.path(DIR_SYNTHESE, "sensibilite_carte_robustesse.png"),
-           gE, width = 10, height = 9, dpi = 300)
+           gE, width = 10, height = 9.8, dpi = 300)
     cat("  ✓ E. sensibilite_carte_robustesse.png\n")
   }
 }

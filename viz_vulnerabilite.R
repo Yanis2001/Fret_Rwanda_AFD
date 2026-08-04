@@ -167,8 +167,51 @@ impact_par_zone_sf <- reseau %>%
   ) %>%
   mutate(
     pct_surcout_moyen = replace_na(pct_surcout_moyen, 0),
-    surcout_total_rwf = replace_na(surcout_total_rwf, 0)
+    surcout_total_rwf = replace_na(surcout_total_rwf, 0),
+    n_deconnexions    = replace_na(n_deconnexions, 0L),
+
+    # ── Classe d'impact de la zone ────────────────────────────────────────────
+    # Une zone largement déconnectée doit apparaître comme telle et NON dans la
+    # classe « 0 à 5 % ». Son surcoût moyen n'est en effet calculé que sur les
+    # rares liaisons qui lui restent — typiquement ses voisines immédiates, donc
+    # peu ou pas affectées — et ressort proche de zéro. Colorer sur ce seul
+    # indicateur peindrait en gris rassurant les zones les plus durement
+    # touchées : celles qui ont perdu l'accès au reste du réseau.
+    # Le seuil de 50 % des destinations sépare la perte de quelques liaisons
+    # d'un véritable enclavement.
+    part_deconnectee  = n_deconnexions / pmax(n_warehouses - 1, 1),
+    classe_impact = case_when(
+      part_deconnectee >= 0.5   ~ "Déconnectée",
+      pct_surcout_moyen >= 100  ~ "Surcoût ≥ 100 %",
+      pct_surcout_moyen >= 50   ~ "Surcoût 50–100 %",
+      pct_surcout_moyen >= 20   ~ "Surcoût 20–50 %",
+      pct_surcout_moyen >= 5    ~ "Surcoût 5–20 %",
+      TRUE                      ~ "Surcoût < 5 %"
+    ),
+    classe_impact = factor(
+      classe_impact,
+      levels = c("Surcoût < 5 %", "Surcoût 5–20 %", "Surcoût 20–50 %",
+                 "Surcoût 50–100 %", "Surcoût ≥ 100 %", "Déconnectée")
+    )
   )
+
+# Palette de la classe d'impact des zones : gradient jaune → rouge pour les
+# surcoûts, et un noir distinct pour l'enclavement, qui n'est pas le haut d'une
+# échelle de surcoût mais une rupture de nature différente.
+PALETTE_CLASSE_ZONE <- c(
+  "Surcoût < 5 %"    = "#CCCCCC",
+  "Surcoût 5–20 %"   = "#FFFFB2",
+  "Surcoût 20–50 %"  = "#FD8D3C",
+  "Surcoût 50–100 %" = "#E31A1C",
+  "Surcoût ≥ 100 %"  = "#800026",
+  "Déconnectée"      = "#000000"
+)
+
+n_zones_deconnectees <- sum(impact_par_zone_sf$classe_impact == "Déconnectée")
+if (n_zones_deconnectees > 0) {
+  cat("  ⚠", n_zones_deconnectees,
+      "zone(s) enclavée(s) (plus de 50 % de leurs destinations coupées)\n")
+}
 
 # ── CARTE A : Réseau dégradé et zones d'impact ────────────────────────────────
 cat("  Génération Carte A — réseau dégradé...\n")
@@ -200,21 +243,28 @@ carte_reseau_degrade <- fond_carte() +
   tm_lines(col = "#CC0000", lwd = 3.5,
            col.legend = tm_legend(show = FALSE)) +
   
-  # Points des zones avec couleur selon le surcoût moyen
+  # Points des zones colorés par classe d'impact. On utilise une échelle
+  # CATÉGORIELLE et non un découpage du surcoût moyen : l'enclavement n'est pas
+  # un surcoût élevé, c'est une absence de coût définissable, et il doit se lire
+  # comme tel sur la carte.
   tm_shape(impact_par_zone_sf) +
   tm_dots(
-    fill       = "pct_surcout_moyen",
-    fill.scale = tm_scale_intervals(
-      style  = "fixed",
-      breaks = c(0, 5, 20, 50, 100, Inf),
-      values = c("#CCCCCC", "#FFFFB2", "#FD8D3C", "#E31A1C", "#800026")
-    ),
-    fill.legend = tm_legend(title = "Surcoût moyen\n(% hausse)"),
+    fill        = "classe_impact",
+    fill.scale  = tm_scale_categorical(values = PALETTE_CLASSE_ZONE),
+    fill.legend = tm_legend(title = "Impact sur la zone"),
     size = 0.8
   ) +
   
   tm_title(paste0("Réseau dégradé — ", NOM_SCENARIO,
                   "\n", DESCRIPTION_SCENARIO)) +
+  tm_credits(
+    note_lecture(sprintf(
+      "ce scénario coupe %d tronçons (rouge) et enclave %d zone(s) (points noirs, « Déconnectée »).",
+      nrow(aretes_perturbees_sf), n_zones_deconnectees
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -257,6 +307,14 @@ carte_criticite <- fond_carte() +
   
   tm_title(paste0("Arêtes critiques du réseau — ", NOM_SCENARIO,
                   "\nTop ", N_ARETES_AFFICHEES, " par surcoût pondéré")) +
+  tm_credits(
+    note_lecture(sprintf(
+      "le tronçon classé n°1 génère, à lui seul coupé, un surcoût pondéré de %s (milliers RWF×tonnes).",
+      format(round(aretes_critiques_sf$surcout_pondere_k[which.min(aretes_critiques_sf$rang)]), big.mark = " ")
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -319,6 +377,16 @@ carte_vulnerabilite <- fond_carte() +
   tm_title(paste0("Vulnérabilité économique des zones\n",
                   NOM_SCENARIO, " — Durée estimée : ",
                   DUREE_JOURS, " jours")) +
+  tm_credits(
+    note_lecture(sprintf(
+      "la zone %s supporte le plus fort surcoût total, %s RWF sur les %d jours du scénario.",
+      str_remove(impact_par_zone_sf$warehouse_name[which.max(impact_par_zone_sf$surcout_total_rwf)], " - .*"),
+      format(round(max(impact_par_zone_sf$surcout_total_rwf)), big.mark = " "),
+      DUREE_JOURS
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -333,6 +401,12 @@ cat("  ✓ Carte C sauvegardée\n")
 # ── GRAPHIQUE : Distribution des surcoûts relatifs ────────────────────────────
 cat("  Génération du graphique de distribution...\n")
 
+# Exemple de lecture chiffré (repris dans le caption ci-dessous) : nombre de
+# paires OD dont le surcoût est proche de 50 %, calculé sur les données
+# réellement affichées pour rester exact quel que soit le scénario.
+n_exemple_surcout <- sum(od_compare$surcout_relatif_pct >= 45 &
+                          od_compare$surcout_relatif_pct < 55, na.rm = TRUE)
+
 g_surcouts <- od_compare %>%
   filter(!is.na(surcout_relatif_pct), surcout_relatif_pct > 0) %>%
   ggplot(aes(x = surcout_relatif_pct, fill = type_impact)) +
@@ -341,26 +415,36 @@ g_surcouts <- od_compare %>%
     values = PALETTE_IMPACT,
     name   = "Type d'impact"
   ) +
-  scale_x_continuous(
+  # Échelle log : la distribution est très étalée à droite (quelques paires
+  # dépassent 1000 % de surcoût) — des graduations linéaires jusqu'à 200 %
+  # compressaient tous les labels à gauche et laissaient le reste du
+  # graphique vide. Même traitement que distribution_trafic_par_secteur.png
+  # (viz_fret.R) pour une distribution à la même forme très asymétrique.
+  scale_x_log10(
     labels = scales::percent_format(scale = 1),
-    breaks = c(0, 10, 25, 50, 75, 100, 150, 200)
+    breaks = c(1, 5, 10, 25, 50, 100, 250, 500, 1000)
   ) +
   labs(
     title    = paste0("Distribution des surcoûts de transport — ", NOM_SCENARIO),
     subtitle = paste0(DESCRIPTION_SCENARIO,
                       "\nDurée estimée : ", DUREE_JOURS, " jours"),
-    x        = "Hausse du coût de transport (%)",
-    y        = "Nombre de paires OD affectées"
+    x        = "Hausse du coût de transport (%, échelle log)",
+    y        = "Nombre de paires OD affectées",
+    caption  = note_lecture(sprintf(
+      "dans %s, %d paires origine-destination ont subi une hausse de leur coût de transport proche de 50 %%.",
+      NOM_SCENARIO, n_exemple_surcout
+    ), largeur_car = 132)
   ) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title    = element_text(face = "bold"),
     plot.subtitle = element_text(color = "#555555")
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, paste0("graphique_surcouts_", NOM_SCENARIO, ".png")),
-  g_surcouts, width = 11, height = 6, dpi = 300
+  g_surcouts, width = 11, height = 7.2, dpi = 300
 )
 cat("  ✓ Graphique sauvegardé\n\n")
 
@@ -453,6 +537,14 @@ carte_detour <- fond_carte() +
     "Itinéraires de contournement — ", NOM_SCENARIO,
     "\nCouleur = surcoût moyen pondéré | Épaisseur = volume détourné | Noir = routes coupées"
   )) +
+  tm_credits(
+    note_lecture(sprintf(
+      "le tronçon de détour le plus sollicité absorbe %s tonnes reportées depuis les routes coupées.",
+      format(round(max(aretes_detour_sf$vol_detourne_t)), big.mark = " ")
+    )),
+    position = tm_pos_out("center", "bottom", "left", "top"),
+    size     = 0.65
+  ) +
   tm_layout(legend.outside = TRUE, frame = TRUE) +
   tm_scalebar(position = c("left", "bottom")) +
   tm_compass(position  = c("right", "top"))
@@ -577,9 +669,15 @@ g_report <- ggplot(report_long,
     ),
     x    = "Type de route",
     y    = "Volume (milliers de tonnes)",
-    fill = NULL
+    fill = NULL,
+    caption = note_lecture(sprintf(
+      "sur les routes %s, le trafic varie de %s%s %% par rapport à la référence après le choc.",
+      report_df$road_type[which.max(abs(report_df$pct_variation))],
+      ifelse(report_df$pct_variation[which.max(abs(report_df$pct_variation))] >= 0, "+", ""),
+      report_df$pct_variation[which.max(abs(report_df$pct_variation))]
+    ), largeur_car = 132)
   ) +
-  
+
   theme_minimal(base_size = 12) +
   theme(
     plot.title      = element_text(face = "bold", size = 13),
@@ -587,13 +685,14 @@ g_report <- ggplot(report_long,
     legend.position = "top",
     panel.grid.minor = element_blank(),
     axis.text.x     = element_text(angle = 20, hjust = 1)
-  )
+  ) +
+  THEME_NOTE_LECTURE
 
 ggsave(
   file.path(DIR_CARTES, paste0("graphique_report_type_route_", NOM_SCENARIO, ".png")),
   g_report,
   width = 11,
-  height = 6,
+  height = 6.8,
   dpi = 300
 )
 cat("  ✓ graphique_report_type_route_", NOM_SCENARIO, ".png\n\n", sep = "")
