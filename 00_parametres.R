@@ -408,7 +408,9 @@ entreposages_manuels <- tibble(
     "Kigali - Hub Central", "Kigali - SEZ Masoro", "Kigali - Marché Kimisagara",
     "Frontière Gatuna (Ouganda)", "Frontière Rusumo (Tanzanie)",
     "Frontière Rubavu/Goma (RDC)", "Frontière Kagitumba (Ouganda)",
-    "Frontière Bugarama (Burundi)",
+    "Frontière Bugarama (RDC)",
+    "Frontière Nemba (Burundi)", "Frontière Rusizi/Bukavu (RDC)",
+    "Frontière Akanyaru-Haut (Burundi)",
     "Huye (Butare) - Centre Sud", "Musanze - Centre Nord",
     "Rubavu - Centre Ouest", "Rusizi - Centre Sud-Ouest",
     "Bugesera SEZ (Agro-industrie)",
@@ -417,14 +419,20 @@ entreposages_manuels <- tibble(
   type = c(
     "hub","sez","marche",
     "frontiere","frontiere","frontiere","frontiere",
-    "frontiere","ville","ville","ville","ville",
+    "frontiere",
+    "frontiere","frontiere",
+    "frontiere",
+    "ville","ville","ville","ville",
     "sez","ville","ville","ville"
   ),
   # pays = NA pour les zones internes, nom du pays pour les frontières.
   # Utilisé pour associer les coûts pré-frontière en Partie 19
+
   pays = c(
     NA, NA, NA,
     "Ouganda", "Tanzanie", "RDC", "Ouganda",
+    "RDC",
+    "Burundi", "RDC",
     "Burundi",
     NA, NA, NA, NA,
     NA,
@@ -432,10 +440,14 @@ entreposages_manuels <- tibble(
   ),
   lon = c(30.0619, 30.1300, 30.0588, 30.0890,
           30.7850, 29.2600, 30.7500, 29.0200,
+          30.2175, 28.9075,
+          29.7600,
           29.7388, 29.6333, 29.2650, 29.0100,
           30.1500, 29.7400, 29.7550, 30.4300),
   lat = c(-1.9536, -1.9000, -1.9700, -1.3800,
           -2.3800, -1.6667, -1.3100, -2.6200,
+          -2.3525, -2.4846,
+          -2.8200,
           -2.5965, -1.4992, -1.6750, -2.4900,
           -2.1000, -2.0850, -2.3500, -1.8700),
   source = "manuel"
