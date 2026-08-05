@@ -16,7 +16,8 @@
 #   - lookup_type / lookup_physique / lookup_vehicule, max_idx_mm
 #   - n_aretes_physiques, n_vehicules, n_warehouses, node_multi(), warehouse_nodes_base
 #   - reseau (pour le road_type des arêtes physiques)
-#   - flux_gravitaire (matrices OD tonnes par secteur), flux_tonnes_total
+#   - flux_gravitaire (matrices OD tonnes par secteur, n_warehouses × n_warehouses,
+#     flux RoW déjà projetés sur les postes frontières), flux_tonnes_total
 #   - paramètres 00 : CONGESTION, BPR_ALPHA/BETA, MSA_MAX_ITER/TOL, SECTEURS,
 #     VEHICULES_IDS, params_flotte_df, capacites_route_df, TAUX_CHARGEMENT,
 #     JOURS_TRAFIC_AN, TAUX_DETENTION_STOCK, EOQ_REMPLISSAGE_MIN,
@@ -135,6 +136,22 @@ affecter_equilibre_msa <- function(aretes_bloquees = integer(0)) {
     which(.est_route & lookup_physique %in% aretes_bloquees)
   } else {
     integer(0)
+  }
+
+  # ── Garde-fou : cohérence dimensionnelle des matrices de flux ────────────────
+  # Les paires OD sont sélectionnées sur flux_tonnes_total, puis le volume est
+  # lu dans flux_gravitaire[[s]][i, j] avec les MÊMES indices. Si les matrices
+  # sectorielles étaient plus grandes (nœuds RoW non projetés en lignes/colonnes
+  # supplémentaires), tout le bloc excédentaire ne serait jamais lu et le
+  # tonnage importé/exporté disparaîtrait silencieusement de l'affectation.
+  # On vérifie donc l'invariant avant toute affectation.
+  dims_secteurs <- sapply(flux_gravitaire, function(M) paste(dim(M), collapse = "x"))
+  dim_attendue  <- paste(dim(flux_tonnes_total), collapse = "x")
+  if (any(dims_secteurs != dim_attendue)) {
+    stop("Dimensions incoherentes entre flux_gravitaire et flux_tonnes_total : ",
+         "attendu ", dim_attendue, ", obtenu ",
+         paste(sprintf("%s=%s", names(dims_secteurs), dims_secteurs), collapse = ", "),
+         ".\n  Les flux RoW doivent etre projetes secteur par secteur en 03_transport.R (VII.5).")
   }
 
   # ── Paires OD actives (flux > seuil, hors diagonale), regroupées par origine ──
