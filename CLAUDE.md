@@ -6,3 +6,4 @@
 - Ne supprimer une annotation existante que si, et seulement si, elle correspond à une version du code qui n'existe plus.
 - Ne mets pas de commentaires comparant l'ancienne version du code et la version avec les modifications que tu viens de faire. Les commentaires ne doivent décrire que la version actuel du code.
 - Ne push rien sur GitHub
+- N'écris pas de mot entièrement en majuscule si ce n'est pas un acronyme
