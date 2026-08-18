@@ -23,6 +23,7 @@
 \usepackage{xcolor}
 \usepackage{listings}
 \usepackage[backend=biber, style=authoryear, sorting=none, doi=true, url=true, isbn=false]{biblatex}
+\usepackage{mdframed}
 \addbibresource{references.bib}
 
 % Configuration de la géométrie
@@ -53,16 +54,48 @@
 \date{8 septembre 2026}
 
 \begin{document}
-	
-	\maketitle
+
+	% Page de garde du mémoire : mentions du master, titre, auteur, structure d'accueil et jury.
+	\begin{titlepage}
+		\centering
+		\vspace*{1cm}
+		{\large MASTER Mention Économie de l'Environnement, de l'Énergie et des Transports\par}
+		\vspace{0.3cm}
+		{\large MODÉLISATION ET PROSPECTIVES\par}
+		\vspace{0.3cm}
+		{\large 2026\par}
+
+		\vspace{2cm}
+		{\Large\bfseries MEMOIRE\par}
+
+		\vspace{2cm}
+		{\large DUMAS\par}
+		{\large Yanis\par}
+
+		\vspace{2cm}
+		{\Large\bfseries Modélisation du fret routier au Rwanda\par}
+
+		\vspace{2cm}
+		{\large Agence Française de Développement\par}
+		{\large 5 rue Roland Barthes, 75012, Paris\par}
+
+		\vspace{2cm}
+		{\large Composition du jury\par}
+		\vspace{0.3cm}
+		{\large Président :\par}
+		{\large Tuteur professionnel : Antoine GODIN\par}
+		{\large Tuteur académique : Julien LEFEVRE\par}
+
+		\vfill
+		{\large Pas de confidentialité\par}
+		\vspace*{1cm}
+	\end{titlepage}
 	
 	\newpage
 	
-	% Table des matières
 	\tableofcontents
 	\newpage
 	
-	% Remerciements
 	\chapter*{Remerciements}
 	\addcontentsline{toc}{chapter}{Remerciements}
 	
@@ -70,7 +103,6 @@
 	
 	\newpage
 	
-	% Introduction
 	\chapter{Introduction}
 	
 	En 2021 sortait le dernier rapport du GIEC \cite{IPCC2021} sur les bases physiques du dérèglement climatique. De manière très classique, il est rappelé que ce dernier implique une augmentation de la fréquence et de l'intensité des événements climatiques extrêmes, notamment des inondations, à travers le monde.
@@ -107,40 +139,49 @@
 
 	Ce chapitre décrit les caractéristiques du Rwanda qui déterminent la géographie de son fret : la densité et le relief de son territoire, l'organisation de son système de transport, la structure de son appareil productif et son exposition aux aléas hydro-climatiques. 
 
-	\section{Un territoire dense et accidenté}
+	\section{Un territoire dense et accidenté, exposé aux aléas hydro-climatique}
 	\label{sec:territoire}
 
-	Le cinquième recensement de la population dénombre 13 millions d'habitants en août 2022, pour une croissance intercensitaire de 2,3~\% par an et une densité de 503~habitants par km$^2$, l'une des plus fortes d'Afrique continentale. Cette densité reste très largement rurale : la population urbaine ne représentait que 27,9~\% du total en 2022, contre 16,5~\% en 2012, et l'armature urbaine est nettement dominée par Kigali (\cite{NISR2023}). 
+	Le cinquième recensement de la population dénombre 13 millions d'habitants en août 2022, pour une croissance intercensitaire de 2,3~\% par an et une densité de 503~habitants par km$^2$, l'une des plus fortes d'Afrique continentale. Cette densité reste très largement rurale : la population urbaine, bien qu'en forte hausse, ne représentait que 27,9~\% du total en 2022, contre 16,5~\% en 2012, et l'armature urbaine est nettement dominée par Kigali (\cite{NISR2023}). 
 	
-	Le « pays aux mille collines » présente des dénivelés importants. Le plateau central culmine autour de 1700-1800m, les bas plateaux de l'Est entre 1400 et 1600m et à l'inverse, la région montagneuse de la crête Congo-Nil culmine entre 2500 et 3500m (Ministère des ressources naturelles). Or, la pente affecte directement la consommation de carburant et la vitesse commerciale des poids lourds.
+	Le Rwanda est aussi appelé le « pays aux mille collines » en raison de son dénivelé important. Le plateau central culmine autour de 1700-1800m, les bas plateaux de l'Est entre 1400 et 1600m et à l'inverse, la région montagneuse de la crête Congo-Nil culmine entre 2500 et 3500m (Ministère des ressources naturelles). Or, la pente affecte directement la consommation de carburant.
+	
+	Le Rwanda est au 29\textsuperscript{e} rang mondial de vulnérabilité au changement climatique en 2018 selon l'indice ND-GAIN (Notre Dame Global Adaptation Initiative)\footnote{L'indice combine un indice de vulnérabilité de 6 secteurs essentiels ainsi qu'un de préparation du pays pour faire face au changement climatique. Il est développé par l'Université Notre-Dame aux États-Unis.}. La politique nationale des transports identifie explicitement le risque de perturbation des systèmes de transport par les inondations, les vents violents et les glissements de terrain avec près de 74~\% des routes de districts qui sont exposées à ce dernier risque (\cite{MININFRA2021}).
+	
+	L'épisode des 2 et 3~mai 2023 en fournit une illustration documentée. Des pluies torrentielles ont provoqué inondations et glissements de terrain dans les provinces de l'Ouest, du Nord et du Sud, causant plus de 130~décès. L'évaluation du MINECOFIN chiffre les dommages et pertes à 222,31~milliards de RWF (environ 193~millions d'USD) et les besoins de reconstruction à 518,58~milliards de RWF, pour un impact estimé à environ 0,4~point de croissance du PIB réel en 2023 (\cite{MINECOFIN2023}). Surtout, le secteur des transports concentre à lui seul près de 60~\% du total des dommages et pertes, très loin devant le logement (12~\%), l'environnement et la gestion des ressources en eau (12~\%) et la santé (8~\%). Au Rwanda, il semble donc qu'un aléa climatique localisé soit d'abord un choc sur le réseau de transport.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.7\linewidth]{images/carte_relief.png}
-		\caption{Relief du Rwanda}
+		\caption{Relief du Rwanda \\
+			\footnotesize Source : auteur}
 		\label{fig:carte_relief}
 	\end{figure}
 
 	\section{Un système de transport entièrement routier}
 	\label{sec:tout_routier}
 
-	Le Rwanda ne dispose ni de réseau ferroviaire, ni de transport fluvial marchand d'ampleur, ni d'oléoduc en service. La politique nationale des transports est explicite : en l'absence de rail et de voies navigables, l'ensemble des marchandises entrant, sortant ou transitant par le pays est déplacé par camion (\cite{MININFRA2021}). Les projets ferroviaires reliant Kigali aux ports de la région restent, à la date de rédaction, à l'état de planification. Le fret rwandais est donc, en pratique, un fret routier, la politique nationale des transports chiffrant à plus de 90~\% la part de la route dans le fret total, le solde résiduel étant assuré essentiellement par le transport aérien de produits d'exportation à haute valeur ajoutée (\cite{MININFRA2021}).
+	Le Rwanda ne dispose ni de réseau ferroviaire, ni de transport fluvial marchand d'ampleur, ni d'oléoduc en service. La politique nationale des transports est explicite : en l'absence de rail et de voies navigables, la grande majorité des marchandises entrant, sortant ou transitant par le pays est déplacé par camion (\cite{MININFRA2021}). Les projets ferroviaires reliant Kigali aux ports de la région restent, à la date de rédaction, à l'état de planification. Le fret rwandais est donc, en pratique, un fret routier, la politique nationale des transports chiffrant à plus de 90~\% la part de la route dans le fret total, le solde résiduel étant assuré essentiellement par le transport aérien de produits d'exportation à haute valeur ajoutée (\cite{MININFRA2021}).
 
 	Ce réseau routier est par ailleurs très hétérogène. Il comptait à la fin des années 2010 environ 44~671~km, dont seulement 1~973~km revêtus, 72~\% de ce linéaire bitumé correspondant aux routes nationales (\cite{MININFRA2021}). Le fret longue distance se concentre donc sur une ossature bitumée étroite, tandis que l'essentiel du linéaire est sans revêtement. Un tronçon revêtu interrompu par une inondation n'a donc fréquemment pour report qu'une piste de qualité très inférieure.
 
 	À cette structure interne s'ajoute la condition d'enclavement : le commerce maritime du pays transite par le territoire d'un pays tiers, principalement via le corridor Nord vers Mombasa (environ 1~682~km depuis Kigali) et le corridor Central vers Dar es Salaam (environ 1~495~km), auxquels s'ajoutent des échanges de proximité avec l'Ouganda, la Tanzanie, la RDC et le Burundi (\cite{NCTTCA2018, MININFRA2021}). La politique nationale des transports qualifie le coût du transport, national comme international, d'« exceptionnellement élevé » et en fait une contrainte majeure au développement (\cite{MININFRA2021}). 
 
-	\section{Une structure productive peu diversifiée}
-	\label{sec:structure_productive}
+	Malgré tout, le pays connait une croissance soutenue et une réduction rapide de la pauvreté depuis le milieu des années 1990. L'appareil productif rwandais reste cependant marqué par le poids de l'agriculture dans l'emploi, un secteur manufacturier étroit et une croissance largement tirée par les services et l'investissement public (\cite{WorldBank2020, WorldBank2024CEM}). Les biens manufacturés, les intrants industriels et les produits pétroliers sont pour l'essentiel importés, tandis que les exportations restent concentrées sur un petit nombre de produits (minerais, thé, café, réexportations) : le pays est structurellement importateur net dans la plupart des branches, ce qui a nécessité de décomposer en trois partie le modèle gravitaire utilisé. (voir \ref{subsubsec:RoW})
+	
+	\section{Le manque dans la littérature d'une analyse de vulnérabilité de fret Rwandais}
+	\label{sec:manque_litterature}
 
-	Malgré une croissance soutenue et une réduction rapide de la pauvreté depuis le milieu des années 1990, l'appareil productif rwandais reste marqué par le poids de l'agriculture dans l'emploi, un secteur manufacturier étroit et une croissance largement tirée par les services et l'investissement public (\cite{WorldBank2020, WorldBank2024CEM}). Les biens manufacturés, les intrants industriels et les produits pétroliers sont pour l'essentiel importés, tandis que les exportations restent concentrées sur un petit nombre de produits (minerais, thé, café, réexportations) : le pays est structurellement importateur net dans la plupart des branches.
+	Les deux constats précédents, une exposition forte aux aléas hydro-climatiques et un fret intégralement routier, appellent un exercice couplant un modèle de flux de marchandises au réseau routier rwandais et à un aléa spatialisé. À notre connaissance, un tel exercice n'existe pas : les travaux disponibles se répartissent en trois familles, dont aucune ne réunit les deux composantes.
 
-	\section{Une exposition marquée aux aléas hydro-climatiques}
-	\label{sec:exposition_alea}
+	La première couple effectivement réseau, aléa et conséquences économiques, mais sur d'autres terrains. Le travail le plus proche de notre objet, mené dans le cadre du programme HVT du FCDO britannique (\cite{Hickford2023}), superpose au réseau des cartes d'inondation fluviale par période de retour et par scénario climatique, reconstitue des flux de commerce à partir des données de la CNUCED, les affecte au moindre coût généralisé, puis coupe successivement chaque lien pour en mesurer la criticité. Une crue centennale y affecte 2~243~km de routes pour 412~millions d'USD de dommages directs, et les pertes indirectes sur les flux de commerce passeraient de 0,16 à environ 4,2~millions d'USD par jour de perturbation à l'horizon 2080. Or l'étude porte sur le Kenya, la Tanzanie, l'Ouganda et la Zambie : le Rwanda n'y figure pas. Le même vide vaut pour \cite{Colon2021}, dont le modèle multi-agents couplé au réseau routier est calibré sur la Tanzanie, et pour \cite{Koks2019}, dont l'analyse multi-aléas est mondiale mais trop grossière pour raisonner sur les flux internes d'un pays.
 
-	La politique nationale des transports situe le Rwanda au 29\textsuperscript{e} rang mondial de vulnérabilité au changement climatique selon l'indice ND-GAIN, et identifie explicitement le risque de perturbation des systèmes de transport par les inondations, les vents violents et les glissements de terrain (\cite{MININFRA2021}). La combinaison d'un relief accidenté et de fortes pluies saisonnières rend les routes de montagne particulièrement exposées.
+	La deuxième famille porte bien sur le Rwanda, mais sans modèle de transport. Les évaluations soutenues par le GFDRR à Kigali estiment le risque d'inondation sur des actifs critiques, dont le hub de Nyabugogo, et mesurent la perturbation du service de bus, avec 42~\% des lignes déroutées et 18~\% annulées (\cite{GFDRRRwanda}) : l'échelle est urbaine, l'objet est le transport de personnes, et le raisonnement porte sur des actifs isolés plutôt que sur un réseau. Le document d'évaluation du projet RECOR de la Banque mondiale recense quant à lui, après les inondations de mai~2023, les dommages subis par 16~routes nationales, 26~routes de district et 47~ponts, pour 127~millions d'USD de reconstruction (\cite{WorldBank2024RECOR}). Ces travaux comptabilisent des dommages constatés ou une exposition d'actifs, mais ne disent rien du surcoût de transport ni du report de trafic engendrés par une coupure donnée.
 
-	L'épisode des 2 et 3~mai 2023 en fournit une illustration documentée. Des pluies torrentielles ont provoqué inondations et glissements de terrain dans les provinces de l'Ouest, du Nord et du Sud, causant plus de 130~décès. L'évaluation du MINECOFIN chiffre les dommages et pertes à 222,31~milliards de RWF (environ 193~millions d'USD) et les besoins de reconstruction à 518,58~milliards de RWF, pour un impact estimé à environ 0,4~point de croissance du PIB réel en 2023 (\cite{MINECOFIN2023}). Surtout, le secteur des transports concentre à lui seul près de 60~\% du total des dommages et pertes, très loin devant le logement (12~\%), l'environnement et la gestion des ressources en eau (12~\%) et la santé (8~\%). Au Rwanda, il semble donc qu'un aléa climatique localisé soit d'abord un choc sur le réseau de transport.
+	La troisième famille traite l'aléa seul. Les cartographies de susceptibilité aux inondations développées pour le Rwanda, dont la plus récente pondère par régression logistique vingt facteurs topographiques, hydrologiques, géologiques et anthropiques, validés sur les extensions observées par Sentinel-1 entre 2014 et 2024 (\cite{Hategekimana2026}), fournissent des couches d'aléa directement mobilisables en entrée d'un modèle de transport, mais restent muettes sur les conséquences économiques d'une coupure.
+
+	L'originalité du travail présenté ici tient donc au couplage complet, sur le cas rwandais, de ces éléments : une matrice origine-destination de fret construite de manière endogène, une affectation sur le réseau routier réel avec prise en compte de la congestion, puis une dégradation de tronçons sous aléa d'inondation permettant d'en mesurer le surcoût. La littérature existante offre soit la méthode sans le pays, soit le pays sans la méthode. Cette revue porte cependant sur les seuls travaux publiés et accessibles : des rapports internes d'administrations ou de bailleurs ont pu traiter tout ou partie de cette question.
+
 	
 		\newpage
 	
@@ -165,12 +206,12 @@
 	\subsection {Agent-Based Model (ABM) ou microsimulations}
 	\label{subsec:ABM}
 	
-	La spécificité de ce type de modèle, qui fait à la fois sa force et sa faiblesse, est que son objectif premier est de modéliser les flux à l'échelle de l'agent. Chaque firme individuelle est représentée et interagit avec les autres firmes modélisées. Il n'y a pas de firme représentative (ou à un niveau particulièrement désagrégé) ni de bouclage macroéconomique forcé. La dynamique d'ensemble émerge des comportements individuels tels que modélisés. Un choc est là aussi modélisé par la coupure d'un arc du réseau. Les mécanismes de diffusion de ce choc peuvent ainsi être représentés de manière particulièrement fine. \cite{Liedtke2009} en donne le cadre micro-comportemental appliqué au fret, en simulant les décisions de transport de firmes individuelles et les relations commerciales qu'elles nouent entre elles. \cite{Colon2021} en fournissent l'application la plus proche de notre objet : ils couplent un modèle de chaînes d'approvisionnement multi-agents au réseau de transport tanzanien et coupent successivement chaque tronçon pour en mesurer la criticité économique. Le principal problème de ce type de modèles est qu'ils sont particulièrement complexes à calibrer et nécessitent de surcroît une quantité de données particulièrement massive.
-	
+	La spécificité de ce type de modèle, qui fait à la fois sa force et sa faiblesse, est que son objectif premier est de modéliser les flux à l'échelle de l'agent. Chaque firme individuelle est représentée et interagit avec les autres firmes modélisées. Il n'y a pas de firme représentative (ou à un niveau particulièrement désagrégé) ni de bouclage macroéconomique forcé. La dynamique d'ensemble émerge des comportements individuels tels que modélisés. Un choc est là aussi modélisé par la coupure d'un arc du réseau. Les mécanismes de diffusion de ce choc peuvent ainsi être représentés de manière particulièrement fine. \cite{Liedtke2009} en donne le cadre micro-comportemental appliqué au fret, en simulant les décisions de transport de firmes individuelles et les relations commerciales qu'elles nouent entre elles. \cite{Colon2021} en fournissent l'application la plus proche de notre objet : ils couplent un modèle de chaînes d'approvisionnement multi-agents au réseau de transport tanzanien et coupent successivement chaque tronçon pour en mesurer la criticité économique. Le principal problème de ce type de modèles est qu'ils sont particulièrement complexes à calibrer et nécessitent de surcroît une quantité de données particulièrement massive. De plus, en raison de l'abscence de bouclage macro, il est possible que certaines propriétés, inhérentes à ce type de contrainte, soient ignorées. D'où l'intérêt pour nous de boucler notre modèle avec un modèle macroéconomique.
+		
 	\subsection {Modèles de machine learning}
 	\label{subsec:machine_learning}
 	
-	Ces modèles sont beaucoup utilisés pour de la prospective, notamment par des entreprises privées comme Amazon par exemple. L'avantage de ce type d'approche c'est qu'elle nécessite un nombre minimal de choix de forme fonctionnelle mais exige en contrepartie une quantité de données encore plus importante que pour les ABM. \cite{Karlaftis2011} formulent clairement l'arbitrage en transport : les méthodes d'apprentissage l'emportent souvent en pouvoir prédictif pur, mais au prix de modèles « boîte noire » dont les paramètres ne s'interprètent pas économiquement, ce qui les rend peu adaptées à l'analyse de politiques ou de scénarios contrefactuels. \cite{Vlahogianni2014} confirment ce constat dans leur revue de la prévision de trafic à court terme, où la performance de ces méthodes reste conditionnée à la disponibilité de séries de mesures denses et continues, une condition qui n'est pas remplie ici.
+	Ces modèles sont beaucoup utilisés pour de la prospective de l'évolution des flux de fret, notamment par des entreprises privées comme Amazon par exemple. L'avantage de ce type d'approche c'est qu'elle nécessite un nombre minimal de choix de forme fonctionnelle mais exige en contrepartie une quantité de données encore plus importante que pour les ABM. \cite{Karlaftis2011} formulent clairement l'arbitrage en transport : les méthodes d'apprentissage de type machin learning l'emportent souvent en pouvoir prédictif pur sur les modèles avec forme fonctionnelle explicite, mais au prix de modèles « boîte noire » dont les paramètres ne s'interprètent pas économiquement. Cela les rend peu adaptées à l'analyse de politiques ou de scénarios contrefactuels comme une inondation du réseau par exemple. \cite{Vlahogianni2014} confirment ce constat dans leur revue de la prévision de trafic à court terme, où la performance de ces méthodes reste conditionnée à la disponibilité de séries de mesures denses et continues, une condition qui n'est pas remplie ici.
 	
 	\section{Le modèle classique à 4 étapes}
 	\label{sec:4_etapes}
@@ -180,28 +221,24 @@
 	\subsection{Production et attraction}
 	\label{subsec:prod_attraction}
 
-	Cette étape détermine les quantités de marchandises sortant de chaque zone d'origine et entrant dans chaque zone de destination, c'est-à-dire les marges de la matrice origine-destination. La grandeur produite est un tonnage, même si les étapes intermédiaires peuvent raisonner en unités monétaires, sous la forme de flux commerciaux. \cite{deJong2004} y distinguent quatre familles de méthodes et soulignent que toutes, sans exception, reposent sur des données agrégées. Dans l'ensemble des systèmes de modèles qu'ils recensent, ils ne trouvent aucun modèle de production-attraction estimé sur données désagrégées, c'est-à-dire à l'échelle de la firme ou de l'envoi.
+	Cette étape détermine les quantités de marchandises sortant de chaque zone d'origine et entrant dans chaque zone de destination, c'est-à-dire les données de la matrice origine-destination. La grandeur produite est un tonnage, même si les étapes intermédiaires peuvent raisonner en unités monétaires, sous la forme de flux commerciaux. \cite{deJong2004} y distinguent quatre familles de méthodes et soulignent que toutes reposent sur des données agrégées. Aucun des modèles de production-attraction recensés n'est estimé sur des données à l'échelle de la firme ou de l'envoi.
 
-	\paragraph{Tendances et séries temporelles.} La première famille prolonge dans le futur les tendances observées. Les modèles vont du simple facteur de croissance aux modèles autorégressifs à moyenne mobile, ces derniers n'exploitant que l'information contenue dans les flux de camions observés et étant conçus pour la prévision de court terme. Certaines variantes introduisent des variables explicatives, au premier rang desquelles le PIB. L'avantage est de n'exiger qu'une quantité limitée de données, mais sur un grand nombre d'années. L'inconvénient est d'apporter peu d'information sur la causalité et de laisser peu de prise à la simulation de politiques publiques. Cette famille est inutilisable dans notre cas. Nous ne disposons pas de séries longues de trafic observé au Rwanda et, surtout, la méthode ne dit rien de la localisation de la demande.
+	\paragraph{Tendances et séries temporelles.} La première famille prolonge dans le futur les tendances observées. Les modèles vont du simple facteur de croissance aux modèles autorégressifs à moyenne mobile (ARMA) conçus pour la prévision de court terme. Certaines variantes introduisent des variables explicatives, au premier rang desquelles le PIB. L'avantage de ces méthodes est de n'exiger qu'une quantité limitée de données, mais sur un grand nombre d'années. L'inconvénient est d'apporter peu d'information sur la causalité et de laisser peu de prise à la simulation de politiques publiques. Cette famille est inutilisable dans notre cas. Nous ne disposons pas de séries longues de trafic observé au Rwanda et, surtout, la méthode ne dit rien de la localisation de la demande.
 
 	\paragraph{Dynamique des systèmes.} La deuxième famille représente l'économie et le transport comme un ensemble de stocks, de flux et de boucles de rétroaction simulés dans le temps. \cite{deJong2004} en donnent pour exemple le modèle européen ASTRA, dont le module macroéconomique prédit la croissance du PIB, laquelle alimente un module d'économie régionale qui produit une demande de fret en tonnes par paire origine-destination, ensuite affectée à des modes et à des liens \emph{virtuels}. En retour, la variation des coûts de transport modifie le PIB. Les paramètres d'un tel système ne sont généralement pas estimés statistiquement mais repris de la littérature et calés par essais successifs, en vérifiant le comportement dynamique obtenu, si bien qu'aucun test statistique n'est disponible sur leurs valeurs. Cette famille peut englober à elle seule les étapes de distribution et de choix modal et permet de représenter les interactions avec l'usage des sols, ce qui est précieux pour un couplage. Sa limite est décisive pour notre objet, et les auteurs la formulent explicitement. Ces modèles ne contiennent pas assez de détail spatial et de détail de réseau pour produire des flux zone à zone et des charges par arc. Un choc localisé sur une route ne peut donc pas y être représenté.
 
-	\paragraph{Taux de génération par zone.} La troisième famille attribue à chaque zone un volume produit et un volume attiré, obtenus en classant des données transversales de volumes transportés en un petit nombre de types de zones homogènes. \cite{deJong2004} renvoient ici aux manuels américains de prévision rapide, qui publient des taux par type de véhicule routier et par branche d'activité, dans une approche purement unimodale. Les besoins en données sont limités et se réduisent à des données zonales, mais la méthode donne, là encore, peu d'information sur la causalité et laisse peu de place aux effets de politiques. Elle suppose en outre de disposer d'une observation préalable des volumes transportés par zone, ce qui n'existe pas au Rwanda.
+	\paragraph{Taux de génération par zone.} La troisième famille attribue à chaque zone un volume produit et un volume attiré, obtenus en classant des données transversales de volumes transportés en un petit nombre de types de zones homogènes. \cite{deJong2004} renvoient ici aux manuels américains de prévision rapide, qui publient des taux par type de véhicule routier et par branche d'activité, dans une approche purement unimodale. Les besoins en données sont limités et se réduisent à des données zonales, mais la méthode donne, là encore, peu d'information sur la causalité et laisse peu de place aux effets de politiques. Elle suppose en outre de disposer d'une observation préalable des volumes transportés par zone, ce nous n'avons pas pour le Rwanda.
 
-	\paragraph{Tables entrée-sortie et modèles apparentés.} La dernière famille part des tables entrée-sortie, qui décrivent en unités monétaires ce que chaque secteur de l'économie livre aux autres secteurs, en incluant la demande finale des consommateurs, les importations et les exportations. La forme multirégionale de ces tables, qui ajoute aux livraisons intersectorielles les livraisons entre régions, n'existe pas dans la plupart des pays et, lorsqu'elle existe, ne distingue le plus souvent que quelques grandes régions. Le modèle suppose que la table peut être remise à l'échelle en fonction de la croissance sectorielle prévue, et \cite{deJong2004} distinguent deux variantes. Dans la première, les coefficients techniques et de commerce sont \emph{fixes} et prolongent les structures de production et d'échange actuelles. Dans la seconde, ces coefficients sont \emph{élastiques}, la fraction de la production du secteur $s$ de la région $j$ consommée dans la région $i$ étant estimée, par exemple par un logit multinomial, en fonction de la production de la région et du coût généralisé de transport relatif aux autres régions. La génération et la distribution deviennent alors sensibles au coût et au temps de transport, sous une forme de demande induite. Les auteurs citent comme applications le modèle national italien, le modèle norvégien REGARD alimentant NEMO, le modèle belge alimentant WFTM, ainsi que les modèles européens STREAMS puis SCENES. Ils relèvent que le modèle néerlandais TEM-II et le modèle national suédois SAMGODS procèdent différemment. Ces derniers partent d'une table entrée-sortie nationale multisectorielle, et non multirégionale, la convertissent en tonnes puis la régionalisent, par exemple sur la base des parts régionales d'emploi et de population.
+	\paragraph{Tables entrée-sortie et modèles apparentés.} La dernière famille part des tables entrée-sortie, qui décrivent en unités monétaires ce que chaque secteur de l'économie livre aux autres secteurs, en incluant la demande finale des consommateurs, les importations et les exportations. La forme multirégionale de ces tables, qui ajoute aux livraisons intersectorielles les livraisons entre régions, n'existe pas dans la plupart des pays (c'est notamment le cas du Rwanda) et, lorsqu'elle existe, ne distingue le plus souvent que quelques grandes régions. \cite{deJong2004} distinguent deux variantes. Dans la première, les coefficients techniques et de commerce sont \emph{fixes} et prolongent les structures de production et d'échange actuelles. Dans la seconde, ces coefficients sont \emph{élastiques}, la fraction de la production du secteur $s$ de la région $j$ consommée dans la région $i$ étant estimée, par exemple par un logit multinomial, en fonction de la production de la région et du coût généralisé de transport relatif aux autres régions. La génération et la distribution deviennent alors sensibles au coût et au temps de transport, sous une forme de demande induite. Les auteurs citent comme applications le modèle national italien, le modèle norvégien REGARD alimentant NEMO, le modèle belge alimentant WFTM, ainsi que les modèles européens STREAMS puis SCENES. Ces derniers partent d'une table entrée-sortie nationale multisectorielle, et non multirégionale, la convertissent en tonnes puis la régionalisent,  sur la base des parts régionales d'emploi et de population. C'est la méthode que nous utilisons.
 
 	Les avantages de cette famille sont, toujours selon \cite{deJong2004}, le lien explicite avec l'économie, la possibilité de représenter les interactions avec l'usage des sols et la sensibilité aux politiques lorsque les coefficients sont élastiques. Ses inconvénients sont au nombre de quatre. Il faut disposer d'une table entrée-sortie, de préférence multirégionale. Les hypothèses sont restrictives si les coefficients sont fixes. Il faut convertir des valeurs en tonnes. Il faut enfin identifier séparément les flux d'importation et d'exportation. Les auteurs notent que ces modèles multirégionaux peuvent être regardés comme des modèles d'équilibre général calculable, et que les modèles spatialisés de ce type (section~\ref{subsec:SCGE}) n'étaient pas encore, à la date de leur revue, des outils opérationnels de prévision.
-
-	C'est cette quatrième voie que nous retenons (section~\ref{subsubsec:affectation_prod}), et précisément dans la variante de TEM-II et de SAMGODS. Nous partons d'une comptabilité nationale sans dimension régionale, nous la régionalisons à l'aide de variables locales, puis nous la convertissons en tonnes. Ce choix se justifie par les deux avantages relevés ci-dessus. Il s'agit de la seule famille qui garantisse la cohérence comptable entre les flux physiques modélisés et les grandeurs macroéconomiques, et donc de la seule qui rende le modèle directement couplable avec un modèle multisectoriel, ce qui est l'objectif final du travail. Les quatre inconvénients recensés par les auteurs sont exactement les difficultés auxquelles nous nous heurtons. Nous ne disposons pas de table multirégionale, nous retenons des coefficients fixes, nous devons calibrer des taux de conversion monnaie-tonne et nous devons traiter à part les échanges extérieurs, ce que fait la couche \emph{Rest of World} (section~\ref{subsubsec:RoW}).
-
-	\cite{deJong2004} insistent d'ailleurs sur le fait que cette conversion des valeurs en tonnes, réalisée au moyen de ratios valeur-poids par groupe de marchandises, constitue l'un des points les plus faibles de toute la chaîne de modélisation. Ces ratios ont un effet important sur les prédictions finales et ils sont le plus souvent construits à partir de moyennes tirées des statistiques de commerce et de transport. Les auteurs recommandent de les documenter par des enquêtes spécifiques auprès des chargeurs, portant conjointement sur la valeur et le poids d'un même envoi. C'est la raison pour laquelle nous soumettons ces taux à un test de sensibilité (section~\ref{sec:sensibilite}).
 
 	\subsection{Distribution}
 	\label{subsec:distrib}
 
-	L'objectif de cette étape est de déterminer les volumes transportés entre chaque origine et chaque destination $(T_{i,j})$, c'est-à-dire les cellules de la matrice origine-destination, à partir des mesures de production et d'attraction issues de l'étape précédente et d'une mesure de résistance au transport, exprimée comme un coût ou un coût généralisé. Comme à l'étape précédente, \cite{deJong2004} relèvent que tous les modèles de distribution du fret recensés dans la littérature reposent sur des données agrégées.
+	L'objectif de cette étape est de déterminer les volumes transportés entre chaque origine et chaque destination $(T_{i,j})$, c'est-à-dire les données de la matrice origine-destination, à partir des mesures de production et d'attraction issues de l'étape précédente et d'une mesure de résistance au transport, exprimée comme un coût ou un coût généralisé. On entend par coût généralisé une valorisation monétaire de coût monétaire et non-monétaire comme le temps de transport par exemple. Comme à l'étape précédente, \cite{deJong2004} relèvent que tous les modèles de distribution du fret recensés reposent sur des données agrégées.
 
-	La méthode la plus couramment employée est le modèle gravitaire. Le flux entre la zone $i$ et la zone $j$ y est fonction du produit des mesures de production de $i$ et d'attraction de $j$, divisé par une mesure du coût généralisé de transport entre les deux. L'intuition est que deux zones échangent d'autant plus qu'elles sont de grande taille et que le coût de transport qui les sépare est faible. Les auteurs en citent plusieurs applications, dont les modèles néerlandais TEM-II et SMILE ainsi que des modèles de liaisons fixes scandinaves.
+	La méthode la plus couramment employée est le modèle gravitaire. L'intuition est que deux zones échangent d'autant plus qu'elles sont de grande taille et que le coût de transport qui les sépare est faible. Les auteurs en citent plusieurs applications, dont les modèles néerlandais TEM-II et SMILE ainsi que des modèles de liaisons fixes scandinaves.
 
 	La revue identifie une alternative. Lorsque le modèle entrée-sortie multirégional de l'étape précédente est doté de coefficients élastiques, il fournit simultanément la production, l'attraction et la distribution, comme dans le modèle national italien et dans les modèles européens STREAMS et SCENES. Le modèle européen NEAC procède de même en modélisant la distribution conjointement avec la production et l'attraction, à partir de la valeur ajoutée sectorielle et du coût de transport, dans une formulation de type gravitaire.
 
@@ -212,9 +249,18 @@
 
 	Cette étape répartit la demande entre les modes disponibles, à savoir la route, le rail, le transport combiné et les voies navigables. C'est l'étape pour laquelle \cite{deJong2004} recensent la plus grande variété de méthodes, et la seule où coexistent modèles agrégés et modèles désagrégés. Ils en distinguent sept familles.
 
-	Les modèles fondés sur des \emph{élasticités} restituent l'effet de la variation d'une seule variable, par exemple le coût d'un mode, à partir d'élasticités reprises d'autres modèles ou de dires d'experts. Très économes en données et très rapides, ils servent aux évaluations stratégiques, aux premières approximations et aux situations de grande rareté des données. En contrepartie, les élasticités ne sont pas nécessairement transférables d'un contexte à un autre et seul l'effet de mesures isolées est restitué, sans synergie entre elles. Les modèles de \emph{partage modal agrégés} sont le plus souvent des logit binomiaux ou multinomiaux estimés sur les parts de chaque mode observées dans un ensemble de zones. Ils donnent une part de marché et non un volume, si bien que leurs élasticités sont conditionnelles à la demande totale. Leur fondement théorique est faible, car l'agrégation ne se ramène à une maximisation d'utilité individuelle que sous des hypothèses très restrictives, et la forme multinomiale impose l'égalité des élasticités croisées. Les modèles \emph{néoclassiques} partent quant à eux de la théorie de la firme, une fonction de demande de transport étant dérivée d'une fonction de coût par le lemme de Shephard. Leur base théorique est solide mais la variable expliquée est la part budgétaire d'un mode dans le coût total, alors que le cadre à quatre étapes a besoin d'une part en volume, ce qui les rend difficiles à intégrer. Les modèles de \emph{demande directe} prédisent directement le nombre de trajets ou de kilomètres par mode, sans passer par une part de marché conditionnelle à une demande totale prédite ailleurs, et se heurtent à la même difficulté d'intégration.
+	Les modèles fondés sur des \emph{élasticités} restituent l'effet de la variation d'une seule variable, par exemple le coût d'un mode, à partir d'élasticités reprises d'autres modèles ou de dires d'experts. Très économes en données et très rapides, ils servent aux évaluations stratégiques, aux premières approximations et aux situations de grande rareté des données. En contrepartie, les élasticités ne sont pas nécessairement transférables d'un contexte à un autre et seul l'effet de mesures isolées est restitué, sans synergie entre elles. 
+	
+	Les modèles de \emph{partage modal agrégés} sont le plus souvent des logit binomiaux ou multinomiaux estimés sur les parts de chaque mode observées dans un ensemble de zones. Ils donnent une part de marché et non un volume, si bien que leurs élasticités sont conditionnelles à la demande totale. Leur fondement théorique est faible, car l'agrégation ne se ramène à une maximisation d'utilité individuelle que sous des hypothèses très restrictives, et la forme multinomiale impose l'égalité des élasticités croisées. 
+	
+	Les modèles \emph{néoclassiques} partent quant à eux de la théorie de la firme, une fonction de demande de transport étant dérivée d'une fonction de coût par le lemme de Shephard. Leur base théorique est solide mais la variable expliquée est la part budgétaire d'un mode dans le coût total, alors que le cadre à quatre étapes a besoin d'une part en volume, ce qui les rend difficiles à intégrer. 
+	
+	Les modèles de \emph{demande directe} prédisent directement le nombre de trajets ou de kilomètres par mode, sans passer par une part de marché conditionnelle à une demande totale prédite ailleurs, et se heurtent à la même difficulté d'intégration.
 
-	Les modèles de \emph{partage modal désagrégés} utilisent des enquêtes chargeurs, des enquêtes marchandises ou des données de préférences déclarées. Ce sont principalement des logit multinomiaux ou emboîtés. Le décideur y est la firme et non l'individu, si bien que la fonction d'utilité indirecte se reformule en fonction de profit et que la théorie sous-jacente devient une maximisation aléatoire du profit. Certains de ces modèles traitent conjointement le choix du mode et des décisions logistiques comme la taille des envois, la localisation du fournisseur ou le coût logistique total incluant manutention et stockage. Leur avantage est leur fondement théorique et leur capacité à intégrer de nombreuses variables causales et instruments de politique publique. Leur inconvénient est l'exigence de données désagrégées, que \cite{deJong2004} identifient comme le principal obstacle à leur diffusion, avec les difficultés d'estimation liées à la corrélation entre composantes de temps et de coût. L'approche par \emph{microsimulation} pousse cette logique plus loin. Dans le modèle prototype développé pour la région de Portland, un modèle entrée-sortie produit des flux zone à zone en valeur, puis un second niveau reconstitue les tournées et les trajets de camions par simulation de Monte-Carlo, en enchaînant conversion en envois, allocation à des organisations individuelles, choix des points de transbordement, choix du type de transporteur et de véhicule et constitution des tournées. Elle représente donc un très grand nombre de comportements, mais au prix soit de besoins massifs en données, soit d'hypothèses nombreuses sur les distributions simulées.
+
+	Les modèles de \emph{partage modal désagrégés} utilisent des enquêtes chargeurs, des enquêtes marchandises ou des données de préférences déclarées. Ce sont principalement des logit multinomiaux ou emboîtés. Le décideur y est la firme et non l'individu, si bien que la fonction d'utilité indirecte se reformule en fonction de profit et que la théorie sous-jacente devient une maximisation aléatoire du profit. Certains de ces modèles traitent conjointement le choix du mode et des décisions logistiques comme la taille des envois, la localisation du fournisseur ou le coût logistique total incluant manutention et stockage. Leur avantage est leur fondement théorique et leur capacité à intégrer de nombreuses variables causales et instruments de politique publique. Leur inconvénient est l'exigence de données désagrégées, que \cite{deJong2004} identifient comme le principal obstacle à leur diffusion, avec les difficultés d'estimation liées à la corrélation entre composantes de temps et de coût. 
+	
+	L'approche par \emph{microsimulation} pousse cette logique plus loin. Dans le modèle prototype développé pour la région de Portland, un modèle entrée-sortie produit des flux zone à zone en valeur, puis un second niveau reconstitue les tournées et les trajets de camions par simulation de Monte-Carlo, en enchaînant conversion en envois, allocation à des organisations individuelles, choix des points de transbordement, choix du type de transporteur et de véhicule et constitution des tournées. Elle représente donc un très grand nombre de comportements, mais au prix soit de besoins massifs en données, soit d'hypothèses nombreuses sur les distributions simulées.
 
 	La dernière famille est celle des modèles de \emph{réseau multimodal}, qui prédisent simultanément le choix du mode et celui de l'itinéraire. Pour une paire origine-destination donnée, un grand nombre de combinaisons mode-route est envisageable et un algorithme de minimisation du coût sélectionne la meilleure, le trafic de la paire lui étant dans la plupart des cas affecté en totalité, selon l'affectation dite \emph{all-or-nothing}. Cette approche permet de représenter des chaînes de transport enchaînant plusieurs modes, à condition que le réseau comporte, outre les arcs propres à chaque mode, les ports et terminaux où s'opèrent les transbordements. La fonction de coût peut alors intégrer plusieurs composantes, dont les temps de parcours et les coûts de terminal. L'unité d'observation reste la paire origine-destination et non la firme, de sorte qu'il s'agit bien d'un modèle agrégé. La sélection est en général conduite séparément par groupe de marchandises, car les exigences de manutention et les valeurs du temps diffèrent d'un bien à l'autre. \cite{deJong2004} en soulignent les avantages, à savoir des besoins en données limités, un fondement théorique et la possibilité d'intégrer une demande élastique et des politiques agissant sur le coût généralisé. Ils en soulignent aussi les limites, à savoir le peu d'information sur la causalité et une demande le plus souvent tenue pour fixe. C'est cette famille que retiennent, d'après leur conclusion, la plupart des grands systèmes de modèles.
 
@@ -227,9 +273,51 @@
 
 	Les auteurs relèvent ensuite que beaucoup de modèles de fret n'incluent tout simplement pas cette quatrième étape, et que la plupart de ceux qui l'incluent ne l'appliquent qu'aux camions. L'affectation au réseau routier est parfois réalisée conjointement avec le trafic de voyageurs, le fret ne représentant en général qu'une faible part du trafic total, sauf à proximité des grands terminaux. Cela suppose de convertir les trajets de véhicules de fret en équivalents voiture particulière, puisqu'un camion consomme davantage de capacité routière qu'une voiture. Nous procédons de la même manière (section~\ref{subsubsec:PCU}).
 
-	La revue oppose alors deux architectures. Dans la première, l'assignation constitue une étape séparée. Le choix modal peut y être conduit à un niveau désagrégé et l'affectation peut être menée conjointement avec les déplacements de voyageurs, mais l'absence d'interaction entre la demande et l'affectation est peu réaliste et ne peut être corrigée que de manière itérative, et les chaînes multimodales sont difficiles, sans être impossibles, à représenter. Dans la seconde, l'affectation se fait sur un réseau multimodal. La substitution s'opère directement entre combinaisons mode-route et les chaînes enchaînant plusieurs modes sont traitées naturellement, mais le processus d'optimisation se contrôle mal et peut produire, pour certaines paires origine-destination, des solutions mode-route irréalistes du fait des facteurs omis dans la fonction de coût. Notre modèle relève de la seconde architecture, le choix du type de véhicule et celui de l'itinéraire étant indissociables (section~\ref{subsec:choix_modale}).
+	La revue oppose alors deux architectures. Dans la première, l'assignation constitue une étape séparée. Le choix modal peut y être conduit à un niveau désagrégé et l'affectation peut être menée conjointement avec les déplacements de voyageurs, mais l'absence d'interaction entre la demande et l'affectation est peu réaliste et ne peut être corrigée que de manière itérative, et les chaînes multimodales sont difficiles, sans être impossibles, à représenter. Dans la seconde, l'affectation se fait sur un réseau multimodal. La substitution s'opère directement entre combinaisons mode-route et les itinéraires enchaînant plusieurs modes sont traitées naturellement, mais le processus d'optimisation se contrôle mal et peut produire, pour certaines paires origine-destination, des solutions mode-route irréalistes du fait des facteurs omis dans la fonction de coût. Notre modèle relève de la seconde architecture, le choix du type de véhicule et celui de l'itinéraire étant indissociables (section~\ref{subsec:choix_modale}).
 
 	Un point n'est pas traité par \cite{deJong2004}. Dans les systèmes qu'ils recensent, l'affectation est essentiellement du tout-ou-rien, c'est-à-dire qu'elle suppose un coût de parcours indépendant du volume affecté, donc une capacité illimitée des arcs. Cette hypothèse n'est pas tenable ici. Comme nous l'avons présenté en section~\ref{sec:tout_routier}, le réseau routier rwandais est majoritairement composé de pistes, et l'engorgement peut survenir rapidement en cas de rupture d'un axe bitumé, c'est-à-dire précisément dans les scénarios que nous cherchons à simuler. Nous complétons donc le cadre de la revue par la prise en compte de la congestion, selon le premier principe de \cite{Wardrop1952}. À l'équilibre, aucun usager ne peut réduire son coût en changeant unilatéralement d'itinéraire, de sorte que tous les itinéraires effectivement empruntés entre une même paire ont le même coût, inférieur ou égal à celui des itinéraires inutilisés. Cet équilibre est obtenu en faisant dépendre le temps de parcours du flux par la fonction du \cite{BPR1964} et en itérant les choix d'itinéraire jusqu'à convergence par la méthode des moyennes successives \cite{Sheffi1985}. Nous développerons plus en détail cette méthode lors de la présentation du modèle en section~\ref{subsubsec:MSA}.
+	
+		\newpage
+	
+	\begin{mdframed}[frametitle=Encadré 1 : illustration des 4 étapes pour un réseau fictif]
+		
+		[insérer image]
+		
+		\medskip
+		\medskip
+		
+		\textbf{Étape 1 : production et attraction}
+		
+		Soit $p$ et $a$ les fonctions de prodution et d'attraction et $X_i$ l'ensemble des variables associées au point $i \in \{A, B, C\}$, on calcul $p(X_i) = p_i \in \mathbb{R}^+$ et $a(X_i)=a_i\in \mathbb{R}^+$
+		
+		[insérer image]
+		
+		\medskip
+		\medskip
+		
+		\textbf{Étape 2 : distribution}
+		
+		$T_{i,j} = a_j\times p_i \times f(c_{i,j})$ avec f une fonction décroissante du coût de transport entre i et j ($c_{i,j}$)
+		
+		[insérer image]
+		
+		\medskip
+		\medskip
+		
+		\textbf{Étape 3 : choix modal}
+		
+		La part de $T_{i,j}$ qui est faite par chaque mode de transport.
+		
+		\medskip
+		\medskip
+		
+		\textbf{Étape 4 : Assignation}
+		
+		Choix de l'itinéraire.
+		
+		[insérer l'image]
+		
+	\end{mdframed}
 
 	\newpage
 	
@@ -250,7 +338,31 @@
 	
 	Enfin, nous produisons des scénarios de rupture des routes pour voir comment évolue le modèle dans ces cas.
 	
-	Ce modèle est avant tout un proof of concept servant à doter l'équipe modélisation de l'AFD d'un modèle de transport utilisable dans une diversité de cas d'étude. Le travail de calibration n'a donc pas été la priorité du projet et de nombreuses données fictives ont été utilisées en complément des données réelles. Elles ont été générées par le LLM Claude de l'entreprise Anthropic. Plus généralement, un abonnement payant à Claude Code de 20€/mois a été contracté pour faciliter le codage et débogage du modèle, la revue de littérature et également pour aider à la réflexion sur les avantages et inconvénients des différents choix méthodologiques.
+	\textbf{Une utilisation importante des LLM de l'entreprise Anthropic}
+	
+	Afin de faciliter le déroulement du projet, un abonnement payant à Claude Code de 20€/mois a été contracté.
+	
+	Le code a presque intégralement été réalisé par les différents LLM (Large Language Model) de l'entreprise Anthropic. Au début du projet, c'est majoritairement le modèle Sonnet 4.6 qui était utilisé, ensuite Opus 4.8 et finalement Sonnet 5.
+	
+	La manière dont nous avons procédé a était de réfléchir dans un premier temps au fonctionnement souhaité du modèle de fret. On demandait ensuite à Claude de nous  faire une rapide présentation des méthodes alternatives présentes dans la littérature ainsi que leurs avantages et inconvéniants. Une fois le choix de la méthode tranché, on demandait à Claude de proposer un code réalisant la tâche demandée. Finalement, une grande partie du temps du projet a été la relecture du code produit par Claude pour vérifier l'absence d'erreurs et affiner la compréhension de ce qui était effectivement fait.
+	
+	En plus du code, un certain nombre de paramètres et de données ont été générées directement par Claude. Nous les présentons plus en détails dans la section suivante. 
+	
+	Le travail effectué se veut avant tout un proof of concept servant à doter l'équipe modélisation de l'AFD d'un modèle de transport utilisable dans une diversité de cas d'étude. Le travail de calibration n'a donc pas été la priorité du projet.
+	
+	La liste d'instructions suivante était utilisée continuellement via la fonctionnalité "instruction permanente" de Claude Code : 
+	
+	\begin{itemize}
+		\item  Réponds toujours en français et de manière concise.
+		\item Tous les nouveaux paramètres doivent être ajoutés dans `00\_parametres.R`.
+		\item Tout code ajouté doit être annoté : expliquer l'objectif du bloc et ce qu'il fait concrètement, pour qu'une personne extérieure au projet puisse comprendre.
+		\item Ne supprimer une annotation existante que si, et seulement si, elle correspond à une version du code qui n'existe plus.
+		\item Ne mets pas de commentaires comparant l'ancienne version du code et la version avec les modifications que tu viens de faire. Les commentaires ne doivent décrire que la version actuel du code.
+		\item Ne push rien sur GitHub
+		\item N'écris pas de mot entièrement en majuscule si ce n'est pas un acronyme
+	\end{itemize}
+	
+	Cette liste a été complété progressivement, à mesure que les problèmes liés à l'utilisation de Claude Code étaient observés.
 	
 
 	\section{Présentation des différentes parties du modèle}
@@ -267,40 +379,44 @@
 	Un certain nombre de paramètres par véhicules (camion lourd, camion léger et camionnette) ont ainsi été créés :
 	
 	\begin{itemize}
-		\item leur consommation de carburant.
+		\item leur consommation de carburant. (10 L/100km pour les camionnettes, 20 L/100km pour les camions moyens et 35 L/100km pour les camions lourds)
 		\item leur facteur de surconsommation lié à la pente (facteur pente qui vaut 1 pour les camionnettes, 1,5 pour les camions moyens et 2 pour les camions lourds).
 		\item leur valeur du temps (c'est-à-dire du point de vue de l'entreprise de transport, le salaire horaire des chauffeur.euses, le coût d'opportunité d'immobiliser du capital dans le véhicule le temps du trajet, l'amortissement de l'achat du véhicule et sa dépréciation).
-		\item La capacité maximale de chargement.
+		\item La capacité maximale de chargement. (3\,000 kg, 7\,500 kg et 20\,000 kg pour les camionnettes, camions moyens et camions lourds)
 		\item Leur facteur de handicap à circuler en ville (plus important pour les gros véhicules).
-		\item Leur facteur d'émissions de CO$_2$, de NO$_x$ et de PM2.5.
-		\item Leur coût fixe de (dé)chargement.
-		\item Leur facteur d'équivalence en termes de véhicule individuel (PCU).
+		\item Leur facteur d'émissions de CO$_2$, de NO$_x$ et de PM2.5. (2,68 g/kg de CO$_2$, identique pour les trois véhicules ; 0,25, 0,50 et 0,80 g/kg de NO$_x$ et 0,040, 0,065 et 0,090 g/kg de PM2.5 pour les camionnettes, camions moyens et camions lourds respectivement)
+		\item Leur coût fixe de (dé)chargement. (14\,820 RWF, 24\,700 RWF et 39\,520 RWF pour les camionnettes, camions moyens et camions lourds)
+		\item Leur facteur d'équivalence en termes de véhicule individuel (PCU). (1,5, 2,0 et 3,0 pour les camionnettes, camions moyens et camions lourds)
 	\end{itemize}
+	\medskip
 	
 	D'autres paramètres sont créés par type de véhicule, de route et d'état de la route :
 	
 	\begin{itemize}
-		\item La vitesse
-		\item L'usure du véhicule
-		\item Un facteur de surconsommation de carburant
+		\item La vitesse (allant de 14 km/h pour un camion lourd sur piste non classée à 120 km/h pour une camionnette sur autoroute bitumée)
+		\item L'usure du véhicule (allant de 19,76 RWF/km sur route bitumée à 217,36 RWF/km pour un camion lourd sur piste non revêtue)
+		\item Un facteur de surconsommation de carburant (allant de 1,00 sur route bitumée à 1,50 pour un camion lourd sur piste non revêtue)
 	\end{itemize}
+	\medskip
 	
-	Les coûts de transbordement sont créés par type de véhicule avant et après.
+	Les coûts de transbordement sont créés par type de véhicule avant et après (par exemple, 39\,520 RWF si l'on passse de la camionnette au camion lourd).
 	
-	Le coût pré-frontière, c'est-à-dire le coût de transport moyen des marchandises arrivant au poste à la frontière depuis un pays voisin, est également créé par pays voisins.
+	Le coût pré-frontière, c'est-à-dire le coût de transport moyen des marchandises arrivant au poste à la frontière depuis un pays voisin, est également créé par pays voisins (par exemple, 27\,664 RWF/tonne pour l'Agriculture en provenance de RDC)
 	
-	On utilise le prix du carburant.
+	On utilise le prix du carburant (1\,383,2 RWF/L).
 	
-	Un certain nombre de points Origine-Destination (OD) importants sont ajoutés manuellement, notamment les postes aux frontières.
+	Un certain nombre de points Origine-Destination (OD) importants sont ajoutés manuellement, notamment les 8 postes aux frontières.
 	
-	Les données d'emplois par branche d'activité désagrégées à l'échelle du district sont également créées.
+	Les données d'emplois par branche d'activité désagrégées à l'échelle du district sont également créées à partir des données nationales (par exemple, 18\,286 emplois dans le secteur de la construction dans le district de Nyarugenge).
+	\medskip
 	
 	D'autres données, par secteur d'activité cette fois, sont créées :
 	
 	\begin{itemize}
-		\item Les paramètres de friction pour le modèle gravitaire, c'est-à-dire la sensibilité des flux des secteurs aux coûts de transport.
-		\item Le taux de conversion RWF-tonne.
+		\item Les paramètres de friction pour le modèle gravitaire, c'est-à-dire la sensibilité des flux des secteurs aux coûts de transport (allant de 1,2 pour les Mines à 2,5 pour la Construction). Ce sont les $\beta$ de la fonction de friction décrite en section \ref{subsubsec:gravitaire}.
+		\item Le taux de conversion RWF-tonne (allant de 111\,000 RWF/tonne pour la Construction à 3\,571\,000 RWF/tonne pour les Cultures d'exportation).
 	\end{itemize}
+	\medskip
 	
 	On crée finalement le taux de détention du stock de marchandise $(r)$, c'est-à-dire le coût annuel de garder 1 RWF en stock, la capacité des routes par type de route et la clé de distribution du commerce extérieur par pays voisin.
 	
@@ -313,11 +429,11 @@
 	
 	On utilise également la Matrice de Comptabilité Sociale (SAM) du Rwanda de 2021 afin d'en extraire la matrice des coefficients techniques, la demande finale par secteurs et classe de ménage, la production nationale par secteurs et les exportations et importations par secteurs.
 	
-	Ensuite, on télécharge les données du Copernicus DEM (Digital Elevation Model) disponible sur AWS via le package \texttt{elevatr}, pour avoir l'altitude de surface aux différents points du graphe et ainsi calculer les niveaux de pente.
+	Ensuite, on télécharge les données du Copernicus DEM (Digital Elevation Model) disponible sur AWS (le service Cloud d'Amazon) via le package elevatr, pour avoir l'altitude de surface aux différents points du graphe et ainsi calculer les niveaux de pente.
 	
-	Les données démographiques sont, elles, issues de \href{https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/RWA/}{Worldpop.org} (tous les 100m en 2020) afin d'avoir une désagrégation spatiale le plus fine possible, ou des données NISR (données officielles par district en 2023) en cas d'absence des données de Worldpop.org. Ces données sont issues d'un modèle entraîné par machine learning pour associer un ensemble de variables géospatiales (bâtiments, routes, luminosité nocturne, etc.) à la densité de population connue des unités administratives. 
+	Les données démographiques sont, elles, issues de \href{https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/RWA/}{Worldpop.org} (tous les 100m en 2020) afin d'avoir une désagrégation spatiale le plus fine possible. Ces données sont issues d'un modèle entraîné par machine learning pour associer un ensemble de variables géospatiales (bâtiments, routes, luminosité nocturne, etc.) à la densité de population connue des unités administratives. 
 
-	Enfin, on utilise les données du \href{https://data.humdata.org/dataset/}{Relative Wealth Index de Meta}. Ce sont des données de richesse relative des ménages par rapport à un référentiel national, avec une résolution de 2,4 km. Elles sont issues d'un modèle entraîné par machine learning pour associer un ensemble de données non-conventionnelles de Facebook (imagerie satellite haute résolution, données de connectivité mobile et Wi-Fi, cartes topographiques, densité routière, luminosité nocturne, etc.) aux données collectées auprès d'1,4 million de ménages lors d'enquêtes de l'USAID réalisées dans 56 pays (\cite{Chi2022}). Ces données sont utilisées comme un proxy très spatialisé du revenu par habitant.e et de la productivité des points OD.
+	Enfin, on utilise les données du \href{https://data.humdata.org/dataset/}{Relative Wealth Index de Meta}. Ce sont des données de richesse relative des ménages par rapport à un référentiel national, avec une résolution de 2,4 km. Elles sont issues d'un modèle entraîné par machine learning pour associer un ensemble de données non-conventionnelles de Facebook (imagerie satellite haute résolution, données de connectivité mobile et Wi-Fi, cartes topographiques, densité routière, luminosité nocturne, etc.) aux données collectées auprès d'1,4 million de ménages lors d'enquêtes de l'USAID réalisées dans 56 pays (\cite{Chi2022}). Ces données sont utilisées comme un proxy très spatialisé du revenu par habitant.e et de la productivité des points OD. Pour le Rwanda, elles vont de -1,06 à 2,11 avec une valeur médiane de 0 par construction.
 	
 	\subsection{Production du réseau}
 	\label{subsec:reseau}
@@ -353,7 +469,8 @@
 		\begin{minipage}{0.48\textwidth}
 			\centering
 				\includegraphics[width=\linewidth]{images/schema_graphe.png}
-				\caption{Schéma d'un graphe multimodal}
+				\caption{Schéma d'un graphe multimodal \\
+					\footnotesize Source : auteur}
 				\label{fig:reseau_rwanda}
 		\end{minipage}
 
@@ -374,7 +491,8 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.6\linewidth]{images/carte_routes_hors_geante.png}
-		\caption{Carte des blocs de routes non reliées à la composante géante}
+		\caption{Carte des blocs de routes non reliées à la composante géante \\
+			\footnotesize Source : auteur}
 		\label{fig:carte_comp_geante}
 	\end{figure}
 	
@@ -390,19 +508,25 @@
 	\end{itemize}
 	
 	
-	On ajoute ensuite au graphe les points correspondants aux OD du modèle. Pour cela, on ajoute les points définis manuellement ainsi que l'ensemble des villes présentes dans le fichier OSM. Ces points sont snappés sur le nœud du réseau le plus proche afin d'être reliés aux routes. Si plusieurs villes sont snappées sur le même point, on ne conserve que la ville avec la plus grande population. On associe ensuite à chaque point son polygone de Voronoï, c'est-à-dire l'ensemble du territoire rwandais dont aucun autre point du graphe n'est plus proche. L'idée est de supposer que les points du graphe sont représentatifs de l'ensemble du territoire que couvre le polygone de Voronoï.
+	In fine, on a donc un tableur avec une ligne par tronçon et une colonne par caractéristique précédemment énoncées. On ajoute ensuite au graphe les points correspondants aux OD du modèle. Pour cela, on ajoute les points définis manuellement ainsi que l'ensemble des villes présentes dans le fichier OSM. Ces points sont rattachés au nœud du réseau le plus proche afin d'être reliés aux routes. Si plusieurs villes sont rattachées au même point, on ne conserve que la ville avec la plus grande population. On associe ensuite à chaque point son polygone de Voronoï, c'est-à-dire l'ensemble du territoire rwandais dont aucun autre point du graphe n'est plus proche. L'idée est de supposer que les points du graphe sont représentatifs de l'ensemble du territoire que couvre le polygone de Voronoï.
 
 	Le choix du pavage de Voronoï plutôt que du découpage administratif mérite d'être justifié. Le zonage est en effet le principal levier de biais d'un modèle en quatre étapes : \cite{HolguinVeras2011} montrent que l'erreur de génération croît avec l'hétérogénéité interne des zones, et \cite{Ortuzar2011} rappellent que le découpage doit être défini par rapport au réseau, faute de quoi une part importante des déplacements devient intra-zonale et disparaît du modèle. Or les districts rwandais sont à la fois très hétérogènes (ils mêlent systématiquement centre urbain et versants ruraux) et sans rapport avec la topologie du réseau. Le pavage de Voronoï répond aux deux problèmes : par construction, chaque parcelle du territoire est rattachée au point d'accès au réseau qui lui est effectivement le plus proche, ce qui donne une partition exhaustive, sans recouvrement, et cohérente avec la manière dont les marchandises entrent réellement sur le réseau. Il permet en outre de faire varier la résolution du modèle simplement en ajoutant ou retirant des points OD, sans avoir à redéfinir un zonage.
+	
+	\medskip
+	
+	[insérer une image du découpage via pavage de Voronoï]
+	
+	\medskip
 
 	On ajoute ensuite à ces polygones leurs caractéristiques :
 	\begin{itemize}
-	\item La somme de la population telle que présente dans le raster WorldPop ou bien, si elle n'est pas disponible, une partie de la population officielle du district telle que donnée par le NISR au prorata de l'aire du ou des districts que le polygone de Voronoï occupe.
-	\item Le RWI moyen. Pour ce faire, on calcule d'abord le rwi moyen brut selon cette formule : 
+	\item La somme de la population telle que présente dans le raster WorldPop.
+	\item Le RWI moyen. Pour ce faire, on calcule d'abord le rwi moyen brut du polygone comme une somme pondérée par la population : 
 	\begin{equation}
-		\text{RWI}_i = \frac{\sum_i^c \text{rwi}_i \times \omega_i}{\sum_i^c \omega_i }
+		\text{RWI}_i = \frac{\sum_j^c \text{rwi}_j \times \omega_i}{\sum_j^c \omega_j }
 		\label{eq:rwi brut}
 	\end{equation}
-	c représente ici le nombre de cellules du raster RWI, $\omega_i$ est la somme de la population WorldPop dans un cercle de 1,2km autour du centre de la cellule $\text{rwi}_i$ et vaut 1 si les données WorldPop ne sont pas disponibles.
+	c représente ici le nombre de pixel du raster RWI, $\omega_i$ est la somme de la population WorldPop dans un cercle de 1,2km autour du centre du pixel $\text{rwi}_i$ et vaut 1 si les données WorldPop ne sont pas disponibles.
 	
 	Une fois fait, on procède à une normalisation min-max pour classer entre 0 et 1 l'ensemble des points et ainsi éviter les valeurs négatives tout en conservant les écarts relatifs : 
 	\begin{equation}
@@ -414,14 +538,38 @@
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.6\linewidth]{images/prorata_air.png}
-		\caption{Emploi d'un polygone au prorata de l'aire qu'il occupe dans les districts A, B, C et D}
+		\caption{Emploi d'un polygone au prorata de l'aire qu'il occupe dans les districts A, B, C et D \\
+			\footnotesize Source : auteur}
 		\label{fig:prorata_air}
 	\end{figure}
-	\item La classe géo-sociale. Les polygones sont classés en 10 catégories : par quintile de revenus et s'ils sont urbains ou ruraux. 
-	Un polygone est considéré comme urbain si plus de 50\% de sa population vit dans une zone taguée sur OSM comme residential, commercial ou retail. Sinon, le polygone est rural. Si aucun polygone n’est considéré comme urbain, la demande finale des urbains de la SAM est attribuée à la variable dem\_finale\_publique.
-	Les quintiles de revenus sont estimés via le $p\_rwi$.	
-
+	
+	
+	\item La classe géo-sociale. La population des polygones est classée en 10 catégories : par quintile de revenus estimés via le $p\_rwi$ et s'ils sont urbains ou ruraux. 
+	
+	Pour définir la proportion de personne vivant en zone urbaine ou rurale, on procède comme suit : 
+	
+	\begin{itemize}
+		
+		\item On prend les pixels de WorldPop comme unité de base. 
+		
+		\item On somme toutes les populations des pixels dans un cercle de rayon 1km centré sur le centre des pixels WorldPop. L'objectif est ainsi de déduire la densité locale d'habitant.es. 
+		
+		\item On divise ensuite le territoire entier en polygones de Voronoï pour les cellules rwi. Chaque pixel WorldPop est ensuite associé à la cellule rwi la plus proche. 
+		
+		\item On associe également l'ensemble des pixels WorldPop à leur densité locale et l'identifiant du point OD de rattachement. 
+		
+		\item On classe ensuite les pixels par densité locale décroissante.
+		
+		\item Enfin, on déclare urbain, les premiers pixels de la liste jusqu'à ce que la somme de leur population atteigne la proportion de personnes résidents en zone urbaine cible, définie dans les paramètres (ici la population implicite de la SAM : aller voir l'Annexe pour plus de détails). 
 	\end{itemize}
+
+	\medskip
+	
+	Pour définir la classe de revenu, on classe dans l'ordre décroissant les pixels WorldPop par $rwi$. On divise ensuite la population totale par quintile.
+	
+	\end{itemize}
+
+
 
 	
 	\subsubsection{Calcul du coût généralisé sans congestion}
@@ -448,18 +596,22 @@
 		\label{eq:cout_usure}
 	\end{equation}
 	
-	Avec $\text{usure}_{\text{km},i,v}$ représente le coût par km parcouru de l'usure du véhicule v sur la route i.
+	Avec $\text{usure}_{\text{km},i,v}$ qui représente le coût par km parcouru de l'usure du véhicule v sur la route i.
 	
 	\begin{equation}
 		\text{coût}_{\text{temps}} = \frac{\text{distance}_{\text{km}}}{\text{vitesse}_{\text{kmh}}} \times \text{prix}_{\text{temps}} 
 		\label{eq:cout_temps}
 	\end{equation}
 	
-	Ce coût sera ensuite utilisé comme variable à minimiser par l'algorithme Dijkstra (\cite{Dijkstra1959}) afin de trouver le plus court chemin entre les différents points du graphe. Ce dernier est utilisé via le package \cite{Csardi2026igraph}. Une petite animation est disponible sur la page \href{https://fr.wikipedia.org/wiki/Algorithme_de_Dijkstra}{wikipédia dédiée} si la personne lectrice de ce mémoire veut se représenter visuellement son fonctionnement.
+	Ce coût généralisé sera ensuite utilisé comme variable à minimiser par l'algorithme Dijkstra (\cite{Dijkstra1959}) afin de trouver le plus court chemin entre les différents points du graphe. Ce dernier est utilisé via le package geodata (\cite{Csardi2026igraph}). Une petite animation est disponible sur la page \href{https://fr.wikipedia.org/wiki/Algorithme_de_Dijkstra}{wikipédia dédiée à l'algorithme Dijkstra}, si la personne lectrice de ce mémoire veut se représenter visuellement son fonctionnement.
 	
 	Chaque point est ainsi relié à l'ensemble des autres par le chemin le plus court. C'est à ce moment que le choix du mode de transport se fait. Les arcs de transbordement reçoivent eux uniquement un coût défini au début, dans les paramètres. Les couches du réseau par mode de transport étant reliées au sein du graphe par ces arêtes de transbordement, il est possible d'aller d'un point A à un point B en passant par plusieurs modes de transport. On suppose donc ici que les entreprises utilisent toujours le mode de transport le moins cher.
 	
-	Une fois fait, on a donc une matrice OD où chaque ligne correspond à une paire de points OD à laquelle on associe plusieurs colonnes : le coût et l'identifiant du chemin optimal, la distance et le temps du parcours, le véhicule de départ et d'arrivée, le nombre de transbordements ainsi que les émissions de polluants associées.
+	Une fois fait, on a donc une matrice OD où chaque ligne correspond à une paire de points OD à laquelle on associe plusieurs colonnes : le coût et l'identifiant du chemin optimal, la distance et le temps du parcours, le véhicule de départ et d'arrivée, le nombre de transbordements ainsi que les émissions de polluants associées calculées via la formule : 
+	\begin{equation}
+		Émissions_i = \sum_j^m km_{i,j}\times facteur\_émissions\_par\_km_j
+	\end{equation} 
+	Avec $m$ le nombre de mode de transport.
 	
 	\subsection{Production des flux}
 	\label{subsec:prod_flux}
@@ -469,8 +621,6 @@
 	\subsubsection{Affectation locale de la production}
 	\label{subsubsec:affectation_prod}
 	La production totale par secteurs, telle que définie dans la SAM, est allouée aux différents points OD en proportion du nombre d'emplois de chaque point et de sa richesse relative, utilisée comme proxy de la productivité. L'approximation de la productivité par la richesse relative étant grossière, nous avons choisi de réduire son poids par rapport à celui du nombre d'emplois alloués au point OD.
-
-	Cette manière de procéder est la transposition à l'échelle infranationale de l'approche entrée-sortie multirégionale de \cite{Cascetta2008} : plutôt que d'estimer directement des volumes émis par zone, on part d'un total national comptablement cohérent (ici celui de la SAM 2021) et on le \emph{spatialise} au moyen de clés d'allocation. L'avantage est que la somme des productions locales reste égale, par construction, à la production nationale, ce qui est la condition d'un couplage ultérieur avec un modèle multisectoriel.
 	
 	\begin{equation}
 		x_{i,s} = \text{prod\_totale}_s \times w_{i,s}
@@ -484,6 +634,8 @@
 			w_{i,s} = \alpha \times \frac{\text{emploi}_{i,s}}{\sum_i \text{emploi}_{i,s}} + (1 - \alpha) \times \frac{\text{p\_rwi}_{i}}{\sum_i \text{p\_rwi}_{i}}
 	\end{equation}
 	
+	L'avantage de cette méthode est que la somme des productions locales reste égale, par construction, à la production nationale, ce qui facilitera ensutie le couplage ultérieur avec un modèle multisectoriel.
+	
 	\subsubsection{Affectation locale de la consommation}
 	\label{subsubsec:affectation_conso}
 	
@@ -492,7 +644,8 @@
 	\begin{equation}
 		d_{i,s} = d\_\text{inter}_{i,s} + d\_\text{finale}_{i,s} 
 		\label{eq:conso}
-	\end{equation}\\
+	\end{equation}
+	\medskip
 	
 	Les consommations intermédiaires sont dérivées, très classiquement, du produit de la matrice des coefficients techniques et du vecteur de la production totale de l'entrepôt i calculé via l'équation \ref{eq:prod_i}. N'ayant pas d'information concernant l'hétérogénéité des systèmes techniques par point OD, nous avons fait le choix d'utiliser uniformément la matrice nationale des coefficients techniques. Elle est ici d'autant plus tenable que le Rwanda est un petit territoire à structure productive peu diversifiée (section~\ref{sec:structure_productive}), mais elle reste une limite reconnue du travail.
 	
@@ -508,16 +661,19 @@
 	\begin{equation}
 		d\_\text{finale}_{i,s} = d\_\text{finale\_publique}_{i,s} + d\_\text{finale\_ménage}_{i,s} 
 		\label{eq:conso_finale}
-	\end{equation}\\
+	\end{equation}
+	\medskip
 	
 	La demande finale des ménages du secteur s de l'entrepôt i ($d\_\text{finale\_ménage}_{i,s}$) est calculée en proportion de la demande finale des ménages via la formule suivante :
 	
 	\begin{equation}
 		d\_\text{finale\_ménage}_{i,s} = \sum_c F_{c,s}\times \frac{\text{pop}_{i,c}}{\sum_j \text{pop}_{j,c}}
 		\label{eq:conso_finale_menage}
-	\end{equation}\\
+	\end{equation}
+	\medskip
 	
-	Avec $\text{pop}_{j,c}$, la population de l'entrepôt i de la classe géo-sociale c telle que définie dans la section \ref{subsubsec:integ_donnees} et $F_{c,s}$, la demande finale nationale du secteur s et de la classe géo-sociale c.\\
+	Avec $\text{pop}_{j,c}$, la population de l'entrepôt i de la classe géo-sociale c telle que définie dans la section \ref{subsubsec:integ_donnees} et $F_{c,s}$, la demande finale nationale du secteur s et de la classe géo-sociale c.
+	\medskip
 
 	
 	Finalement, on complète la demande finale par celle relevant de la consommation publique et de l'investissement public et privé. Les imports et exports sont traités à part. 
@@ -527,12 +683,14 @@
  		\label{eq:conso_finale_publique}
 	\end{equation}
 	
-	Avec $F\_\text{publique}_s$, la consommation publique (gov) et investissement (s-i) dans le secteur s à l'échelle nationale 
+	Avec $F\_\text{publique}_s$, la consommation publique (gov) et l'investissement (s-i) dans le secteur s à l'échelle nationale 
 	
 	\begin{equation}
 		z_i = \text{pop}_i \times (p\_rwi_i + \epsilon)
 	\end{equation} 
-	$z_i$ représente le poids de l'entrepôt i dans la demande finale nationale. On ajoute $\epsilon$ pour éviter de multiplier par 0 au cas où $p\_rwi_i$ serait nul.
+	$z_i$ représente le poids de l'entrepôt i dans la demande finale nationale. On ajoute $\epsilon$ pour éviter de multiplier par 0 au cas où $p\_rwi_i$ serait nul. 
+	
+	On suppose ici que les dépenses publiques locales sont proportionnelles aux impôts locaux mobilisables, eux même proportionnels à la richesse totale produite, c'est-à-dire la population multipliée par la richesse par habitant.es.
 
 	
 	\subsubsection{Création d'une couche Rest of World (RoW)}
@@ -559,17 +717,13 @@
 	\label{subsubsec:friction}
 	
 	La fonction de friction a pour objet de capter la sensibilité des échanges aux coûts de transport.
-
-	Le coût fixe de manutention est ajouté à l'intérieur de la parenthèse. Il joue comme un plancher de coût, ce qui empêche la friction de diverger pour les paires très proches.
-
-	Le paramètre $\beta_s$ est le paramètre le plus déterminant et le moins bien identifié du modèle : faute de flux observés, il est produit par dire d'expert (section~\ref{subsubsec:donnees_fictives}). C'est la raison pour laquelle il fait l'objet d'un test de sensibilité dédié (section~\ref{subsec:parametre_friction}).
 	
 \begin{equation}
-		\text{Friction}_{i,j}^s = \left[ c_{ij} + c_{p,j,s} + c_{\text{fixe}} \times \left( \frac{\text{tonnes}}{\text{Milliard RWF}} \right)_s \right]^{-\beta}
+		\text{Friction}_{i,j}^s = \left[ (c_{ij} + c_{p,j,s} + c_{\text{fixe}}) \times \left( \frac{\text{tonnes}}{\text{Milliard RWF}} \right)_s \right]^{-\beta}
 		\label{eq:friction}
 \end{equation}
 	
-	$c_{ij}$ correspond aux coûts de transport en RWF / tonne entre $i$ et $j$ issus de la matrice OD. $c_{p,j,s}$ correspond au $\min_b[\text{coût\_frontière}_{p,s} + c_{b,j}]$, c'est-à-dire le coût de transport entre le pays $p$ et l'entrepôt $j$ via le poste à frontière $b$. $c_{\text{fixe}}$ correspond au coût fixe de manutention (chargement + déchargement) en RWF / tonne. Finalement, les $\beta_s$ correspondent aux paramètres de sensibilité des secteurs aux coûts de transport.
+	$c_{ij}$ correspond aux coûts de transport en RWF / tonne entre $i$ et $j$ issus de la matrice OD. $c_{p,j,s}$ correspond au $\min_b[\text{coût\_frontière}_{p,s} + c_{b,j}]$, c'est-à-dire le coût de transport entre le pays $p$ et l'entrepôt $j$ via le poste frontière $b$. $c_{\text{fixe}}$ correspond au coût fixe de manutention (chargement + déchargement) en RWF / tonne. Finalement, les $\beta_s$ correspondent aux paramètres de sensibilité des secteurs aux coûts de transport.
 	
 	\subsubsection{Algorithme de Furness (IPF)}
 	\label{subsubsec:furness}
@@ -578,8 +732,10 @@
 	
 	\begin{equation}
 		T_{i,j}^s = O_{i,s} \times D_{j,s} \times \text{Friction}_{i,j}^s
-	\end{equation}\\
-	Les échanges intra-zones ne sont pas pris en compte ($T_{ii}^{s} = 0$)\\
+	\end{equation}
+	\medskip
+	Les échanges intra-zones ne sont pas pris en compte ($T_{ii}^{s} = 0$)
+	\medskip
 	
 	\textbf{Boucle :} À l'itération $k$, on alterne deux rééquilibrages.
 	
@@ -593,7 +749,8 @@
 		a_{i,s,k} = \frac{O_{i,s}}{\sum_j T_{i,j}^s}
 	\end{equation}
 	
-	L'objectif est que $a_{i,s,k} \to 1 \iff O_{i,s} = \sum_j T_{i,j}^s$. L'ensemble des flux sortants du point OD i doit être égal au surplus de production de ce dernier tel que défini dans la section \ref{subsubsec:decompo_comex} ci-dessous. C'est la première contrainte.\\
+	L'objectif est que $a_{i,s,k} \to 1 \iff O_{i,s} = \sum_j T_{i,j}^s$. L'ensemble des flux sortants du point OD i doit être égal au surplus de production de ce dernier tel que défini ci-après. C'est la première contrainte.
+	\medskip
 	
 	2) Équilibrage des colonnes $j$ :
 	
@@ -605,9 +762,10 @@
 		b_{j,s,k} = \frac{D_{j,s}}{\sum_i T_{i,j}^s}
 	\end{equation}
 	
-	L'objectif est que $b_{j,s,k} \to 1 \iff D_{i,s} = \sum_j T_{i,j}^s$. C'est la deuxième contrainte. L'ensemble des flux entrants du point OD j doit être égal au déficit de production de ce dernier tel que défini dans la section \ref{subsubsec:decompo_comex} ci-dessous.\\
+	L'objectif est que $b_{j,s,k} \to 1 \iff D_{i,s} = \sum_j T_{i,j}^s$. L'ensemble des flux entrants du point OD j doit être égal au déficit de production de ce dernier tel que défini ci-après. C'est la deuxième contrainte.
+	\medskip
 	
-	L'algorithme itère jusqu'à ce que la différence entre les flux sortants/entrants et l'offre/demande soit inférieure à un seuil de tolérance, c'est-à-dire que $A_{i,s}$ et $B_{j,s}$ tendent suffisamment vers 1.
+	L'algorithme itère jusqu'à ce que la différence entre les flux sortants/entrants et l'offre/demande soit inférieure à un seuil de tolérance, c'est-à-dire que $a_{i,s}$ et $b_{j,s}$ tendent suffisamment vers 1.
 	
 	\textbf{Lien avec le modèle doublement contraint.} Les facteurs
 	\emph{cumulés} sur l'ensemble des itérations,
@@ -619,8 +777,6 @@
 	\end{equation}
 	
 	sont les facteurs d'équilibrage du modèle de \cite{Wilson1967}. On retrouve alors la forme de l'équation \ref{eq:gravitaire}
-
-	Sa contrepartie est une exigence de faisabilité stricte : l'algorithme ne converge que si les marges lignes et colonnes ont la même somme et si le support de la matrice de friction le permet. C'est ce point qui a rendu nécessaire la décomposition en trois jambes exposée ci-dessous.
 	
 	
 	\subsubsection{Décomposition entre commerce domestique et extérieur}
@@ -635,12 +791,14 @@
 		\begin{equation}
 			O_{i,s} = \max (x_{i,s}(1-\tau_{E,s})-d_{i,s}(1-\tau_{M,s});0)
 		\end{equation}
-		$O_{i,s}$ correspond alors au surplus d'offre domestique par rapport à la demande du secteur s de l'entrepôt i.\\
+		$O_{i,s}$ correspond alors au surplus d'offre domestique par rapport à la demande du secteur s de l'entrepôt i.
+		\medskip
 	
 		\begin{equation}
 	 		D_{j,s} = \max (0; d_{j,s}(1-\tau_{M,s})-x_{j,s}(1-\tau_{E,s})) 
 		\end{equation}
-		Même chose mais pour le déficit.\\
+		Même chose mais pour le déficit.
+		\medskip
 		
 		
 		\item Exports : 
@@ -654,7 +812,8 @@
 			 \begin{equation}
 			 	D_{j,s} = EX_{j,s}
 			 \end{equation}
-			$D_{j,s}$ correspond lui au total des exportations du secteur s vers le pays j.\\
+			$D_{j,s}$ correspond lui au total des exportations du secteur s vers le pays j.
+			\medskip
 			 
 
 		\item Imports :
@@ -678,6 +837,8 @@
 	\begin{equation}
 		\tau_{M,s}=\frac{IM_s}{\sum_i d_i}
 	\end{equation}
+	
+	Les $\tau$ sont donc les taux d'exposition nationaux de chaque secteur au commerce extérieur. On suppose ici qu'il s'applique uniformément à l'ensemble des localisations n'ayant pas d'informations plus précises à disposition.
 
 	
 	\subsection{Affectation du fret}
@@ -686,7 +847,7 @@
 	\subsubsection{Décomposition coût sans congestion}
 	\label{subsubsec:decompo_cout}
 	
-	Le coût\_tkm précédemment calculé = coût sans congestion qu'on multiplie par les km de la route $i$ pour avoir $\text{coût}_{t,i}$.
+	Le coût\_tkm précédemment calculé est égal au coût sans congestion qu'on multiplie par les km de la route $i$ pour avoir $\text{coût}_{t,i}$.
 	
 	On le décompose entre sa partie temps et hors temps :
 	
@@ -715,7 +876,7 @@
 
 	\vspace{1em}
 
-	L'objectif est que le surcoût en termes de temps de rajouter une voiture soit très faible tant que $\text{PCU}_i < \text{C}_i$ et augmente très rapidement ensuite. Deux précisions sur l'usage que nous en faisons. D'une part, seule la composante temps du coût généralisé est multipliée par le facteur BPR (section~\ref{subsubsec:decompo_cout}) : la congestion allonge les durées, elle ne modifie ni la pente ni la consommation à vitesse donnée.
+	L'objectif est que le surcoût en termes de temps de rajouter une voiture soit très faible tant que $\text{PCU}_i < \text{C}_i$ et augmente très rapidement ensuite. Seule la composante temps du coût généralisé est multipliée par le facteur BPR (section~\ref{subsubsec:decompo_cout}) : la congestion allonge les durées, elle ne modifie ni la pente ni la consommation à vitesse donnée.
 	
 	\subsubsection{Flux PCU journalier par route}
 	\label{subsubsec:PCU}
@@ -727,7 +888,7 @@
 		 \quad \text{PCU}_{i,n}^* = \frac{\text{tonnes}_{i,n}^{s,*}}{\text{taux\_chargement} \times \text{capacité\_max}_v} \times \frac{\text{facteur\_PCU}_v}{ \text{jours\_trafic}_{\text{an}}}
 	\end{equation}
 	
-	Avec $\text{facteur\_PCU}_v$ qui correspond à l'équivalent véhicule individuel du véhicule v, $\text{capacité\_max}_v$ à la capacité maximale de chargement du véhicule v, $\text{taux\_chargement}$ à la proportion de cette capacité maximale et $\text{jours\_trafic}_{\text{an}}$ le nombre de jours ouvrables de trafic fret par an.
+	Le $\text{facteur\_PCU}_v$ correspond à l'équivalent véhicule individuel du véhicule v, $\text{capacité\_max}_v$ à la capacité maximale de chargement du véhicule v, $\text{taux\_chargement}$ à la proportion de cette capacité maximale et $\text{jours\_trafic}_{\text{an}}$ le nombre de jours ouvrables de trafic fret par an.
 	
 	
 	\subsubsection{Méthode des moyennes successives (MSA)}
@@ -751,7 +912,8 @@
 		\text{tonnes}_{t,n}^{s,*} = \text{tonnes}_{t,n-1}^{s,*} + \frac{1}{n} \times (\text{tonnes}_{t,n}^s - \text{tonnes}_{t,n-1}^{s,*})
 	\end{equation}
 	
-	Où $\text{tonnes}_{t,n}^{s,*}$ correspond aux flux d'équilibre de marchandises du secteur $s$ sur l'arête $i$ après l'itération $n$ et $\text{tonnes}_{t,n}^s$ aux flux courants de marchandises du secteur $s$ sur l'arête $i$ lors de l'itération $n$\\
+	Où $\text{tonnes}_{t,n}^{s,*}$ correspond aux flux d'équilibre de marchandises du secteur $s$ sur l'arête $i$ après l'itération $n$ et $\text{tonnes}_{t,n}^s$ aux flux courants de marchandises du secteur $s$ sur l'arête $i$ lors de l'itération $n$
+	\medskip
 
 	
 	On s'arrête lorsque :
@@ -763,7 +925,7 @@
 	\subsubsection{Coût logistique total pour la comptabilité}
 	\label{subsubsec:compta_logistiq}
 
-	La modélisation du coût logistique total répond à une limite reconnue des modèles en quatre étapes : le choix d'itinéraire y est fait sur le seul coût de déplacement, alors que la décision réelle du chargeur porte sur un coût logistique total incluant l'immobilisation de capital en stock et en transit. \cite{Baumol1970} en donnent la formulation fondatrice en transposant le modèle de lot économique (EOQ) au transport de fret : la taille optimale des envois résulte de l'arbitrage entre coût fixe par envoi et coût de détention du stock, et le temps de transport entre dans le coût par le stock en transit. \cite{Combes2012} en fournit la validation empirique sur données d'enquête chargeurs françaises.
+	La modélisation du coût logistique total répond à une limite reconnue des modèles en quatre étapes : le choix d'itinéraire y est fait sur le seul coût de déplacement, alors que la décision réelle du chargeur porte sur un coût logistique total incluant l'immobilisation de capital en stock et en transit. \cite{Baumol1970} en donnent la formulation fondatrice en transposant le modèle de lot économique (EOQ) au transport de fret : la taille optimale des envois résulte de l'arbitrage entre coût fixe par envoi et coût de détention du stock, et le temps de transport entre dans le coût via le stock en transit. \cite{Combes2012} en fournit la validation empirique sur données d'enquête chargeurs françaises.
 
 	Nous retenons cette formulation comme \emph{comptabilité ex post} et non comme critère d'optimisation : le choix du chemin et du véhicule reste fait sur le coût généralisé de la section~\ref{subsubsec:cout_generalise}, et le coût logistique total est reconstruit ensuite sur les flux d'équilibre. 
 	
@@ -779,6 +941,8 @@
 	\end{equation}
 	
 	Où  $\tau_v = \frac{ \sum_k\text{temps}_{v,k}}{\text{heure\_année}} $ correspond au temps de trajet entre $i$ et $j$ via la partie du trajet effectué avec le véhicule v en proportion de l'année ; $\text{q}_{i,j,v}$ à la taille optimale des envois entre $i$ et $j$ via la partie du trajet effectuée avec le véhicule v ; $K_v$ au coût d'embarquement et de débarquement ; $V_s$ à la valeur d'une tonne de marchandise du secteur $s$ et $r$ au taux de détention du stock, c'est-à-dire le coût annuel de garder une unité de valeur en stock, c'est-à-dire la somme du taux d'intérêt, du coût stockage, des coûts d'assurance et de l'obsolescence des biens transportés.
+	
+	Cette décomposition pourrait être utile plus tard lors du couplage avec un modèle multisectoriel.
 
 	
 	\subsection{Modélisation d'un choc}
@@ -793,11 +957,9 @@
 	
 	\begin{enumerate}
 		\item \textbf{Mode Manuel} : on liste les identifiants OSM des routes que l'on veut perturber.
-		\item \textbf{Mode Buffer} : toutes les routes dans un rayon autour d'un point donné manuellement sont considérées comme à risque
-		\item \textbf{Mode Raster} : les routes sont considérées comme en zone à risque si la variable physique est supérieure à un seuil défini, par exemple supérieure à x millimètres de précipitation.
+		\item \textbf{Mode Buffer} : toutes les tronçons de route dans un rayon autour d'un point donné manuellement sont considérées comme à risque
+		\item \textbf{Mode Raster} : les tronçons de route sont considérés comme perturbés si la variable physique, représentée par le raster utilisé, est supérieure à un seuil défini, par exemple supérieure à 50cm d'eau.
 	\end{enumerate}
-	
-	Pour les modes Buffer et Raster, on choisit la proportion des routes en zones à risque effectivement inondées. Les routes effectivement inondées seront ensuite générées aléatoirement.
 	
 	Une fois les routes affectées identifiées, on reconstruit le graphe multi-modal en leur attribuant un coût infini. Ensuite, on recalcule les itinéraires OD optimaux sur ce réseau dégradé.
 	
@@ -821,11 +983,11 @@
 	\subsubsection{Analyse de criticité}
 	\label{subsubsec:criticite}
 
-	L'analyse de scénarios répond à la question « que se passe-t-il si cette zone est inondée ? ». L'analyse de criticité répond à la question inverse, indépendante de tout scénario : quelles arêtes du réseau sont les plus coûteuses à perdre ? Elle suit la méthode de suppression d'arc de \cite{Jenelius2015}, où l'importance d'un lien se mesure par l'augmentation du coût total de déplacement induite par sa suppression. Le filtrage préalable aux arêtes les plus chargées et aux paires échangeant des volumes significatifs est une concession au coût de calcul, le problème complet étant quadratique en nombre de paires, et introduit un biais qu'il faut signaler : une arête peu chargée mais sans substitut peut être plus critique qu'une arête très chargée doublée par un itinéraire équivalent, ce qui est exactement le phénomène mis en évidence par \cite{Colon2021}.
+	L'analyse de scénarios répond à la question « que se passe-t-il si cette zone est inondée ? ». L'analyse de criticité répond à la question inverse, indépendante de tout scénario : quelles arêtes du réseau sont les plus coûteuses à perdre ? Elle suit la méthode de suppression d'arc de \cite{Jenelius2015}, où l'importance d'un lien se mesure par l'augmentation du coût total de déplacement induite par sa suppression. 
 
 	\begin{enumerate}
 		\item Filtre des arêtes candidates : les arêtes du top $N_{\text{TOP\_ARETES\_CRITIQUES}}$ (=50) des volumes transportés
-		\item Passage à coût infini de ces arêtes candidates une par une
+		\item Passage à coût infini des arêtes candidates une par une
 		\item Calcul à nouveau de Dijkstra avec comme poids les coûts post-congestion de l'affectation initiale pour les paires qui échangent des volumes supérieurs à $\text{SEUIL\_PAIRES\_CRITICITE}$ (=100t) pour trouver le nouveau chemin le plus court lorsqu'une arête est « supprimée »
 		\item Calcul du surcoût servant à classer les arêtes par ordre de criticité
 	\end{enumerate}
@@ -844,15 +1006,15 @@
 
 	\subsubsection{Convergence et cohérence comptable}
 
-	Le réseau retenu compte 28\,145 nœuds et 35\,594 arêtes, en une seule composante connexe. Les 121 candidats-entrepôts initiaux sont ramenés à 91 nœuds origine-destination après la fusion à 4 km décrite en \ref{subsubsec:affectation_prod}, dont 5 postes frontières protégés de la fusion. Ces 91 zones couvrent une population de 12\,908\,867 habitants, cohérente avec le recensement RPHC5 de 2022.
+	Le réseau retenu compte 28\,145 nœuds et 35\,594 arêtes, en une seule composante connexe. Les 123 candidats-entrepôts initiaux sont ramenés à 91 points OD après la fusion à 4 km décrite en \ref{subsubsec:affectation_prod}, dont 8 postes frontières protégés de la fusion. Ces 91 zones couvrent une population de 12,9 millions d'habitant.es, cohérente avec le recensement RPHC5 de 2022.
 
-	L'algorithme de Furness converge pour les huit secteurs porteurs de fret, en 4 à 11 itérations selon le secteur, avec une erreur maximale sur les marges inférieure à $10^{-4}$\,\%. La vérification du bilan ressources-emplois au prix de base laisse un résidu maximal de $10^{-6}$ milliard de RWF, soit une fermeture comptable exacte aux erreurs d'arrondi près~: les tonnages produits par le modèle gravitaire sont donc bien ceux qu'implique la matrice de comptabilité sociale, sans fuite ni création de matière.
+	L'algorithme de Furness converge pour les huit secteurs porteurs de fret, en 4 à 12 itérations selon le secteur.
 
-	La matrice de coûts est complète~: les 8\,190 paires origine-destination possibles sont toutes connectées par au moins un chemin routier, pour un coût généralisé moyen de 6\,213 RWF par tonne.
+	La matrice de coûts est complète~: les 8\,190 paires origine-destination possibles sont toutes connectées par au moins un chemin routier, pour un coût généralisé moyen de 6\,070 RWF par tonne.
 
 	\subsubsection{Structure des flux}
 
-	Le modèle produit un tonnage total de 11\,672\,525 tonnes par an, réparties sur 5\,637 paires actives. Le tableau \ref{tab:flux_secteur_ref} en donne la ventilation sectorielle.
+	Le modèle produit un tonnage total d'environ 11,5 millions de tonnes par an, réparties sur 5\,479 paires actives. Le tableau \ref{tab:flux_secteur_ref} en donne la ventilation sectorielle.
 
 	\begin{table}[H]
 		\centering
@@ -862,30 +1024,34 @@
 			\toprule
 			Secteur & $\beta$ & Flux (tonnes) & Part du tonnage \\
 			\midrule
-			Construction     & 2,5 & 4\,352\,364 & 37,3\,\% \\
-			Manufactures     & 1,6 & 2\,131\,597 & 18,3\,\% \\
-			Chimie/pétrole   & 1,5 & 1\,718\,406 & 14,7\,\% \\
-			Agro-industrie   & 1,8 & 1\,624\,767 & 13,9\,\% \\
-			Mines            & 1,2 &   871\,398 &  7,5\,\% \\
-			Agriculture      & 2,3 &   634\,621 &  5,4\,\% \\
-			Commerce         & 1,7 &   294\,887 &  2,5\,\% \\
-			Cultures d'exportation & 1,4 & 44\,484 & 0,4\,\% \\
+			Construction     & 2,5 & 4\,204\,962 & 36,6\,\% \\
+			Manufactures     & 1,6 & 2\,129\,976 & 18,5\,\% \\
+			Chimie/pétrole   & 1,5 & 1\,718\,489 & 14,9\,\% \\
+			Agro-industrie   & 1,8 & 1\,619\,485 & 14,1\,\% \\
+			Mines            & 1,2 &   871\,659 &  7,6\,\% \\
+			Agriculture      & 2,3 &   628\,282 &  5,5\,\% \\
+			Commerce         & 1,7 &   285\,397 &  2,5\,\% \\
+			Cultures d'exportation & 1,4 & 44\,477 & 0,4\,\% \\
 			\midrule
-			\textbf{Total}   &     & \textbf{11\,672\,525} & \textbf{100\,\%} \\
+			\textbf{Total}   &     & \textbf{11\,502\,727} & \textbf{100\,\%} \\
 			\bottomrule
 		\end{tabular}
+
+		\vspace{0.3em}
+		{\footnotesize Source : auteur}
 	\end{table}
 
 	La Construction domine largement le tonnage. Ce résultat est attendu et tient à la nature physique des biens plutôt qu'à leur poids économique~: avec 9\,009 tonnes par milliard de RWF, ce secteur affiche le taux de conversion monnaie-tonne le plus élevé du modèle, près de douze fois celui du Commerce. Un pays en phase d'équipement en infrastructures déplace d'abord des granulats, du ciment et des matériaux de remblai.
 
-	Les trois secteurs suivants — Manufactures, Chimie/pétrole et Agro-industrie — représentent ensemble 46,9\,\% du tonnage. Leur particularité est d'être massivement importés~: le bilan ressources-emplois montre une offre domestique nulle pour les Manufactures et la Chimie/pétrole, dont la totalité de l'approvisionnement provient de l'extérieur. Ces flux naissent donc aux postes frontières et non dans les zones de production intérieures, ce qui aura des conséquences directes sur la géographie du trafic.
+	Les trois secteurs suivants : Manufactures, Chimie/pétrole et Agro-industrie,  représentent ensemble 47,5\,\% du tonnage. Leur particularité est d'être massivement importés.
 
-	Cette asymétrie se lit dans le classement des zones par activité totale. Le poste frontière de Rusumo, porte d'entrée du corridor central vers Dar es Salaam, traite à lui seul 3\,514 milliers de tonnes, soit davantage que le hub central de Kigali (1\,736 milliers de tonnes). Viennent ensuite Gatuna (1\,550), tête du corridor nord vers Mombasa, puis Kigali-OSM (905) et Rubavu/Goma (832). Quatre des cinq premières zones du pays sont des points de franchissement frontalier~: le fret rwandais est avant tout un fret d'importation en transit vers la capitale.
+	Cette asymétrie se lit dans le classement des zones par activité totale. Le poste frontière de Rusumo, porte d'entrée du corridor central vers Dar es Salaam, traite à lui seul 3\,470 milliers de tonnes, soit davantage que le hub central de Kigali (1\,707 milliers de tonnes). Viennent ensuite Gatuna (1\,519), tête du corridor nord vers Mombasa, puis Kigali-OSM (887) et Rubavu/Goma (688). Quatre des cinq premières zones du pays sont des points de franchissement frontalier~: le fret rwandais longue distance semble donc avant tout un fret d'importation en transit vers la capitale.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.9\linewidth]{images/ref_graphique_flux_secteurs.png}
-		\caption{Flux échangés par secteur — scénario de référence}
+		\caption{Flux échangés par secteur — scénario de référence \\
+			\footnotesize Source : auteur}
 		\label{fig:flux_secteurs_ref}
 	\end{figure}
 
@@ -894,16 +1060,17 @@
 
 	\subsubsection{Volume affecté et longueur des acheminements}
 
-	L'affectation ne retient que les paires dépassant le seuil de 50 tonnes, soit 3\,379 paires sur les 5\,637 actives. Ce filtre écarte 40,2\,\% des paires mais seulement 0,27\,\% du tonnage~: il élimine une longue traîne d'échanges négligeables sans altérer les résultats agrégés.
+	L'affectation ne retient que les paires dépassant le seuil de 50 tonnes, soit 3\,254 paires sur les 5\,479 actives. Ce filtre écarte 40,6\,\% des paires mais seulement 0,26\,\% du tonnage et réduit ainsi de façon importante le temps de calcul.
 
-	L'affectation à l'équilibre produit 1\,507\,601\,749 tonnes-kilomètres, soit une distance moyenne d'acheminement de 129 km. Ce chiffre est élevé au regard des dimensions du pays (environ 250 km dans sa plus grande diagonale), et s'explique précisément par le poids des flux d'importation~: une tonne entrée à Rusumo doit traverser la moitié du territoire pour atteindre Kigali.
+	L'affectation à l'équilibre produit 1,39 milliard de tonnes-kilomètres, soit une distance moyenne d'acheminement de 121 km. Ce chiffre est élevé au regard des dimensions du pays (environ 250 km dans sa plus grande diagonale), et s'explique précisément par le poids des flux d'importation~: une tonne entrée à Rusumo doit traverser la moitié du territoire pour atteindre Kigali.
 
-	Le trafic emprunte 4\,062 arêtes, soit 11,4\,\% du réseau. Cette concentration est une propriété du modèle autant qu'une réalité géographique~: l'affectation étant déterministe, tous les flux d'une même paire origine-destination suivent l'unique chemin de coût minimal, ce qui concentre le trafic sur un petit nombre d'axes. Le volume maximal atteint 3\,514\,036 tonnes sur les tronçons de la route de Rusumo, contre 440\,132 tonnes en moyenne sur les arêtes actives.
+	Le trafic emprunte 3\,962 arêtes, soit 11,1\,\% du réseau. Cette concentration est une propriété du modèle autant qu'une réalité géographique~: l'affectation étant déterministe, tous les flux d'une même paire origine-destination suivent l'unique chemin de coût minimal, ce qui concentre le trafic sur un petit nombre d'axes. Le volume maximal atteint 3,5 millions de tonnes sur les tronçons de la route de Rusumo, contre 423 mille tonnes en moyenne sur les arêtes actives.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.9\linewidth]{images/ref_carte_trafic_fret.png}
-		\caption{Intensité du trafic de fret sur le réseau — scénario de référence}
+		\caption{Intensité du trafic de fret sur le réseau — scénario de référence \\
+			\footnotesize Source : auteur}
 		\label{fig:trafic_ref}
 	\end{figure}
 
@@ -919,91 +1086,89 @@
 			\toprule
 			Secteur & Part des t$\cdot$km & Part des tonnes & Distance moyenne \\
 			\midrule
-			Manufactures     & 24,2\,\% & 18,3\,\% & 171 km \\
-			Construction     & 22,7\,\% & 37,3\,\% &  79 km \\
-			Chimie/pétrole   & 19,9\,\% & 14,7\,\% & 175 km \\
-			Agro-industrie   & 16,2\,\% & 13,9\,\% & 150 km \\
-			Mines            &  9,7\,\% &  7,5\,\% & 168 km \\
-			Agriculture      &  5,0\,\% &  5,4\,\% & 120 km \\
-			Commerce         &  1,7\,\% &  2,5\,\% &  88 km \\
-			Cultures d'exportation & 0,5\,\% & 0,4\,\% & 166 km \\
+			Manufactures     & 24,9\,\% & 18,5\,\% & 162 km \\
+			Construction     & 22,7\,\% & 36,6\,\% &  75 km \\
+			Chimie/pétrole   & 20,5\,\% & 14,9\,\% & 165 km \\
+			Agro-industrie   & 15,4\,\% & 14,1\,\% & 132 km \\
+			Mines            &  9,5\,\% &  7,6\,\% & 151 km \\
+			Agriculture      &  4,9\,\% &  5,5\,\% & 107 km \\
+			Commerce         &  1,7\,\% &  2,5\,\% &  83 km \\
+			Cultures d'exportation & 0,4\,\% & 0,4\,\% & 139 km \\
 			\bottomrule
 		\end{tabular}
+
+		\vspace{0.3em}
+		{\footnotesize Source : auteur}
 	\end{table}
 
-	Deux régimes d'acheminement se dégagent. Les secteurs liés au commerce extérieur — Chimie/pétrole, Manufactures, Mines, Cultures d'exportation — parcourent en moyenne 165 à 175 km, distance qui correspond à un trajet frontière-intérieur. Les secteurs domestiques — Construction et Commerce — se contentent de 79 et 88 km, distances de desserte locale entre carrières, chantiers et marchés. L'Agriculture et l'Agro-industrie occupent une position intermédiaire, cohérente avec leur double nature de production locale partiellement exportée.
+	Deux régimes d'acheminement se dégagent. Les secteurs liés au commerce extérieur (Chimie/pétrole, Manufactures, Mines, Cultures d'exportation) parcourent en moyenne 140 à 165 km, distance qui correspond à un trajet frontière-Kigali. Les secteurs domestiques (Construction et Commerce) se contentent de 75 et 83 km, correspondant à des distances de desserte locale entre carrières, chantiers et marchés. L'Agriculture et l'Agro-industrie occupent une position intermédiaire, cohérente avec leur double nature de production locale partiellement exportée.
 
-	La conséquence est un renversement de hiérarchie~: la Construction, premier secteur en tonnage avec 37,3\,\%, ne représente que 22,7\,\% de l'effort de transport, tandis que les Manufactures passent de 18,3\,\% à 24,2\,\%. Rapporté au travail effectivement demandé au réseau routier, le fret rwandais est d'abord un fret d'importation.
+	La conséquence est un renversement de hiérarchie~: la Construction, premier secteur en tonnage avec 36,6\,\%, ne représente que 22,7\,\% de l'effort de transport, tandis que les Manufactures passent de 18,5\,\% à 24,9\,\%.
 
-	Cette structure se projette sur la hiérarchie du réseau (figure \ref{fig:compo_route_ref}). Le long des quatre niveaux classés, on observe un basculement régulier~: la part des Manufactures et de la Chimie/pétrole décroît de 41,4\,\% sur les routes \textit{trunk} à 29,5\,\% sur les routes \textit{tertiary}, tandis que celle de la Construction progresse en sens inverse de 26,4\,\% à 43,4\,\%. Les axes structurants portent les flux d'importation venus des frontières~; les routes secondaires et tertiaires portent la desserte locale de matériaux.
+	Cette structure se projette sur la hiérarchie du réseau (figure \ref{fig:compo_route_ref}). Le long des quatre niveaux classés, on observe un basculement régulier~: la part des Manufactures et de la Chimie/pétrole décroît de 42,4\,\% sur les routes \textit{trunk} à 30,0\,\% sur les routes \textit{tertiary}, tandis que celle de la Construction progresse en sens inverse de 26,4\,\% à 45,5\,\%. Les axes structurants portent les flux d'importation venus des frontières~; les routes secondaires et tertiaires portent la desserte locale de matériaux.
 
-	Ce gradient s'interrompt toutefois sur la catégorie \textit{unclassified}, où les Manufactures et la Chimie/pétrole représentent 53,6\,\% du tonnage et la Construction seulement 14,9\,\%. Cette anomalie ne traduit vraisemblablement pas un fait économique mais une limite de la source~: dans OpenStreetMap, l'étiquette \textit{unclassified} est la catégorie par défaut des voies sans classification administrative renseignée. Elle mélange donc de véritables routes de desserte et des tronçons non renseignés d'itinéraires interurbains structurants — ce qui explique déjà qu'elle concentre 97\,\% du linéaire écarté lors de l'extraction de la composante géante (annexe \ref{subsubsec:annexe_composante_geante}). La lecture du niveau hiérarchique comme indicateur de la nature du flux ne vaut donc que sur les catégories effectivement classées.
+	Ce gradient s'interrompt toutefois sur la catégorie \textit{unclassified}, où les Manufactures et la Chimie/pétrole représentent 54,8\,\% du tonnage et la Construction seulement 17,5\,\%. Cette anomalie ne traduit vraisemblablement pas un fait économique mais une limite de la source~: dans OpenStreetMap, l'étiquette \textit{unclassified} est la catégorie par défaut des voies sans classification administrative renseignée. Elle mélange donc de véritables routes de desserte et des tronçons non renseignés d'itinéraires interurbains structurants.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=\linewidth]{images/ref_graphique_compo_secteurs_type_route.png}
-		\caption{Composition sectorielle du trafic par niveau hiérarchique du réseau}
+		\caption{Composition sectorielle du trafic par niveau hiérarchique du réseau \\
+			\footnotesize Source : auteur}
 		\label{fig:compo_route_ref}
 	\end{figure}
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.85\linewidth]{images/ref_carte_secteur_dominant.png}
-		\caption{Secteur dominant en tonnage sur chaque arête du réseau}
+		\caption{Secteur dominant en tonnage sur chaque arête du réseau \\
+			\footnotesize Source : auteur}
 		\label{fig:secteur_dominant_ref}
 	\end{figure}
 
 	\subsubsection{Congestion et saturation}
 
-	L'équilibre BPR/MSA converge en 3 itérations, pour un critère d'arrêt fixé à un écart relatif de 1\,\%. La première passe, équivalente à une affectation tout-ou-rien, place 18 arêtes en situation de sur-capacité ($V/C > 1$)~; le report d'itinéraire opéré par les itérations suivantes ramène ce nombre à 8. L'écart relatif passe de 1,0000 à 0,0168 puis 0,0056, ce qui traduit une redistribution réelle mais rapidement stabilisée.
+	L'équilibre BPR/MSA converge en 3 itérations, donc assez rapidement. La première passe, équivalente à une affectation tout-ou-rien, place 18 arêtes en situation de sur-capacité ($V/C > 1$). Le report d'itinéraire opéré par les itérations suivantes ramène ce nombre à 8. sur 35 594 arêtes. 
 
-	Le taux de saturation maximal s'établit à 1,67, atteint sur les tronçons du corridor de Rusumo. Seules 8 arêtes sur 35\,594 dépassent le seuil de saturation, et aucune ne se situe dans la zone intermédiaire ($0{,}8 < V/C < 1$)~: le réseau est globalement fluide, avec quelques points de rupture nettement identifiés. Ce résultat doit toutefois être lu avec prudence, la capacité en unités de véhicule particulier par type de route n'ayant pas fait l'objet d'une calibration sur données de comptage rwandaises.
+	Le taux de saturation maximal s'établit à 1,65, atteint sur les tronçons du corridor de Rusumo. Le réseau modélisé est globalement fluide, avec quelques points de rupture nettement identifiés. 
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.9\linewidth]{images/ref_carte_saturation_reseau.png}
-		\caption{Taux de saturation $V/C$ du réseau — scénario de référence}
+		\caption{Taux de saturation $V/C$ du réseau — scénario de référence \\
+			\footnotesize Source : auteur}
 		\label{fig:saturation_ref}
 	\end{figure}
 
-	\subsubsection{Choix modal}
-
-	La répartition modale du trafic est dégénérée~: la totalité des tonnes-kilomètres est réalisée par le camion lourd, aucun flux n'étant affecté à la camionnette ou au camion moyen, et aucun transbordement n'étant réalisé sur les 546 arêtes prévues à cet effet.
-
-	Ce résultat n'est pas un artefact de calcul mais une conséquence directe de la structure de coûts retenue. Le camion lourd présente le coût unitaire le plus bas sur les trois postes simultanément~: 79,97 RWF par tonne-kilomètre contre 108,48 pour le camion moyen et 124,32 pour la camionnette, et 3\,952 RWF par tonne de manutention contre 6\,587 et 9\,880. En l'absence de contrainte de taille de lot, de fréquence de livraison ou d'accessibilité de la voirie, aucun mécanisme ne peut faire préférer un véhicule plus petit. Le graphe multimodal à trois couches et les arêtes de transbordement restent donc inutilisés dans le scénario de référence. Nous revenons sur cette limite au chapitre \ref{sec:sensibilite} et en discussion.
-
 	\subsubsection{Émissions et validation}
 
-	Le fret modélisé émet 77\,742 tonnes de CO$_2$, 23\,207 kg de NO$_x$ et 2\,611 kg de PM2,5 par an, soit une intensité moyenne de 0,052 kg de CO$_2$ par tonne-kilomètre. Cette valeur est cohérente avec les facteurs d'émission usuels des poids lourds, ce qui est attendu puisque l'ensemble du trafic est affecté à cette catégorie de véhicule.
+	Le fret modélisé émet 70\,153 tonnes de CO$_2$, 20\,941 kg de NO$_x$ et 2\,356 kg de PM2,5 par an, soit une intensité moyenne de 0,051 kg de CO$_2$ par tonne-kilomètre. Cette valeur est cohérente avec les facteurs d'émission usuels des poids lourds, ce qui est attendu puisque l'ensemble du trafic est affecté à cette catégorie de véhicule.
 
-	Le coût de transport impliqué par le modèle s'élève à 68,6 milliards de RWF, à rapprocher des 1\,394,7 milliards de marges de distribution (poste \textit{trc}) de la matrice de comptabilité sociale, soit 4,9\,\% (figure \ref{fig:validation_trc_ref}). L'écart est considérable mais son sens était attendu~: le poste \textit{trc} agrège le transport routier, les marges de gros et de détail, le transport de voyageurs et le dernier kilomètre, dont aucun n'est modélisé ici. Le modèle ne capture que l'acheminement inter-entrepôts de marchandises sur le réseau interurbain. Cette confrontation ne constitue donc pas une validation au sens strict, mais un test de vraisemblance de l'ordre de grandeur~: elle indique que le coût modélisé reste inférieur à sa borne supérieure comptable, sans permettre de conclure sur sa justesse.
+	Le coût de transport impliqué par le modèle s'élève à 61,3 milliards de RWF, à rapprocher des 1\,394,7 milliards de marges de distribution (poste \textit{trc}) de la matrice de comptabilité sociale, soit 4,4\,\% (figure \ref{fig:validation_trc_ref}). L'écart est considérable mais son sens était attendu~: le poste \textit{trc} agrège le transport routier, les marges de gros et de détail, le transport de voyageurs et le dernier kilomètre, dont aucun n'est modélisé ici. Le modèle ne capture que l'acheminement inter-entrepôts de marchandises sur le réseau interurbain. Cette confrontation ne constitue donc pas une validation au sens strict, mais un test de vraisemblance de l'ordre de grandeur~: elle indique que le coût modélisé reste inférieur à sa borne supérieure comptable, sans permettre de conclure sur sa justesse.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=0.75\linewidth]{images/ref_graphique_validation_trc.png}
-		\caption{Coût de transport modélisé rapporté aux marges de distribution de la SAM}
+		\caption{Coût de transport modélisé rapporté aux marges de distribution de la SAM \\
+			\footnotesize Source : auteur}
 		\label{fig:validation_trc_ref}
 	\end{figure}
 	
 	\section{Scénarios d'inondations}
 	\label{sec:scenario}
 	
-	La modélisation des impacts des inondations sur les réseaux de transport s'appuie sur les travaux de \cite{Botzen2019} et \cite{Otto2017} qui analysent les impacts économiques des catastrophes naturelles et la propagation des chocs dans les chaînes d'approvisionnement.
-	
 	\subsubsection{Construction du scénario}
 
-	L'aléa retenu est la carte d'inondation fluviale mondiale produite par le Centre commun de recherche de la Commission européenne dans le cadre du service Copernicus de gestion des urgences \parencite{Baugh2024}. Ces cartes sont issues du couplage d'un modèle hydrologique (LISFLOOD) et d'un modèle hydraulique bidimensionnel (LISFLOOD-FP) appliqués au modèle numérique de terrain MERIT. Elles fournissent, à une résolution de 3 secondes d'arc (environ 90 m), la hauteur d'eau en mètres pour sept périodes de retour. Nous retenons la crue centennale.
+	L'aléa retenu est la carte d'inondation fluviale mondiale produite par le Centre commun de recherche de la Commission européenne dans le cadre du service Copernicus de gestion des urgences \parencite{Baugh2024}. Ces cartes fournissent, à une résolution de 3 secondes d'arc (environ 90 m), la hauteur d'eau en mètres pour sept périodes de retour. Nous retenons la crue centennale.
 
-	Deux masques fournis par le producteur sont appliqués avant usage. Le premier retire les plans d'eau permanents~: les cartes d'aléa du JRC les intègrent par construction, si bien que le lac Kivu et les lacs de l'Akagera apparaîtraient comme inondés à toutes les périodes de retour. Sans ce retrait, l'étendue submergée ne varierait quasiment pas entre la crue décennale et la crue quincentennale — 375\,000 contre 380\,000 pixels — et la gradation par période de retour perdrait tout sens. Après masquage, la progression redevient monotone~: 54\,826, 67\,637 et 73\,264 pixels au-delà de 50 cm d'eau pour les périodes de retour de 10, 100 et 500 ans. Le second masque écarte les zones de profondeur aberrante que le JRC signale lui-même, où le modèle prédit plus de 10 m d'eau dans de petits chenaux — artefacts fréquents sur un relief aussi marqué que celui du Rwanda.
+	Deux masques fournis par le producteur sont appliqués avant usage. Le premier retire les plans d'eau permanents. Les cartes du JRC les intègrent par construction~: sur le lac Kivu comme sur les lacs de l'Akagera, le raster indique une hauteur d'eau à toutes les périodes de retour, y compris décennale, non parce qu'une crue s'y produit mais parce que le lac s'y trouve. Or un pixel mesure 90 m de côté~: un pont sur l'Akagera ou une route de rive du Kivu tombe sur ces pixels et serait déclaré submergé en permanence. Sans ce retrait, le critère de submersion retiendrait 489 tronçons pour la crue centennale au lieu de 211, soit 278 tronçons de trop~: 134 km de routes, dont 72 km d'axes structurants et plusieurs franchissements majeurs. Le second masque écarte les zones de profondeur aberrante que le JRC signale lui-même, où le modèle prédit plus de 10 m d'eau dans de petits chenaux, artéfact dû au relief marqué du Rwanda.
 
-	Une route est déclarée submergée lorsque plus de 30\,\% de sa longueur se trouve sous plus de 50 cm d'eau, profondeur au-delà de laquelle un poids lourd ne franchit plus l'ouvrage de façon fiable. Ce critère retient 211 tronçons. Nous n'en coupons ensuite que 70\,\%, tirés aléatoirement à graine fixe. Ce tirage n'est pas une commodité de calcul~: le raster décrit la lame d'eau au sol sans connaître la cote de la chaussée, et une route remblayée, un pont ou un ouvrage de drainage restent praticables là où le pixel est inondé. Le tirage représente cette incertitude sur l'exposition réelle de l'ouvrage.
-
-	Le scénario final coupe 153 tronçons, soit 102 km et 0,43\,\% du linéaire du réseau, répartis sur les cinq niveaux hiérarchiques et les trois types de revêtement. La durée de la perturbation est fixée à 14 jours.
+	Une route est déclarée submergée lorsque plus de 30\,\% de sa longueur se trouve sous plus de 50 cm d'eau, profondeur au-delà de laquelle un poids lourd ne franchit plus l'ouvrage de façon fiable. Ce critère retient 211 tronçons soit 143,4 km et 0,59\,\% du linéaire du réseau, répartis sur les cinq niveaux hiérarchiques et les trois types de revêtement. La perturbation est fixée à 14 jours.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=\linewidth]{images/rupt_alea_glofas.png}
-		\caption{Aléa d'inondation fluviale de période de retour 100 ans et tronçons exposés}
+		\caption{Aléa d'inondation fluviale de période de retour 100 ans et tronçons exposés \\
+			\footnotesize Source : auteur}
 		\label{fig:alea_glofas}
 	\end{figure}
 
@@ -1022,43 +1187,50 @@
 			\toprule
 			Type d'impact & Paires & Part des paires & Part du tonnage & Surcoût médian \\
 			\midrule
-			Inchangé              &    2 &  0,0\,\% &  0,0\,\% & — \\
-			Faible ($<$10\,\%)     & 3\,772 & 46,1\,\% & 57,9\,\% &   0,0\,\% \\
-			Modéré (10--50\,\%)    & 1\,780 & 21,7\,\% & 22,2\,\% &  30,1\,\% \\
-			Fort (50--100\,\%)     &   938 & 11,5\,\% &  8,4\,\% &  71,2\,\% \\
-			Très fort ($>$100\,\%) &   838 & 10,2\,\% &  7,2\,\% & 135,1\,\% \\
-			Déconnecté            &   860 & 10,5\,\% &  4,3\,\% & — \\
+			Inchangé              &    6 &  0,1\,\% &  0,2\,\% & — \\
+			Faible ($<$10\,\%)     & 3\,694 & 45,1\,\% & 57,7\,\% &   0,0\,\% \\
+			Modéré (10--50\,\%)    & 1\,530 & 18,7\,\% & 16,5\,\% &  28,9\,\% \\
+			Fort (50--100\,\%)     &   938 & 11,5\,\% & 10,9\,\% &  71,4\,\% \\
+			Très fort ($>$100\,\%) & 1\,002 & 12,2\,\% &  7,8\,\% & 139,2\,\% \\
+			Déconnecté            & 1\,020 & 12,5\,\% &  6,9\,\% & — \\
 			\bottomrule
 		\end{tabular}
+
+		\vspace{0.3em}
+		{\footnotesize Source : auteur}
 	\end{table}
 
-	Les deux pondérations racontent des histoires différentes, et c'est le principal enseignement de ce scénario. En nombre de paires, l'événement paraît sévère~: seules 2 paires sur 8\,190 restent strictement inchangées, et plus d'un cinquième subit un surcoût supérieur à 50\,\%. Pondéré par le tonnage, il l'est beaucoup moins~: 57,9\,\% des tonnes ne subissent qu'un surcoût inférieur à 10\,\%, et les paires déconnectées, qui représentent 10,5\,\% des liaisons, ne portent que 4,3\,\% du fret, soit 501\,489 tonnes.
+	[insérer carte]
 
-	Cette divergence tient à la structure spatiale des flux décrite en \ref{subsec:OD}~: le tonnage est concentré sur un petit nombre de liaisons frontière-capitale, tandis que la longue traîne des paires faiblement chargées relie des zones périphériques bien plus exposées à la coupure. Raisonner en nombre de paires revient donc à donner autant de poids à un flux de quelques dizaines de tonnes qu'au corridor de Rusumo. Nous privilégions par conséquent les grandeurs pondérées par le tonnage dans tout ce qui suit.
+	Les deux pondérations racontent des histoires différentes, et c'est le principal enseignement de ce scénario. En nombre de paires, l'événement paraît sévère~: seules 6 paires sur 8\,190 restent strictement inchangées, et près d'un quart subit un surcoût supérieur à 50\,\%. Pondéré par le tonnage, il l'est beaucoup moins~: 57,7\,\% des tonnes ne subissent qu'un surcoût inférieur à 10\,\%, et les paires déconnectées, qui représentent 12,5\,\% des liaisons, ne portent que 6,9\,\% du fret, soit 791\,964 tonnes.
 
-	Le fait que 2 paires seulement demeurent inchangées mérite par ailleurs une explication. Il ne signifie pas que la quasi-totalité des itinéraires traverse la zone inondée, mais que la coupure modifie l'équilibre de congestion sur l'ensemble du réseau~: le trafic reporté renchérit des arêtes situées loin du choc, et pratiquement tout chemin voit son coût bouger à la marge. C'est précisément la classe « faible », qui rassemble 46,1\,\% des paires pour un surcoût médian nul.
+	Cette divergence tient à la structure spatiale des flux décrite en \ref{subsec:OD}~: le tonnage est concentré sur un petit nombre de liaisons frontière-capitale, tandis que les paires faiblement chargées sont reliées à des zones périphériques bien plus exposées à la coupure. 
+
+	Le fait que 6 paires seulement demeurent inchangées mérite par ailleurs une explication. Il ne signifie pas que la quasi-totalité des itinéraires traverse la zone inondée, mais que la coupure modifie l'équilibre de congestion sur l'ensemble du réseau~: le trafic reporté renchérit des arêtes situées loin du choc, et pratiquement tout chemin voit son coût bouger à la marge. C'est précisément la classe « faible », qui rassemble 45,1\,\% des paires pour un surcoût médian quasi nul.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=\linewidth]{images/rupt_graphique_surcouts.png}
-		\caption{Distribution des surcoûts relatifs de transport par paire origine-destination}
+		\caption{Distribution des surcoûts relatifs de transport par paire origine-destination \\
+			\footnotesize Source : auteur}
 		\label{fig:surcouts_rupture}
 	\end{figure}
 
 	\subsubsection{Coût agrégé et report de trafic}
 
-	En pondérant chaque paire par le tonnage qu'elle échange, le surcoût de transport atteint 17,6 milliards de RWF en équivalent annuel, soit 25,6\,\% du coût de transport du scénario de référence. Rapporté aux 14 jours de perturbation, l'ordre de grandeur est de 675 millions de RWF. Cette conversion suppose que le fret est réparti uniformément dans l'année et que les volumes échangés ne réagissent pas au choc — deux hypothèses fortes sur lesquelles nous revenons en discussion.
+	En pondérant chaque paire par le tonnage qu'elle échange, le surcoût de transport atteint 17,7 milliards de RWF en équivalent annuel, soit 28,8\,\% du coût de transport du scénario de référence. Rapporté aux 14 jours de perturbation, l'ordre de grandeur est de 677 millions de RWF. Cette conversion suppose que le fret est réparti uniformément dans l'année et que les volumes échangés ne réagissent pas au choc, deux hypothèses fortes qui seront affaiblies une fois le modèle couplé à un modèle macro multisectoriel.
 
-	L'allongement des itinéraires représente 331 millions de tonnes-kilomètres supplémentaires, soit 22\,\% de l'effort de transport de référence. Les émissions correspondantes s'élèvent à 18\,338 tonnes de CO$_2$ en équivalent annuel, soit environ 703 tonnes sur la durée de l'événement, auxquelles s'ajoutent 5\,474 kg de NO$_x$ et 616 kg de PM2,5.
+	L'allongement des itinéraires représente 360 millions de tonnes-kilomètres supplémentaires, soit 26,0\,\% de l'effort de transport de référence. Les émissions correspondantes s'élèvent à 18\,684 tonnes de CO$_2$ en équivalent annuel, soit environ 717 tonnes sur la durée de l'événement, auxquelles s'ajoutent 5\,577 kg de NO$_x$ et 627 kg de PM2,5.
 
-	Ce surcroît d'émissions est proportionnellement supérieur à l'allongement du transport~: 23,6\,\% d'émissions supplémentaires pour 22\,\% de tonnes-kilomètres en plus. L'écart tient à la nature des itinéraires de substitution. Les émissions sont calculées avec l'intensité propre à chaque tronçon emprunté, or les routes de contournement sont en moyenne plus étroites, moins bien revêtues et plus pentues que les axes qu'elles remplacent~: une tonne-kilomètre de détour émet davantage qu'une tonne-kilomètre de trajet nominal.
+	Ce surcroît d'émissions est légèrement supérieur, en proportion, à l'allongement du transport~: 26,6\,\% d'émissions supplémentaires pour 26,0\,\% de tonnes-kilomètres en plus. L'écart, ténu, va dans le sens attendu au vu de la nature des itinéraires de substitution. Les émissions sont calculées avec l'intensité propre à chaque tronçon emprunté, or les routes de contournement sont en moyenne plus étroites, moins bien revêtues et plus pentues que les axes qu'elles remplacent~: une tonne-kilomètre de détour émet davantage qu'une tonne-kilomètre de trajet nominal. Sa faible amplitude indique toutefois que le report s'opère ici pour l'essentiel sur des axes de qualité comparable.
 
-	Le report de trafic se lit enfin dans la congestion. Sur le réseau intact, l'équilibre place 8 arêtes en sur-capacité~; sur le réseau amputé, elles sont 16, pour une saturation maximale comparable (1,62 contre 1,67). La coupure de 0,43\,\% du linéaire double donc le nombre de points de saturation, le trafic dévié se concentrant sur les itinéraires de contournement disponibles (figure \ref{fig:detours_rupture}).
+	Le report de trafic se lit enfin dans la congestion. Les arêtes en sur-capacité passent de 8 à 16 sur le réseau dégradé, et la saturation maximale s'élève de 1,65 à 1,73. La coupure de 0,59\,\% du linéaire double donc le nombre de points de saturation et aggrave le plus chargé d'entre eux, le trafic dévié se concentrant sur les itinéraires de contournement disponibles (figure \ref{fig:detours_rupture}).
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=\linewidth]{images/rupt_carte_detours.png}
-		\caption{Itinéraires de contournement — couleur : surcoût moyen des flux reroutés ; épaisseur : volume détourné}
+		\caption{Carte des itinéraires de contournement \\
+			\footnotesize Source : auteur}
 		\label{fig:detours_rupture}
 	\end{figure}
 
@@ -1067,24 +1239,25 @@
 
 	\subsubsection{L'enclave de Bugesera}
 
-	Les 860 paires déconnectées ne se répartissent pas sur l'ensemble du territoire~: elles se réduisent intégralement à cinq zones. Rilima, Ramiro, Kayumbo Centre, la zone industrielle 19 et la zone économique spéciale de Bugesera perdent chacune l'accès à 86 de leurs 90 partenaires, ne restant connectées qu'entre elles. Ces cinq zones, comprises entre 30,06 et 30,23 degrés de longitude est et entre 2,10 et 2,30 degrés de latitude sud, forment un ensemble contigu correspondant au district de Bugesera.
+	Les 1\,020 paires déconnectées ne se répartissent pas sur l'ensemble du territoire~: elles se réduisent intégralement à six zones. Rilima, Ramiro, Kayumbo Centre, la zone industrielle 19, la zone économique spéciale de Bugesera et le poste frontière de Nemba perdent chacun l'accès à 85 de leurs 90 partenaires, ne restant connectés qu'entre eux. Ces six zones forment un ensemble contigu correspondant au district de Bugesera, dont Nemba constitue le point de passage vers le Burundi.
 
-	Le résultat est géographiquement cohérent. Bugesera est bordé au nord et à l'ouest par la Nyabarongo, au sud par l'Akanyaru et la frontière burundaise, et parsemé de lacs~: le district ne communique avec le reste du pays que par un nombre restreint de franchissements, tous situés en fond de vallée et donc exposés à la crue. La submersion simultanée de ces points de passage suffit à isoler le district, alors même que le scénario ne coupe que 0,43\,\% du réseau national. L'enjeu n'est pas mince, ce district accueillant une zone économique spéciale et le futur aéroport international de Bugesera.
+	Le résultat est géographiquement cohérent. Bugesera est bordé au nord et à l'ouest par la Nyabarongo, au sud par l'Akanyaru et la frontière burundaise, et parsemé de lacs~: le district ne communique avec le reste du pays que par un nombre restreint de franchissements, tous situés en fond de vallée et donc exposés à la crue. La submersion simultanée de ces points de passage suffit à isoler le district, alors même que le scénario ne coupe que 0,59\,\% du réseau national. L'enjeu n'est pas mince, ce district accueillant une zone économique spéciale et le futur aéroport international de Bugesera.
 
 	Cette configuration illustre une propriété générale des réseaux peu maillés~: la vulnérabilité n'est pas proportionnelle à l'ampleur du dommage physique, mais dépend de la position des tronçons atteints dans la topologie du graphe. Quelques centaines de mètres de chaussée submergée en fond de vallée produisent un effet sans commune mesure avec plusieurs kilomètres coupés sur un axe doublé.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=\linewidth]{images/rupt_carte_reseau_degrade.png}
-		\caption{Réseau dégradé et impact par zone. L'enclavement fait l'objet d'une classe distincte (en noir) et non du haut de l'échelle de surcoût~: une zone déconnectée n'a pas de surcoût défini, et son surcoût moyen apparent, calculé sur les seules liaisons qui lui restent, serait trompeusement faible.}
+		\caption{Réseau dégradé et impact par zone \\
+			\footnotesize Source : auteur}
 		\label{fig:reseau_degrade}
 	\end{figure}
 
-	Hors déconnexion, les zones les plus pénalisées se situent dans le corridor central, entre Kigali et Huye~: Runda subit un surcoût relatif moyen de 195\,\%, Musambira de 132\,\%, Muhanga de 90\,\% et Ruhango de 79\,\%. Ce sont des zones dont les itinéraires vers la capitale franchissent la Nyabarongo et dont le contournement impose un long détour amont.
+	Hors déconnexion, les zones les plus pénalisées se situent dans le corridor central, entre Kigali et Huye~: Runda subit un surcoût relatif moyen de 211\,\%, Musambira de 146\,\%, Muhanga de 100\,\% et Ruhango de 88\,\%. Le surcoût est calculé paire par paire, comme l'augmentation du coût de transport d'une tonne entre une origine et une destination~; le chiffre associé à une zone en est la moyenne sur l'ensemble de ses liaisons effectivement détournées, les liaisons déconnectées et celles dont l'itinéraire est inchangé étant écartées. Il se lit donc comme la pénalité moyenne subie par les trajets au départ de cette zone, et non comme le renchérissement d'une liaison particulière. Ce sont des zones dont les itinéraires vers la capitale franchissent la Nyabarongo et dont le contournement impose un long détour amont.
 
 	\subsubsection{Criticité des axes}
 
-	L'analyse de criticité procède différemment~: plutôt que de simuler un événement, elle coupe une à une les 50 arêtes les plus chargées du réseau et mesure le surcoût agrégé qu'entraîne chaque suppression isolée, pondéré par les tonnages échangés. Les résultats sont agrégés par voie, la criticité d'une route étant définie comme le maximum sur ses tronçons — couper un seul tronçon suffit à interrompre l'itinéraire.
+	L'analyse de criticité procède différemment~: plutôt que de simuler un événement, elle coupe une à une les 50 arêtes les plus chargées du réseau et mesure le surcoût agrégé qu'entraîne chaque suppression isolée, pondéré par les tonnages échangés. Les résultats sont agrégés par voie, la criticité d'une route étant définie comme le maximum sur ses tronçons. Couper un seul tronçon suffit à interrompre l'itinéraire.
 
 	\begin{table}[H]
 		\centering
@@ -1094,38 +1267,40 @@
 			\toprule
 			Rang & Route & Tronçons & Long. (km) & Volume (t) & Criticité \\
 			\midrule
-			1 & Liaison Ngoma--Rusumo & 20 & 36,2 & 3\,514\,036 & 3\,022\,476 \\
-			2 & KK 3 Rd (Kigali)      &  5 &  3,0 & 3\,205\,427 &   238\,232 \\
-			3 & (sans nom, Kigali)    &  3 &  1,9 & 3\,097\,727 &   226\,086 \\
-			4 & KK 3 Rd (Kigali)      &  3 &  1,2 & 3\,205\,427 &   208\,374 \\
-			5 & KK 3 Rd (Kigali)      &  2 &  1,1 & 3\,205\,427 &   208\,374 \\
+			1 & Liaison Ngoma--Rusumo & 20 & 36,2 & 3\,511\,362 & 2\,983\,885 \\
+			2 & KK 3 Rd (Kigali)      &  5 &  3,0 & 3\,182\,156 &   236\,114 \\
+			3 & (sans nom, Kigali)    &  3 &  1,9 & 3\,089\,203 &   223\,333 \\
+			4 & KK 3 Rd (Kigali)      &  3 &  1,2 & 3\,182\,156 &   206\,917 \\
+			5 & KK 3 Rd (Kigali)      &  2 &  1,1 & 3\,182\,156 &   206\,917 \\
 			\bottomrule
 		\end{tabular}
 
 		\vspace{0.3em}
-		{\footnotesize Criticité en milliers de RWF $\times$ tonnes.}
+		\parbox{\linewidth}{\footnotesize Criticité en milliers de RWF $\times$ tonnes. \\
+			Source : auteur}
 	\end{table}
 
-	Le classement est écrasé par un axe unique. La liaison de 36 km qui relie la région de Ngoma au poste frontière de Rusumo porte 3,5 millions de tonnes, présente une criticité douze fois supérieure à celle de la deuxième route du classement, et sa coupure déconnecterait à elle seule 180 paires origine-destination — alors qu'aucune des quatre routes suivantes n'en déconnecte une seule. Cet axe est le débouché rwandais du corridor central vers Dar es Salaam, par lequel transite l'essentiel des importations du pays.
+	Le classement est écrasé par un axe unique. La liaison de 36 km qui relie la région de Ngoma au poste frontière de Rusumo porte 3,5 millions de tonnes, présente une criticité douze fois supérieure à celle de la deuxième route du classement, et sa coupure déconnecterait à elle seule 172 paires origine-destination alors qu'aucune des quatre routes suivantes n'en déconnecte une seule. Cet axe est le débouché rwandais du corridor central vers Dar es Salaam, par lequel transite l'essentiel des importations du pays.
 
 	Ce résultat pointe une vulnérabilité structurelle plutôt qu'un risque d'inondation~: cette route n'est pas particulièrement exposée à la crue, mais le pays n'a pas d'itinéraire de substitution comparable vers la Tanzanie. Les routes suivantes du classement sont, elles, des tronçons urbains de Kigali dont la criticité tient au volume qu'ils portent et non à l'absence d'alternative, comme le montre leur absence de déconnexion.
 
 	\begin{figure}[H]
 		\centering
 		\includegraphics[width=\linewidth]{images/rupt_carte_criticite_aretes.png}
-		\caption{Arêtes les plus critiques du réseau, classées par surcoût pondéré}
+		\caption{Arêtes les plus critiques du réseau, classées par surcoût pondéré \\
+			\footnotesize Source : auteur}
 		\label{fig:criticite}
 	\end{figure}
 
 	\subsubsection{Portée et limites de l'exercice}
 
-	Trois réserves encadrent la lecture de ces résultats.
+	Deux réserves encadrent la lecture de ces résultats.
 
-	D'abord, le coût de la déconnexion n'est pas valorisé. Une paire déconnectée reçoit un surcoût non défini et sort des moyennes~: les 501\,489 tonnes privées d'accès ne contribuent donc pas au chiffrage de 675 millions de RWF, qui constitue de ce fait une borne inférieure. Une évaluation complète supposerait de valoriser la production perdue ou substituée dans les zones isolées, ce qui relève du couplage avec un modèle économique évoqué en discussion.
+	D'une part, le coût de la déconnexion n'est pas valorisé. Une paire déconnectée reçoit un surcoût non défini et sort des moyennes~: les 791\,964 tonnes privées d'accès ne contribuent donc pas au chiffrage de 677 millions de RWF, qui constitue de ce fait une borne inférieure. Une évaluation complète supposerait de valoriser la production perdue ou substituée dans les zones isolées, ce qui relève du couplage avec un modèle économique évoqué en discussion.
 
-	Ensuite, l'aléa mobilisé est strictement fluvial. Les cartes du JRC ne représentent ni les crues éclair ni les glissements de terrain, or ce sont eux qui ont causé l'essentiel des dommages routiers lors des inondations de mai 2023 dans l'ouest du pays. La vulnérabilité des districts de l'Ouest est donc vraisemblablement sous-estimée par ce scénario.
+	D'autre part, l'aléa mobilisé est strictement fluvial. Les cartes du JRC ne représentent ni les crues éclair ni les glissements de terrain, or ce sont eux qui ont causé l'essentiel des dommages routiers lors des inondations de mai 2023 dans l'ouest du pays. La vulnérabilité des districts de l'Ouest est donc vraisemblablement sous-estimée par ce scénario.
 
-	Enfin, le seuil de submersion et la proportion de routes effectivement coupées sont des paramètres de jugement, non des grandeurs mesurées. Les capacités de voirie qui déterminent la congestion n'ont pas davantage été calibrées sur des comptages rwandais. Les ordres de grandeur présentés ici doivent donc être lus comme la démonstration d'un mécanisme et d'une chaîne de calcul, non comme une prévision chiffrée du coût d'une crue centennale au Rwanda.
+	Les ordres de grandeur présentés ici doivent donc être lus comme la démonstration d'un mécanisme et d'une chaîne de calcul, non comme une prévision chiffrée du coût d'une crue centennale au Rwanda.
 	
 	\section{Tests de sensibilité}
 	\label{sec:sensibilite}
@@ -1213,20 +1388,65 @@
 			\begin{minipage}{0.48\textwidth}
 				\centering
 				\includegraphics[width=\linewidth]{images/local_routes_hors_geante.png}
-				\caption{Localisation des routes non reliées à la composante géante}
+				\caption{Localisation des routes non reliées à la composante géante \\
+					\footnotesize Source : auteur}
 				\label{fig:local_routes_hors_geante}
 			\end{minipage}
 			\hfill
 			\begin{minipage}{0.48\textwidth}
 				\centering
 				\includegraphics[width=\linewidth]{images/types_routes_hors_geante.png}
-				\caption{Types de routes non reliées à la composante géante}
+				\caption{Types de routes non reliées à la composante géante \\
+					\footnotesize Source : auteur}
 				\label{fig:types_routes_hors_geante}
 			\end{minipage}
 		\end{figure}
 
 		\subsubsection{Quelques caractéristiques techniques du modèle}
 		Le projet a été développé via plusieurs scripts R interdépendants. L'ensemble de ces scripts ainsi que l'ensemble des cartes, graphiques et certaines données sont accessibles librement via le \href{https://github.com/GEMMES-AFD/Transport}{GitHub de l'AFD}
-		
-	
+
+		\subsubsection{Fichiers exportés par le modèle (dossier \texttt{exports/})}
+		\label{subsubsec:annexe_exports}
+
+		Chaque exécution complète du modèle (\texttt{run\_all.R}) écrit ses résultats dans le dossier \texttt{outputs/exports/}, aux formats CSV, Parquet (format colonnaire compressé, lisible avec \texttt{pandas} en Python ou le package \texttt{arrow} en R) et GeoPackage (format géospatial ouvert, compatible QGIS/ArcGIS). Les noms de fichiers liés à un scénario de choc ou de sensibilité intègrent l'identifiant du scénario (\texttt{NOM\_SCENARIO} / \texttt{SCENARIO\_ID}) afin de ne jamais écraser les résultats de référence.
+
+		\paragraph{Réseau routier}
+		\begin{itemize}
+			\item \texttt{reseau\_aretes.gpkg} — tronçons du réseau routier retenu (composante géante), avec pour chaque arête son type de route, son revêtement, sa longueur, sa pente moyenne et son coût au tonne-kilomètre pour les trois véhicules types (camionnette, camion moyen, camion lourd).
+			\item \texttt{reseau\_noeuds.gpkg} — nœuds du réseau, avec l'indicateur d'entrepôt (\texttt{is\_warehouse}), son nom et son type.
+			\item \texttt{aretes\_finales.csv} / \texttt{aretes\_finales.parquet} — version tabulaire (sans géométrie) de \texttt{reseau\_aretes.gpkg}.
+			\item \texttt{aretes\_couts\_tous\_vehicules.parquet} — coûts détaillés par arête et par véhicule (carburant, usure, temps, émissions de CO2/NOx/PM2.5 par tonne-kilomètre), avant sélection du véhicule de référence.
+			\item \texttt{couts\_prebordure.csv} — coût au tonne-kilomètre du transport pré-frontière (import/export), par pays partenaire et par secteur.
+			\item \texttt{reseau\_avec\_fret.gpkg} — réseau routier enrichi des volumes de fret affectés à chaque arête à l'issue de la partie VIII (tonnage total, classe de trafic, volumes par véhicule, part de camions lourds).
+			\item \texttt{volumes\_fret\_par\_secteur.csv} — même réseau, détaillé par secteur d'activité (ventilation du tonnage de chaque arête entre les secteurs producteurs).
+		\end{itemize}
+
+		\paragraph{Matrice origine-destination et flux de fret}
+		\begin{itemize}
+			\item \texttt{matrice\_od\_long.csv} / \texttt{matrice\_od.parquet} — matrice origine-destination au format long (une ligne par paire de nœuds), avec coût, distance et émissions du plus court chemin.
+			\item \texttt{matrice\_flux\_gravitaire\_tonnes.csv} — matrice des flux de tonnage entre entrepôts issue du modèle gravitaire (partie VII).
+			\item \texttt{matrice\_flux\_fret\_tonnes.csv} — matrice des flux de tonnage effectivement affectés au réseau (après choix modal).
+			\item \texttt{offre\_demande\_zones.csv} — offre et demande totales par zone d'entreposage, en milliards de RWF.
+		\end{itemize}
+
+		\paragraph{Comptabilité économique et logistique}
+		\begin{itemize}
+			\item \texttt{table\_io\_coefficients.csv} — matrice des coefficients techniques $A$ de la table entrées-sorties.
+			\item \texttt{table\_io\_recap.csv} — récapitulatif par secteur (production, consommation intermédiaire, valeur ajoutée, demande finale, tonnes par milliard de RWF).
+			\item \texttt{comptabilite\_couts\_eoq.csv} — ventilation du coût logistique annuel par secteur en quatre composantes (commande, transport, stock cyclique, stock en transit) et taille d'envoi optimale moyenne $q^*$ (modèle de Wilson), telle que décrite en annexe~\ref{subsubsec:annexe_composante_geante} et dans la partie sur le choix du véhicule.
+		\end{itemize}
+
+		\paragraph{Scénarios de choc et vulnérabilité (partie IX)}
+		\begin{itemize}
+			\item \texttt{impact\_od\_<scenario>.csv} — comparaison, pour chaque paire origine-destination, du coût et des émissions en situation de référence et en situation dégradée par le choc (surcoût absolu et relatif, type d'impact, tonnage affecté).
+			\item \texttt{criticite\_aretes\_<scenario>.csv} — indice de criticité de chaque tronçon du réseau (surcoût pondéré par le tonnage induit par sa suppression, nombre de déconnexions causées).
+			\item \texttt{criticite\_routes\_<scenario>.csv} — même indicateur agrégé par route (regroupement des tronçons partageant le même \texttt{osm\_id}).
+		\end{itemize}
+
+		\paragraph{Vérification et calibration}
+		Ces fichiers, préfixés \texttt{verif\_}, comparent des grandeurs simulées par le modèle aux sources officielles de calibration (voir annexe sur les sources) : convergence de l'algorithme de Furness, population et emploi par source, part de la valeur ajoutée par secteur, répartition modale du trafic (tonnes-kilomètres), taux de saturation et longueur du réseau par type de route, et un tableau de bord de synthèse comparant chaque indicateur du modèle à sa référence externe.
+
+		\paragraph{Tests de sensibilité}
+		Le sous-dossier \texttt{sensibilite/} contient un répertoire par run testé (variations ponctuelles d'un paramètre, ex. \texttt{beta\_moins20}, \texttt{vot\_double}, ou tirages latin hypercube sampling \texttt{lhs\_01} à \texttt{lhs\_20}), chacun reproduisant l'intégralité des exports ci-dessus pour ce jeu de paramètres. Le fichier \texttt{plan\_lhs.csv} liste, pour chaque tirage \texttt{lhs\_XX}, les multiplicateurs appliqués aux paramètres $\beta$ (fonction de friction) et aux valeurs au tonne par secteur.
+
 \end{document}
