@@ -719,10 +719,19 @@ dem_zones  <- matrix(0, n_warehouses, N_SECTEURS,
 #   explicitement ci-dessous après construction de offre_zones / demande_zones.
 # ==============================================================================
 
-# Emploi national par secteur = somme sur toutes les zones actives.
+# Postes-frontière "passage" (00_parametres.R, cf. warehouse_passage_uniquement
+# dans 01_reseau.R Partie IV.3-bis) : sans cellule de Voronoï propre, ils n'ont
+# ni population ni emploi (Partie IV.6/IV.4.F) et doivent rester à l'écart de
+# la production/demande domestiques — ils ne servent qu'au commerce extérieur
+# (idx_frontiere_par_pays, plus bas). emp_i est déjà nul pour eux ; is_passage_seul
+# sert plus bas à annuler aussi le terme RWI (non pondéré par population), seul
+# canal qui leur donnerait sinon une part de production non nulle.
+is_passage_seul <- replace_na(noeuds_entreposage$warehouse_passage_uniquement, FALSE)
+
+# Emploi national par secteur = somme sur les zones "ville" actives.
 # Garantit que Σ_i x[i,s] = production_totale[s] (la production est entièrement
-# allouée aux zones, sans fuite hors réseau).
-emploi_national <- colSums(emploi_zone_secteur, na.rm = TRUE)
+# allouée aux zones "ville", sans fuite hors réseau).
+emploi_national <- colSums(emploi_zone_secteur[!is_passage_seul, , drop = FALSE], na.rm = TRUE)
 # Protection contre division par zéro si un secteur est absent du RPHC5.
 emploi_national[emploi_national == 0] <- 1
 
@@ -739,8 +748,9 @@ p_rwi_zones <- diag_rwi$p_rwi[
 p_rwi_zones <- replace_na(p_rwi_zones, median(p_rwi_zones, na.rm = TRUE))
 stopifnot(length(p_rwi_zones) == n_warehouses)
 
-# Dénominateur du terme RWI dans le poids de production (Σ_i p_rwi_i).
-rwi_total <- sum(p_rwi_zones)
+# Dénominateur du terme RWI dans le poids de production (Σ_i p_rwi_i), calculé
+# sur les seules zones "ville" (cf. is_passage_seul ci-dessus).
+rwi_total <- sum(p_rwi_zones[!is_passage_seul])
 if (rwi_total == 0) stop("rwi_total est nul — vérifier diag_rwi dans persist.")
 
 # Poids de demande finale z[i] = pop[i] × (p_rwi[i] + ε) — forme multiplicative.
@@ -820,7 +830,10 @@ for (i in seq_len(n_warehouses)) {
   # est une caractéristique géographique de la zone, pas sectorielle.
   emp_i      <- emploi_zone_secteur[i, ]           # vecteur N_SECTEURS (effectifs bruts)
   part_emp_i <- emp_i / emploi_national            # part d'emploi par secteur (Σ_i = 1)
-  part_rwi_i <- p_rwi_zones[i] / rwi_total         # part RWI scalaire (Σ_i = 1)
+  # part_rwi_i forcée à 0 pour un poste-frontière "passage" : sans cette
+  # exclusion il recevrait quand même une part de production via ce seul
+  # terme RWI (non pondéré par population, contrairement à la demande finale).
+  part_rwi_i <- if (is_passage_seul[i]) 0 else p_rwi_zones[i] / rwi_total  # part RWI scalaire (Σ_i = 1)
   w_i        <- ALPHA_EMPLOI_RWI * part_emp_i + (1 - ALPHA_EMPLOI_RWI) * part_rwi_i
   x_i        <- production_totale * w_i            # vecteur N_SECTEURS (mrd RWF)
 
@@ -884,54 +897,6 @@ recap_zones <- duck_query("
 ")
 
 cat("✓ Offres et demandes domestiques stockées dans DuckDB\n\n")
-
-# ==============================================================================
-# VII.2.B.2 : Vérification du bilan ressources-emplois au prix de base
-#
-# Principe (Approche prix de base, cf. discussion méthodologique) :
-#   Toutes les grandeurs (production, demande finale, coefficients A, imports,
-#   exports) proviennent de lire_sam() au prix de base, après retrait du
-#   « coin » marges (trc) + taxes (stax, mtax) via le facteur k.
-#
-#   On vérifie ici que le bilan ressources-emplois tient par secteur :
-#     Σ_i offre_zones[i,s] + imports[s] ≈ Σ_i demande_zones[i,s] + exports[s]
-#
-#   Ce bilan est garanti mathématiquement (cf. commentaire VII.2.B), mais la
-#   vérification explicite permet de détecter toute dérive numérique ou
-#   incohérence entre les données SAM et les données d'emploi/population.
-#
-#   Note : les coûts de transport (c_ij) sont capturés par la fonction de coût
-#   du graphe routier (02_couts.R) et non par la SAM — intégrer trc dans les
-#   masses du modèle gravitaire constituerait un double comptage.
-# ==============================================================================
-
-cat("── Vérification bilan ressources-emplois au prix de base ──────────────\n")
-
-offre_dom_nat  <- colSums(offre_zones)    # Σ_i offre_zones[i,s]  (mrd RWF)
-demande_dom_nat <- colSums(demande_zones) # Σ_i demande_zones[i,s] (mrd RWF)
-imports_s      <- sam$imports[SECTEURS]
-exports_s      <- sam$exports[SECTEURS]
-
-# Résidu = (offre_dom + imports) − (demande_dom + exports) doit être ≈ 0
-residu_bilan <- (offre_dom_nat + imports_s) - (demande_dom_nat + exports_s)
-
-bilan_pb_df <- tibble(
-  Secteur      = SECTEURS,
-  Offre_dom    = round(offre_dom_nat,   1),
-  Imports_SAM  = round(imports_s,       1),
-  Demande_dom  = round(demande_dom_nat, 1),
-  Exports_SAM  = round(exports_s,       1),
-  Residu       = round(residu_bilan,    4)
-)
-print(bilan_pb_df, n = Inf)
-
-residu_max <- max(abs(residu_bilan))
-if (residu_max < 0.01) {
-  cat("  ✓ Bilan prix de base vérifié — résidu max :", round(residu_max, 6), "mrd RWF\n\n")
-} else {
-  warning("⚠ Bilan prix de base déséquilibré (résidu max : ", round(residu_max, 2),
-          " mrd RWF) — vérifier la cohérence entre lire_sam() et les données MRIO.")
-}
 
 # ==============================================================================
 # VII.2.C : Couche virtuelle RoW (Rest of World)
@@ -1222,7 +1187,7 @@ furness_gravity <- function(O_s,
   if (ecart_rel > TOL_EQUILIBRE_MARGES) {
     stop("  [", secteur, "] Marges déséquilibrées : ΣO = ", round(total_O, 3),
          ", ΣD = ", round(total_D, 3), " (écart ", round(ecart_rel * 100, 6),
-         " %).\n  → Vérifier le bilan ressources-emplois VII.2.B.2 ",
+         " %).\n  → Vérifier l'allocation MRIO VII.2.B ",
          "(Σ_i prod_zones[i,s] doit valoir production_totale[s]).")
   }
 
@@ -1310,7 +1275,7 @@ furness_gravity <- function(O_s,
       warning("  [", secteur, "] Furness non convergé après ", FURNESS_MAX_ITER,
               " itérations. Erreur finale : ", round(err_max * 100, 4), "%",
               "\n  → Vérifier les zones isolées (offre ou demande = 0).",
-              "\n  → Augmenter FURNESS_MAX_ITER ou revoir C_IJ_PLANCHER.")
+              "\n  → Augmenter FURNESS_MAX_ITER.")
     }
   }
   
@@ -1448,6 +1413,12 @@ flux_total <- matrix(0, nrow = n_total, ncol = n_total,
 #   Σ_i o_dom_zones  = Σ_i q_dom_zones = X − exports = D − imports (domestique équil.)
 #   La dernière égalité découle du bilan SAM (X + imports = D + exports).
 # ==============================================================================
+
+# Agrégats de commerce extérieur de la SAM, au prix de base (mrd RWF).
+# Ce sont les totaux nationaux à répartir entre les zones par les propensions
+# ci-dessous ; ils servent aussi de cibles de marges aux jambes export/import.
+imports_s <- sam$imports[SECTEURS]
+exports_s <- sam$exports[SECTEURS]
 
 # Propensions sectorielles (uniformes entre zones)
 tau_E <- ifelse(production_totale[SECTEURS] > 1e-12,
