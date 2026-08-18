@@ -15,6 +15,33 @@
 ################################################################################
 
 # ==============================================================================
+# I.0 : Locale UTF-8
+# Sans ceci, la session R démarre en locale "C" (US-ASCII) sur certaines
+# installations. Les accents (é, è, à, —…) écrits dans le code, eux, sont en
+# UTF-8 : avec une locale ASCII, les devices graphiques (notamment le device
+# PNG "quartz" utilisé en repli quand XQuartz/cairo est absent, voir
+# viz_vulnerabilite.R) ne savent pas interpréter ces octets et affichent des
+# points à la place des caractères accentués sur les cartes et graphiques.
+# On essaie plusieurs locales UTF-8 dans l'ordre ; si aucune n'est installée
+# sur la machine (cas rare, ex. certains environnements Linux minimalistes),
+# on n'échoue pas silencieusement : un avertissement est affiché.
+# ==============================================================================
+.locales_utf8_candidates <- c("fr_FR.UTF-8", "en_US.UTF-8", "C.UTF-8")
+.locale_ok <- FALSE
+for (.loc in .locales_utf8_candidates) {
+  if (suppressWarnings(!isFALSE(tryCatch(Sys.setlocale("LC_ALL", .loc), error = function(e) FALSE)))) {
+    .locale_ok <- TRUE
+    break
+  }
+}
+if (!.locale_ok) {
+  warning("Aucune locale UTF-8 disponible (essayé : ",
+          paste(.locales_utf8_candidates, collapse = ", "),
+          ") — les caractères accentués risquent de mal s'afficher sur les cartes/graphiques.")
+}
+rm(.locales_utf8_candidates, .locale_ok, .loc)
+
+# ==============================================================================
 # I.1 : Packages et options
 # Installe et charge les packages nécessaires. Augmente le timeout pour
 # les téléchargements de gros fichiers (DEM, PBF).
@@ -42,6 +69,7 @@ packages_requis <- c(
   "digest",        # Génération d'empreinte numérique (hash) d'objets R
   "ggrepel",       # Étiquettes ggplot2 sans chevauchement (graphiques RWI, démographie)
   "ggalluvial",    # Diagrammes de Sankey pour les flux de fret (viz_fret.R)
+  "ggnewscale",    # Deuxième échelle "fill" dans un même ggplot
   "ggpattern",     # Remplissages hachurés (composition sectorielle : exports/imports vs domestique)
   "RColorBrewer",  # Palettes de couleurs pour les cartes et graphiques sectoriels
   "readxl",        # Lecture des fichiers Excel (.xlsx) — utilisé pour la SAM IFPRI 2021
@@ -450,6 +478,29 @@ entreposages_manuels <- tibble(
           -2.8200,
           -2.5965, -1.4992, -1.6750, -2.4900,
           -2.1000, -2.0850, -2.3500, -1.8700),
+  # passage_uniquement = TRUE pour un poste frontière qui n'est qu'un point de
+  # passage douanier (pas de véritable agglomération propre) : il ne reçoit pas
+  # de polygone de Voronoï ni de population/production/demande domestiques
+  # (01_reseau.R Partie IV.6, 03_transport.R Partie VII.2.B) et ne sert qu'au
+  # routage du commerce extérieur (03_transport.R Partie VII.2.C-VII.5). Le
+  # territoire environnant est hérité par la ville la plus proche.
+  # FALSE = poste frontière avec une vraie ville (garde le rôle de zone
+  # économique complète, en plus du commerce extérieur), ou zone non
+  # frontalière (la colonne ne s'applique pas).
+  # Critère retenu : population WorldPop dans un rayon de 4 km autour du poste.
+  #   Rubavu/Goma 152 602, Rusizi/Bukavu 57 376, Bugarama 49 660 → ville
+  #   Gatuna 16 566, Kagitumba 15 250, Rusumo 15 024, Nemba 9 056,
+  #   Akanyaru-Haut 4 053 → passage
+  passage_uniquement = c(
+    FALSE, FALSE, FALSE,
+    TRUE, TRUE, FALSE, TRUE,
+    FALSE,
+    TRUE, FALSE,
+    TRUE,
+    FALSE, FALSE, FALSE, FALSE,
+    FALSE,
+    FALSE, FALSE, FALSE
+  ),
   source = "manuel"
 )
 
@@ -1388,6 +1439,20 @@ PALETTE_ZONE_TYPE <- c(
   ville     = "#880088",   # Violet      — ville
   industrie = "#FF6600"    # Orange foncé— zone industrielle
 )
+
+# ── Type simplifié des zones, pour la légende « Type » des cartes ─────────────
+# Les cartes n'opposent plus les 6 types d'entrepôt (hub, sez, marché,
+# frontière, ville, industrie) mais seulement les postes-frontière au reste,
+# regroupé sous « Ville ». Le détail par type (PALETTE_ZONE_TYPE) reste utilisé
+# par ailleurs pour les cartes qui distinguent les 6 types.
+PALETTE_TYPE <- c(
+  "Frontière" = "#FF0000",   # Rouge  — poste frontière
+  "Ville"     = "#880088"    # Violet — tout le reste (hub, sez, marché, ville, industrie)
+)
+
+# Regroupe un type brut de zone (warehouse_type / type_zone) en 2 catégories
+# ("Frontière" vs "Ville") pour l'affichage sur les cartes.
+type_simplifie <- function(type_brut) if_else(type_brut == "frontiere", "Frontière", "Ville")
 
 # ── Coûts généralisés (gradient jaune pâle → bordeaux) ────────────────────────
 PALETTE_COUTS <- c("#FFF7BC", "#FEC44F", "#D94701", "#7F0000")
