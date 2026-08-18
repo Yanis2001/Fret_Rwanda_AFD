@@ -1,9 +1,10 @@
 ################################################################################
 # run_sensibilite.R
-# RÔLE : Lancer une ANALYSE DE SENSIBILITÉ PAR HYPERCUBE LATIN sur les deux
+# RÔLE : Lancer une ANALYSE DE SENSIBILITÉ PAR HYPERCUBE LATIN sur les trois
 #        familles de paramètres les plus incertaines du modèle :
 #          • BETA_SECTEUR          — élasticités du modèle gravitaire ;
-#          • VALEUR_RWF_PAR_TONNE  — conversion valeur → tonnes.
+#          • VALEUR_RWF_PAR_TONNE  — conversion valeur → tonnes ;
+#          • valeur_temps          — prix du temps (colonne de params_flotte_df).
 #        Aucune sortie du run de référence (run_all.R) n'est écrasée.
 #
 #
@@ -46,8 +47,11 @@
 RELANCER_RESEAU <- FALSE
 
 # Modules de visualisation à rejouer pour chaque scénario.
-SENS_VIZ_RESEAU   <- FALSE  # cartes de coûts/pentes : inutiles ici (le réseau et
-                            # la valeur du temps ne varient pas dans ce plan)
+SENS_VIZ_RESEAU   <- FALSE  # cartes de coûts/pentes : la géographie ne varie pas
+                            # et les indicateurs de synthèse portent sur les flux,
+                            # pas sur la carte des coûts. Passez à TRUE pour
+                            # inspecter visuellement l'effet de la valeur du temps
+                            # sur les coûts par arête, scénario par scénario.
 SENS_VIZ_FRET     <- TRUE   # cartes de trafic, Sankey, compositions sectorielles
 SENS_VIZ_VULNERAB <- FALSE  # vulnérabilité : coûteuse et peu affectée par ce plan
 
@@ -82,9 +86,10 @@ source("00_parametres.R", local = FALSE)
 secteurs_sens <- SECTEURS_FRET
 n_sec <- length(secteurs_sens)
 
-# Dimensions de l'hypercube : un axe par (secteur × beta) + un axe par
-# (secteur × valeur-tonne). Avec 8 secteurs de fret → 16 dimensions.
-n_dim <- 2L * n_sec
+# Dimensions de l'hypercube : un axe par (secteur × beta), un axe par
+# (secteur × valeur-tonne), plus UN axe unique pour la valeur du temps (partagée
+# par les trois véhicules). Avec 8 secteurs de fret → 8 + 8 + 1 = 17 dimensions.
+n_dim <- 2L * n_sec + 1L
 
 set.seed(SENS_LHS_GRAINE)
 
@@ -95,12 +100,15 @@ set.seed(SENS_LHS_GRAINE)
 # (2 × amplitude) : mult = (1 − amp) + u × (2 × amp).
 U <- lhs::randomLHS(SENS_LHS_N, n_dim)
 
-# Colonnes 1..n_sec  → multiplicateurs des betas
-# Colonnes (n_sec+1)..2n_sec → multiplicateurs des valeurs/tonne
+# Colonnes 1..n_sec            → multiplicateurs des betas
+# Colonnes (n_sec+1)..2n_sec   → multiplicateurs des valeurs/tonne
+# Colonne  n_dim (la dernière) → multiplicateur de la valeur du temps
 mult_beta_mat <- (1 - SENS_LHS_AMPLITUDE_BETA) +
                  U[, 1:n_sec, drop = FALSE] * (2 * SENS_LHS_AMPLITUDE_BETA)
 mult_val_mat  <- (1 - SENS_LHS_AMPLITUDE_VALEUR_TONNE) +
-                 U[, (n_sec + 1):n_dim, drop = FALSE] * (2 * SENS_LHS_AMPLITUDE_VALEUR_TONNE)
+                 U[, (n_sec + 1):(2 * n_sec), drop = FALSE] * (2 * SENS_LHS_AMPLITUDE_VALEUR_TONNE)
+mult_vot_vec  <- (1 - SENS_LHS_AMPLITUDE_VOT) +
+                 U[, n_dim] * (2 * SENS_LHS_AMPLITUDE_VOT)
 
 colnames(mult_beta_mat) <- secteurs_sens
 colnames(mult_val_mat)  <- secteurs_sens
@@ -117,12 +125,14 @@ plan_lhs <- data.frame(
   id = ids_sens,
   mult_beta_mat,
   mult_val_mat,
+  mult_vot_vec,
   check.names = FALSE,
   stringsAsFactors = FALSE
 )
 names(plan_lhs) <- c("id",
                      paste0("beta_",     secteurs_sens),
-                     paste0("valtonne_", secteurs_sens))
+                     paste0("valtonne_", secteurs_sens),
+                     "vot")
 
 DIR_SENS_EXPORTS <- file.path(DIR_EXPORTS, "sensibilite")   # référence → outputs/exports/sensibilite
 dir.create(DIR_SENS_EXPORTS, showWarnings = FALSE, recursive = TRUE)
@@ -133,8 +143,8 @@ readr::write_csv(plan_lhs, file.path(DIR_SENS_EXPORTS, "plan_lhs.csv"))
 # appliquent, secteur par secteur, les multiplicateurs du tirage. force() fige
 # les vecteurs dans la fermeture (sinon, dans la boucle, toutes les fonctions
 # partageraient le dernier tirage — piège classique de portée en R).
-faire_surcharge <- function(mult_beta, mult_val) {
-  force(mult_beta); force(mult_val)
+faire_surcharge <- function(mult_beta, mult_val, mult_vot) {
+  force(mult_beta); force(mult_val); force(mult_vot)
   list(
     BETA_SECTEUR = function(b) {
       b[names(mult_beta)] <- b[names(mult_beta)] * mult_beta[names(mult_beta)]
@@ -143,6 +153,17 @@ faire_surcharge <- function(mult_beta, mult_val) {
     VALEUR_RWF_PAR_TONNE = function(v) {
       v[names(mult_val)] <- v[names(mult_val)] * mult_val[names(mult_val)]
       v
+    },
+    # Valeur du temps : le multiplicateur du tirage s'applique à la colonne
+    # valeur_temps des trois véhicules à la fois. On surcharge params_flotte_df
+    # en entier (et non la seule colonne) parce que c'est ce nom d'objet que
+    # 00_parametres.R sait traiter : il réécrit ensuite la table DuckDB
+    # params_flotte, lue en SQL par 02_couts.R pour construire les coûts par
+    # arête. Sans cette réécriture, le SQL continuerait d'utiliser l'ancienne
+    # valeur du temps et le test serait sans effet.
+    params_flotte_df = function(pf) {
+      pf$valeur_temps <- pf$valeur_temps * mult_vot
+      pf
     }
   )
 }
@@ -151,11 +172,12 @@ faire_surcharge <- function(mult_beta, mult_val) {
 SCENARIOS <- lapply(seq_len(SENS_LHS_N), function(k) {
   mb <- mult_beta_mat[k, ]
   mv <- mult_val_mat[k, ]
+  mt <- mult_vot_vec[k]
   list(
     id        = ids_sens[k],
-    libelle   = sprintf("Tirage LHS %d/%d — betas ×[%.2f;%.2f], valeurs/tonne ×[%.2f;%.2f]",
-                        k, SENS_LHS_N, min(mb), max(mb), min(mv), max(mv)),
-    surcharge = faire_surcharge(mb, mv)
+    libelle   = sprintf("Tirage LHS %d/%d — betas ×[%.2f;%.2f], valeurs/tonne ×[%.2f;%.2f], valeur du temps ×%.2f",
+                        k, SENS_LHS_N, min(mb), max(mb), min(mv), max(mv), mt),
+    surcharge = faire_surcharge(mb, mv, mt)
   )
 })
 
@@ -167,9 +189,11 @@ t_debut_sens <- Sys.time()
 cat("\n╔══════════════════════════════════════════════════════╗\n")
 cat(  "║  SENSIBILITÉ — HYPERCUBE LATIN :", SENS_LHS_N, "tirages          ║\n")
 cat(  "╚══════════════════════════════════════════════════════╝\n")
-cat("  Dimensions          :", n_dim, "(", n_sec, "betas +", n_sec, "valeurs/tonne )\n")
+cat("  Dimensions          :", n_dim, "(", n_sec, "betas +", n_sec,
+    "valeurs/tonne + 1 valeur du temps )\n")
 cat("  Amplitude betas      : ±", 100 * SENS_LHS_AMPLITUDE_BETA, "%\n")
 cat("  Amplitude valeurs    : ±", 100 * SENS_LHS_AMPLITUDE_VALEUR_TONNE, "%\n")
+cat("  Amplitude val. temps : ±", 100 * SENS_LHS_AMPLITUDE_VOT, "%\n")
 cat("  Plan d'expérience    :", file.path(DIR_SENS_EXPORTS, "plan_lhs.csv"), "\n\n")
 
 for (.sc in SCENARIOS) {

@@ -1130,14 +1130,16 @@ stopifnot(setequal(names(BETA_SECTEUR), SECTEURS_FRET))
 # Paramètres des tests de sensibilité par HYPERCUBE LATIN (run_sensibilite.R)
 # ==============================================================================
 # Objectif : mesurer comment les résultats du modèle réagissent à l'incertitude
-# sur les deux familles de paramètres les moins bien connues — les élasticités
-# gravitaires (BETA_SECTEUR) et les valeurs unitaires (VALEUR_RWF_PAR_TONNE).
+# sur les familles de paramètres les moins bien connues — les élasticités
+# gravitaires (BETA_SECTEUR), les valeurs unitaires (VALEUR_RWF_PAR_TONNE) et
+# la valeur du temps (colonne valeur_temps de params_flotte_df).
 #
 # Pourquoi un hypercube latin plutôt qu'un coefficient uniforme ?
 #   Multiplier TOUS les betas (ou toutes les valeurs/tonne) par un même facteur
 #   ne teste qu'une seule direction de variation et confond l'effet des
 #   secteurs. Ici, CHAQUE secteur voit son beta ET sa valeur/tonne varier
-#   INDÉPENDAMMENT. Le plan d'expérience est un hypercube latin
+#   INDÉPENDAMMENT, et la valeur du temps varie sur un axe supplémentaire.
+#   Le plan d'expérience est un hypercube latin
 #   (lhs::randomLHS) : pour N tirages et d paramètres, chaque paramètre est
 #   découpé en N intervalles de même probabilité et chacun n'est visité qu'une
 #   fois. On obtient une couverture homogène de l'espace des paramètres avec
@@ -1156,10 +1158,49 @@ SENS_LHS_N <- 20
 SENS_LHS_AMPLITUDE_BETA         <- 0.30
 #   0.30 → chaque valeur unitaire (RWF/tonne) est tirée dans [0.70 ; 1.30].
 SENS_LHS_AMPLITUDE_VALEUR_TONNE <- 0.30
+# Amplitude appliquée à la VALEUR DU TEMPS (colonne valeur_temps de
+# params_flotte_df). Un multiplicateur UNIQUE est tiré par scénario et appliqué
+# aux trois véhicules : la valeur du temps est une hypothèse d'ensemble sur le
+# prix du délai, et non un paramètre propre à chaque véhicule. Le rapport entre
+# véhicules est donc préservé, mais le poids relatif du temps face au carburant
+# et à l'usure change — ce qui déplace aussi bien les itinéraires retenus que
+# le choix du véhicule (le coût du temps est rapporté à la capacité en tonnes).
+#   0.30 → la valeur du temps de tous les véhicules est tirée dans [0.70 ; 1.30].
+SENS_LHS_AMPLITUDE_VOT          <- 0.30
 
 # Graine aléatoire : rend le plan LHS reproductible d'une exécution à l'autre
 # (mêmes scénarios → figures de synthèse comparables et réexécutables).
 SENS_LHS_GRAINE <- 123
+
+# ── Paramètres de la synthèse comparative (viz_sensibilite.R) ────────────────
+
+# Scénario de rupture dont les surcoûts et le classement de criticité sont
+# analysés. Le module 05 écrit un jeu de fichiers par scénario de rupture
+# (impact_od_<nom>.csv, criticite_aretes_<nom>.csv) : il faut donc désigner
+# celui que la synthèse compare entre tirages.
+#   NULL  → détection automatique : on retient le scénario présent à la fois
+#           dans les exports de référence et dans le plus grand nombre de
+#           dossiers de tirages (le nom retenu est affiché dans la console).
+#   "..." → nom explicite, ex. "Inondation_RN1_Kigali_Huye".
+SENS_SCENARIO_VULNERAB <- NULL
+
+# Nombre de zones affichées dans le graphique de volatilité de la localisation
+# de l'offre et de la demande. Les 91 zones ne tiennent pas sur un graphique
+# lisible : on ne montre que les plus dispersées entre tirages.
+SENS_N_ZONES_VOLATILES <- 15
+
+# Part minimale du tonnage national qu'une zone doit porter pour entrer dans ce
+# classement. Le classement se fait sur une dispersion RELATIVE : sans plancher,
+# il est trusté par des zones minuscules dont la part passe de 0,05 % à 0,15 %,
+# ce qui fait un écart relatif spectaculaire pour un déplacement de fret
+# négligeable — et qui écrase l'échelle des zones réellement importantes.
+# 0.005 = la zone doit peser au moins 0,5 % du tonnage national expédié ou reçu.
+SENS_PART_MIN_ZONE <- 0.005
+
+# Nombre d'arêtes du classement de criticité de RÉFÉRENCE dont on suit la
+# stabilité entre tirages. Au-delà d'une vingtaine, les libellés d'axe
+# deviennent illisibles.
+SENS_TOP_CRITICITE <- 20
 
 # ==============================================================================
 # Paramètres de l'affectation All-or-Nothing
@@ -1494,6 +1535,16 @@ PALETTE_SATURATION <- c(
 # Rouge = route très émettrice (pente forte + mauvaise surface + véhicule lourd)
 # Vert  = route peu émettrice (plat, bitumée, camion léger)
 PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
+
+# Palette des figures de ROBUSTESSE (viz_sensibilite.R) : elle code un
+# coefficient de variation entre tirages, c'est-à-dire une grandeur dont les
+# deux extrémités ont un sens explicite — vert = résultat stable quelles que
+# soient les hypothèses, rouge = résultat qui dépend fortement des paramètres.
+# C'est une échelle de « chaleur sémantique » et non une simple gradation de
+# magnitude : elle est donc légitimement multi-teintes, à condition d'être
+# toujours accompagnée de sa légende. Centralisée ici pour que la carte des
+# arêtes et celle des zones partagent exactement le même code couleur.
+PALETTE_ROBUSTESSE <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 
 # ── Secteurs économiques (dans l'ordre de SECTEURS) ───────────────────────────
 # Centralisé ici pour garantir que chaque secteur a toujours la même couleur
