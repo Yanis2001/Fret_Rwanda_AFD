@@ -41,13 +41,13 @@
   >
 ]>
 <requests version="1.0">
-  <internal package="biblatex" priority="9" active="0">
+  <internal package="biblatex" priority="9" active="1">
     <generic>latex</generic>
     <provides type="dynamic">
-      <file>"mémoire fret rwanda".bcf</file>
+      <file>"mémoire fret rwanda".bcf</file>
     </provides>
     <requires type="dynamic">
-      <file>"mémoire fret rwanda".bbl</file>
+      <file>"mémoire fret rwanda".bbl</file>
     </requires>
     <requires type="static">
       <file>blx-dm.def</file>
@@ -60,23 +60,23 @@
       <file>french.lbx</file>
     </requires>
   </internal>
-  <external package="biblatex" priority="5" active="0">
+  <external package="biblatex" priority="5" active="1">
     <generic>biber</generic>
     <cmdline>
       <binary>biber</binary>
-      <infile>"mémoire fret rwanda"</infile>
+      <infile>"mémoire fret rwanda"</infile>
     </cmdline>
     <input>
-      <file>"mémoire fret rwanda".bcf</file>
+      <file>"mémoire fret rwanda".bcf</file>
     </input>
     <output>
-      <file>"mémoire fret rwanda".bbl</file>
+      <file>"mémoire fret rwanda".bbl</file>
     </output>
     <provides type="dynamic">
-      <file>"mémoire fret rwanda".bbl</file>
+      <file>"mémoire fret rwanda".bbl</file>
     </provides>
     <requires type="dynamic">
-      <file>"mémoire fret rwanda".bcf</file>
+      <file>"mémoire fret rwanda".bcf</file>
     </requires>
     <requires type="editable">
       <file>references.bib</file>

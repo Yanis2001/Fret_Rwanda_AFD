@@ -338,7 +338,12 @@
 	
 	Enfin, nous produisons des scénarios de rupture des routes pour voir comment évolue le modèle dans ces cas.
 	
+	\medskip
+	\medskip
+	
 	\textbf{Une utilisation importante des LLM de l'entreprise Anthropic}
+	
+	\medskip
 	
 	Afin de faciliter le déroulement du projet, un abonnement payant à Claude Code de 20€/mois a été contracté.
 	
@@ -1332,24 +1337,14 @@
 	Les modèles entrée-sortie pour l'évaluation des impacts des catastrophes naturelles \cite{Miller2009, Leontief1936, Okuyama2007} constituent le cadre théorique fondamental de cette analyse. Les travaux récents de \cite{Carvalho2021} et \cite{Inoue2019} sur la propagation des chocs dans les chaînes d'approvisionnement ont également fortement influencé la conception de ce modèle.
 	
 	\section{Limites du travail}
-	
-	Le travail présenté comporte un certain nombre de limitations qui méritent d'être mentionnées :
-	
-	\begin{itemize}
-		\item Les routes sont considérées comme étant à double sens (pour réduire le nombre de calculs)
-		\item Tous les entrepôts ne sont pas des points OD. Pas possible de faire un changement modal à l'entrée d'une ville par exemple
-		\item Hypothèse d'homogénéité des biens et services au sein des secteurs (EX d'un entrepôt $i$ = $O_i - D_i$)
-		\item Hypothèse que la matrice des coefficients techniques $(A)$ est identique entre les différents entrepôts
-		\item Hypothèse d'exposition uniforme de tous les entrepôts au commerce extérieur
-		\item Hypothèse d'uniformité du prix du temps
-		\item Pas de modélisation du dernier km
-		\item Pas d'effet du secteur sur le choix modal et le chemin optimal
-		\item Le choix modal et le chemin optimal ne tiennent pas compte de l'ensemble des coûts logistiques
-		\item La répartition des flux est déterministe et pas probabiliste, ce qui risque de concentrer artificiellement les flux sur certaines routes
-		\item RWI représente la richesse des ménages, pas l'activité productive locale
-		\item Le transbordement n'a pas de temps associé
-		\item Pas de rétroactions de l'effet de la congestion sur les volumes échangés par paire d'entrepôts
-	\end{itemize}
+
+	Les choix de simplification qui rendent le modèle praticable ont des conséquences qu'il convient d'expliciter. Elles peuvent être regroupées en trois familles~: celles qui touchent à la représentation du réseau et des points d'échange, celles qui touchent à l'agrégation des grandeurs économiques, et celles qui touchent au comportement de transport et à l'affectation des flux.
+
+	\paragraph{Représentation du réseau et des points d'échange.} Le graphe du réseau routier (section~\ref{subsubsec:reseau_routier}) est non orienté~: chaque route est supposée praticable dans les deux sens, ce qui réduit le nombre de calculs mais ignore d'éventuelles asymétries de circulation. Tous les entrepôts ne sont pas des points OD, si bien que le modèle ne peut pas représenter un changement modal à l'entrée d'une ville. Le dernier kilomètre, c'est-à-dire la distribution fine au sein d'une même zone, n'est pas modélisé~: le facteur urbain de l'équation~\ref{eq:cout_t} pénalise les gros véhicules en zone dense, mais n'en tient pas lieu. De la même façon, les arcs de transbordement ne reçoivent qu'un coût fixe défini en paramètre (section~\ref{subsubsec:cout_generalise}) et aucun temps ne leur est associé, alors qu'un changement de véhicule immobilise en pratique la marchandise.
+
+	\paragraph{Agrégation économique et sectorielle.} L'excédent net d'un entrepôt $i$ est calculé comme $O_i - D_i$ (équation~\ref{eq:prod_i}), ce qui suppose une homogénéité des biens et services à l'intérieur de chaque secteur. La matrice des coefficients techniques $A$ est supposée identique pour tous les entrepôts, faute d'information sur l'hétérogénéité des systèmes techniques par point OD (section~\ref{subsubsec:affectation_conso})~; cette hypothèse est d'autant plus tenable que le Rwanda est un petit territoire à structure productive peu diversifiée, mais elle reste une limite reconnue du travail. Les taux d'exposition au commerce extérieur $\tau_{E,s}$ et $\tau_{M,s}$ sont eux aussi appliqués uniformément à l'ensemble des localisations, faute de données plus précises (section~\ref{subsubsec:decompo_comex}). Le prix du temps, enfin, est supposé uniforme entre entrepôts (équation~\ref{eq:cout_temps}), alors que le RWI utilisé pour pondérer l'allocation de la production locale (section~\ref{subsubsec:affectation_prod}) capte la richesse des ménages et non l'activité productive, ce qui n'en est qu'une approximation grossière.
+
+	\paragraph{Comportement de transport et affectation des flux.} Le choix du mode et du chemin optimal résulte de la seule minimisation du coût généralisé (section~\ref{subsubsec:cout_generalise}) et ne dépend pas du secteur transporté, alors que les exigences de manutention et la valeur du temps diffèrent en pratique d'un bien à l'autre. Ce coût ne couvre pas non plus l'ensemble des coûts logistiques~: le coût de détention du stock en transit, reconstruit ex post à des fins de comptabilité (section~\ref{subsubsec:compta_logistiq}), n'entre pas dans le critère qui détermine l'itinéraire. La répartition des flux obtenue par la méthode des moyennes successives (section~\ref{subsubsec:MSA}) est par ailleurs déterministe et non probabiliste, ce qui risque de concentrer artificiellement les flux sur certaines routes plutôt que de refléter la diversité des choix individuels des chargeurs. Enfin, la congestion, telle que modélisée par la fonction BPR (section~\ref{subsubsec:BPR}), agit sur les temps de parcours et donc sur le choix d'itinéraire, mais pas sur les volumes échangés~: aucune rétroaction ne relie la congestion à la demande fixée en amont par la distribution gravitaire.
 	
 	\section{Extensions futures et recommandations}
 	
@@ -1448,5 +1443,17 @@
 
 		\paragraph{Tests de sensibilité}
 		Le sous-dossier \texttt{sensibilite/} contient un répertoire par run testé (variations ponctuelles d'un paramètre, ex. \texttt{beta\_moins20}, \texttt{vot\_double}, ou tirages latin hypercube sampling \texttt{lhs\_01} à \texttt{lhs\_20}), chacun reproduisant l'intégralité des exports ci-dessus pour ce jeu de paramètres. Le fichier \texttt{plan\_lhs.csv} liste, pour chaque tirage \texttt{lhs\_XX}, les multiplicateurs appliqués aux paramètres $\beta$ (fonction de friction) et aux valeurs au tonne par secteur.
+
+		\subsubsection{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}
+		\label{subsubsec:annexe_afd_gemmes}
+
+		\paragraph{L'Agence Française de Développement}
+		L'Agence Française de Développement (AFD) est un établissement public français qui met en œuvre la politique de développement et de solidarité internationale de la France. Elle finance, accompagne et accélère des projets en faveur du climat, de la biodiversité, de la paix, de l'éducation, de la santé ou encore de l'égalité femmes-hommes, dans les pays en développement, émergents et dans les Outre-mer français. Le groupe AFD, qui inclut sa filiale Proparco dédiée au secteur privé, intervient dans plus d'une centaine de pays via un réseau d'agences locales, dont l'agence de Kigali au Rwanda, à l'origine de la présente étude.
+
+		\paragraph{Le département Économie (ECO)}
+		Au sein de l'AFD, le département Économie (ECO) réunit les économistes de l'institution chargés de produire des analyses, des recherches et des outils d'aide à la décision pour éclairer les stratégies de financement du développement. Ce département contribue à la fois à la recherche académique publiée par l'AFD (notes techniques, papiers de recherche, revue \textit{Question de Développement}) et à l'appui direct aux équipes opérationnelles, en apportant une expertise économique sur des sujets tels que le commerce international, les infrastructures, la macroéconomie ou l'évaluation d'impact des projets financés.
+
+		\paragraph{L'équipe GEMMES}
+		Le programme GEMMES (Gérer les Enjeux Macroéconomiques et de Modélisation Environnementale et Sociale) est une initiative de recherche du département ECO consacrée à la modélisation économique des interactions entre systèmes climatiques, environnementaux et économiques. L'équipe développe des modèles quantitatifs (notamment des modèles d'équilibre général, des modèles multi-agents et des modèles input-output) permettant d'évaluer les impacts macroéconomiques du changement climatique et des politiques d'adaptation ou d'atténuation dans les pays partenaires de l'AFD. Le présent mémoire, portant sur la modélisation du fret routier rwandais et sa vulnérabilité aux inondations, s'inscrit dans cette démarche : il vise à outiller l'équipe GEMMES et l'agence AFD de Kigali d'un modèle reproductible permettant de quantifier les conséquences économiques d'une dégradation du réseau de transport, en amont d'une extension future vers un couplage avec un modèle macroéconomique dynamique de type ARIO/ESTEEM (voir annexe sur le couplage envisagé).
 
 \end{document}
