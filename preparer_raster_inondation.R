@@ -31,12 +31,23 @@
 #   https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/
 #
 # UTILISATION :
-#   1. Exécuter ce script une fois (les tuiles doivent être présentes).
+#   1. Exécuter ce script une fois. Les tuiles absentes sont téléchargées
+#      automatiquement depuis le serveur public du JRC.
 #   2. Dans 00_parametres.R, choisir GLOFAS_PERIODE_RETOUR (10, 100 ou 500).
 #   3. Lancer 05_vulnerabilite.R normalement (UTILISER_MODE_RASTER <- TRUE).
+#
+#   Le module 05 appelle lui-même ce script quand le raster est introuvable :
+#   un run sur une machine neuve (SSPCloud) reconstruit donc les données seul.
+#   L'appelant peut restreindre le travail à certaines périodes de retour en
+#   définissant glofas_periodes_demandees avant de sourcer ce script.
 ################################################################################
 
 library(terra)
+
+# Paramètres GloFAS (URL du JRC, tuiles, emprise…) : définis dans 00_parametres.R.
+# Le test evite de re-sourcer les paramètres quand un module l'a déjà fait, ce qui
+# permet d'exécuter ce script aussi bien seul que depuis le pipeline.
+if (!exists("GLOFAS_URL_BASE")) source("00_parametres.R")
 
 cat("=== Préparation du raster d'aléa inondation (JRC / GloFAS) ===\n\n")
 
@@ -44,14 +55,52 @@ cat("=== Préparation du raster d'aléa inondation (JRC / GloFAS) ===\n\n")
 # Bounding box du Rwanda élargie d'une marge : les postes frontières et les
 # nœuds RoW se trouvent sur la frontière, et le réseau OSM extrait déborde
 # légèrement du pays. Une marge évite de tronquer l'aléa sur ces zones.
-DOSSIER_TUILES <- "data/raw/glofas"
-TUILES         <- c("ID139_N0_E20", "ID151_N0_E30")
-PERIODES       <- c(10, 100, 500)
+DOSSIER_TUILES <- GLOFAS_DOSSIER_TUILES
+TUILES         <- GLOFAS_TUILES
 
-emprise_rwanda <- ext(28.80, 30.95, -2.90, -1.00)   # xmin, xmax, ymin, ymax
+# Périodes traitées : celles demandées par l'appelant si la variable existe
+# (le module 05 ne demande que la période de son scénario, pour éviter de
+# télécharger et mosaïquer les trois), sinon toutes celles des paramètres.
+PERIODES <- if (exists("glofas_periodes_demandees")) {
+  glofas_periodes_demandees
+} else {
+  GLOFAS_PERIODES
+}
+
+emprise_rwanda <- ext(GLOFAS_EMPRISE)   # xmin, xmax, ymin, ymax
 
 cat("Emprise de découpe : lon", xmin(emprise_rwanda), "à", xmax(emprise_rwanda),
     "| lat", ymin(emprise_rwanda), "à", ymax(emprise_rwanda), "\n\n")
+
+# ── Téléchargement d'une tuile brute depuis le JRC ────────────────────────────
+# Les tuiles brutes ne sont pas versionnées : sur une machine neuve il faut les
+# récupérer. Le succès est jugé sur la taille du fichier obtenu et non sur
+# l'absence d'erreur, car download.file() signale une erreur HTTP par un simple
+# avertissement en laissant un fichier tronqué sur le disque.
+# Renvoie TRUE si la tuile est disponible en local à la sortie de la fonction.
+telecharger_tuile <- function(nom_fichier, sous_dossier) {
+  chemin <- file.path(DOSSIER_TUILES, nom_fichier)
+
+  # Résidu d'un téléchargement précédent interrompu : on repart de zéro.
+  if (file.exists(chemin) && file.size(chemin) < GLOFAS_TAILLE_MIN_OCTETS) {
+    file.remove(chemin)
+  }
+  if (file.exists(chemin)) return(TRUE)
+
+  dir.create(DOSSIER_TUILES, recursive = TRUE, showWarnings = FALSE)
+  url <- paste(GLOFAS_URL_BASE, sous_dossier, nom_fichier, sep = "/")
+  cat("  ↓ Téléchargement de", nom_fichier, "...\n")
+  try(download.file(url, destfile = chemin, mode = "wb", quiet = TRUE),
+      silent = TRUE)
+
+  if (file.exists(chemin) && file.size(chemin) >= GLOFAS_TAILLE_MIN_OCTETS) {
+    cat("    ✓", round(file.size(chemin) / 1e6, 1), "Mo\n")
+    return(TRUE)
+  }
+  if (file.exists(chemin)) file.remove(chemin)
+  cat("    ✗ Échec du téléchargement (", url, ")\n")
+  FALSE
+}
 
 # ── Chargement d'un masque (eaux permanentes / profondeurs aberrantes) ────────
 # Les masques sont fournis par le JRC sous le même découpage en tuiles que les
@@ -60,9 +109,14 @@ cat("Emprise de découpe : lon", xmin(emprise_rwanda), "à", xmax(emprise_rwanda
 # exécutable avec les seules tuiles de profondeur.
 charger_masque <- function(suffixe) {
   morceaux <- list()
+  # Sous-dossier du JRC correspondant au masque demandé.
+  sous_dossier <- switch(suffixe,
+                         "permanent_water"       = "Permanent_WaterBodies",
+                         "spurious_depth_areas"  = "Spurious_Depths")
   for (tuile in TUILES) {
-    chemin <- file.path(DOSSIER_TUILES, sprintf("%s_%s.tif", tuile, suffixe))
-    if (!file.exists(chemin)) return(NULL)
+    nom    <- sprintf("%s_%s.tif", tuile, suffixe)
+    chemin <- file.path(DOSSIER_TUILES, nom)
+    if (!file.exists(chemin) && !telecharger_tuile(nom, sous_dossier)) return(NULL)
     r <- rast(chemin)
     if (is.null(intersect(ext(r), emprise_rwanda))) next
     morceaux[[tuile]] <- crop(r, emprise_rwanda)
@@ -85,10 +139,11 @@ preparer_periode <- function(rp) {
   # amont sur l'intersection des emprises.
   morceaux <- list()
   for (tuile in TUILES) {
-    chemin <- file.path(DOSSIER_TUILES, sprintf("%s_RP%d_depth.tif", tuile, rp))
-    if (!file.exists(chemin)) {
-      stop("Tuile manquante : ", chemin,
-           "\n  Relancer le téléchargement depuis le JRC Data Store.")
+    nom    <- sprintf("%s_RP%d_depth.tif", tuile, rp)
+    chemin <- file.path(DOSSIER_TUILES, nom)
+    if (!file.exists(chemin) && !telecharger_tuile(nom, sprintf("RP%d", rp))) {
+      stop("Tuile manquante et non téléchargeable : ", chemin,
+           "\n  Vérifier l'accès réseau à ", GLOFAS_URL_BASE)
     }
     r <- rast(chemin)
     if (is.null(intersect(ext(r), emprise_rwanda))) {

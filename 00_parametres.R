@@ -387,6 +387,43 @@ GLOFAS_PERIODE_RETOUR       <- 100
 CHEMIN_RASTER_RISQUE        <- sprintf(
   "data/raw/zones_inondables_rwanda_glofas_rp%03d.tif", GLOFAS_PERIODE_RETOUR)
 
+# ── Acquisition des tuiles GloFAS brutes ─────────────────────────────────────
+# Les rasters d'aléa découpés sur le Rwanda ne sont pas versionnés (exclus par
+# .gitignore comme tous les .tif) : sur une machine neuve — un service SSPCloud
+# par exemple — ils sont absents et le Mode C du module 05 n'a aucune donnée.
+# Ces paramètres permettent à preparer_raster_inondation.R de retélécharger les
+# tuiles brutes depuis le serveur public du JRC et de reconstruire les rasters.
+
+# Racine de l'arborescence publique du JRC. Les fichiers y sont rangés par
+# période de retour (RP10/, RP100/…) et les deux masques dans leurs propres
+# dossiers (Permanent_WaterBodies/, Spurious_Depths/).
+GLOFAS_URL_BASE <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/",
+                          "CEMS-GLOFAS/flood_hazard")
+
+# Dossier local où sont stockées les tuiles brutes téléchargées.
+GLOFAS_DOSSIER_TUILES <- "data/raw/glofas"
+
+# Tuiles de 10°×10° couvrant le Rwanda, à cheval sur les méridiens 20-30°E
+# et 30-40°E. À adapter si le pays étudié change.
+GLOFAS_TUILES <- c("ID139_N0_E20", "ID151_N0_E30")
+
+# Périodes de retour à préparer par défaut (une sortie .tif par période).
+GLOFAS_PERIODES <- c(10, 100, 500)
+
+# Emprise de découpe : bounding box du pays élargie d'une marge, car les postes
+# frontières et les nœuds RoW sont sur la frontière et le réseau OSM extrait
+# déborde légèrement du pays. Ordre : xmin, xmax, ymin, ymax (WGS84).
+GLOFAS_EMPRISE <- c(28.80, 30.95, -2.90, -1.00)
+
+# Taille plancher (octets) d'une tuile brute valide. Une tuile depth pèse
+# 15-21 Mo ; un téléchargement interrompu ou une erreur HTTP laisse un fichier
+# minuscule que le run suivant prendrait pour un cache valide.
+GLOFAS_TAILLE_MIN_OCTETS <- 1e6
+
+# Script de reconstruction des rasters, appelé automatiquement par le module 05
+# lorsque CHEMIN_RASTER_RISQUE est introuvable.
+SCRIPT_PREPARER_RASTER <- "preparer_raster_inondation.R"
+
 # ==============================================================================
 # Paramètres DEM (Modèle Numérique de Terrain)
 # ==============================================================================

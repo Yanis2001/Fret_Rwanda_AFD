@@ -184,11 +184,30 @@ if (UTILISER_MODE_BUFFER) {
 # ── Mode C : raster de risque ─────────────────────────────────────────────────
 if (UTILISER_MODE_RASTER) {
   
+  # Les rasters d'aléa ne sont pas versionnés (.gitignore exclut les .tif) :
+  # sur une machine neuve ils sont absents. On tente donc de les reconstruire en
+  # appelant preparer_raster_inondation.R, qui télécharge les tuiles brutes du
+  # JRC puis les mosaïque. Seule la période de retour du scénario est préparée,
+  # pour ne pas télécharger les trois jeux de tuiles inutilement.
+  # local = ... : le script s'exécute dans son propre environnement (lecture des
+  # paramètres globaux possible, mais ses variables de travail ne polluent pas
+  # celles du module).
+  if (!file.exists(CHEMIN_RASTER_RISQUE) && file.exists(SCRIPT_PREPARER_RASTER)) {
+    cat("  Mode C : raster absent — reconstruction depuis les tuiles JRC/GloFAS\n")
+    env_raster <- new.env(parent = globalenv())
+    assign("glofas_periodes_demandees", GLOFAS_PERIODE_RETOUR, envir = env_raster)
+    try(source(SCRIPT_PREPARER_RASTER, local = env_raster), silent = FALSE)
+    rm(env_raster)
+  }
+
   if (!file.exists(CHEMIN_RASTER_RISQUE)) {
     # warning() affiche un message d'avertissement sans arrêter le script
     # (contrairement à stop() qui arrêterait l'exécution)
     warning("  ⚠ Mode C activé mais fichier raster introuvable : ",
-            CHEMIN_RASTER_RISQUE, "\n  Mode C ignoré.\n")
+            CHEMIN_RASTER_RISQUE,
+            "\n  La reconstruction via ", SCRIPT_PREPARER_RASTER,
+            " a échoué (accès réseau au serveur du JRC ?).",
+            "\n  Mode C ignoré.\n")
   } else {
     
     cat("  Mode C (raster) : chargement de", CHEMIN_RASTER_RISQUE, "...\n")
@@ -313,11 +332,23 @@ if (length(osm_ids_perturbes) > 0) {
 n_perturb <- length(indices_aretes_perturbees)
 
 if (n_perturb == 0) {
-  # Si aucune arête n'est trouvée, on arrête avec un message explicatif
+  # Si aucune arête n'est trouvée, on arrête avec un message explicatif.
+  # Cas le plus fréquent sur une machine neuve : le Mode C est le seul mode actif
+  # et son raster n'a pas pu être obtenu — on le signale explicitement plutôt que
+  # de laisser croire à un mauvais réglage de seuil.
+  diagnostic_raster <- if (UTILISER_MODE_RASTER &&
+                           !file.exists(CHEMIN_RASTER_RISQUE)) {
+    paste0("  → Mode Raster : fichier d'aléa absent (", CHEMIN_RASTER_RISQUE,
+           ").\n     Lancer source(\"", SCRIPT_PREPARER_RASTER,
+           "\") pour le reconstruire.\n")
+  } else {
+    "  → Mode Raster : le seuil est-il trop élevé ?\n"
+  }
+
   stop("⚠ Aucune arête perturbée identifiée. Vérifiez les paramètres du scénario.\n",
        "  → Mode Buffer : les coordonnées GPS sont-elles dans le pays étudié ?\n",
        "  → Mode Manuel : les osm_id existent-ils dans le réseau ?\n",
-       "  → Mode Raster : le seuil est-il trop élevé ?\n")
+       diagnostic_raster)
 }
 
 cat("\n✓ Arêtes perturbées identifiées :", n_perturb, "\n")
