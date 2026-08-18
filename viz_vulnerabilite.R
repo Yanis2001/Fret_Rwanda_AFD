@@ -96,10 +96,13 @@ aretes_reseau_sf <- reseau %>%
 # ── Reconstruction de coords_zones_sf ─────────────────────────────────────────
 # Points sf des zones d'entrepôt, utilisés sur la Carte D (itinéraires de détour).
 # Version simplifiée sans taille_point — la Carte D n'en a pas besoin.
+# type : type simplifié de la zone ("Frontière" vs "Ville"), pour la légende
+# "Type" des cartes (00_parametres.R).
 coords_zones_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
-  st_as_sf()
+  st_as_sf() %>%
+  mutate(type = type_simplifie(warehouse_type))
 
 .vuln <- readRDS(PERSIST_VULNERAB)
 list2env(.vuln, envir = .GlobalEnv)
@@ -170,6 +173,10 @@ impact_par_zone_sf <- reseau %>%
     surcout_total_rwf = replace_na(surcout_total_rwf, 0),
     n_deconnexions    = replace_na(n_deconnexions, 0L),
 
+    # type simplifié de la zone ("Frontière" vs "Ville"), pour la légende
+    # "Type" utilisée quand aucun surcoût n'est disponible (00_parametres.R).
+    type              = type_simplifie(warehouse_type),
+
     # ── Classe d'impact de la zone ────────────────────────────────────────────
     # Une zone largement déconnectée doit apparaître comme telle et NON dans la
     # classe « 0 à 5 % ». Son surcoût moyen n'est en effet calculé que sur les
@@ -222,6 +229,29 @@ zone_impact_visible <- aretes_perturbees_sf %>%
   st_buffer(dist = 2000) %>%   # 2km de buffer pour être visible sur la carte
   st_union()
 
+# ── Poids de la perturbation ──────────────────────────────────────────────────
+# Deux indicateurs pour situer l'ampleur du scénario, affichés dans la note de
+# lecture de la Carte A :
+#  1. part du linéaire total du réseau (tous tronçons, utilisés ou non) que
+#     représentent les arêtes coupées ;
+#  2. part du linéaire des « axes effectivement utilisés » — les tronçons qui
+#     portaient déjà du fret (volume_tonnes > 0) avant la perturbation — qui se
+#     retrouve coupée. Ce second indicateur est le plus parlant économiquement :
+#     un scénario peut couper un faible pourcentage du réseau brut tout en
+#     touchant une part importante des axes qui comptent réellement pour le fret.
+km_total_reseau   <- sum(aretes_reseau_sf$length_km, na.rm = TRUE)
+km_perturbe       <- sum(aretes_perturbees_sf$length_km, na.rm = TRUE)
+pct_reseau_touche <- 100 * km_perturbe / km_total_reseau
+
+aretes_utilisees_sf <- aretes_reseau_sf %>%
+  filter(volume_tonnes > 0)
+km_utilise           <- sum(aretes_utilisees_sf$length_km, na.rm = TRUE)
+km_utilise_perturbe  <- sum(
+  aretes_perturbees_sf$length_km[aretes_perturbees_sf$arete_idx %in% aretes_utilisees_sf$arete_idx],
+  na.rm = TRUE
+)
+pct_axes_utilises_touches <- if (km_utilise > 0) 100 * km_utilise_perturbe / km_utilise else 0
+
 carte_reseau_degrade <- fond_carte() +
   
   # Réseau de base en gris clair
@@ -242,7 +272,19 @@ carte_reseau_degrade <- fond_carte() +
   tm_shape(aretes_perturbees_sf) +
   tm_lines(col = "#CC0000", lwd = 3.5,
            col.legend = tm_legend(show = FALSE)) +
-  
+
+  # Entrée de légende manuelle pour les arêtes perturbées : tm_lines() ci-dessus
+  # utilise une couleur fixe (pas une variable), donc tmap ne génère pas de
+  # légende automatique pour cette couche. tm_add_legend() ajoute une entrée
+  # dédiée avec le même rouge, pour que la carte reste lisible sans légende.
+  tm_add_legend(
+    labels   = "Arêtes coupées / perturbées",
+    col      = "#CC0000",
+    lwd      = 3.5,
+    type     = "lines",
+    position = tm_pos_out("right", "center")
+  ) +
+
   # Points des zones colorés par classe d'impact. On utilise une échelle
   # CATÉGORIELLE et non un découpage du surcoût moyen : l'enclavement n'est pas
   # un surcoût élevé, c'est une absence de coût définissable, et il doit se lire
@@ -250,17 +292,42 @@ carte_reseau_degrade <- fond_carte() +
   tm_shape(impact_par_zone_sf) +
   tm_dots(
     fill        = "classe_impact",
-    fill.scale  = tm_scale_categorical(values = PALETTE_CLASSE_ZONE),
-    fill.legend = tm_legend(title = "Impact sur la zone"),
-    size = 0.8
+    # labels : mêmes intitulés que les niveaux du facteur classe_impact, sauf
+    # « Déconnectée » qui est explicitée pour que la légende porte sa propre
+    # définition (zone ayant perdu l'accès à ≥ 50 % de ses destinations
+    # habituelles — voir le calcul de part_deconnectee plus haut).
+    fill.scale  = tm_scale_categorical(
+      values = PALETTE_CLASSE_ZONE,
+      labels = c(
+        "Surcoût < 5 %",
+        "Surcoût 5–20 %",
+        "Surcoût 20–50 %",
+        "Surcoût 50–100 %",
+        "Surcoût ≥ 100 %",
+        "Déconnectée (≥ 50 % des destinations habituelles coupées)"
+      )
+    ),
+    # position/width fixés explicitement : avec l'intitulé long de la classe
+    # « Déconnectée », l'algorithme de mise en page automatique de tmap peut
+    # décider de replier la légende en bas (où elle chevauche la note de
+    # lecture) plutôt qu'à droite. On force donc la légende à droite — alignée
+    # verticalement au centre pour longer la carte comme avant, et non calée en
+    # haut de page — avec une largeur suffisante pour que l'intitulé tienne sur
+    # une seule colonne.
+    fill.legend = tm_legend(
+      title    = "Impact sur la zone",
+      position = tm_pos_out("right", "center"),
+      width    = 22
+    ),
+    size = 0.5
   ) +
   
   tm_title(paste0("Réseau dégradé — ", NOM_SCENARIO,
                   "\n", DESCRIPTION_SCENARIO)) +
   tm_credits(
     note_lecture(sprintf(
-      "ce scénario coupe %d tronçons (rouge) et enclave %d zone(s) (points noirs, « Déconnectée »).",
-      nrow(aretes_perturbees_sf), n_zones_deconnectees
+      "ce scénario coupe %d tronçons (%.1f%% du linéaire routier total ; %.1f%% du linéaire des axes qui portaient déjà du fret avant la perturbation) et enclave %d zone(s) (« Déconnectée »).",
+      nrow(aretes_perturbees_sf), pct_reseau_touche, pct_axes_utilises_touches, n_zones_deconnectees
     )),
     position = tm_pos_out("center", "bottom", "left", "top"),
     size     = 0.65
@@ -279,12 +346,30 @@ cat("  ✓ Carte A sauvegardée\n")
 # ── CARTE B : Arêtes critiques (top N classées par criticité) ─────────────────
 cat("  Génération Carte B — arêtes critiques...\n")
 
+# Libellé "tranche (xx,x %)" par tranche de rang, part du linéaire des
+# arêtes affichées (top N) — insérée dans la légende comme pour la carte des
+# pentes. Mêmes seuils que col.scale ci-dessous ; .drop = FALSE conserve les
+# tranches vides (ex. si N_ARETES_AFFICHEES < 20) pour garder 5 catégories.
+breaks_rang  <- c(0, 5, 10, 15, 20, Inf)
+libelles_rang <- c("0 à 5", "5 à 10", "10 à 15", "15 à 20", "20 et plus")
+km_par_rang <- aretes_critiques_sf %>%
+  st_drop_geometry() %>%
+  mutate(tranche_rang = cut(rang, breaks = breaks_rang, labels = libelles_rang)) %>%
+  group_by(tranche_rang, .drop = FALSE) %>%
+  summarise(km = sum(length_km, na.rm = TRUE), .groups = "drop")
+
+labels_rang_pct <- sprintf(
+  "%s (%s %%)",
+  km_par_rang$tranche_rang,
+  sub("\\.", ",", sprintf("%.1f", 100 * km_par_rang$km / sum(km_par_rang$km)))
+)
+
 carte_criticite <- fond_carte() +
-  
+
   # Réseau de base en gris très clair
   tm_shape(aretes_reseau_sf) +
   tm_lines(col = "#EEEEEE", lwd = 0.3) +
-  
+
   # Arêtes avec trafic, colorées par leur rang de criticité
   # (plus rouge = plus critique = suppression la plus coûteuse)
   tm_shape(aretes_critiques_sf) +
@@ -292,19 +377,26 @@ carte_criticite <- fond_carte() +
     col        = "rang",
     col.scale  = tm_scale_intervals(
       style  = "fixed",
-      breaks = c(0, 5, 10, 15, 20, Inf),
-      values = rev(c("#FFF5F0", "#FCBBA1", "#FC7050", "#EF3B2C", "#99000D"))
+      breaks = breaks_rang,
+      values = rev(c("#FFF5F0", "#FCBBA1", "#FC7050", "#EF3B2C", "#99000D")),
+      labels = labels_rang_pct
     ),
     col.legend = tm_legend(title = paste0("Rang de criticité\n(top ",
                                           N_ARETES_AFFICHEES, ")")),
     lwd        = 3
   ) +
   
-  # Arêtes perturbées du scénario actuel
-  tm_shape(aretes_perturbees_sf) +
-  tm_lines(col = "#0000CC", lwd = 2,
-           col.legend = tm_legend(show = FALSE)) +
-  
+  # Arêtes perturbées du scénario actuel. Colonne constante "type_ligne" pour
+  # forcer une entrée de légende dédiée (bleu), distincte du dégradé de
+  # criticité ci-dessus.
+  tm_shape(aretes_perturbees_sf %>% mutate(type_ligne = "Arête perturbée du scénario")) +
+  tm_lines(
+    col        = "type_ligne",
+    col.scale  = tm_scale_categorical(values = c("Arête perturbée du scénario" = "#0000CC")),
+    col.legend = tm_legend(title = "Scénario"),
+    lwd        = 2
+  ) +
+
   tm_title(paste0("Arêtes critiques du réseau — ", NOM_SCENARIO,
                   "\nTop ", N_ARETES_AFFICHEES, " par surcoût pondéré")) +
   tm_credits(
@@ -342,12 +434,12 @@ carte_vulnerabilite <- fond_carte() +
   tm_shape(aretes_reseau_sf) +
   tm_lines(col = "#DDDDDD", lwd = 0.3) +
   
-  # Taille des points proportionnelle au surcoût total (exposition économique)
-  # Couleur selon la présence de déconnexions (rouge = zone coupée du réseau)
+  # Couleur selon la présence de déconnexions (rouge = zone coupée du réseau) ;
+  # taille fixe (0,5), commune à tous les points OD des cartes du projet.
   tm_shape(impact_par_zone_sf) +
   {
     if (has_surcouts) {
-      # Version complète : taille et couleur variables
+      # Version complète : couleur selon le nombre de destinations coupées
       tm_dots(
         fill       = "n_deconnexions",
         fill.scale = tm_scale_intervals(
@@ -355,17 +447,15 @@ carte_vulnerabilite <- fond_carte() +
           values = c("#2166AC", "#FEE08B", "#F46D43", "#A50026")
         ),
         fill.legend = tm_legend(title = "Nb de destinations\ncoupées"),
-        size        = "surcout_total_rwf",
-        size.scale  = tm_scale(values.range = c(0.3, 2.5)),
-        size.legend = tm_legend(title = "Surcoût total\n(RWF)")
-      ) 
+        size        = 0.5
+      )
     } else {
-      # Version dégradée : taille fixe, couleur selon type de zone
+      # Version dégradée : aucun surcoût à représenter, couleur selon type de zone
       tm_dots(
-        fill        = "warehouse_type",
-        fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-        fill.legend = tm_legend(title = "Type de zone"),
-        size        = 0.6
+        fill        = "type",
+        fill.scale  = tm_scale(values = PALETTE_TYPE),
+        fill.legend = tm_legend(title = "Type"),
+        size        = 0.5
       )
     }
   } +
@@ -407,10 +497,29 @@ cat("  Génération du graphique de distribution...\n")
 n_exemple_surcout <- sum(od_compare$surcout_relatif_pct >= 45 &
                           od_compare$surcout_relatif_pct < 55, na.rm = TRUE)
 
-g_surcouts <- od_compare %>%
-  filter(!is.na(surcout_relatif_pct), surcout_relatif_pct > 0) %>%
+donnees_surcout <- od_compare %>%
+  filter(!is.na(surcout_relatif_pct), surcout_relatif_pct > 0)
+
+# Bornes des barres calées sur les seuils de classification de type_impact
+# (10 %, 50 %, 100 % — voir 05_vulnerabilite.R). Avec un simple bins = 40,
+# les limites des barres tombaient au hasard par rapport à ces seuils : une
+# barre pouvait alors contenir des paires OD "faible" et "modere" à la fois,
+# ce qui empilait deux couleurs sur une même barre. On part d'une grille
+# log-régulière à 40 points (même densité visuelle qu'avant) et on y insère
+# les 3 seuils exacts, pour qu'aucune barre ne chevauche deux catégories.
+grille_log <- 10^seq(log10(min(donnees_surcout$surcout_relatif_pct)),
+                      log10(max(donnees_surcout$surcout_relatif_pct)),
+                      length.out = 40)
+seuils_classification <- c(10, 50, 100)
+seuils_a_inserer <- seuils_classification[
+  seuils_classification > min(donnees_surcout$surcout_relatif_pct) &
+  seuils_classification < max(donnees_surcout$surcout_relatif_pct)
+]
+bornes_histogramme <- sort(unique(c(grille_log, seuils_a_inserer)))
+
+g_surcouts <- donnees_surcout %>%
   ggplot(aes(x = surcout_relatif_pct, fill = type_impact)) +
-  geom_histogram(bins = 40, color = "white", linewidth = 0.2) +
+  geom_histogram(breaks = bornes_histogramme, color = "white", linewidth = 0.2) +
   scale_fill_manual(
     values = PALETTE_IMPACT,
     name   = "Type d'impact"
@@ -499,17 +608,77 @@ aretes_detour_sf <- aretes_reseau_sf %>%
     lwd_detour = as.numeric(rescale(log10(vol_detourne_t + 1), to = c(0.6, 5)))
   )
 
+# Part du linéaire de détour par classe de surcoût, insérée dans la parenthèse
+# déjà utilisée pour la borne de surcoût (ex. "Faible (<10%, 23,4 % du
+# linéaire)") — même principe que pour la carte des pentes.
+km_par_surcout <- aretes_detour_sf %>%
+  st_drop_geometry() %>%
+  group_by(classe_surcout, .drop = FALSE) %>%
+  summarise(km = sum(length_km, na.rm = TRUE), .groups = "drop")
+
+labels_surcout_pct <- setNames(
+  sprintf("%s, %s %% du linéaire)",
+          sub("\\)$", "", as.character(km_par_surcout$classe_surcout)),
+          sub("\\.", ",", sprintf("%.1f", 100 * km_par_surcout$km / sum(km_par_surcout$km)))),
+  as.character(km_par_surcout$classe_surcout)
+)
+
+aretes_detour_sf <- aretes_detour_sf %>%
+  mutate(classe_surcout_pct = factor(
+    labels_surcout_pct[as.character(classe_surcout)],
+    levels = labels_surcout_pct[names(PALETTE_SURCOUT_DETOUR)]
+  ))
+
+palette_surcout_pct <- setNames(
+  PALETTE_SURCOUT_DETOUR,
+  labels_surcout_pct[names(PALETTE_SURCOUT_DETOUR)]
+)
+
+# ── Zone inondée du scénario (Mode C, IX.1) ───────────────────────────────────
+# Reconstruit le masque d'inondation à partir du même raster GloFAS et du même
+# seuil de hauteur d'eau que la détection des arêtes perturbées dans
+# 05_vulnerabilite.R (Mode C) : permet de voir si les itinéraires de détour
+# longent la zone inondée ou s'en écartent largement.
+zone_inondation_ok <- FALSE
+if (UTILISER_MODE_RASTER && file.exists(CHEMIN_RASTER_RISQUE)) {
+  raster_risque_detour <- terra::rast(CHEMIN_RASTER_RISQUE) %>%
+    terra::project("EPSG:32735", method = "bilinear")
+  masque_inondation <- raster_risque_detour > SEUIL_RISQUE_RASTER
+  masque_inondation[masque_inondation == 0] <- NA
+  if (!all(is.na(terra::values(masque_inondation)))) {
+    zone_inondation_sf <- terra::as.polygons(masque_inondation, dissolve = TRUE) %>%
+      st_as_sf()
+    zone_inondation_ok <- TRUE
+  }
+}
+
 carte_detour <- fond_carte() +
-  
+
   # Réseau de base en gris très clair (contexte géographique)
   tm_shape(aretes_reseau_sf) +
-  tm_lines(col = "#EEEEEE", lwd = 0.3) +
-  
+  tm_lines(col = "#EEEEEE", lwd = 0.3)
+
+# Zone inondée en aplat bleu semi-transparent, sous les routes de détour pour
+# qu'elles restent lisibles par-dessus.
+if (zone_inondation_ok) {
+  carte_detour <- carte_detour +
+    tm_shape(zone_inondation_sf) +
+    tm_polygons(
+      fill        = "#3182BD",
+      col         = "#3182BD",
+      lwd         = 0.3,
+      fill_alpha  = 0.35,
+      fill.legend = tm_legend(show = FALSE)
+    )
+}
+
+carte_detour <- carte_detour +
+
   # Itinéraires de contournement : couleur = surcoût moyen, épaisseur = volume
   tm_shape(aretes_detour_sf) +
   tm_lines(
-    col        = "classe_surcout",
-    col.scale  = tm_scale(values = PALETTE_SURCOUT_DETOUR),
+    col        = "classe_surcout_pct",
+    col.scale  = tm_scale(values = palette_surcout_pct),
     col.legend = tm_legend(title = "Surcoût moyen\n(flux reroutés)"),
     lwd        = "lwd_detour",
     lwd.scale  = tm_scale(values.range = c(0.6, 5)),
@@ -527,9 +696,9 @@ carte_detour <- fond_carte() +
   # Zones d'entrepôt
   tm_shape(coords_zones_sf) +
   tm_dots(
-    fill        = "warehouse_type",
-    fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-    fill.legend = tm_legend(title = "Type de zone"),
+    fill        = "type",
+    fill.scale  = tm_scale(values = PALETTE_TYPE),
+    fill.legend = tm_legend(title = "Type"),
     size        = 0.5
   ) +
   
@@ -538,9 +707,15 @@ carte_detour <- fond_carte() +
     "\nCouleur = surcoût moyen pondéré | Épaisseur = volume détourné | Noir = routes coupées"
   )) +
   tm_credits(
-    note_lecture(sprintf(
-      "le tronçon de détour le plus sollicité absorbe %s tonnes reportées depuis les routes coupées.",
-      format(round(max(aretes_detour_sf$vol_detourne_t)), big.mark = " ")
+    note_lecture(paste0(
+      sprintf(
+        "le tronçon de détour le plus sollicité absorbe %s tonnes reportées depuis les routes coupées.",
+        format(round(max(aretes_detour_sf$vol_detourne_t)), big.mark = " ")
+      ),
+      if (zone_inondation_ok) sprintf(
+        " Aplat bleu : zone inondée du scénario (hauteur d'eau simulée > %.1f m, GloFAS période de retour %d ans).",
+        SEUIL_RISQUE_RASTER, GLOFAS_PERIODE_RETOUR
+      ) else ""
     )),
     position = tm_pos_out("center", "bottom", "left", "top"),
     size     = 0.65
@@ -596,62 +771,80 @@ report_df <- vol_ref_type %>%
     road_type       = factor(road_type,
                              levels = c("motorway", "trunk", "primary",
                                         "secondary", "tertiary", "unclassified")),
+    # Trafic qui continue de circuler sur les arêtes non coupées de ce type
+    # (= socle commun aux barres "avant choc" et "après choc")
+    vol_conserve_t  = vol_ref_t - vol_perdu_t,
     # Variation nette = trafic de détour entrant - trafic perdu (route coupée)
     variation_nette = vol_detour_t - vol_perdu_t,
     pct_variation   = round(variation_nette / pmax(vol_ref_t, 1) * 100, 1),
-    # Position verticale du label : au-dessus de la barre la plus haute
-    y_label         = pmax(vol_detour_t, vol_perdu_t) / 1000
+    # Position verticale du label : au-dessus de la barre empilée "après choc"
+    # (conservé + détourné entrant), pour que sa hauteur totale corresponde
+    # bien au pourcentage affiché
+    y_label         = (vol_conserve_t + vol_detour_t) / 1000
   ) %>%
   filter(!is.na(road_type))
 
-# ── Format long pour ggplot ───────────────────────────────────────────────────
-report_long <- report_df %>%
-  pivot_longer(
-    cols      = c(vol_ref_t, vol_detour_t, vol_perdu_t),
-    names_to  = "categorie",
-    values_to = "volume_t"
-  ) %>%
+# ── Format long empilé ─────────────────────────────────────────────────────────
+# Pour chaque type de route, deux barres empilées côte à côte :
+#  - "Avant choc"  = trafic conservé (bleu) + trafic perdu (rouge)
+#  - "Après choc"  = trafic conservé (bleu) + trafic détourné entrant (vert)
+# Le socle "trafic conservé" est identique dans les deux barres, ce qui permet
+# de comparer visuellement la hauteur totale avant/après (et donc le %).
+report_long <- bind_rows(
+  report_df %>% transmute(road_type, phase = "Avant choc",
+                           composante = "Trafic conservé",
+                           volume_t = vol_conserve_t),
+  report_df %>% transmute(road_type, phase = "Avant choc",
+                           composante = "Perdu (route coupée)",
+                           volume_t = vol_perdu_t),
+  report_df %>% transmute(road_type, phase = "Après choc",
+                           composante = "Trafic conservé",
+                           volume_t = vol_conserve_t),
+  report_df %>% transmute(road_type, phase = "Après choc",
+                           composante = "Report entrant (détour)",
+                           volume_t = vol_detour_t)
+) %>%
   mutate(
-    categorie = recode(categorie,
-                       "vol_ref_t"    = "Référence (avant choc)",
-                       "vol_detour_t" = "Report entrant (détour)",
-                       "vol_perdu_t"  = "Perdu (route coupée)"
-    ),
-    categorie = factor(categorie,
-                       levels = c("Référence (avant choc)",
-                                  "Report entrant (détour)",
-                                  "Perdu (route coupée)"))
+    phase      = factor(phase, levels = c("Avant choc", "Après choc")),
+    composante = factor(composante,
+                        levels = c("Trafic conservé",
+                                   "Perdu (route coupée)",
+                                   "Report entrant (détour)"))
   )
 
 # ── Graphique ─────────────────────────────────────────────────────────────────
+# Une facette par type de route, avec dans chacune deux barres empilées
+# (avant / après choc) partageant le même socle "trafic conservé".
 g_report <- ggplot(report_long,
-                   aes(x = road_type, y = volume_t / 1000, fill = categorie)) +
-  
-  geom_col(position = "dodge", width = 0.72) +
-  
-  # Annotation de la variation nette au-dessus des barres
+                   aes(x = phase, y = volume_t / 1000, fill = composante)) +
+
+  geom_col(position = "stack", width = 0.72) +
+
+  facet_wrap(~ road_type, nrow = 1) +
+
+  # Annotation de la variation nette au-dessus de la barre "après choc"
   geom_text(
     data    = report_df,
     mapping = aes(
-      x     = road_type,
-      y     = y_label + max(report_df$y_label, na.rm = TRUE) * 0.03,
+      x     = "Après choc",
+      y     = y_label + max(report_df$y_label, na.rm = TRUE) * 0.05,
       label = paste0(ifelse(pct_variation >= 0, "+", ""), pct_variation, "%"),
       color = ifelse(variation_nette >= 0, "#006400", "#CC0000")
     ),
     inherit.aes = FALSE,
     vjust    = 0,
-    size     = 3.5,
+    size     = 3.2,
     fontface = "bold"
   ) +
-  
+
   # Ligne de référence à 0 pour la lisibilité
   geom_hline(yintercept = 0, color = "#AAAAAA", linewidth = 0.4) +
-  
+
   scale_fill_manual(
     values = c(
-      "Référence (avant choc)"  = "#4393C3",
-      "Report entrant (détour)" = "#2CA25F",
-      "Perdu (route coupée)"    = "#D6604D"
+      "Trafic conservé"         = "#4393C3",
+      "Perdu (route coupée)"    = "#D6604D",
+      "Report entrant (détour)" = "#2CA25F"
     )
   ) +
   scale_color_identity() +
@@ -659,15 +852,15 @@ g_report <- ggplot(report_long,
     labels = scales::label_number(suffix = " kt"),
     expand = expansion(mult = c(0, 0.18))
   ) +
-  
+
   labs(
     title    = paste0("Report de trafic par type de route — ", NOM_SCENARIO),
     subtitle = paste0(
-      "Bleu = volume de référence · Vert = trafic de détour absorbé · ",
-      "Rouge = trafic perdu sur route coupée\n",
+      "Bleu = trafic conservé (commun aux deux barres) · Rouge = trafic perdu ",
+      "sur route coupée · Vert = trafic de détour absorbé\n",
       "Pourcentage = variation nette / volume de référence"
     ),
-    x    = "Type de route",
+    x    = NULL,
     y    = "Volume (milliers de tonnes)",
     fill = NULL,
     caption = note_lecture(sprintf(
@@ -684,7 +877,7 @@ g_report <- ggplot(report_long,
     plot.subtitle   = element_text(color = "#666666", size = 9),
     legend.position = "top",
     panel.grid.minor = element_blank(),
-    axis.text.x     = element_text(angle = 20, hjust = 1)
+    strip.text      = element_text(face = "bold")
   ) +
   THEME_NOTE_LECTURE
 

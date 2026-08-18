@@ -31,7 +31,6 @@ list2env(.ent, envir = .GlobalEnv)
 reseau         <- .fret$reseau
 volume_par_secteur    <- .fret$volume_par_secteur
 volume_par_secteur_df <- .fret$volume_par_secteur_df
-volumes_par_zone      <- .fret$volumes_par_zone
 rm(.fret)
 
 .flux <- readRDS(PERSIST_FLUX_FRET)
@@ -117,21 +116,15 @@ coords_zones_sf <- reseau %>%
 
 # match() : associe chaque nœud d'entrepôt à son index dans noeuds_entreposage
 # pour récupérer les volumes de trafic.
-coords_zones_sf <- coords_zones_sf %>%
-  mutate(match_idx = match(warehouse_name, noeuds_entreposage$warehouse_name)) %>%
-  filter(!is.na(match_idx)) %>%
-  arrange(match_idx)
-
-# Taille des points proportionnelle au volume total de la zone (en scale log)
+# type : type simplifié de la zone ("Frontière" vs "Ville"), utilisé pour la
+# légende "Type" sur les cartes ci-dessous (00_parametres.R).
 coords_zones_sf <- coords_zones_sf %>%
   mutate(
-    offre_kt      = as.numeric(volumes_par_zone$Offre_kt[
-      match(warehouse_name, volumes_par_zone$Zone)]),
-    demande_kt    = as.numeric(volumes_par_zone$Demande_kt[
-      match(warehouse_name, volumes_par_zone$Zone)]),
-    total_kt      = offre_kt + demande_kt,
-    taille_point  = as.numeric(rescale(log10(total_kt + 1), to = c(0.3, 1.8)))
-  )
+    match_idx = match(warehouse_name, noeuds_entreposage$warehouse_name),
+    type      = type_simplifie(warehouse_type)
+  ) %>%
+  filter(!is.na(match_idx)) %>%
+  arrange(match_idx)
 
 cat("✓ Couches préparées\n")
 cat("  Arêtes fret actives:", nrow(aretes_fret), "\n")
@@ -169,14 +162,12 @@ carte_fret <- fond_carte() +
   # Points des zones
   tm_shape(coords_zones_sf) +
   tm_dots(
-    fill = "warehouse_type",
-    fill.scale = tm_scale(values = PALETTE_ZONE_TYPE),
-    fill.legend = tm_legend(title = "Type de zone"),
-    size = "taille_point",
-    size.scale = tm_scale(values.range = c(0.3, 1.8)),
-    size.legend = tm_legend(show = FALSE)
+    fill = "type",
+    fill.scale = tm_scale(values = PALETTE_TYPE),
+    fill.legend = tm_legend(title = "Type"),
+    size = 0.5
   ) +
-  
+
   tm_title(paste0("Intensité du Trafic Fret\nModèle gravitaire — ", NOM_PAYS)) +
   tm_credits(
     note_lecture(sprintf(
@@ -223,6 +214,32 @@ if ("taux_saturation" %in% colonnes_aretes) {
       lwd_val = as.numeric(rescale(taux_saturation, to = c(0.5, 5)))
     )
 
+  # Libellé "classe (xx,x %)" par classe de saturation, part du linéaire des
+  # arêtes chargées de fret — insérée dans la légende comme pour la carte des
+  # pentes.
+  km_par_saturation <- aretes_saturation %>%
+    st_drop_geometry() %>%
+    group_by(classe_saturation) %>%
+    summarise(km = sum(length_km, na.rm = TRUE), .groups = "drop")
+
+  labels_saturation_pct <- setNames(
+    sprintf("%s (%s %%)", km_par_saturation$classe_saturation,
+            sub("\\.", ",", sprintf("%.1f", 100 * km_par_saturation$km / sum(km_par_saturation$km)))),
+    km_par_saturation$classe_saturation
+  )
+  noms_saturation_presentes <- intersect(names(PALETTE_SATURATION), names(labels_saturation_pct))
+
+  aretes_saturation <- aretes_saturation %>%
+    mutate(classe_saturation_pct = factor(
+      labels_saturation_pct[classe_saturation],
+      levels = labels_saturation_pct[noms_saturation_presentes]
+    ))
+
+  palette_saturation_pct <- setNames(
+    PALETTE_SATURATION[noms_saturation_presentes],
+    labels_saturation_pct[noms_saturation_presentes]
+  )
+
   carte_saturation <- fond_carte() +
 
     # Réseau de base en gris très clair (contexte géographique)
@@ -232,8 +249,8 @@ if ("taux_saturation" %in% colonnes_aretes) {
     # Arêtes colorées par classe de saturation (catégoriel, comme warehouse_type)
     tm_shape(aretes_saturation) +
     tm_lines(
-      col        = "classe_saturation",
-      col.scale  = tm_scale(values = PALETTE_SATURATION),
+      col        = "classe_saturation_pct",
+      col.scale  = tm_scale(values = palette_saturation_pct),
       col.legend = tm_legend(title = "Saturation (V/C)"),
       lwd        = "lwd_val",
       lwd.scale  = tm_scale(values.range = c(0.4, 5)),
@@ -243,12 +260,10 @@ if ("taux_saturation" %in% colonnes_aretes) {
     # Points des zones (mêmes couleurs que la carte globale)
     tm_shape(coords_zones_sf) +
     tm_dots(
-      fill        = "warehouse_type",
-      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-      fill.legend = tm_legend(title = "Type de zone"),
-      size        = "taille_point",
-      size.scale  = tm_scale(values.range = c(0.3, 1.8)),
-      size.legend = tm_legend(show = FALSE)
+      fill        = "type",
+      fill.scale  = tm_scale(values = PALETTE_TYPE),
+      fill.legend = tm_legend(title = "Type"),
+      size        = 0.5
     ) +
 
     tm_title(paste0("Saturation du réseau de fret (V/C)\nFonction d'encombrement — ",
@@ -359,14 +374,12 @@ for (s in SECTEURS_FRET) {
     # Points des zones (mêmes couleurs que la carte globale)
     tm_shape(coords_zones_sf) +
     tm_dots(
-      fill        = "warehouse_type",
-      fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-      fill.legend = tm_legend(title = "Type de zone"),
-      size        = "taille_point",
-      size.scale  = tm_scale(values.range = c(0.3, 1.8)),
-      size.legend = tm_legend(show = FALSE)
+      fill        = "type",
+      fill.scale  = tm_scale(values = PALETTE_TYPE),
+      fill.legend = tm_legend(title = "Type"),
+      size        = 0.5
     ) +
-    
+
     tm_title(paste0("Intensité du Trafic Fret — Secteur ", s,
                     "\nModèle gravitaire — ", NOM_PAYS)) +
     tm_credits(
@@ -449,19 +462,44 @@ aretes_dominant_sf <- aretes_geom_base %>%
 
 # PALETTE_SECTEURS est définie dans 00_parametres.R (chargé via source() en début de script).
 
+# Libellé "secteur (xx,x %)" par secteur dominant, part du linéaire des
+# arêtes avec trafic — insérée dans la légende comme pour la carte des pentes.
+km_par_secteur_dominant <- aretes_dominant_sf %>%
+  st_drop_geometry() %>%
+  group_by(secteur_dominant) %>%
+  summarise(km = sum(length_km, na.rm = TRUE), .groups = "drop")
+
+labels_secteur_dominant_pct <- setNames(
+  sprintf("%s (%s %%)", km_par_secteur_dominant$secteur_dominant,
+          sub("\\.", ",", sprintf("%.1f", 100 * km_par_secteur_dominant$km / sum(km_par_secteur_dominant$km)))),
+  km_par_secteur_dominant$secteur_dominant
+)
+noms_secteurs_dominants_presents <- intersect(names(PALETTE_SECTEURS), names(labels_secteur_dominant_pct))
+
+aretes_dominant_sf <- aretes_dominant_sf %>%
+  mutate(secteur_dominant_pct = factor(
+    labels_secteur_dominant_pct[secteur_dominant],
+    levels = labels_secteur_dominant_pct[noms_secteurs_dominants_presents]
+  ))
+
+palette_secteur_dominant_pct <- setNames(
+  PALETTE_SECTEURS[noms_secteurs_dominants_presents],
+  labels_secteur_dominant_pct[noms_secteurs_dominants_presents]
+)
+
 carte_dominant <- fond_carte() +
-  
+
   # Réseau de base en gris clair
   tm_shape(reseau %>% activate("edges") %>% st_as_sf()) +
   tm_lines(col = "#EEEEEE", lwd = 0.3) +
-  
+
   # Arêtes colorées par secteur dominant
   # Largeur proportionnelle au volume total (pas sectoriel) pour garder
   # l'information sur l'intensité globale.
   tm_shape(aretes_dominant_sf) +
   tm_lines(
-    col        = "secteur_dominant",
-    col.scale  = tm_scale(values = PALETTE_SECTEURS),
+    col        = "secteur_dominant_pct",
+    col.scale  = tm_scale(values = palette_secteur_dominant_pct),
     col.legend = tm_legend(title = "Secteur\ndominant"),
     lwd        = 1.5
   ) +
@@ -511,10 +549,10 @@ carte_ges_affecte <- fond_carte() +
     lwd        = 1.5
   ) +
   tm_shape(coords_zones_sf) +
-  tm_dots(fill = "warehouse_type",
-          fill.scale  = tm_scale(values = PALETTE_ZONE_TYPE),
-          fill.legend = tm_legend(title = "Type de zone"),
-          size = 0.4) +
+  tm_dots(fill = "type",
+          fill.scale  = tm_scale(values = PALETTE_TYPE),
+          fill.legend = tm_legend(title = "Type"),
+          size = 0.5) +
   tm_title("Émissions CO₂ du Fret — Répartition sur le réseau") +
   tm_credits(
     note_lecture(sprintf(
@@ -759,11 +797,12 @@ distrib_secteurs <- volume_par_secteur_df %>%
 
 g_distrib <- ggplot(distrib_secteurs, aes(x = Volume_t, fill = Secteur)) +
   geom_histogram(bins = 30, color = "white", linewidth = 0.2) +
-  # facet_wrap() : une sous-figure par secteur. scales = "free_y" permet à
-  # chaque sous-figure d'avoir sa propre échelle Y (certains secteurs ont
-  # beaucoup moins d'arêtes actives que d'autres).
+  # facet_wrap() : une sous-figure par secteur. scales = "fixed" (par défaut)
+  # impose la même échelle X et Y à toutes les sous-figures, pour pouvoir
+  # comparer visuellement les secteurs entre eux (hauteur des barres,
+  # étendue du volume) sans être trompé par des échelles différentes.
   # ncol calculé pour obtenir une grille la plus carrée possible
-  facet_wrap(~ Secteur, scales = "free_y", ncol = ceiling(sqrt(N_SECTEURS))) +
+  facet_wrap(~ Secteur, ncol = ceiling(sqrt(N_SECTEURS))) +
   scale_x_log10(
     labels = scales::label_number(big.mark = " "),
     breaks = c(1, 10, 100, 1000, 10000, 100000)
@@ -1132,11 +1171,28 @@ graphe_compo_100 <- function(mat, titre, soustitre, fichier,
       Zone    = factor(Zone, levels = noms[order(pop)]),
       Secteur = factor(Secteur, levels = SECTEURS),
       Bloc    = factor(Bloc, levels = c(lab_solide, lab_hachure)),
-      # Ordre d'empilement : bloc domestique d'abord (1..N), puis bloc commerce
-      # extérieur (101..), secteurs dans l'ordre SECTEURS à l'intérieur de chaque
-      # bloc → les deux jambes apparaissent en blocs distincts dans chaque barre.
-      ordre   = (as.integer(Bloc) - 1L) * 100L + match(Secteur, SECTEURS)
+      # Ordre d'empilement : secteurs d'abord, dans l'ordre SECTEURS, et à
+      # l'intérieur de chaque secteur le bloc domestique puis le bloc commerce
+      # extérieur → pour un même secteur, la portion domestique et sa portion
+      # commerce extérieur se suivent directement dans la barre (au lieu d'être
+      # regroupées en deux blocs opposés, tout le domestique puis tout le
+      # commerce extérieur).
+      ordre   = match(Secteur, SECTEURS) * 10L + (as.integer(Bloc) - 1L)
     )
+
+  # On retire de la légende (et des couleurs affichées) les secteurs dont le
+  # tonnage total (toutes zones, domestique + commerce ext. confondus) est nul :
+  # ils n'apparaîtraient de toute façon jamais dans les barres, inutile de les
+  # lister à côté du graphique.
+  secteurs_actifs <- df_long %>%
+    group_by(Secteur) %>%
+    summarise(tot = sum(Valeur, na.rm = TRUE), .groups = "drop") %>%
+    filter(tot > 0) %>%
+    pull(Secteur) %>%
+    as.character()
+  df_long <- df_long %>%
+    filter(Secteur %in% secteurs_actifs) %>%
+    mutate(Secteur = factor(Secteur, levels = intersect(SECTEURS, secteurs_actifs)))
 
   if (is.null(mat_hachure)) {
     # Cas sans commerce extérieur : aplat simple (comportement d'origine).
@@ -1185,42 +1241,106 @@ graphe_compo_100 <- function(mat, titre, soustitre, fichier,
   cat("  ✓", fichier, "\n")
 }
 
-# ── Helper B : flux brut par secteur pour 3 zones imposées ────────────────────
-# Trace le flux brut de chaque secteur (valeurs absolues, non normalisées) pour
-# les 3 entrepôts dont les indices de ligne sont fournis dans `sel` (et étiquetés
-# par `rang`). On impose les MÊMES 3 entrepôts (ceux min/médian/max de la demande)
-# aux graphes offre et demande, pour lire directement l'effet du netting
-# demande = max(0, d − x) en comparant production brute x et demande brute d.
-# Une facette par zone, échelle libre (scales = "free_x") : la composition reste
-# lisible malgré l'écart d'ampleur (le total de chaque zone est rappelé en titre
-# de facette). unite : libellé d'unité ("mrd RWF" ou "tonnes").
-graphe_brut3 <- function(mat, unite, sel, rang, titre, soustitre, fichier) {
-  totaux <- rowSums(mat, na.rm = TRUE)
-  noms <- str_trunc(str_remove(rownames(mat), " - .*"), 22)
-  lab  <- sprintf("%s — %s  (total : %s %s)",
+# ── Helper B : flux bruts OFFRE vs DEMANDE en miroir, centré sur zéro ─────────
+# Combine en un seul graphique la production brute x[i,s] (offre, tracée à
+# GAUCHE de zéro) et la demande totale brute d[i,s] (demande, tracée à DROITE),
+# pour les 3 mêmes entrepôts (indices de ligne fournis dans `sel`, étiquetés
+# par `rang` — ceux min/médian/max de la demande totale).
+# Pour chaque secteur, la partie COMMUNE aux deux (min(x,d) : ce qui pourrait
+# être produit ET consommé sur place, sans passer par le réseau) est tracée en
+# APLAT des deux côtés. L'EXCÉDENT du côté qui dépasse — max(0,x−d) côté offre
+# (surplus exportable) ou max(0,d−x) côté demande (besoin non couvert
+# localement) — est tracé en HACHURÉ, uniquement du côté concerné : c'est
+# l'implémentation graphique de offre_zones/demande_zones (le solde net utilisé
+# par le modèle gravitaire, cf. 03_transport.R).
+# Technique : on empile deux couches geom_col sur le même x. La couche du
+# dessous va jusqu'à l'extension TOTALE (x ou d, signée) et porte le motif
+# hachuré ; la couche du dessus, opaque et sans hachure, ne va que jusqu'à la
+# partie commune. Elle masque donc entièrement la couche du dessous côté
+# commun, et ne laisse apparaître le hachuré que sur l'excédent — sans qu'il
+# soit nécessaire de gérer explicitement où placer le motif.
+# Une facette par zone, échelle libre (scales = "free_x") : la composition
+# reste lisible malgré l'écart d'ampleur (le total offre/demande de chaque zone
+# est rappelé en titre de facette). unite : libellé d'unité ("mrd RWF" ou
+# "tonnes").
+graphe_brut3_diverge <- function(mat_offre, mat_demande, unite, sel, rang,
+                                  titre, soustitre, fichier,
+                                  secteurs_affiches = SECTEURS_FRET) {
+  tot_offre   <- rowSums(mat_offre,   na.rm = TRUE)
+  tot_demande <- rowSums(mat_demande, na.rm = TRUE)
+  noms <- str_trunc(str_remove(rownames(mat_demande), " - .*"), 22)
+  lab  <- sprintf("%s — %s  (offre : %s %s · demande : %s %s)",
                   rang, noms[sel],
-                  format(round(totaux[sel]), big.mark = " "), unite)
-  sub <- mat[sel, , drop = FALSE]
-  df  <- as.data.frame(unname(sub)); colnames(df) <- colnames(mat)
-  df$Zone <- factor(lab, levels = lab)
-  df_long <- df %>%
-    pivot_longer(-Zone, names_to = "Secteur", values_to = "Valeur") %>%
-    # rev(SECTEURS) : après coord_flip(), Agriculture se retrouve en haut.
-    mutate(Secteur = factor(Secteur, levels = rev(SECTEURS)))
-  g <- ggplot(df_long, aes(Secteur, Valeur, fill = Secteur)) +
-    geom_col(width = 0.8) +
+                  format(round(tot_offre[sel]),   big.mark = " "), unite,
+                  format(round(tot_demande[sel]), big.mark = " "), unite)
+
+  off <- mat_offre[sel, secteurs_affiches, drop = FALSE]
+  dem <- mat_demande[sel, secteurs_affiches, drop = FALSE]
+  # Partie commune aux deux côtés, secteur par secteur et entrepôt par
+  # entrepôt : min(offre, demande). Le facteur TONNES_PAR_mrd_RWF étant le même
+  # des deux côtés pour un secteur donné, ce min commute avec la conversion en
+  # tonnes déjà appliquée en amont (en_tonnes()).
+  commun <- pmin(off, dem)
+
+  # Passage au format long ; Valeur est signée : négative pour l'offre (barres
+  # vers la gauche après coord_flip), positive pour la demande (vers la droite).
+  vers_long <- function(m, cote) {
+    d <- as.data.frame(unname(m)); colnames(d) <- secteurs_affiches
+    d$Zone <- factor(lab, levels = lab)
+    pivot_longer(d, -Zone, names_to = "Secteur", values_to = "Valeur") %>%
+      mutate(Cote   = cote,
+             Valeur = if (cote == "Offre") -Valeur else Valeur)
+  }
+  df_ext <- bind_rows(vers_long(off,    "Offre"), vers_long(dem, "Demande"))
+  df_int <- bind_rows(vers_long(commun, "Offre"), vers_long(commun, "Demande"))
+
+  # rev(secteurs_affiches) : après coord_flip(), le premier secteur se retrouve en haut.
+  ord_secteur <- rev(secteurs_affiches)
+  df_ext <- df_ext %>% mutate(Secteur = factor(Secteur, levels = ord_secteur))
+  df_int <- df_int %>% mutate(Secteur = factor(Secteur, levels = ord_secteur))
+
+  g <- ggplot() +
+    geom_col_pattern(
+      data            = df_ext,
+      mapping         = aes(Secteur, Valeur, fill = Secteur),
+      width           = 0.8,
+      pattern         = "stripe",
+      pattern_colour  = NA,
+      pattern_fill    = "grey15",
+      pattern_density = 0.35,
+      pattern_spacing = 0.012,
+      pattern_angle   = 45,
+      colour = NA, linewidth = 0
+    ) +
+    geom_col(
+      data    = df_int,
+      mapping = aes(Secteur, Valeur, fill = Secteur),
+      width   = 0.8, colour = NA
+    ) +
+    geom_hline(yintercept = 0, colour = "grey30", linewidth = 0.4) +
     facet_wrap(~ Zone, ncol = 1, scales = "free_x") +
     coord_flip() +
     scale_fill_manual(values = PALETTE_SECTEURS, guide = "none") +
-    scale_y_continuous(labels = scales::label_number(big.mark = " ")) +
-    labs(title = titre, subtitle = soustitre, x = NULL,
-         y = paste0("Flux brut (", unite, ")"),
-         caption = note_lecture({
-           .rmax <- df_long[which.max(df_long$Valeur), ]
-           sprintf("pour %s, le secteur %s totalise %s %s.",
-                   as.character(.rmax$Zone), .rmax$Secteur,
-                   format(round(.rmax$Valeur), big.mark = " "), unite)
-         }, largeur_car = 132)) +
+    # scales::number() (plutôt que format()) évite le retour en notation
+    # scientifique (1e+06) que format() choisit pour les grands nombres ronds.
+    scale_y_continuous(labels = function(v) scales::number(abs(v), accuracy = 1, big.mark = " ")) +
+    labs(
+      title    = titre,
+      subtitle = soustitre,
+      x        = NULL,
+      y        = paste0("Offre (", unite, ")   ←        →   Demande (", unite, ")"),
+      caption  = note_lecture(sprintf(
+        paste0("partie pleine = min(offre, demande) par secteur (satisfaisable ",
+               "localement) ; partie hachurée = excédent du côté qui dépasse ",
+               "(surplus exportable côté offre, besoin non couvert localement ",
+               "côté demande). Pour %s, le secteur %s a l'excédent le plus élevé, ",
+               "%s %s."),
+        as.character(df_ext$Zone[which.max(abs(df_ext$Valeur) - abs(df_int$Valeur))]),
+        df_ext$Secteur[which.max(abs(df_ext$Valeur) - abs(df_int$Valeur))],
+        format(round(max(abs(df_ext$Valeur) - abs(df_int$Valeur))), big.mark = " "),
+        unite
+      ), largeur_car = 132)
+    ) +
     theme_minimal(base_size = 11) +
     theme(plot.title    = element_text(face = "bold", size = 13),
           plot.subtitle = element_text(color = "#666666", size = 9),
@@ -1264,27 +1384,31 @@ graphe_compo_100(
 # (demande brute d), pour visualiser directement l'effet de max(0, d − x).
 # Nécessite prod_zones ET dem_zones (bruts) persistés par 03_transport.R.
 if (exists("prod_zones") && exists("dem_zones")) {
-  # Sélection par la demande totale brute (rowSums dem_zones) : max, médiane, min.
+  # Zones à population nulle exclues de la sélection : ce sont les postes-
+  # frontière "passage" (sans cellule de Voronoï propre, cf. 01_reseau.R IV.6),
+  # dont le profil offre/demande n'est pas représentatif d'un territoire habité.
+  # diag_population est aligné ligne à ligne sur noeuds_entreposage, donc sur
+  # les lignes de prod_zones/dem_zones (mêmes indices 1..n_warehouses).
+  zones_peuplees <- which(diag_population$population_zone > 0)
+
+  # Sélection par la demande totale brute (rowSums dem_zones) : max, médiane, min,
+  # uniquement parmi les zones peuplées.
   dem_tot  <- rowSums(dem_zones, na.rm = TRUE)
-  ord_d    <- order(dem_tot)
+  ord_d    <- zones_peuplees[order(dem_tot[zones_peuplees])]
   sel_dem  <- c(ord_d[length(ord_d)], ord_d[ceiling(length(ord_d) / 2)], ord_d[1])
   rang_dem <- c("Demande max", "Demande médiane", "Demande min")
 
-  # 4) OFFRE brute (production locale x) sur les 3 entrepôts de la demande — tonnes.
-  graphe_brut3(
-    en_tonnes(prod_zones), "tonnes", sel_dem, rang_dem,
-    "Flux brut par secteur — production locale (entrepôts min/médian/max de la demande) — tonnes",
+  # 4) OFFRE (production locale x) vs DEMANDE (demande totale d) en miroir,
+  # centré sur zéro, sur les 3 mêmes entrepôts — tonnes.
+  # secteurs_affiches = SECTEURS_FRET (défaut) : on n'affiche que les secteurs
+  # qui échangent effectivement du tonnage sur le réseau (TONNES_PAR_mrd_RWF >
+  # 0), pour ne pas polluer le graphe de barres à zéro.
+  graphe_brut3_diverge(
+    en_tonnes(prod_zones), en_tonnes(dem_zones), "tonnes", sel_dem, rang_dem,
+    "Flux brut par secteur — offre (production locale) vs demande (entrepôts min/médian/max de la demande) — tonnes",
     paste0("Modèle MRIO — ", NOM_PAYS,
-           " · production brute convertie en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
-    "graphique_offre_brut_tonnes_3entrepots.png"
-  )
-  # 5) DEMANDE brute (demande totale d) sur les mêmes 3 entrepôts — tonnes.
-  graphe_brut3(
-    en_tonnes(dem_zones), "tonnes", sel_dem, rang_dem,
-    "Flux brut par secteur — demande totale (entrepôts min/médian/max de la demande) — tonnes",
-    paste0("Modèle MRIO — ", NOM_PAYS,
-           " · demande brute convertie en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
-    "graphique_demande_brut_tonnes_3entrepots.png"
+           " · production et demande brutes converties en tonnes (facteur sectoriel TONNES_PAR_mrd_RWF)"),
+    "graphique_offre_demande_brut_tonnes_3entrepots.png"
   )
 } else {
   cat("  ⚠ prod_zones/dem_zones absents du persist — relancer 03_transport.R pour les graphes bruts\n")
@@ -1298,9 +1422,11 @@ cat("✓ Graphiques de composition sectorielle (offre & demande) sauvegardés\n\
 
 cat("Génération du diagramme de Sankey...\n")
 
-# ── Agrégation par (type de zone origine × secteur × type de zone destination) ──
-# On travaille à l'échelle des TYPES de zones (6 types) plutôt que des 120 zones
-# individuelles, pour garantir la lisibilité du diagramme.
+# ── Agrégation par (district origine × secteur × district destination) ──────
+# On travaille à l'échelle des DISTRICTS administratifs (warehouse_district,
+# 01_reseau.R) plutôt que des 120 zones individuelles, pour garantir la
+# lisibilité du diagramme tout en restant à un niveau géographique plus fin et
+# plus parlant que le type de zone (frontière, industrie, etc.).
 # Les indices de ligne/colonne de flux_gravitaire[[s]] correspondent
 # directement aux lignes de noeuds_entreposage (construit en IV.3).
 
@@ -1311,33 +1437,82 @@ sankey_raw <- map_dfr(SECTEURS_FRET, function(s) {
   idx <- which(mat_s > 0 & row(mat_s) != col(mat_s), arr.ind = TRUE)
   if (nrow(idx) == 0) return(tibble())
   tibble(
-    flux_t           = mat_s[idx],
-    type_origine     = noeuds_entreposage$warehouse_type[idx[, 1]],
-    type_destination = noeuds_entreposage$warehouse_type[idx[, 2]],
-    secteur          = s
+    flux_t               = mat_s[idx],
+    district_origine     = noeuds_entreposage$warehouse_district[idx[, 1]],
+    district_destination = noeuds_entreposage$warehouse_district[idx[, 2]],
+    secteur              = s
   )
 }) %>%
-  group_by(type_origine, secteur, type_destination) %>%
+  group_by(district_origine, secteur, district_destination) %>%
   summarise(flux_t = sum(flux_t, na.rm = TRUE), .groups = "drop") %>%
   # Seuil de lisibilité : on ne garde que les flux représentant au moins
   # 0.1% du tonnage total pour éviter les micro-rubans illisibles
-  filter(flux_t > sum(flux_t) * 0.001) %>%
+  filter(flux_t > sum(flux_t) * 0.001)
+
+# Ordre des districts sur les axes 1 et 3 : décroissant selon le volume total
+# transporté (origine + destination confondues), pour que les plus gros
+# centres logistiques apparaissent en haut du diagramme.
+ordre_districts <- sankey_raw %>%
+  pivot_longer(cols = c(district_origine, district_destination),
+               values_to = "district") %>%
+  group_by(district) %>%
+  summarise(flux_t = sum(flux_t, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(flux_t)) %>%
+  pull(district)
+
+sankey_raw <- sankey_raw %>%
   mutate(
-    type_origine     = factor(type_origine,     levels = names(PALETTE_ZONE_TYPE)),
-    secteur          = factor(secteur,           levels = SECTEURS),
-    type_destination = factor(type_destination, levels = names(PALETTE_ZONE_TYPE))
+    district_origine     = factor(district_origine,     levels = ordre_districts),
+    secteur              = factor(secteur,               levels = SECTEURS),
+    district_destination = factor(district_destination, levels = ordre_districts)
   )
+
+# ── Part urbaine par district, pour colorer les blocs des axes 1 et 3 ────────
+# part_urbaine[i] = population du nœud-entrepôt i résidant dans le masque
+# urbain retenu par le modèle (01_reseau.R, Partie IV.5.B), rapportée à sa
+# population totale. pop_groupe_zone (chargé depuis persist_entreposages.rds)
+# donne la population par nœud × groupe SAM (colonnes u1..u5 = quintiles
+# urbains, r1..r5 = quintiles ruraux) ; ses lignes sont dans le même ordre que
+# noeuds_entreposage, ce qui permet de rattacher directement chaque nœud à son
+# warehouse_district.
+# La part urbaine du district = somme de la population urbaine de ses nœuds /
+# somme de sa population totale (moyenne pondérée par la population de chaque
+# nœud, pas une simple moyenne des parts individuelles).
+part_urbaine_district <- tibble(
+  district    = noeuds_entreposage$warehouse_district,
+  pop_urbaine = rowSums(pop_groupe_zone[, paste0("u", 1:5), drop = FALSE]),
+  pop_totale  = rowSums(pop_groupe_zone)
+) %>%
+  group_by(district) %>%
+  summarise(part_urbaine = sum(pop_urbaine) / sum(pop_totale), .groups = "drop")
+
+# Vecteur nommé district → part urbaine, utilisé plus bas via after_stat()
+# pour colorer uniquement les blocs des axes district (les blocs de l'axe
+# secteur ne matchent aucun nom et reçoivent NA, donc la couleur neutre
+# na.value du gradient).
+LOOKUP_PART_URBAINE_DISTRICT <- setNames(
+  part_urbaine_district$part_urbaine,
+  part_urbaine_district$district
+)
+
+# Vecteur nommé district → couleur de texte (blanc sur fond bleu foncé quand
+# la part urbaine dépasse 50 %, gris foncé sinon), pour que le nom du district
+# reste lisible quel que soit le remplissage du bloc.
+LOOKUP_TEXTE_DISTRICT <- setNames(
+  ifelse(part_urbaine_district$part_urbaine > 0.5, "white", "#222222"),
+  part_urbaine_district$district
+)
 
 g_sankey <- ggplot(
   sankey_raw,
   aes(
-    axis1 = type_origine,
+    axis1 = district_origine,
     axis2 = secteur,
-    axis3 = type_destination,
+    axis3 = district_destination,
     y     = flux_t / 1000        # Conversion en milliers de tonnes
   )
 ) +
-  # Rubans : chaque ruban = un flux (type_origine, secteur, type_destination)
+  # Rubans : chaque ruban = un flux (district_origine, secteur, district_destination)
   # curve_type = "cubic" donne des courbes de Bézier lisses
   geom_alluvium(
     aes(fill = secteur),
@@ -1345,25 +1520,56 @@ g_sankey <- ggplot(
     alpha      = 0.65,
     curve_type = "cubic"
   ) +
-  # Blocs : un par valeur unique sur chaque axe
+  scale_fill_manual(values = PALETTE_SECTEURS, name = "Secteur") +
+  # ggnewscale::new_scale_fill() : ouvre une deuxième échelle de couleur pour
+  # les couches suivantes, indépendante de celle des rubans (secteur). Sans
+  # cet appel, un seul ggplot ne peut pas avoir à la fois un fill discret
+  # (secteur) et un fill continu (part urbaine) sur le même aesthetic "fill".
+  ggnewscale::new_scale_fill() +
+  # Blocs : un par valeur unique sur chaque axe. LOOKUP_PART_URBAINE_DISTRICT[stratum]
+  # ne renvoie une valeur que pour les blocs des axes district (axis1/axis3) ;
+  # les blocs de l'axe secteur (axis2) ne matchent aucun nom de district et
+  # reçoivent NA, donc la couleur na.value du gradient ci-dessous.
   geom_stratum(
+    aes(fill = after_stat(LOOKUP_PART_URBAINE_DISTRICT[as.character(stratum)])),
     width     = 1/5,
-    fill      = "white",
     color     = "#333333",
     linewidth = 0.4
   ) +
-  # after_stat(stratum) : récupère le nom de la strate depuis le stat interne
+  # after_stat(stratum) : récupère le nom de la strate depuis le stat interne.
+  # Taille de police réduite car les axes district comptent une trentaine de
+  # strates (un par district administratif). Couleur de texte définie via
+  # LOOKUP_TEXTE_DISTRICT (blanc/gris foncé) pour rester lisible sur le
+  # gradient de part urbaine ; replace_na() couvre les blocs de l'axe secteur,
+  # qui ne matchent aucun nom de district.
   geom_text(
     stat     = "stratum",
-    aes(label = after_stat(stratum)),
-    size     = 3.2,
-    fontface = "bold",
-    color    = "#222222"
+    aes(
+      label  = after_stat(stratum),
+      colour = after_stat(replace_na(
+        LOOKUP_TEXTE_DISTRICT[as.character(stratum)], "#222222"
+      ))
+    ),
+    size     = 2.5,
+    fontface = "bold"
   ) +
-  scale_fill_manual(values = PALETTE_SECTEURS, name = "Secteur") +
+  scale_colour_identity(guide = "none") +
+  # Notation explicitée dans le titre de légende : la part urbaine est un
+  # ratio de population (population résidant dans le masque urbain du modèle
+  # ÷ population totale du district), affiché en pourcentage entre 0 et 100 %.
+  # na.value = couleur des blocs de l'axe secteur (non concernés par cette
+  # échelle) et des districts sans warehouse_district connu (GADM indisponible).
+  scale_fill_gradient(
+    low      = "#FFFFFF",
+    high     = "#08306B",
+    na.value = "white",
+    limits   = c(0, 1),
+    labels   = scales::percent,
+    name     = "Part urbaine\n(pop. en zone urbaine\n÷ pop. totale du district)"
+  ) +
   scale_x_discrete(
-    limits = c("type_origine", "secteur", "type_destination"),
-    labels = c("Type d'origine", "Secteur", "Type de destination"),
+    limits = c("district_origine", "secteur", "district_destination"),
+    labels = c("District d'origine", "Secteur", "District de destination"),
     expand = expansion(add = 0.15)
   ) +
   scale_y_continuous(
@@ -1373,15 +1579,15 @@ g_sankey <- ggplot(
   labs(
     title    = "Flux de fret interzonaux — Diagramme de Sankey",
     subtitle = paste0(
-      "Agrégation par type de zone et secteur économique · ",
+      "Agrégation par district et secteur économique · ",
       format(round(sum(sankey_raw$flux_t) / 1e6, 1)), " Mt modélisées"
     ),
     x = NULL,
     caption = note_lecture(sprintf(
-      "le plus gros ruban relie les zones « %s », via le secteur %s, aux zones « %s », avec %s kt.",
-      sankey_raw$type_origine[which.max(sankey_raw$flux_t)],
+      "le plus gros ruban relie le district « %s », via le secteur %s, au district « %s », avec %s kt.",
+      sankey_raw$district_origine[which.max(sankey_raw$flux_t)],
       sankey_raw$secteur[which.max(sankey_raw$flux_t)],
-      sankey_raw$type_destination[which.max(sankey_raw$flux_t)],
+      sankey_raw$district_destination[which.max(sankey_raw$flux_t)],
       format(round(max(sankey_raw$flux_t) / 1000), big.mark = " ")
     ), largeur_car = 168)
   ) +
@@ -1396,11 +1602,13 @@ g_sankey <- ggplot(
   ) +
   THEME_NOTE_LECTURE
 
+# Hauteur de 12 pouces : la trentaine de districts sur les axes 1 et 3 a besoin
+# de cet espace vertical pour rester lisible.
 ggsave(
   file.path(DIR_CARTES, "sankey_flux_fret.png"),
   g_sankey,
   width  = 14,
-  height = 8.8,
+  height = 12,
   dpi    = 300
 )
 cat("✓ sankey_flux_fret.png\n\n")
@@ -1814,7 +2022,11 @@ groupe_viz <- paste0(ifelse(substr(groupe_code, 1, 1) == "u", "Urbain Q", "Rural
 
 # ── Jointure avec zones_voronoi ───────────────────────────────────────────────
 # noeuds_entreposage est ordonné comme warehouse_id = row_number() → jointure
-# directe sans ambiguïté. On exclut les nœuds-frontière (hors territoire RW).
+# directe sans ambiguïté. zones_voronoi ne contient déjà qu'un polygone par
+# nœud "ville" (01_reseau.R Partie IV.3-bis/IV.6) : les postes-frontière
+# "passage" (warehouse_passage_uniquement) n'y figurent pas, faute de cellule
+# propre. Les postes-frontière "ville" (Voronoï + commerce intérieur), eux,
+# ont un vrai polygone et sont donc affichés comme n'importe quelle autre zone.
 voronoi_geo <- zones_voronoi %>%
   left_join(
     tibble(
@@ -1827,8 +2039,7 @@ voronoi_geo <- zones_voronoi %>%
       part_urbaine     = part_urbaine_cellule
     ),
     by = "warehouse_id"
-  ) %>%
-  filter(warehouse_type != "frontiere")   # exclut les nœuds hors Rwanda
+  )
 
 # Ordre d'affichage : Rural Q1…Q5 puis Urbain Q1…Q5 (du plus pauvre au plus riche)
 niveaux_groupe <- c(paste0("Rural Q",  1:5), paste0("Urbain Q", 1:5))
@@ -1851,6 +2062,29 @@ PALETTE_GEOSOCIAL <- c(
   "Urbain Q5" = "#08306B"
 )
 
+# ── Exemple de lecture : classe majoritaire de la zone associée à Kigali ─────
+# Plusieurs zones peuvent porter "Kigali" dans leur nom d'entrepôt (découpage
+# infra-urbain) ; on retient celle de plus forte population (pop_i, alignée
+# ligne à ligne sur noeuds_entreposage) comme représentative de l'agglomération.
+idx_kigali <- which(grepl("Kigali", noeuds_entreposage$warehouse_name))
+if (length(idx_kigali) > 0) {
+  id_kigali     <- noeuds_entreposage$warehouse_id[idx_kigali[which.max(pop_i[idx_kigali])]]
+  groupe_kigali <- voronoi_geo$groupe_geosocial[voronoi_geo$warehouse_id == id_kigali]
+
+  # Traduction du code de groupe (ex. "Urbain Q5") en formulation lisible.
+  strate_kigali    <- ifelse(grepl("^Urbain", groupe_kigali), "urbains", "ruraux")
+  q_kigali         <- as.integer(sub(".*Q", "", groupe_kigali))
+  libelle_quintile <- c("quintile inférieur", "2e quintile", "3e quintile",
+                         "4e quintile", "quintile supérieur")[q_kigali]
+
+  texte_lecture_kigali <- note_lecture(sprintf(
+    "la classe géosociale majoritaire de la zone associée à Kigali est la classe des %s du %s des revenus.",
+    strate_kigali, libelle_quintile
+  ))
+} else {
+  texte_lecture_kigali <- ""
+}
+
 # ── Carte tmap ────────────────────────────────────────────────────────────────
 carte_geosocial <- fond_carte() +
   tm_shape(voronoi_geo) +
@@ -1868,8 +2102,9 @@ carte_geosocial <- fond_carte() +
   tm_title("Classes géo-sociales — groupe majoritaire de chaque zone") +
   tm_credits(
     paste0(
-      "Groupe MAJORITAIRE : chaque zone porte en réalité un mélange de groupes ",
-      "(classification au pixel).\nPart moyenne du groupe majoritaire : ",
+      texte_lecture_kigali, "\n",
+      "Groupe majoritaire : chaque zone porte en réalité un mélange de groupes ",
+      "(classification au pixel). Part moyenne du groupe majoritaire : ",
       round(mean(voronoi_geo$part_majoritaire) * 100), " %.\n",
       "Quintiles de consommation découpés sur un classement NATIONAL unique ",
       "(définition EICV5), pondérés par la population WorldPop.\n",

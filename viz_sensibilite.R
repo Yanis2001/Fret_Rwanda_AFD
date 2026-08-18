@@ -19,9 +19,12 @@
 #      agrégés autour de la référence (enveloppe d'incertitude) ;
 #   B. sensibilite_tornado_tkm.png           — indices de sensibilité : quels
 #      paramètres d'entrée pilotent le plus les tonnes·km ;
-#   C. sensibilite_heatmap_indices.png       — |corrélation| entrée × sortie ;
-#   D. sensibilite_divergence_sectorielle.png — volatilité du tonnage par secteur ;
-#   E. sensibilite_carte_robustesse.png      — coefficient de variation du volume
+#   C. sensibilite_scatter_entrees.png       — nuages de points sortie vs entrée,
+#      un panneau par paramètre : relation brute derrière chaque indice du
+#      tornado (repère une non-linéarité qu'une simple corrélation masquerait) ;
+#   D. sensibilite_heatmap_indices.png       — |corrélation| entrée × sortie ;
+#   E. sensibilite_divergence_sectorielle.png — volatilité du tonnage par secteur ;
+#   F. sensibilite_carte_robustesse.png      — coefficient de variation du volume
 #      par arête : où le réseau est le plus sensible à l'incertitude.
 #
 # Ce script se lance en mode RÉFÉRENCE (SCENARIO_ID reste "reference") : il ne
@@ -51,6 +54,16 @@ cat("✓ Plan LHS chargé :", nrow(plan), "scénarios,",
 
 # Colonnes du plan qui sont des multiplicateurs d'entrée (tout sauf l'id)
 cols_entree <- setdiff(names(plan), "id")
+
+# Étiquettes lisibles pour les colonnes de paramètres : "beta_Agriculture" →
+# "β Agriculture" (élasticité) ; "valtonne_Mines" → "RWF/t Mines" (valeur
+# unitaire en RWF par tonne). Réutilisée pour la table de synthèse (section 1)
+# et les indices de sensibilité (section 3).
+jolie_entree <- function(x) {
+  x <- sub("^beta_",     "β ",     x)
+  x <- sub("^valtonne_", "RWF/t ", x)
+  x
+}
 
 # ==============================================================================
 # 1. Lecture des INDICATEURS de sortie pour un dossier d'exports
@@ -124,6 +137,32 @@ if (length(ids_ok) < 2)
 res_scen <- res_scen[ids_ok]
 plan     <- plan[plan$id %in% ids_ok, , drop = FALSE]
 
+# Palette de couleurs par scénario : une couleur fixe attribuée à chaque id de
+# tirage LHS, réutilisée dans toutes les figures de synthèse (A et D) pour
+# pouvoir suivre visuellement un même scénario d'un graphique à l'autre.
+# hcl.colors(..., "Dynamic") est une palette qualitative qui reste lisible
+# même pour un grand nombre de catégories.
+PALETTE_SCENARIOS <- setNames(
+  grDevices::hcl.colors(length(ids_ok), palette = "Dynamic"),
+  ids_ok
+)
+
+# ==============================================================================
+# 1bis. Table de synthèse des paramètres tirés par scénario
+# ==============================================================================
+# Écrit (à chaque exécution) un CSV qui explicite, pour chaque id de scénario
+# LHS (identifiant utilisé comme couleur dans les figures A et D), la valeur
+# exacte des 16 multiplicateurs tirés (β et RWF/t par secteur). Sert de
+# légende détaillée à consulter à côté des figures, puisque les couleurs
+# seules ne permettent pas de lire les valeurs des paramètres.
+table_parametres <- plan
+names(table_parametres) <- c("id", jolie_entree(cols_entree))
+table_parametres[jolie_entree(cols_entree)] <-
+  lapply(table_parametres[jolie_entree(cols_entree)], round, digits = 3)
+readr::write_csv(table_parametres,
+                  file.path(DIR_SYNTHESE, "sensibilite_table_parametres.csv"))
+cat("  ✓ Table des paramètres par scénario → sensibilite_table_parametres.csv\n")
+
 # ==============================================================================
 # 2. Table longue des indicateurs agrégés (écart % à la référence)
 # ==============================================================================
@@ -147,10 +186,14 @@ agg_long$ecart_pct <- 100 * (agg_long$valeur - agg_long$ref) / agg_long$ref
 agg_long <- agg_long[is.finite(agg_long$ecart_pct), , drop = FALSE]
 
 # ── FIGURE A : enveloppe d'incertitude des indicateurs agrégés ───────────────
+# Les points sont colorés par id de scénario (PALETTE_SCENARIOS) : on peut
+# ainsi repérer un même tirage LHS sur les différents indicateurs (et, comme
+# la palette est partagée, le retrouver aussi sur la figure D).
 gA <- ggplot(agg_long, aes(x = indicateur, y = ecart_pct)) +
   geom_hline(yintercept = 0, linewidth = 0.6, color = "#B22222") +
   geom_boxplot(width = 0.45, fill = "#BDD7E7", outlier.shape = NA, alpha = 0.7) +
-  geom_jitter(width = 0.12, height = 0, size = 1.6, alpha = 0.6, color = "#2171B5") +
+  geom_jitter(aes(color = id), width = 0.12, height = 0, size = 1.8, alpha = 0.85) +
+  scale_color_manual(values = PALETTE_SCENARIOS, name = "Scénario") +
   scale_y_continuous(labels = function(x) paste0(x, " %")) +
   labs(
     title    = "Sensibilité des indicateurs agrégés aux incertitudes de paramètres",
@@ -165,15 +208,18 @@ gA <- ggplot(agg_long, aes(x = indicateur, y = ecart_pct)) +
               .etendue_v$indicateur, .etendue_v$etendue)
     }, largeur_car = 132)
   ) +
+  guides(color = guide_legend(ncol = 1, override.aes = list(size = 2.5, alpha = 1))) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title   = element_text(face = "bold"),
     plot.subtitle = element_text(color = "#666666"),
-    axis.text.x  = element_text(angle = 15, hjust = 1)
+    axis.text.x  = element_text(angle = 15, hjust = 1),
+    legend.text  = element_text(size = 7),
+    legend.key.height = grid::unit(0.35, "cm")
   ) +
   THEME_NOTE_LECTURE
 ggsave(file.path(DIR_SYNTHESE, "sensibilite_enveloppe_indicateurs.png"),
-       gA, width = 11, height = 6.8, dpi = 300)
+       gA, width = 12.5, height = 6.8, dpi = 300)
 cat("  ✓ A. sensibilite_enveloppe_indicateurs.png\n")
 
 # ==============================================================================
@@ -209,13 +255,7 @@ indices$corr <- mapply(function(e, s)
   suppressWarnings(cor(entrees_mat[, e], sorties_mat[, s], method = "spearman")),
   indices$entree, indices$sortie)
 
-# Étiquettes lisibles : "beta_Agriculture" → "β Agriculture" ;
-# "valtonne_Mines" → "val/t Mines".
-jolie_entree <- function(x) {
-  x <- sub("^beta_",     "β ",   x)   # β
-  x <- sub("^valtonne_", "val/t ", x)
-  x
-}
+# Étiquettes lisibles (fonction jolie_entree définie section 0).
 indices$entree_lbl <- jolie_entree(indices$entree)
 
 # ── FIGURE B : tornado pour l'indicateur principal (Tonnes-km réseau) ────────
@@ -251,9 +291,63 @@ if (indic_principal %in% colnames(sorties_mat)) {
   ggsave(file.path(DIR_SYNTHESE, "sensibilite_tornado_tkm.png"),
          gB, width = 9, height = 8.8, dpi = 300)
   cat("  ✓ B. sensibilite_tornado_tkm.png\n")
+
+  # ── FIGURE C : nuages de points sortie vs entrée (indicateur principal) ────
+  # Le tornado (figure B) résume la relation entrée → sortie par un seul
+  # nombre (la corrélation de rang). Ce nombre peut masquer une relation non
+  # monotone ou un effet de seuil. On trace donc, pour l'indicateur principal,
+  # un panneau par paramètre : en abscisse le multiplicateur tiré (1 =
+  # référence), en ordonnée l'écart de sortie à la référence. Les panneaux
+  # sont ordonnés du paramètre le plus influent (|corrélation| la plus forte,
+  # même ordre que le tornado) au moins influent.
+  # entrees_mat n'a pas forcément les id de scénario en rownames (héritées du
+  # numéro de ligne de "plan" lors du match) : on utilise rownames(sorties_mat),
+  # qui portent explicitement les id et sont dans le même ordre que entrees_mat
+  # (les deux matrices ont été alignées ligne à ligne via ce même match).
+  ids_princ <- rownames(sorties_mat)
+  scatter_princ <- do.call(rbind, lapply(cols_entree, function(e) {
+    data.frame(
+      entree_lbl    = jolie_entree(e),
+      valeur_entree = entrees_mat[, e],
+      ecart_pct     = agg_long$ecart_pct[
+        match(ids_princ, agg_long$id[agg_long$indicateur == indic_principal])
+      ],
+      stringsAsFactors = FALSE
+    )
+  }))
+  # Ordre des panneaux : du paramètre le plus influent au moins influent,
+  # d'après |corrélation| dans le tornado (variable "tor" ci-dessus).
+  ordre_scatter <- tor$entree_lbl[order(-abs(tor$corr))]
+  scatter_princ$entree_lbl <- factor(scatter_princ$entree_lbl, levels = ordre_scatter)
+
+  gC <- ggplot(scatter_princ, aes(x = valeur_entree, y = ecart_pct)) +
+    geom_hline(yintercept = 0, linewidth = 0.5, color = "#B22222") +
+    geom_vline(xintercept = 1, linewidth = 0.5, color = "grey60", linetype = "dashed") +
+    geom_smooth(method = "loess", formula = y ~ x, se = FALSE,
+                color = "grey40", linewidth = 0.5) +
+    geom_point(color = "#2171B5", size = 2, alpha = 0.8) +
+    scale_y_continuous(labels = function(x) paste0(x, " %")) +
+    facet_wrap(~ entree_lbl, ncol = 4) +
+    labs(
+      title    = paste0("Relation brute entrée → sortie — ", indic_principal),
+      subtitle = "Un panneau par paramètre tiré (hypercube latin) ; complète le tornado (figure B) en montrant la forme de la relation",
+      x = "Multiplicateur d'entrée tiré (1 = référence)",
+      y = "Écart de sortie à la référence",
+      caption = note_lecture(
+        "chaque point est un tirage LHS ; la ligne grise est une tendance lissée (loess) qui permet de repérer une relation non linéaire ou un effet de seuil que la seule corrélation du tornado ne capturerait pas.",
+        largeur_car = 132)
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(plot.title    = element_text(face = "bold"),
+          plot.subtitle = element_text(color = "#666666"),
+          strip.text    = element_text(face = "bold")) +
+    THEME_NOTE_LECTURE
+  ggsave(file.path(DIR_SYNTHESE, "sensibilite_scatter_entrees.png"),
+         gC, width = 13, height = 9, dpi = 300)
+  cat("  ✓ C. sensibilite_scatter_entrees.png\n")
 }
 
-# ── FIGURE C : heatmap des indices |corr| (toutes entrées × toutes sorties) ──
+# ── FIGURE D : heatmap des indices |corr| (toutes entrées × toutes sorties) ──
 indices$abscorr <- abs(indices$corr)
 # Ordonner les entrées par influence moyenne (les plus influentes en haut).
 ordre_entree <- indices |>
@@ -262,7 +356,7 @@ ordre_entree <- indices |>
   dplyr::arrange(m)
 indices$entree_lbl <- factor(indices$entree_lbl, levels = ordre_entree$entree_lbl)
 
-gC <- ggplot(indices, aes(x = sortie, y = entree_lbl, fill = abscorr)) +
+gD <- ggplot(indices, aes(x = sortie, y = entree_lbl, fill = abscorr)) +
   geom_tile(color = "white", linewidth = 0.4) +
   geom_text(aes(label = sprintf("%.2f", corr)), size = 3,
             color = ifelse(indices$abscorr > 0.6, "white", "grey20")) +
@@ -284,8 +378,8 @@ gC <- ggplot(indices, aes(x = sortie, y = entree_lbl, fill = abscorr)) +
         axis.text.x = element_text(angle = 20, hjust = 1)) +
   THEME_NOTE_LECTURE
 ggsave(file.path(DIR_SYNTHESE, "sensibilite_heatmap_indices.png"),
-       gC, width = 10, height = 8.8, dpi = 300)
-cat("  ✓ C. sensibilite_heatmap_indices.png\n")
+       gD, width = 10, height = 8.8, dpi = 300)
+cat("  ✓ D. sensibilite_heatmap_indices.png\n")
 
 # ==============================================================================
 # 4. Divergence sectorielle : volatilité du tonnage par secteur
@@ -309,11 +403,15 @@ ordre_sect <- sect_long |>
   dplyr::arrange(dplyr::desc(etendue))
 sect_long$secteur <- factor(sect_long$secteur, levels = ordre_sect$secteur)
 
-gD <- ggplot(sect_long, aes(x = secteur, y = ecart_pct, fill = secteur)) +
+# Les boîtes restent colorées par secteur (PALETTE_SECTEURS) ; les points sont
+# eux colorés par id de scénario (PALETTE_SCENARIOS, la même que sur la
+# figure A) pour pouvoir suivre un tirage donné à travers les secteurs.
+gE <- ggplot(sect_long, aes(x = secteur, y = ecart_pct)) +
   geom_hline(yintercept = 0, linewidth = 0.6, color = "#B22222") +
-  geom_boxplot(width = 0.55, outlier.shape = NA, alpha = 0.85) +
-  geom_jitter(width = 0.12, height = 0, size = 1.2, alpha = 0.4) +
+  geom_boxplot(aes(fill = secteur), width = 0.55, outlier.shape = NA, alpha = 0.85) +
+  geom_jitter(aes(color = id), width = 0.12, height = 0, size = 1.4, alpha = 0.6) +
   scale_fill_manual(values = PALETTE_SECTEURS, guide = "none") +
+  scale_color_manual(values = PALETTE_SCENARIOS, name = "Scénario") +
   scale_y_continuous(labels = function(x) paste0(x, " %")) +
   labs(
     title    = "Volatilité du tonnage sectoriel face aux incertitudes de paramètres",
@@ -325,14 +423,17 @@ gD <- ggplot(sect_long, aes(x = secteur, y = ecart_pct, fill = secteur)) +
       ordre_sect$secteur[1], ordre_sect$etendue[1]
     ), largeur_car = 132)
   ) +
+  guides(color = guide_legend(ncol = 1, override.aes = list(size = 2.5, alpha = 1))) +
   theme_minimal(base_size = 12) +
   theme(plot.title = element_text(face = "bold"),
         plot.subtitle = element_text(color = "#666666"),
-        axis.text.x = element_text(angle = 20, hjust = 1)) +
+        axis.text.x = element_text(angle = 20, hjust = 1),
+        legend.text  = element_text(size = 7),
+        legend.key.height = grid::unit(0.35, "cm")) +
   THEME_NOTE_LECTURE
 ggsave(file.path(DIR_SYNTHESE, "sensibilite_divergence_sectorielle.png"),
-       gD, width = 11, height = 6.8, dpi = 300)
-cat("  ✓ D. sensibilite_divergence_sectorielle.png\n")
+       gE, width = 12.5, height = 6.8, dpi = 300)
+cat("  ✓ E. sensibilite_divergence_sectorielle.png\n")
 
 # ==============================================================================
 # 5. Carte de robustesse spatiale : coefficient de variation par arête
@@ -345,15 +446,66 @@ cat("  ✓ D. sensibilite_divergence_sectorielle.png\n")
 # Alignement : le module 01 (géographie) n'étant PAS relancé en sensibilité,
 # l'ordre des arêtes est identique entre tous les scénarios et la référence. On
 # empile donc les vecteurs $arete par colonne, avec un garde-fou sur la longueur.
+#
+# La carte est produite avec tmap (et non ggplot2) pour reprendre le même fond
+# de carte (provinces, frontière, lacs, parcs) que toutes les autres cartes du
+# projet. fond_carte() est une fonction tmap sauvegardée par 01_reseau.R dans
+# persist_fond_carte.rds ; on la recharge ici comme le font les autres scripts
+# viz_*.R.
 # ==============================================================================
+
+# ── Correction du device PNG pour tmap sur macOS sans XQuartz ────────────────
+# tmap v4 force type="cairo-png" en dur dans sa fonction interne plot_device.
+# Sur macOS sans XQuartz installé, cairo n'est pas disponible : tmap_save()
+# échoue silencieusement (avertissement "failed to load cairo DLL", aucun
+# fichier créé, pas d'erreur levée). Ce bloc détecte l'absence de cairo et
+# remplace automatiquement le device par type="quartz" (rendu natif macOS).
+# Sur les systèmes où cairo fonctionne (Linux, macOS + XQuartz), le patch est
+# silencieusement ignoré.
+local({
+  .f      <- tempfile(fileext = ".png")
+  .echec  <- FALSE
+  withCallingHandlers(
+    grDevices::png(.f, type = "cairo-png", width = 10, height = 10,
+                   res = 72, units = "px"),
+    warning = function(w) {
+      .echec <<- TRUE
+      invokeRestart("muffleWarning")
+    }
+  )
+  try(dev.off(), silent = TRUE)
+  unlink(.f, force = TRUE)
+
+  if (.echec) {
+    .orig <- tmap:::plot_device
+    .patched <- function(device, ext, filename, dpi, units_target) {
+      if (is.null(device) && identical(ext, "png")) {
+        force(dpi)
+        force(units_target)
+        return(function(..., width, height) {
+          grDevices::png(..., type = "quartz", width = width, height = height,
+                         res = dpi, units = units_target)
+        })
+      }
+      .orig(device, ext, filename, dpi, units_target)
+    }
+    assignInNamespace("plot_device", .patched, ns = "tmap")
+    cat("  ✓ tmap : device PNG patché (quartz au lieu de cairo-png, XQuartz absent)\n")
+  }
+})
+
+# Fonction de fond de carte (provinces, frontière, lacs, parcs), commune à
+# toutes les cartes tmap du projet.
+fond_carte <- readRDS(file.path(DIR_CARTES, "persist_fond_carte.rds"))
+
 f_gpkg <- file.path(DIR_EXPORTS, "reseau_avec_fret.gpkg")
 long_ref <- length(ref$arete)
 longueurs_ok <- vapply(res_scen, function(x) length(x$arete) == long_ref, logical(1))
 
 if (!file.exists(f_gpkg)) {
-  cat("  ⚠ E. carte de robustesse ignorée : géométrie", f_gpkg, "absente\n")
+  cat("  ⚠ F. carte de robustesse ignorée : géométrie", f_gpkg, "absente\n")
 } else if (!all(longueurs_ok)) {
-  cat("  ⚠ E. carte de robustesse ignorée : nombre d'arêtes incohérent entre scénarios\n")
+  cat("  ⚠ F. carte de robustesse ignorée : nombre d'arêtes incohérent entre scénarios\n")
 } else {
 
   # Matrice arêtes × scénarios des volumes.
@@ -368,7 +520,7 @@ if (!file.exists(f_gpkg)) {
   reseau_geo <- sf::st_read(f_gpkg, quiet = TRUE)
 
   if (nrow(reseau_geo) != long_ref) {
-    cat("  ⚠ E. carte de robustesse ignorée : géométrie (", nrow(reseau_geo),
+    cat("  ⚠ F. carte de robustesse ignorée : géométrie (", nrow(reseau_geo),
         ") et volumes (", long_ref, ") de tailles différentes\n")
   } else {
     reseau_geo$cv_volume  <- cv_arete
@@ -377,31 +529,50 @@ if (!file.exists(f_gpkg)) {
     # (le CV n'a pas de sens sur les arêtes à volume quasi nul).
     reseau_cv <- reseau_geo[is.finite(reseau_geo$cv_volume) &
                             reseau_geo$moy_volume > SEUIL_FLUX_TONNES, ]
+    # CV exprimé en % pour la légende (tm_scale_continuous n'a pas d'équivalent
+    # à scales::percent_format utilisé côté ggplot2).
+    reseau_cv$cv_pct <- 100 * reseau_cv$cv_volume
 
-    gE <- ggplot(reseau_cv) +
-      geom_sf(aes(color = cv_volume, linewidth = moy_volume)) +
-      scale_color_gradientn(
-        colors = c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027"),
-        name   = "Coef. de\nvariation",
-        labels = scales::percent_format(accuracy = 1)
+    carte_robustesse <- fond_carte() +
+
+      # Réseau de base en gris très clair, pour situer les corridors colorés
+      # dans l'ensemble du réseau routier.
+      tm_shape(reseau_geo) +
+      tm_lines(col = "#DDDDDD", lwd = 0.3) +
+
+      # Arêtes empruntées, colorées par CV (vert = robuste, rouge = sensible
+      # aux hypothèses) et épaissies selon le volume moyen transporté.
+      tm_shape(reseau_cv) +
+      tm_lines(
+        col        = "cv_pct",
+        col.scale  = tm_scale_continuous(
+          values = c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
+        ),
+        col.legend = tm_legend(title = "Coef. de\nvariation (%)"),
+        lwd        = "moy_volume",
+        lwd.scale  = tm_scale(values.range = c(0.2, 3)),
+        lwd.legend = tm_legend(show = FALSE)
       ) +
-      scale_linewidth_continuous(range = c(0.2, 1.6), guide = "none") +
-      labs(
-        title    = "Robustesse spatiale des flux face aux incertitudes de paramètres",
-        subtitle = "Coefficient de variation du volume par arête sur l'ensemble des tirages LHS\n(vert = corridor robuste, rouge = corridor très sensible aux hypothèses)",
-        caption  = note_lecture(sprintf(
+
+      tm_title("Robustesse spatiale des flux face aux incertitudes de paramètres") +
+      tm_credits(
+        note_lecture(sprintf(
           "l'arête la plus sensible a un coefficient de variation de %.0f %% sur les %d tirages.",
-          100 * max(reseau_cv$cv_volume, na.rm = TRUE), length(res_scen)
-        ), largeur_car = 120)
+          max(reseau_cv$cv_pct, na.rm = TRUE), length(res_scen)
+        )),
+        position = tm_pos_out("center", "bottom", "left", "top"),
+        size     = 0.65
       ) +
-      theme_minimal(base_size = 12) +
-      theme(plot.title = element_text(face = "bold"),
-            plot.subtitle = element_text(color = "#666666"),
-            axis.text = element_blank(), panel.grid = element_blank()) +
-      THEME_NOTE_LECTURE
-    ggsave(file.path(DIR_SYNTHESE, "sensibilite_carte_robustesse.png"),
-           gE, width = 10, height = 9.8, dpi = 300)
-    cat("  ✓ E. sensibilite_carte_robustesse.png\n")
+      tm_layout(legend.outside = TRUE, frame = TRUE) +
+      tm_scalebar(position = c("left", "bottom")) +
+      tm_compass(position  = c("right", "top"))
+
+    tmap_save(
+      carte_robustesse,
+      file.path(DIR_SYNTHESE, "sensibilite_carte_robustesse.png"),
+      width = 3000, height = 2400, dpi = 300
+    )
+    cat("  ✓ F. sensibilite_carte_robustesse.png\n")
   }
 }
 

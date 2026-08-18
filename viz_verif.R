@@ -438,7 +438,7 @@ carte_source_pop <- fond_carte() +
   tm_dots(fill = "source_cat",
           fill.scale = tm_scale(values = PALETTE_SOURCE_POP),
           fill.legend = tm_legend(title = "Source de\nla population"),
-          size = 0.6) +
+          size = 0.5) +
   tm_title("Source de la population retenue par zone") +
   tm_credits(
     note_lecture(sprintf(
