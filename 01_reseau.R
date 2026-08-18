@@ -26,23 +26,51 @@ source("00_parametres.R")
 
 # Téléchargement du PBF depuis Geofabrik si absent en local.
 # Source publique et pérenne — indépendante du compte SSPCloud.
-# L'URL datée garantit la reproductibilité (données OSM à date fixe).
+
+# Un téléchargement échoué (404 sur une URL datée expirée) laisse malgré tout un
+# fichier de taille nulle sur le disque, que le run suivant prendrait pour un
+# PBF valide. On écarte donc tout fichier local sous le seuil de taille avant de
+# décider s'il faut télécharger.
+if (file.exists(chemin_pbf) && file.size(chemin_pbf) < PBF_TAILLE_MIN_OCTETS) {
+  cat("  PBF local incomplet (", file.size(chemin_pbf), "octets) — suppression\n")
+  file.remove(chemin_pbf)
+}
+
 if (!file.exists(chemin_pbf)) {
-  cat("  Téléchargement du PBF depuis Geofabrik...\n")
-  download.file(
-    url      = GEOFABRIK_PBF_URL,
-    destfile = chemin_pbf,
-    mode     = "wb",
-    quiet    = FALSE
-  )
-  cat("✓ PBF téléchargé :", chemin_pbf, "\n\n")
+  # Essai des URLs dans l'ordre : l'URL datée d'abord (données figées), puis
+  # "latest" en repli si Geofabrik a purgé l'extrait daté. Le succès est jugé
+  # sur la taille du fichier obtenu, pas sur l'absence d'erreur : download.file()
+  # peut signaler l'échec par un simple avertissement.
+  pbf_telecharge <- FALSE
+  for (url_pbf in GEOFABRIK_PBF_URLS) {
+    cat("  Téléchargement du PBF depuis", url_pbf, "...\n")
+    try(download.file(
+      url      = url_pbf,
+      destfile = chemin_pbf,
+      mode     = "wb",
+      quiet    = FALSE
+    ), silent = TRUE)
+
+    if (file.exists(chemin_pbf) && file.size(chemin_pbf) >= PBF_TAILLE_MIN_OCTETS) {
+      pbf_telecharge <- TRUE
+      cat("✓ PBF téléchargé :", chemin_pbf, "\n\n")
+      break
+    }
+    # Téléchargement inexploitable : on nettoie avant de tenter l'URL suivante.
+    if (file.exists(chemin_pbf)) file.remove(chemin_pbf)
+    cat("  ✗ Source indisponible, tentative suivante\n")
+  }
+
+  if (!pbf_telecharge) {
+    stop("Impossible de télécharger le PBF OSM. URLs testées :\n  ",
+         paste(GEOFABRIK_PBF_URLS, collapse = "\n  "),
+         "\nVérifier la connexion réseau ou mettre à jour GEOFABRIK_PBF_URLS ",
+         "dans 00_parametres.R (les extraits datés de Geofabrik expirent ",
+         "au bout d'environ 90 jours).")
+  }
 } else {
   cat("✓ PBF déjà présent en local :", chemin_pbf, "\n\n")
 }
-
-# Vérification de l'existence du fichier avant de continuer.
-# stop() interrompt le script avec un message d'erreur explicite.
-if (!file.exists(chemin_pbf)) stop("Fichier PBF introuvable.")
 
 # ── Lecture sélective du fichier PBF ──────────────────────────────────────────
 # st_read() peut lire directement un fichier PBF via le driver GDAL/OGR.

@@ -296,12 +296,31 @@ if (EST_SENSIBILITE && dir.exists(DIR_PERSIST_REF)) {
   rm(.fond_ref, .fond_sc)
 }
 
-# URL publique et stable du PBF OSM (date fixe = reproductibilité).
-# ⚠ À adapter selon le pays : https://download.geofabrik.de/<continent>/<pays>.osm.pbf
-# Version à jour : https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
-GEOFABRIK_PBF_URL <- "https://download.geofabrik.de/africa/rwanda-260315.osm.pbf"
+# Sources du PBF OSM, essayées dans l'ordre par le module 01.
+# Geofabrik ne conserve ses extraits datés qu'environ 90 jours : passé ce délai
+# l'URL datée renvoie une erreur 404 et le run échoue. On garde donc une URL
+# datée en tête (reproductibilité : données OSM figées à une date connue) et
+# l'URL "latest" en repli, qui reste toujours valide.
+# ⚠ À adapter selon le pays : https://download.geofabrik.de/<continent>/<pays>-latest.osm.pbf
+GEOFABRIK_PBF_URLS <- c(
+  "https://download.geofabrik.de/africa/rwanda-260801.osm.pbf",
+  "https://download.geofabrik.de/africa/rwanda-latest.osm.pbf"
+)
 
-chemin_pbf <- "rwanda-260315.osm.pbf"  # Nom local du fichier PBF — à adapter selon le pays
+# Taille plancher (octets) en dessous de laquelle un PBF local est considéré
+# comme un résidu de téléchargement échoué : une erreur 404 laisse un fichier
+# vide sur le disque, que le run suivant prendrait à tort pour un cache valide.
+# L'extrait Rwanda pèse ~60 Mo, le seuil de 5 Mo est donc très prudent.
+PBF_TAILLE_MIN_OCTETS <- 5e6
+
+# Nom du fichier PBF en local. On réutilise en priorité un extrait déjà
+# téléchargé dans le dossier de travail (nom daté d'un run précédent), ce qui
+# évite de re-télécharger 60 Mo à chaque changement d'URL ; sinon on retient le
+# nom porté par la première URL de la liste.
+.pbf_locaux <- list.files(pattern = "\\.osm\\.pbf$")
+.pbf_locaux <- .pbf_locaux[file.size(.pbf_locaux) >= PBF_TAILLE_MIN_OCTETS]
+chemin_pbf <- if (length(.pbf_locaux) > 0) .pbf_locaux[1] else basename(GEOFABRIK_PBF_URLS[1])
+rm(.pbf_locaux)
 
 # WorldPop a réorganisé plusieurs fois son arborescence.
 # On teste les URLs candidates dans l'ordre jusqu'à en trouver une valide.
