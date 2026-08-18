@@ -1652,11 +1652,14 @@ if (nrow(zones_retail) > 0) {
 # distinct(lon, lat) : supprime les doublons résiduels ayant exactement
 # les mêmes coordonnées.
 # Dans le bloc d'assemblage final, ajouter pays dans le select
+# mutate(passage_uniquement = FALSE) : seuls les postes frontière manuels
+# peuvent porter ce rôle (partie IV.3-bis) ; les entrepôts OSM sont toujours
+# de vraies zones économiques (Voronoï + commerce intérieur).
 entreposages_fictifs <- bind_rows(
   entreposages_manuels,
-  villes_nouvelles %>% mutate(pays = NA_character_),
-  zones_indus_nouvelles %>% mutate(pays = NA_character_),
-  zones_retail_nouvelles %>% mutate(pays = NA_character_)
+  villes_nouvelles %>% mutate(pays = NA_character_, passage_uniquement = FALSE),
+  zones_indus_nouvelles %>% mutate(pays = NA_character_, passage_uniquement = FALSE),
+  zones_retail_nouvelles %>% mutate(pays = NA_character_, passage_uniquement = FALSE)
 ) %>%
   # Supprimer les éventuels doublons résiduels sur les coordonnées
   distinct(lon, lat, .keep_all = TRUE)
@@ -2194,7 +2197,14 @@ reseau <- reseau %>%
       NA_character_),
     warehouse_pays = if_else(is_warehouse,
       entreposages_avec_snap$pays[match(node_id, entreposages_avec_snap$noeud_proche_id)],
-      NA_character_)
+      NA_character_),
+    # warehouse_passage_uniquement : dichotomie ville/passage des postes
+    # frontière (00_parametres.R). TRUE = poste de passage pur, utilisé
+    # uniquement pour le commerce extérieur (03_transport.R) — pas de Voronoï
+    # ni de population/production/demande domestiques propres (Partie IV.6).
+    warehouse_passage_uniquement = if_else(is_warehouse,
+      entreposages_avec_snap$passage_uniquement[match(node_id, entreposages_avec_snap$noeud_proche_id)],
+      NA)
   )
 
 # ── noeuds_entreposage : table des nœuds-entrepôts (1 ligne par nœud) ─────────
@@ -2207,15 +2217,29 @@ noeuds_entreposage <- reseau %>%
 
 n_warehouses <- nrow(noeuds_entreposage)
 
-# seeds_sf : mêmes nœuds en objet sf POINT (même ordre → même warehouse_id),
-# utilisés comme germes du pavage de Voronoï (IV.6).
-seeds_sf <- reseau %>%
+# noeuds_entreposage_sf : TOUS les n_warehouses nœuds-entrepôts en objet sf
+# POINT (même ordre → même warehouse_id), y compris les postes-frontière
+# "passage". Sert à toute opération géométrique portant sur l'ensemble des
+# entrepôts (reconstruction des coordonnées, repli RWI...).
+noeuds_entreposage_sf <- reseau %>%
   activate("nodes") %>%
   filter(is_warehouse) %>%
   st_as_sf() %>%
   mutate(warehouse_id = row_number())
 
-cat("✓ noeuds_entreposage défini :", n_warehouses, "nœuds-entrepôts\n")
+# seeds_sf : germes du pavage de Voronoï (IV.6) — UNIQUEMENT les nœuds "ville"
+# (population, emploi, commerce intérieur). Les postes-frontière "passage"
+# restent des nœuds du réseau routier (utiles au routage du commerce extérieur,
+# 03_transport.R Partie VII) mais ne reçoivent pas de polygone propre : leur
+# territoire environnant est hérité par la ville la plus proche. warehouse_id
+# est CONSERVÉ tel quel (pas renuméroté) pour rester indexable dans les
+# matrices n_warehouses en aval (population, emploi...).
+seeds_sf <- noeuds_entreposage_sf %>%
+  filter(!replace_na(warehouse_passage_uniquement, FALSE))
+
+cat("✓ noeuds_entreposage défini :", n_warehouses, "nœuds-entrepôts (",
+    nrow(seeds_sf), "germes Voronoï +", n_warehouses - nrow(seeds_sf),
+    "postes-frontière \"passage\")\n")
 cat("  dont frontières :",
     sum(noeuds_entreposage$warehouse_type == "frontiere"), "\n\n")
 
@@ -2268,10 +2292,11 @@ zones_voronoi <- zones_voronoi %>%
     st_nearest_feature(geometry, seeds_sf)
   ])
 
-# Contrôle : une cellule par nœud-entrepôt, identifiants tous distincts.
+# Contrôle : une cellule par germe (nœuds "ville", à l'exclusion des postes
+# frontière "passage" — cf. seeds_sf), identifiants tous distincts.
 stopifnot(
-  nrow(zones_voronoi)               == n_warehouses,
-  n_distinct(zones_voronoi$warehouse_id) == n_warehouses
+  nrow(zones_voronoi)               == nrow(seeds_sf),
+  n_distinct(zones_voronoi$warehouse_id) == nrow(seeds_sf)
 )
 
 # ── Population définitive = somme des pixels WorldPop dans chaque cellule ──────
@@ -2313,9 +2338,13 @@ zones_voronoi$population_zone <- round(pmax(pop_cellule, POP_FALLBACK_MIN,
                                             na.rm = TRUE))
 
 # Vecteur population aligné sur l'ordre warehouse_id (1..n_warehouses).
+# Les postes frontière "passage" (absents de zones_voronoi) reçoivent une
+# population nulle : ils n'ont pas de cellule propre et le territoire qui les
+# entoure est déjà compté dans la cellule de la ville la plus proche.
 pop_par_wid <- zones_voronoi$population_zone[
   match(seq_len(n_warehouses), zones_voronoi$warehouse_id)
 ]
+pop_par_wid[is.na(pop_par_wid)] <- 0
 
 # ── Diagnostic et stockage ────────────────────────────────────────────────────
 diag_population <- tibble(
@@ -2356,7 +2385,7 @@ reseau <- reseau %>%
 # Après la fusion, entreposages_fictifs ne décrit plus N candidats mais les
 # n_warehouses nœuds conservés (clé = nom = warehouse_name). On y remet les
 # coordonnées (depuis la géométrie du nœud) et la population définitive.
-coords_wgs <- seeds_sf %>% st_transform(4326) %>% st_coordinates()
+coords_wgs <- noeuds_entreposage_sf %>% st_transform(4326) %>% st_coordinates()
 entreposages_fictifs <- tibble(
   nom               = noeuds_entreposage$warehouse_name,
   type              = noeuds_entreposage$warehouse_type,
@@ -2630,10 +2659,15 @@ if (rwi_ok) {
     match(seq_len(n_warehouses), rwi_cellule$warehouse_id)
   ]
 
-  # Cellules sans aucun point RWI (rare) → score du point RWI le plus proche.
+  # Cellules sans aucun point RWI (rare), ainsi que les postes-frontière
+  # "passage" (aucune cellule propre) → score du point RWI le plus proche du
+  # nœud lui-même. noeuds_entreposage_sf (tous les n_warehouses nœuds, même
+  # ordre que rwi_brut_par_wid) est utilisé plutôt que seeds_sf : ce dernier
+  # ne contient plus que les germes Voronoï et n'est donc plus indexable par
+  # la même position que manquants_rwi.
   manquants_rwi <- which(is.na(rwi_brut_par_wid))
   if (length(manquants_rwi) > 0) {
-    idx_proche <- st_nearest_feature(seeds_sf[manquants_rwi, ], rwi_sf)
+    idx_proche <- st_nearest_feature(noeuds_entreposage_sf[manquants_rwi, ], rwi_sf)
     rwi_brut_par_wid[manquants_rwi] <- rwi_sf$rwi[idx_proche]
     cat("  Cellules sans point RWI (plus proche utilisé) :",
         length(manquants_rwi), "\n")
@@ -3070,18 +3104,32 @@ cat("  Écart max sur les parts de population (points de %) :",
 duck_write(diag_classes_geo_sociales, "classes_geo_sociales")
 
 # ── Part urbaine de chaque zone (descriptif) ──────────────────────────────────
+# Les postes-frontière "passage" n'ont pas de cellule de Voronoï (seeds_sf les
+# exclut, Partie IV.6) : aucun pixel WorldPop ne leur est attribué, leur ligne de
+# pop_groupe_zone est donc entièrement nulle. Le rapport urbain/total y vaut 0/0,
+# c'est-à-dire NaN — la part urbaine d'une zone sans habitant n'est pas définie.
+# On les identifie explicitement pour les écarter des comptages ci-dessous.
+pop_zone_totale   <- rowSums(pop_groupe_zone)
+zone_peuplee      <- pop_zone_totale > 0
 part_urbaine_zone <- rowSums(pop_groupe_zone[, paste0("u", 1:5), drop = FALSE]) /
-                     rowSums(pop_groupe_zone)
+                     pop_zone_totale
 
 entreposages_fictifs <- entreposages_fictifs %>%
   select(-any_of("part_urbaine")) %>%
   mutate(part_urbaine = round(part_urbaine_zone, 3))
 duck_write(entreposages_fictifs, "zones_entreposage")
 
+# Comptages restreints aux zones peuplées : sans na.rm, un seul NaN suffirait à
+# transformer chaque somme en NA et à rendre toute la ligne illisible. Le
+# dénominateur affiché est le nombre de zones peuplées, pas n_warehouses, pour
+# que les deux comptages se rapportent bien à la même population de référence.
 cat("  Part urbaine par zone : ",
-    sum(part_urbaine_zone > 0.5), " zones majoritairement urbaines / ", n_warehouses,
+    sum(part_urbaine_zone > 0.5, na.rm = TRUE), " zones majoritairement urbaines / ",
+    sum(zone_peuplee), " zones peuplées",
     " | zones mixtes (5–95 % urbain) : ",
-    sum(part_urbaine_zone > 0.05 & part_urbaine_zone < 0.95), "\n", sep = "")
+    sum(part_urbaine_zone > 0.05 & part_urbaine_zone < 0.95, na.rm = TRUE),
+    " | sans population (postes-frontière \"passage\") : ",
+    sum(!zone_peuplee), "\n", sep = "")
 
 # Libération des objets raster intermédiaires (volumineux).
 rm(pile, px, pop_quintile, r_wid, r_rwi, r_dens, r_urb_osm, rwi_vor, rwi_vect)
@@ -3239,8 +3287,11 @@ for (col_csv in intersect(cols_attendues, colnames(emploi_node_cols))) {
 # Plus de distinction N vs n_warehouses : la matrice « all » = matrice par nœud.
 emploi_zone_secteur_all <- emploi_zone_secteur
 
-# Alerte si un nœud a un emploi total nul.
-zones_nulles <- which(rowSums(emploi_zone_secteur) == 0)
+# Alerte si un nœud a un emploi total nul — les postes-frontière "passage"
+# sont exclus de cette alerte : leur emploi nul est attendu (pas de cellule
+# de Voronoï propre, cf. warehouse_passage_uniquement).
+zones_nulles <- which(rowSums(emploi_zone_secteur) == 0 &
+                       !replace_na(noeuds_entreposage$warehouse_passage_uniquement, FALSE))
 if (length(zones_nulles) > 0) {
   warning(length(zones_nulles), " nœud(s) avec emploi nul après RPHC5 : ",
           paste(noeuds_entreposage$warehouse_name[zones_nulles], collapse = ", "))
@@ -3298,6 +3349,49 @@ cat("  Emploi total   : min =",
     "| max =", round(max(rowSums(emploi_zone_secteur))), "\n")
 cat("  Population     : min =",
     round(min(pop_i)), "| max =", round(max(pop_i)), "\n\n")
+
+# ── District administratif de chaque nœud-entrepôt ────────────────────────────
+# Objectif : donner à chaque nœud-entrepôt final le nom de son district GADM
+# (niveau admin. 2), pour des regroupements géographiques plus lisibles que le
+# type de zone dans certaines visualisations (ex. sankey_flux_fret, viz_fret.R).
+# pays_districts_gadm (Partie IV.4.B, retéléchargé si besoin en IV.4.F) et
+# noeuds_entreposage_sf (Partie IV.3-bis) sont tous deux en CRS 32735, donc
+# aucune reprojection n'est nécessaire.
+# st_within + repli st_nearest_feature : même logique que la jointure NISR de
+# la Partie IV.4.B, pour les nœuds tombant exactement sur une frontière de
+# district (st_within peut alors ne rien retourner).
+if (exists("pays_districts_gadm") && !is.null(pays_districts_gadm)) {
+
+  noeuds_join_district <- noeuds_entreposage_sf %>%
+    st_join(
+      pays_districts_gadm %>% select(district_gadm),
+      join    = st_within,
+      largest = TRUE
+    )
+
+  warehouse_district <- noeuds_join_district$district_gadm
+
+  manquants_district_idx <- which(is.na(warehouse_district))
+  if (length(manquants_district_idx) > 0) {
+    idx_district_proche_wh <- st_nearest_feature(
+      noeuds_entreposage_sf[manquants_district_idx, ],
+      pays_districts_gadm
+    )
+    warehouse_district[manquants_district_idx] <-
+      pays_districts_gadm$district_gadm[idx_district_proche_wh]
+  }
+
+  noeuds_entreposage$warehouse_district <- warehouse_district
+
+  cat("✓ District administratif associé à", n_warehouses, "nœuds-entrepôts (",
+      length(unique(warehouse_district)), "districts distincts)\n\n")
+
+} else {
+  # Repli : pas de district disponible (ex. GADM injoignable). sankey_flux_fret
+  # (viz_fret.R) doit alors retomber sur warehouse_type.
+  noeuds_entreposage$warehouse_district <- NA_character_
+  cat("⚠ pays_districts_gadm indisponible — warehouse_district = NA\n\n")
+}
 
 # ── Indices des nœuds-entrepôts dans le graphe igraph ─────────────────────────
 # warehouse_nodes_base est un vecteur d'entiers : chaque valeur est la position
