@@ -70,25 +70,32 @@
 \contentsline {subsubsection}{Criticité des axes}{46}{figure.caption.21}%
 \contentsline {subsubsection}{Portée et limites de l'exercice}{48}{figure.caption.23}%
 \contentsline {section}{\numberline {5.3}Tests de sensibilité}{49}{section.5.3}%
-\contentsline {subsection}{\numberline {5.3.1}Paramètres de la fonction de friction}{49}{subsection.5.3.1}%
-\contentsline {subsection}{\numberline {5.3.2}Homogénéité de l'exposition au commerce international}{49}{subsection.5.3.2}%
+\contentsline {paragraph}{Plan d'expérience.}{49}{section.5.3}%
+\contentsline {paragraph}{Lecture des résultats.}{49}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Dispersion des indicateurs agrégés}{49}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}Paramètres de la fonction de friction}{49}{subsection.5.3.2}%
 \contentsline {subsection}{\numberline {5.3.3}Valeur du temps}{49}{subsection.5.3.3}%
 \contentsline {subsection}{\numberline {5.3.4}Valeurs des taux de conversion monnaie-tonne}{49}{subsection.5.3.4}%
-\contentsline {chapter}{\numberline {6}Discussion}{50}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Limites du travail}{50}{section.6.1}%
-\contentsline {paragraph}{Représentation du réseau et des points d'échange.}{50}{section.6.1}%
-\contentsline {paragraph}{Agrégation économique et sectorielle.}{50}{section.6.1}%
-\contentsline {paragraph}{Comportement de transport et affectation des flux.}{51}{section.6.1}%
-\contentsline {section}{\numberline {6.2}Extensions futures et recommandations}{51}{section.6.2}%
-\contentsline {chapter}{\numberline {7}Conclusion}{52}{chapter.7}%
-\contentsline {chapter}{Bibliographie}{53}{chapter*.24}%
-\contentsline {chapter}{\numberline {8}Annexes}{58}{chapter.8}%
-\contentsline {subsubsection}{Décomposition des routes non reliées à la composante géante}{58}{chapter.8}%
-\contentsline {subsubsection}{Quelques caractéristiques techniques du modèle}{58}{figure.caption.25}%
-\contentsline {subsubsection}{Fichiers exportés par le modèle (dossier \texttt {exports/})}{58}{figure.caption.25}%
-\contentsline {paragraph}{Réseau routier}{58}{figure.caption.25}%
-\contentsline {paragraph}{Matrice origine-destination et flux de fret}{59}{figure.caption.25}%
-\contentsline {paragraph}{Comptabilité économique et logistique}{59}{figure.caption.25}%
-\contentsline {paragraph}{Scénarios de choc et vulnérabilité (partie IX)}{59}{figure.caption.25}%
-\contentsline {paragraph}{Vérification et calibration}{59}{figure.caption.25}%
-\contentsline {paragraph}{Tests de sensibilité}{60}{figure.caption.25}%
+\contentsline {subsection}{\numberline {5.3.5}Robustesse spatiale des flux}{50}{subsection.5.3.5}%
+\contentsline {chapter}{\numberline {6}Discussion}{51}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Limites du travail}{51}{section.6.1}%
+\contentsline {paragraph}{Représentation du réseau et des points d'échange.}{51}{section.6.1}%
+\contentsline {paragraph}{Agrégation économique et sectorielle.}{51}{section.6.1}%
+\contentsline {paragraph}{Comportement de transport et affectation des flux.}{52}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Extensions futures et recommandations}{52}{section.6.2}%
+\contentsline {chapter}{\numberline {7}Conclusion}{53}{chapter.7}%
+\contentsline {chapter}{Bibliographie}{54}{chapter*.24}%
+\contentsline {chapter}{\numberline {8}Annexes}{59}{chapter.8}%
+\contentsline {subsubsection}{Décomposition des routes non reliées à la composante géante}{59}{chapter.8}%
+\contentsline {subsubsection}{Quelques caractéristiques techniques du modèle}{59}{figure.caption.25}%
+\contentsline {subsubsection}{Fichiers exportés par le modèle (dossier \texttt {exports/})}{59}{figure.caption.25}%
+\contentsline {paragraph}{Réseau routier}{59}{figure.caption.25}%
+\contentsline {paragraph}{Matrice origine-destination et flux de fret}{60}{figure.caption.25}%
+\contentsline {paragraph}{Comptabilité économique et logistique}{60}{figure.caption.25}%
+\contentsline {paragraph}{Scénarios de choc et vulnérabilité (partie IX)}{60}{figure.caption.25}%
+\contentsline {paragraph}{Vérification et calibration}{60}{figure.caption.25}%
+\contentsline {paragraph}{Tests de sensibilité}{61}{figure.caption.25}%
+\contentsline {subsubsection}{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}{61}{figure.caption.25}%
+\contentsline {paragraph}{L'Agence Française de Développement}{61}{figure.caption.25}%
+\contentsline {paragraph}{Le département Économie (ECO)}{61}{figure.caption.25}%
+\contentsline {paragraph}{L'équipe GEMMES}{61}{figure.caption.25}%

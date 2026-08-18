@@ -1,9 +1,9 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  18 AUG 2026 14:46
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  18 AUG 2026 15:44
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**"mémoire fret rwanda.tex"
-(./mémoire fret rwanda.tex
+**"mémoire fret rwanda.tex"
+(./mémoire fret rwanda.tex
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
 (/usr/local/texlive/2026/texmf-dist/tex/latex/base/report.cls
@@ -851,11 +851,11 @@ Package biblatex Warning: 'babel/polyglossia' detected but 'csquotes' missing.
 
 \@quotelevel=\count471
 \@quotereset=\count472
-(./mémoire fret rwanda.aux
+(./mémoire fret rwanda.aux
 Package babel Info: 'french' activates 'french' shorthands.
 (babel)             Reported on input line 13.
 )
-\openout1 = `"mémoire fret rwanda.aux"'.
+\openout1 = `"mémoire fret rwanda.aux"'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 56.
 LaTeX Font Info:    ... okay on input line 56.
@@ -934,9 +934,9 @@ e
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
 Package hyperref Info: Link coloring ON on input line 56.
-(./mémoire fret rwanda.out) (./mémoire fret rwanda.out)
+(./mémoire fret rwanda.out) (./mémoire fret rwanda.out)
 \@outlinefile=\write4
-\openout4 = `"mémoire fret rwanda.out"'.
+\openout4 = `"mémoire fret rwanda.out"'.
 
 Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: listings package is loaded.
@@ -951,19 +951,19 @@ File: french.lbx 2025/07/10 v3.21 biblatex localization (PK/MW)
 Package biblatex Info: Input encoding 'utf8' detected.
 Package biblatex Info: Automatic encoding selection.
 (biblatex)             Assuming data encoding 'utf8'.
-\openout3 = `"mémoire fret rwanda.bcf"'.
+\openout3 = `"mémoire fret rwanda.bcf"'.
 
 Package biblatex Info: Trying to load bibliographic data...
-Package biblatex Info: ... file '"mémoire fret rwanda".bbl' found.
+Package biblatex Info: ... file '"mémoire fret rwanda".bbl' found.
 
-(./mémoire fret rwanda.bbl)
+(./mémoire fret rwanda.bbl)
 Package biblatex Info: Reference section=0 on input line 56.
 Package biblatex Info: Reference segment=0 on input line 56.
  [1
 
 {/usr/local/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/loc
-al/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc}] (./mémo
-ire fret rwanda.toc
+al/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc}] (./mémoi
+re fret rwanda.toc
 LaTeX Font Info:    Trying to load font information for U+msa on input line 5.
 
 (/usr/local/texlive/2026/texmf-dist/tex/latex/amsfonts/umsa.fd
@@ -978,12 +978,12 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has
 been already used, duplicate ignored
 <to be read again> 
                    \relax 
-l.75 ...3.3}Valeur du temps}{49}{subsection.5.3.3}
+l.77 ...3.3}Valeur du temps}{49}{subsection.5.3.3}
                                                   % [1
 
 ])
 \tf@toc=\write5
-\openout5 = `"mémoire fret rwanda.toc"'.
+\openout5 = `"mémoire fret rwanda.toc"'.
 
 Package babel Info: 'french' activates 'french' shorthands.
 (babel)             Reported on input line 97.
@@ -999,12 +999,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 
 ]
 Chapitre 1.
-<images/evol_hist_precip.png, id=242, 1052.93375pt x 440.64626pt>
+<images/evol_hist_precip.png, id=247, 1052.93375pt x 440.64626pt>
 File: images/evol_hist_precip.png Graphic file (type png)
 <use images/evol_hist_precip.png>
 Package pdftex.def Info: images/evol_hist_precip.png  used on input line 114.
 (pdftex.def)             Requested size: 218.51521pt x 91.44247pt.
-<images/evol_prevue_precip.png, id=246, 537.00626pt x 642.4pt>
+<images/evol_prevue_precip.png, id=251, 537.00626pt x 642.4pt>
 File: images/evol_prevue_precip.png Graphic file (type png)
 <use images/evol_prevue_precip.png>
 Package pdftex.def Info: images/evol_prevue_precip.png  used on input line 122.
@@ -1030,7 +1030,7 @@ Chapitre 2.
 [6
 
 ]
-<images/carte_relief.png, id=279, 720.6925pt x 662.475pt>
+<images/carte_relief.png, id=284, 720.6925pt x 662.475pt>
 File: images/carte_relief.png Graphic file (type png)
 <use images/carte_relief.png>
 Package pdftex.def Info: images/carte_relief.png  used on input line 155.
@@ -1153,7 +1153,7 @@ Overfull \hbox (2.18155pt too wide) in paragraph at lines 451--452
 t les don-n�es g�o-gra-phiques.
  []
 
-<images/illustration_raster.png, id=430, 323.2075pt x 245.91875pt>
+<images/illustration_raster.png, id=435, 323.2075pt x 245.91875pt>
 File: images/illustration_raster.png Graphic file (type png)
 <use images/illustration_raster.png>
 Package pdftex.def Info: images/illustration_raster.png  used on input line 455
@@ -1167,12 +1167,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [21 <./images/illustration_raster.png>]
-<images/schema_graphe.png, id=442, 309.155pt x 174.6525pt>
+<images/schema_graphe.png, id=447, 309.155pt x 174.6525pt>
 File: images/schema_graphe.png Graphic file (type png)
 <use images/schema_graphe.png>
 Package pdftex.def Info: images/schema_graphe.png  used on input line 476.
 (pdftex.def)             Requested size: 218.51521pt x 123.44981pt.
-<images/carte_routes_hors_geante.png, id=443, 424.58624pt x 339.2675pt>
+<images/carte_routes_hors_geante.png, id=448, 424.58624pt x 339.2675pt>
 File: images/carte_routes_hors_geante.png Graphic file (type png)
 <use images/carte_routes_hors_geante.png>
 Package pdftex.def Info: images/carte_routes_hors_geante.png  used on input lin
@@ -1195,7 +1195,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [23 <./images/carte_routes_hors_geante.png>]
-<images/prorata_air.png, id=460, 740.7675pt x 424.58624pt>
+<images/prorata_air.png, id=466, 740.7675pt x 424.58624pt>
 File: images/prorata_air.png Graphic file (type png)
 <use images/prorata_air.png>
 Package pdftex.def Info: images/prorata_air.png  used on input line 545.
@@ -1318,7 +1318,7 @@ Chapitre 5.
 [34
 
 ]
-<images/ref_graphique_flux_secteurs.png, id=583, 794.97pt x 491.436pt>
+<images/ref_graphique_flux_secteurs.png, id=588, 794.97pt x 491.436pt>
 File: images/ref_graphique_flux_secteurs.png Graphic file (type png)
 <use images/ref_graphique_flux_secteurs.png>
 Package pdftex.def Info: images/ref_graphique_flux_secteurs.png  used on input 
@@ -1333,7 +1333,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [35]
-<images/ref_carte_trafic_fret.png, id=588, 3011.25pt x 2409.0pt>
+<images/ref_carte_trafic_fret.png, id=593, 3011.25pt x 2409.0pt>
 File: images/ref_carte_trafic_fret.png Graphic file (type png)
 <use images/ref_carte_trafic_fret.png>
 Package pdftex.def Info: images/ref_carte_trafic_fret.png  used on input line 1
@@ -1356,7 +1356,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [37 <./images/ref_carte_trafic_fret.png>]
-<images/ref_graphique_compo_secteurs_type_route.png, id=605, 794.97pt x 491.436
+<images/ref_graphique_compo_secteurs_type_route.png, id=610, 794.97pt x 491.436
 pt>
 File: images/ref_graphique_compo_secteurs_type_route.png Graphic file (type png
 )
@@ -1364,7 +1364,7 @@ File: images/ref_graphique_compo_secteurs_type_route.png Graphic file (type png
 Package pdftex.def Info: images/ref_graphique_compo_secteurs_type_route.png  us
 ed on input line 1119.
 (pdftex.def)             Requested size: 455.24411pt x 281.4337pt.
-<images/ref_carte_secteur_dominant.png, id=606, 3011.25pt x 2409.0pt>
+<images/ref_carte_secteur_dominant.png, id=611, 3011.25pt x 2409.0pt>
 File: images/ref_carte_secteur_dominant.png Graphic file (type png)
 <use images/ref_carte_secteur_dominant.png>
 Package pdftex.def Info: images/ref_carte_secteur_dominant.png  used on input l
@@ -1379,7 +1379,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [38 <./images/ref_graphique_compo_secteurs_type_route.png>]
-<images/ref_carte_saturation_reseau.png, id=613, 3011.25pt x 2409.0pt>
+<images/ref_carte_saturation_reseau.png, id=618, 3011.25pt x 2409.0pt>
 File: images/ref_carte_saturation_reseau.png Graphic file (type png)
 <use images/ref_carte_saturation_reseau.png>
 Package pdftex.def Info: images/ref_carte_saturation_reseau.png  used on input 
@@ -1394,7 +1394,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [39 <./images/ref_carte_secteur_dominant.png>]
-<images/ref_graphique_validation_trc.png, id=621, 578.16pt x 491.436pt>
+<images/ref_graphique_validation_trc.png, id=626, 578.16pt x 491.436pt>
 File: images/ref_graphique_validation_trc.png Graphic file (type png)
 <use images/ref_graphique_validation_trc.png>
 Package pdftex.def Info: images/ref_graphique_validation_trc.png  used on input
@@ -1409,7 +1409,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [40 <./images/ref_carte_saturation_reseau.png>]
-<images/rupt_alea_glofas.png, id=630, 3011.25pt x 2409.0pt>
+<images/rupt_alea_glofas.png, id=635, 3011.25pt x 2409.0pt>
 File: images/rupt_alea_glofas.png Graphic file (type png)
 <use images/rupt_alea_glofas.png>
 Package pdftex.def Info: images/rupt_alea_glofas.png  used on input line 1174.
@@ -1431,7 +1431,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [42 <./images/rupt_alea_glofas.png>]
-<images/rupt_graphique_surcouts.png, id=647, 794.97pt x 520.344pt>
+<images/rupt_graphique_surcouts.png, id=652, 794.97pt x 520.344pt>
 File: images/rupt_graphique_surcouts.png Graphic file (type png)
 <use images/rupt_graphique_surcouts.png>
 Package pdftex.def Info: images/rupt_graphique_surcouts.png  used on input line
@@ -1446,7 +1446,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [43 <./images/rupt_graphique_surcouts.png>]
-<images/rupt_carte_detours.png, id=655, 3011.25pt x 2409.0pt>
+<images/rupt_carte_detours.png, id=660, 3011.25pt x 2409.0pt>
 File: images/rupt_carte_detours.png Graphic file (type png)
 <use images/rupt_carte_detours.png>
 Package pdftex.def Info: images/rupt_carte_detours.png  used on input line 1236
@@ -1461,7 +1461,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [44 <./images/rupt_carte_detours.png>]
-<images/rupt_carte_reseau_degrade.png, id=662, 3011.25pt x 2409.0pt>
+<images/rupt_carte_reseau_degrade.png, id=667, 3011.25pt x 2409.0pt>
 File: images/rupt_carte_reseau_degrade.png Graphic file (type png)
 <use images/rupt_carte_reseau_degrade.png>
 Package pdftex.def Info: images/rupt_carte_reseau_degrade.png  used on input li
@@ -1484,7 +1484,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [46 <./images/rupt_carte_reseau_degrade.png>]
-<images/rupt_carte_criticite_aretes.png, id=673, 3011.25pt x 2409.0pt>
+<images/rupt_carte_criticite_aretes.png, id=678, 3011.25pt x 2409.0pt>
 File: images/rupt_carte_criticite_aretes.png Graphic file (type png)
 <use images/rupt_carte_criticite_aretes.png>
 Package pdftex.def Info: images/rupt_carte_criticite_aretes.png  used on input 
@@ -1515,8 +1515,16 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [49]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[50]
 Chapitre 6.
-[50
+[51
 
 ]
 
@@ -1526,27 +1534,19 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[51]
+[52]
 Chapitre 7.
-[52
+[53
 
 ]
-Overfull \hbox (30.7774pt too wide) in paragraph at lines 1372--1372
+Overfull \hbox (30.7774pt too wide) in paragraph at lines 1379--1379
 [][][]\T1/cmr/m/sc/12 Northern Corridor Transit and Transport Coordination Auth
 ority (NCTTCA)
  []
 
-[53
+[54
 
 ]
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.49998pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.49998pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
-
-[54]
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.49998pt, for example:
@@ -1571,38 +1571,46 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [57]
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[58]
 Chapitre 8.
-<images/local_routes_hors_geante.png, id=856, 332.24126pt x 129.48375pt>
+<images/local_routes_hors_geante.png, id=865, 332.24126pt x 129.48375pt>
 File: images/local_routes_hors_geante.png Graphic file (type png)
 <use images/local_routes_hors_geante.png>
 Package pdftex.def Info: images/local_routes_hors_geante.png  used on input lin
-e 1385.
+e 1392.
 (pdftex.def)             Requested size: 218.51521pt x 85.16118pt.
-<images/types_routes_hors_geante.png, id=857, 360.34625pt x 196.735pt>
+<images/types_routes_hors_geante.png, id=866, 360.34625pt x 196.735pt>
 File: images/types_routes_hors_geante.png Graphic file (type png)
 <use images/types_routes_hors_geante.png>
 Package pdftex.def Info: images/types_routes_hors_geante.png  used on input lin
-e 1393.
+e 1400.
 (pdftex.def)             Requested size: 218.51521pt x 119.2997pt.
 LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 1403.
+(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 1410.
 
-Overfull \hbox (24.7552pt too wide) in paragraph at lines 1411--1412
+Overfull \hbox (24.7552pt too wide) in paragraph at lines 1418--1419
 []\T1/cmtt/m/n/12 reseau_noeuds.gpkg \T1/cmr/m/n/12 ^^V n�uds du r�-seau, avec 
 l'in-di-ca-teur d'en-tre-p�t (\T1/cmtt/m/n/12 is_warehouse\T1/cmr/m/n/12 ),
  []
 
-[58
+[59
 
  <./images/local_routes_hors_geante.png> <./images/types_routes_hors_geante.png
 >]
-Overfull \hbox (1.75087pt too wide) in paragraph at lines 1413--1414
+Overfull \hbox (1.75087pt too wide) in paragraph at lines 1420--1421
 \T1/cmr/m/n/12 cule (car-bu-rant, usure, temps, �mis-sions de CO2/NOx/PM2.5 par
  tonne-kilom�tre),
  []
 
 
-Overfull \hbox (5.9875pt too wide) in paragraph at lines 1436--1437
+Overfull \hbox (5.9875pt too wide) in paragraph at lines 1443--1444
 []\T1/cmtt/m/n/12 impact_od_<scenario>.csv \T1/cmr/m/n/12 ^^V com-pa-rai-son, p
 our chaque paire origine-destination,
  []
@@ -1614,7 +1622,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[59]
+[60]
+Overfull \hbox (10.61423pt too wide) in paragraph at lines 1458--1459
+[] []\T1/cmr/bx/n/12 L'Agence Fran-�aise de D�-ve-lop-pe-ment[] \T1/cmr/m/n/12 
+L'Agence Fran-�aise de D�-ve-lop-pe-ment (AFD)
+ []
+
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.49998pt, for example:
@@ -1622,7 +1635,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[60] (./mémoire fret rwanda.aux)
+[61] (./mémoire fret rwanda.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
@@ -1631,26 +1644,21 @@ L3 programming layer <2026-01-19>
 
 LaTeX Warning: There were undefined references.
 
-Package rerunfilecheck Info: File `"mémoire fret rwanda".out' has not changed
-.
-(rerunfilecheck)             Checksum: C7A8983C27E4F3B0DD15A79A7E0ADD61;9411.
+Package rerunfilecheck Info: File `"mémoire fret rwanda".out' has not changed.
 
-Package biblatex Warning: Please (re)run Biber on the file:
-(biblatex)                "mémoire fret rwanda"
-(biblatex)                and rerun LaTeX afterwards.
-
-Package logreq Info: Writing requests to '"mémoire fret rwanda".run.xml'.
-\openout1 = `"mémoire fret rwanda.run.xml"'.
+(rerunfilecheck)             Checksum: 4003AFF23A304688A99A7476FB689298;9551.
+Package logreq Info: Writing requests to '"mémoire fret rwanda".run.xml'.
+\openout1 = `"mémoire fret rwanda.run.xml"'.
 
  ) 
 Here is how much of TeX's memory you used:
- 25353 strings out of 467525
- 446703 string characters out of 5418983
- 1308198 words of memory out of 5000000
- 53742 multiletter control sequences out of 15000+600000
+ 25351 strings out of 467525
+ 446523 string characters out of 5418983
+ 1308251 words of memory out of 5000000
+ 53739 multiletter control sequences out of 15000+600000
  643668 words of font info for 80 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 76i,12n,81p,1756b,2237s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 76i,12n,81p,1755b,2237s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb
 ></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex8.
 pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.p
@@ -1672,10 +1680,10 @@ ve/2026/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive
 026/texmf-dist/fonts/type1/public/cm-super/sfrm1440.pfb></usr/local/texlive/202
 6/texmf-dist/fonts/type1/public/cm-super/sfti1200.pfb></usr/local/texlive/2026/
 texmf-dist/fonts/type1/public/cm-super/sftt1200.pfb>
-Output written on "mémoire fret rwanda.pdf" (61 pages, 9861413 bytes).
+Output written on "mémoire fret rwanda.pdf" (62 pages, 9865174 bytes).
 PDF statistics:
- 1024 PDF objects out of 1200 (max. 8388607)
- 866 compressed objects within 9 object streams
- 242 named destinations out of 1000 (max. 500000)
- 445 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 1033 PDF objects out of 1200 (max. 8388607)
+ 874 compressed objects within 9 object streams
+ 243 named destinations out of 1000 (max. 500000)
+ 453 words of extra memory for PDF output out of 10000 (max. 10000000)
 

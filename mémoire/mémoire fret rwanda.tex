@@ -1310,15 +1310,18 @@
 	\section{Tests de sensibilité}
 	\label{sec:sensibilite}
 	
-	Pour l'ensemble des paramètres étudiés, nous avons fait varier leur valeur de $\pm 5\%$.
+	Les paramètres du modèle ne sont pas tous également bien connus. Trois familles reposent sur du dire d'expert ou sur des ordres de grandeur empruntés à la littérature plutôt que sur une mesure directe~: les élasticités $\beta_s$ de la fonction de friction (section~\ref{subsubsec:friction}), les taux de conversion monnaie-tonne qui traduisent les grandeurs de la matrice de comptabilité sociale en tonnages, et la valeur du temps qui pondère la composante temporelle du coût généralisé (équation~\ref{eq:cout_temps}). Ce sont ces trois familles que nous soumettons à variation.
 	
-	\subsection{Paramètres de la fonction de friction}
-	\label{subsec:parametre_friction}
+	\paragraph{Plan d'expérience.} Faire varier un paramètre à la fois, toutes choses égales par ailleurs, ne teste qu'une seule direction de l'espace des hypothèses et ne dit rien des compensations entre paramètres. Nous retenons donc un plan par \emph{hypercube latin}~: chaque axe du plan est découpé en autant d'intervalles équiprobables qu'il y a de tirages, et chaque intervalle n'est visité qu'une fois, ce qui couvre l'espace de façon homogène avec un petit nombre d'exécutions. Le plan compte dix-sept axes — un par élasticité sectorielle, un par valeur au tonne sectorielle, et un axe unique pour la valeur du temps, appliqué simultanément aux trois véhicules types — pour vingt tirages. Chaque axe est tiré sous la forme d'un multiplicateur de la valeur de référence, dans un intervalle de $\pm 30\%$. Cette amplitude est volontairement large~: il ne s'agit pas de refléter une incertitude statistique mesurée, dont nous ne disposons pas, mais de vérifier que les conclusions du modèle survivent à une révision substantielle de ses hypothèses les moins assurées. Chaque tirage donne lieu à une réexécution complète des modules de coûts, de distribution et d'affectation~; la géographie du réseau, qui ne dépend d'aucun de ces paramètres, est réutilisée telle quelle.
+	
+	\paragraph{Lecture des résultats.} Les tirages étant indépendants par construction, l'influence d'un paramètre sur un indicateur de sortie se lit directement dans la corrélation de rang de Spearman entre le multiplicateur tiré et l'indicateur obtenu. Nous présentons d'abord la dispersion d'ensemble des indicateurs agrégés autour du scénario de référence, puis l'attribution de cette dispersion aux différents paramètres, famille par famille.
+	
+	\subsection{Dispersion des indicateurs agrégés}
 	
 	[À développer avec résultats]
 	
-	\subsection{Homogénéité de l'exposition au commerce international}
-	
+	\subsection{Paramètres de la fonction de friction}
+	\label{subsec:parametre_friction}
 	
 	[À développer avec résultats]
 	
@@ -1327,6 +1330,10 @@
 	[À développer avec résultats]
 	
 	\subsection{Valeurs des taux de conversion monnaie-tonne}
+	
+	[À développer avec résultats]
+	
+	\subsection{Robustesse spatiale des flux}
 	
 	[À développer avec résultats]
 	
@@ -1442,18 +1449,43 @@
 		Ces fichiers, préfixés \texttt{verif\_}, comparent des grandeurs simulées par le modèle aux sources officielles de calibration (voir annexe sur les sources) : convergence de l'algorithme de Furness, population et emploi par source, part de la valeur ajoutée par secteur, répartition modale du trafic (tonnes-kilomètres), taux de saturation et longueur du réseau par type de route, et un tableau de bord de synthèse comparant chaque indicateur du modèle à sa référence externe.
 
 		\paragraph{Tests de sensibilité}
-		Le sous-dossier \texttt{sensibilite/} contient un répertoire par run testé (variations ponctuelles d'un paramètre, ex. \texttt{beta\_moins20}, \texttt{vot\_double}, ou tirages latin hypercube sampling \texttt{lhs\_01} à \texttt{lhs\_20}), chacun reproduisant l'intégralité des exports ci-dessus pour ce jeu de paramètres. Le fichier \texttt{plan\_lhs.csv} liste, pour chaque tirage \texttt{lhs\_XX}, les multiplicateurs appliqués aux paramètres $\beta$ (fonction de friction) et aux valeurs au tonne par secteur.
+		Le sous-dossier \texttt{sensibilite/} contient un répertoire par tirage de l'hypercube latin (\texttt{lhs\_01} à \texttt{lhs\_20}), chacun reproduisant l'intégralité des exports ci-dessus pour son jeu de paramètres. Le fichier \texttt{plan\_lhs.csv} liste, pour chaque tirage \texttt{lhs\_XX}, les multiplicateurs appliqués aux paramètres $\beta$ (fonction de friction), aux valeurs au tonne par secteur et à la valeur du temps.
 
 		\subsubsection{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}
 		\label{subsubsec:annexe_afd_gemmes}
 
 		\paragraph{L'Agence Française de Développement}
-		L'Agence Française de Développement (AFD) est un établissement public français qui met en œuvre la politique de développement et de solidarité internationale de la France. Elle finance, accompagne et accélère des projets en faveur du climat, de la biodiversité, de la paix, de l'éducation, de la santé ou encore de l'égalité femmes-hommes, dans les pays en développement, émergents et dans les Outre-mer français. Le groupe AFD, qui inclut sa filiale Proparco dédiée au secteur privé, intervient dans plus d'une centaine de pays via un réseau d'agences locales, dont l'agence de Kigali au Rwanda, à l'origine de la présente étude.
+		L'Agence Française de Développement (AFD) est un établissement public français qui met en œuvre la politique de développement et de solidarité internationale de la France. Elle finance, accompagne et accélère des projets en faveur du climat, de la biodiversité, de la paix, de l'éducation, de la santé ou encore de l'égalité femmes-hommes, dans les pays en développement, émergents et dans les Outre-mer français. Le groupe AFD, qui inclut sa filiale Proparco dédiée au secteur privé, intervient dans plus d'une centaine de pays via un réseau d'agences locales.
 
 		\paragraph{Le département Économie (ECO)}
-		Au sein de l'AFD, le département Économie (ECO) réunit les économistes de l'institution chargés de produire des analyses, des recherches et des outils d'aide à la décision pour éclairer les stratégies de financement du développement. Ce département contribue à la fois à la recherche académique publiée par l'AFD (notes techniques, papiers de recherche, revue \textit{Question de Développement}) et à l'appui direct aux équipes opérationnelles, en apportant une expertise économique sur des sujets tels que le commerce international, les infrastructures, la macroéconomie ou l'évaluation d'impact des projets financés.
+		Au sein de l'AFD, le département Économie (ECO) réunit les chercheur.euses de l'institution chargés de produire des analyses, des recherches et des outils d'aide à la décision pour éclairer les stratégies de financement du développement. Ce département contribue à la fois à la recherche académique publiée par l'AFD (notes techniques, papiers de recherche, revue \textit{Question de Développement}) et à l'appui direct aux équipes opérationnelles, en apportant une expertise économique sur des sujets tels que le commerce international, les infrastructures, la macroéconomie ou l'évaluation d'impact des projets financés.
 
 		\paragraph{L'équipe GEMMES}
-		Le programme GEMMES (Gérer les Enjeux Macroéconomiques et de Modélisation Environnementale et Sociale) est une initiative de recherche du département ECO consacrée à la modélisation économique des interactions entre systèmes climatiques, environnementaux et économiques. L'équipe développe des modèles quantitatifs (notamment des modèles d'équilibre général, des modèles multi-agents et des modèles input-output) permettant d'évaluer les impacts macroéconomiques du changement climatique et des politiques d'adaptation ou d'atténuation dans les pays partenaires de l'AFD. Le présent mémoire, portant sur la modélisation du fret routier rwandais et sa vulnérabilité aux inondations, s'inscrit dans cette démarche : il vise à outiller l'équipe GEMMES et l'agence AFD de Kigali d'un modèle reproductible permettant de quantifier les conséquences économiques d'une dégradation du réseau de transport, en amont d'une extension future vers un couplage avec un modèle macroéconomique dynamique de type ARIO/ESTEEM (voir annexe sur le couplage envisagé).
+		Le programme GEMMES (Gérer les Enjeux Macroéconomiques et de Modélisation Environnementale et Sociale) est une initiative de recherche du département ECO consacrée à la modélisation économique des interactions entre systèmes climatiques, environnementaux et économiques. L'équipe développe des modèles quantitatifs permettant d'évaluer les impacts macroéconomiques du changement climatique et des politiques d'adaptation ou d'atténuation dans les pays partenaires de l'AFD. 
 
 \end{document}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

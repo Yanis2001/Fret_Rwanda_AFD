@@ -160,42 +160,6 @@
       \verb https://www.minecofin.gov.rw/news-detail/frw-51858-billion-needed-to-recover-from-impact-of-recent-floods-and-landslides
       \endverb
     \endentry
-    \entry{MINIRENA2011}{report}{}{}
-      \name{author}{1}{}{%
-        {{un=0,uniquepart=base,hash=3095595734d0db0ecfa1a9ba2107538a}{%
-           family={{Ministry of Natural Resources (MINIRENA)}},
-           familyi={M\bibinitperiod}}}%
-      }
-      \list{institution}{1}{%
-        {République du Rwanda}%
-      }
-      \list{location}{1}{%
-        {Kigali}%
-      }
-      \strng{namehash}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{fullhash}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{fullhashraw}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{bibnamehash}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{authorbibnamehash}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{authornamehash}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{authorfullhash}{3095595734d0db0ecfa1a9ba2107538a}
-      \strng{authorfullhashraw}{3095595734d0db0ecfa1a9ba2107538a}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{title}{Rwanda's Second National Communication under the United Nations Framework Convention on Climate Change}
-      \field{type}{techreport}
-      \field{year}{2011}
-      \verb{urlraw}
-      \verb https://unfccc.int/resource/docs/natc/rwanc2f.pdf
-      \endverb
-      \verb{url}
-      \verb https://unfccc.int/resource/docs/natc/rwanc2f.pdf
-      \endverb
-    \endentry
     \entry{NCTTCA2018}{report}{}{}
       \name{author}{1}{}{%
         {{un=0,uniquepart=base,hash=446816fd193efd1999159d49f85b77c9}{%
@@ -306,51 +270,6 @@
       \verb https://documents.worldbank.org/en/publication/documents-reports/documentdetail/099111224145514415
       \endverb
     \endentry
-    \entry{Colon2021}{article}{}{}
-      \name{author}{3}{}{%
-        {{un=0,uniquepart=base,hash=9425cb5bdf1cd3666ab20e4e1424fa1e}{%
-           family={Colon},
-           familyi={C\bibinitperiod},
-           given={Célian},
-           giveni={C\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
-           family={Hallegatte},
-           familyi={H\bibinitperiod},
-           given={Stéphane},
-           giveni={S\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=fd8fffee36850c59183a20584aa5a750}{%
-           family={Rozenberg},
-           familyi={R\bibinitperiod},
-           given={Julie},
-           giveni={J\bibinitperiod},
-           givenun=0}}%
-      }
-      \strng{namehash}{797463152a8e1770509ed3f591674bbb}
-      \strng{fullhash}{797463152a8e1770509ed3f591674bbb}
-      \strng{fullhashraw}{797463152a8e1770509ed3f591674bbb}
-      \strng{bibnamehash}{797463152a8e1770509ed3f591674bbb}
-      \strng{authorbibnamehash}{797463152a8e1770509ed3f591674bbb}
-      \strng{authornamehash}{797463152a8e1770509ed3f591674bbb}
-      \strng{authorfullhash}{797463152a8e1770509ed3f591674bbb}
-      \strng{authorfullhashraw}{797463152a8e1770509ed3f591674bbb}
-      \field{sortinit}{1}
-      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{journaltitle}{Nature Sustainability}
-      \field{title}{Criticality analysis of a country's transport network via an agent-based supply chain model}
-      \field{volume}{4}
-      \field{year}{2021}
-      \field{pages}{209\bibrangedash 215}
-      \range{pages}{7}
-      \verb{doi}
-      \verb 10.1038/s41893-020-00649-4
-      \endverb
-    \endentry
     \entry{Hickford2023}{report}{}{}
       \name{author}{9}{}{%
         {{un=0,uniquepart=base,hash=c69e218476039411543a48b9bed29dae}{%
@@ -436,6 +355,51 @@
       \verb https://transport-links.com/hvt-publications/final-report-decision-support-systems-for-resilient-strategic-transport-networks-in-low-income-countries/
       \endverb
     \endentry
+    \entry{Colon2021}{article}{}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=9425cb5bdf1cd3666ab20e4e1424fa1e}{%
+           family={Colon},
+           familyi={C\bibinitperiod},
+           given={Célian},
+           giveni={C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f6491e9ef2d4a020091711e1617a4c65}{%
+           family={Hallegatte},
+           familyi={H\bibinitperiod},
+           given={Stéphane},
+           giveni={S\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=fd8fffee36850c59183a20584aa5a750}{%
+           family={Rozenberg},
+           familyi={R\bibinitperiod},
+           given={Julie},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{fullhash}{797463152a8e1770509ed3f591674bbb}
+      \strng{fullhashraw}{797463152a8e1770509ed3f591674bbb}
+      \strng{bibnamehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authorbibnamehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authornamehash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authorfullhash}{797463152a8e1770509ed3f591674bbb}
+      \strng{authorfullhashraw}{797463152a8e1770509ed3f591674bbb}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Nature Sustainability}
+      \field{title}{Criticality analysis of a country's transport network via an agent-based supply chain model}
+      \field{volume}{4}
+      \field{year}{2021}
+      \field{pages}{209\bibrangedash 215}
+      \range{pages}{7}
+      \verb{doi}
+      \verb 10.1038/s41893-020-00649-4
+      \endverb
+    \endentry
     \entry{Koks2019}{article}{}{}
       \true{moreauthor}
       \true{morelabelname}
@@ -497,8 +461,8 @@
       \strng{authornamehash}{228cd3594146dec7ed4b49491fddc571}
       \strng{authorfullhash}{228cd3594146dec7ed4b49491fddc571}
       \strng{authorfullhashraw}{228cd3594146dec7ed4b49491fddc571}
-      \field{sortinit}{2}
-      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{url}
       \field{labelnamesource}{author}
@@ -535,8 +499,8 @@
       \strng{authornamehash}{32730e15a7ca0bf0686ea8d4a3a46ab9}
       \strng{authorfullhash}{32730e15a7ca0bf0686ea8d4a3a46ab9}
       \strng{authorfullhashraw}{32730e15a7ca0bf0686ea8d4a3a46ab9}
-      \field{sortinit}{2}
-      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -992,36 +956,6 @@
       \field{title}{Urban Transportation Networks: Equilibrium Analysis with Mathematical Programming Methods}
       \field{year}{1985}
     \endentry
-    \entry{Anthropic2026Claude}{misc}{}{}
-      \name{author}{1}{}{%
-        {{un=0,uniquepart=base,hash=f431db65cea024a5f19eab835afefee2}{%
-           family={{Anthropic}},
-           familyi={A\bibinitperiod}}}%
-      }
-      \strng{namehash}{f431db65cea024a5f19eab835afefee2}
-      \strng{fullhash}{f431db65cea024a5f19eab835afefee2}
-      \strng{fullhashraw}{f431db65cea024a5f19eab835afefee2}
-      \strng{bibnamehash}{f431db65cea024a5f19eab835afefee2}
-      \strng{authorbibnamehash}{f431db65cea024a5f19eab835afefee2}
-      \strng{authornamehash}{f431db65cea024a5f19eab835afefee2}
-      \strng{authorfullhash}{f431db65cea024a5f19eab835afefee2}
-      \strng{authorfullhashraw}{f431db65cea024a5f19eab835afefee2}
-      \field{sortinit}{4}
-      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{howpublished}{Large Language Model}
-      \field{title}{Claude (Sonnet 4.6, Opus 4.8, Sonnet 5)}
-      \field{year}{2026}
-      \verb{urlraw}
-      \verb https://www.anthropic.com/claude
-      \endverb
-      \verb{url}
-      \verb https://www.anthropic.com/claude
-      \endverb
-    \endentry
     \entry{Hijmans2026geodata}{manual}{}{}
       \name{author}{4}{}{%
         {{un=0,uniquepart=base,hash=9b0a2427b5a45d44474b8316d0d9aad7}{%
@@ -1215,8 +1149,8 @@
       \strng{authornamehash}{2f511aed9eb1b8bb6045137cec17b11b}
       \strng{authorfullhash}{2f511aed9eb1b8bb6045137cec17b11b}
       \strng{authorfullhashraw}{2f511aed9eb1b8bb6045137cec17b11b}
-      \field{sortinit}{5}
-      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1242,8 +1176,8 @@
       \strng{authornamehash}{2066778d476d4368455cb8e3ba6d03b4}
       \strng{authorfullhash}{2066778d476d4368455cb8e3ba6d03b4}
       \strng{authorfullhashraw}{2066778d476d4368455cb8e3ba6d03b4}
-      \field{sortinit}{5}
-      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1324,8 +1258,8 @@
       \strng{authornamehash}{6cd8e81413204f61741abf3c18d475fb}
       \strng{authorfullhash}{00e74e678e92411fc377163e75479e0d}
       \strng{authorfullhashraw}{00e74e678e92411fc377163e75479e0d}
-      \field{sortinit}{5}
-      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1588,8 +1522,8 @@
       \strng{authornamehash}{a0c9a18295a05fbf7662daef53ee0db7}
       \strng{authorfullhash}{a0c9a18295a05fbf7662daef53ee0db7}
       \strng{authorfullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1615,8 +1549,8 @@
       \strng{authornamehash}{7fba8a21a79da7f09bad272143e8adc7}
       \strng{authorfullhash}{7fba8a21a79da7f09bad272143e8adc7}
       \strng{authorfullhashraw}{7fba8a21a79da7f09bad272143e8adc7}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1649,8 +1583,8 @@
       \strng{authornamehash}{60ff8a181743217356c59ac4f263e604}
       \strng{authorfullhash}{60ff8a181743217356c59ac4f263e604}
       \strng{authorfullhashraw}{60ff8a181743217356c59ac4f263e604}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1701,8 +1635,8 @@
       \strng{authornamehash}{daf7a92727e21247a68096b5b9a4d108}
       \strng{authorfullhash}{d1c370b465aab40a99c58ffbc2e30989}
       \strng{authorfullhashraw}{d1c370b465aab40a99c58ffbc2e30989}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1741,8 +1675,8 @@
       \strng{authornamehash}{99779bf4968713cd5f4aa0ea08fb431e}
       \strng{authorfullhash}{99779bf4968713cd5f4aa0ea08fb431e}
       \strng{authorfullhashraw}{99779bf4968713cd5f4aa0ea08fb431e}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{5}
+      \field{sortinithash}{20e9b4b0b173788c5dace24730f47d8c}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2006,8 +1940,8 @@
       \strng{authornamehash}{c76c6987a3f502d782ccb2f1c609f883}
       \strng{authorfullhash}{c76c6987a3f502d782ccb2f1c609f883}
       \strng{authorfullhashraw}{c76c6987a3f502d782ccb2f1c609f883}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2049,8 +1983,8 @@
       \strng{authornamehash}{60687f0db553127521769061a9cf93f1}
       \strng{authorfullhash}{60687f0db553127521769061a9cf93f1}
       \strng{authorfullhashraw}{60687f0db553127521769061a9cf93f1}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2094,8 +2028,8 @@
       \strng{authornamehash}{4e6eada38fb231430ae537a23e64f1a4}
       \strng{authorfullhash}{4181c89681f6c7a77e2486faaf202b6f}
       \strng{authorfullhashraw}{4181c89681f6c7a77e2486faaf202b6f}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2399,8 +2333,8 @@
       \strng{editornamehash}{7c760a153321d2739781505792c7b334}
       \strng{editorfullhash}{7c760a153321d2739781505792c7b334}
       \strng{editorfullhashraw}{7c760a153321d2739781505792c7b334}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2411,6 +2345,43 @@
       \true{nocite}
       \field{pages}{105\bibrangedash 142}
       \range{pages}{38}
+    \endentry
+    \entry{MINIRENA2011}{report}{}{}
+      \name{author}{1}{}{%
+        {{un=0,uniquepart=base,hash=3095595734d0db0ecfa1a9ba2107538a}{%
+           family={{Ministry of Natural Resources (MINIRENA)}},
+           familyi={M\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {République du Rwanda}%
+      }
+      \list{location}{1}{%
+        {Kigali}%
+      }
+      \strng{namehash}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{fullhash}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{fullhashraw}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{bibnamehash}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{authorbibnamehash}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{authornamehash}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{authorfullhash}{3095595734d0db0ecfa1a9ba2107538a}
+      \strng{authorfullhashraw}{3095595734d0db0ecfa1a9ba2107538a}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Rwanda's Second National Communication under the United Nations Framework Convention on Climate Change}
+      \field{type}{techreport}
+      \field{year}{2011}
+      \true{nocite}
+      \verb{urlraw}
+      \verb https://unfccc.int/resource/docs/natc/rwanc2f.pdf
+      \endverb
+      \verb{url}
+      \verb https://unfccc.int/resource/docs/natc/rwanc2f.pdf
+      \endverb
     \endentry
     \entry{Okuyama2014}{article}{}{}
       \name{author}{2}{}{%
@@ -2435,8 +2406,8 @@
       \strng{authornamehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
       \strng{authorfullhash}{e699ba5bc03b19d99d12e4f0c08d1e04}
       \strng{authorfullhashraw}{e699ba5bc03b19d99d12e4f0c08d1e04}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2832,8 +2803,8 @@
       \strng{authornamehash}{6ce09389910924308431843c83e3b399}
       \strng{authorfullhash}{6ce09389910924308431843c83e3b399}
       \strng{authorfullhashraw}{6ce09389910924308431843c83e3b399}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
