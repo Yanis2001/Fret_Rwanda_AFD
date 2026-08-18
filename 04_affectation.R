@@ -586,8 +586,8 @@ cat("  Volume moyen (actif):",
     format(round(stats_trafic$volume_moyen_t), big.mark = " "), "tonnes\n\n")
 
 # ── Zones les plus actives (origines + destinations cumulées) ─────────────────
-# volumes_par_zone est nécessaire en VIII.2 pour dimensionner les points
-# des zones sur les cartes (taille_point ∝ log10(offre + demande)).
+# Classement diagnostic (console) des zones par volume total ; persisté pour
+# être ré-affiché depuis les scripts viz_*.R sans recalcul.
 cat("Activité fret par zone (origines + destinations):\n")
 
 volumes_par_zone <- tibble(
