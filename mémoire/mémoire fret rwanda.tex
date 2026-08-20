@@ -1035,7 +1035,7 @@
 	\subsection{Analyse de sensibilité des paramètres}
 	\label{subsec:sensibilite}
 	
-	La méthode utilisée est celle d'une analyse via hypercube latin (HP) (voir \cref{enc:lhs}) sur les paramètres $\beta_s$, la valeur du temps et les taux de conversion $\frac{RWF}{tonne}$ où les incertitudes sont très grandes. 
+	La méthode utilisée est celle d'une analyse via hypercube latin (HP) (voir {\catcode`\:=12 \cref{enc:lhs}}) sur les paramètres $\beta_s$, la valeur du temps et les taux de conversion $\frac{RWF}{tonne}$ où les incertitudes sont très grandes. 
 	
 	\begin{encadre}{enc:lhs}{Qu'est-ce qu'une analyse via hypercube latin ?}
 		L'objectif d'un HP est de couvrir un maximum de variance des paramètres en faisant tourner le modèle un minimum de fois. 
@@ -1044,7 +1044,13 @@
 		
 		Une fois cela fait pour chaque paramètre, on va associer aléatoirement les rangs des sous-intervalles de chaque paramètre (fig b de \ref{ex_lhs}) afin de ne pas se concentrer sur la diagonale (fig a de \ref{ex_lhs}). Dans notre exemple précédent, le rang du sous-intervalle [2;3[ est 1, celui de [3;4[ est 2 et celui de [4;5] est 3. Il est possible d'optimiser l'association des rangs des sous-intervalles afin de maximiser l'occupation de l'espace des possibles (fig c de \ref{ex_lhs}).
 		
-		[insérer ex_lhs]
+		\begin{figure}[H]
+			\centering
+			\includegraphics[width=0.95\linewidth]{images/ex_lhs.png}
+			\caption{Exemples de plans d'expérience à deux dimensions et vingt tirages \\
+				\footnotesize Source : [mettre la référence]}
+			\label{ex_lhs}
+		\end{figure}
 	\end{encadre}
 	
 	Concrètement, la première étape de notre analyse de sensibilité est de créer un hypercube latin de la dimension voulu, c'est-à-dire le nombre de paramètres étudiés multiplié par le nombre de tirages choisi (ici 20 tirages et 17 paramètres). L'intervalle initiale de chaque paramètre est [0;1]. Pour cela, nous avons utiliser le package lhs ([mettre la référence]).
@@ -1548,7 +1554,7 @@
 	
 	\subsubsection{Couplage avec ESTEEM}
 	
-	L'extension prioritaire et la plus naturelle est celle du couplage avec le modèle macroéconomique multisectoriel de l'AFD : ESTEEM (voir \cref{enc:esteem}). Cette extension du modèle de fret présenté jusqu'à présent permettrait ainsi de pouvoir quantifier l'impact indirect sur les agrégats macroéconomiques, comme la production totale ou l'inflation, d'un choc spatialisé sur le réseau de transport de fret.
+	L'extension prioritaire et la plus naturelle est celle du couplage avec le modèle macroéconomique multisectoriel de l'AFD : ESTEEM (voir {\catcode`\:=12 \cref{enc:esteem}}). Cette extension du modèle de fret présenté jusqu'à présent permettrait ainsi de pouvoir quantifier l'impact indirect sur les agrégats macroéconomiques, comme la production totale ou l'inflation, d'un choc spatialisé sur le réseau de transport de fret.
 	
 	L'idée serait de faire en sorte que les valeurs de la SAM nationale puissent varier de manière endogène. Cela permettrait un aller-retour entre l'impact du fret sur l'économie en général (fret $\to$ ESTEEM) puis celui de la variation de l'économie en général sur les volumes transportés (ESTEEM $\to$ fret).
 	
