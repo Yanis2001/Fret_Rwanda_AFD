@@ -24,6 +24,7 @@
 \usepackage{listings}
 \usepackage[backend=biber, style=authoryear, sorting=none, doi=true, url=true, isbn=false]{biblatex}
 \usepackage{mdframed}
+\usepackage{cleveref} % permet le renvoi automatique vers les encadrés (\Cref{...}) ; doit être chargé après hyperref
 \addbibresource{references.bib}
 
 % Configuration de la géométrie
@@ -47,6 +48,20 @@
 {\normalfont\Large\bfseries}
 {\chaptertitlename\ \thechapter}{20pt}{\Large}
 \titlespacing*{\chapter}{0pt}{50pt}{40pt}
+
+% Encadrés numérotés automatiquement (compteur "encadre") et référençables via \Cref{clé} / \cref{clé}.
+% Usage : \begin{encadre}{clé_du_label}{Titre de l'encadré} ... \end{encadre}
+\newcounter{encadre}
+\renewcommand{\theencadre}{\arabic{encadre}}
+\crefname{encadre}{encadré}{encadrés}
+\Crefname{encadre}{Encadré}{Encadrés}
+\newenvironment{encadre}[2]{%
+	\refstepcounter{encadre}%
+	\label{#1}%
+	\begin{mdframed}[frametitle={Encadré \theencadre~: #2}]
+}{%
+	\end{mdframed}
+}
 
 \title{Modélisation du fret routier au Rwanda \\[0.5em]
 	\large Mémoire de master EEET, parcours modélisation prospective}
@@ -82,7 +97,8 @@
 		\vspace{2cm}
 		{\large Composition du jury\par}
 		\vspace{0.3cm}
-		{\large Président :\par}
+		{\large Juré 1 : Jean-Christophe BUREAU\par}
+		{\large Jurée 2 : Estelle GOZLAN\par}
 		{\large Tuteur professionnel : Antoine GODIN\par}
 		{\large Tuteur académique : Julien LEFEVRE\par}
 
@@ -90,6 +106,12 @@
 		{\large Pas de confidentialité\par}
 		\vspace*{1cm}
 	\end{titlepage}
+	
+	\newpage
+	
+	\chapter{Résumé}
+	
+	[À remplir]
 	
 	\newpage
 	
@@ -279,45 +301,57 @@
 	
 		\newpage
 	
-	\begin{mdframed}[frametitle=Encadré 1 : illustration des 4 étapes pour un réseau fictif]
-		
-		[insérer image]
-		
+	\begin{encadre}{enc:4_etapes}{illustration des 4 étapes pour un réseau fictif}
+
+		\begin{center}
+			\includegraphics[width=0.6\linewidth]{images/4etapes_schema_reseau.png}
+		\end{center}
+
 		\medskip
 		\medskip
-		
+
 		\textbf{Étape 1 : production et attraction}
-		
+
 		Soit $p$ et $a$ les fonctions de prodution et d'attraction et $X_i$ l'ensemble des variables associées au point $i \in \{A, B, C\}$, on calcul $p(X_i) = p_i \in \mathbb{R}^+$ et $a(X_i)=a_i\in \mathbb{R}^+$
-		
-		[insérer image]
-		
+
+		\begin{center}
+			\includegraphics[width=0.6\linewidth]{images/4etapes_prod_attrac.png}
+		\end{center}
+
 		\medskip
 		\medskip
-		
+
 		\textbf{Étape 2 : distribution}
-		
+
 		$T_{i,j} = a_j\times p_i \times f(c_{i,j})$ avec f une fonction décroissante du coût de transport entre i et j ($c_{i,j}$)
-		
-		[insérer image]
-		
+
+		\begin{center}
+			\includegraphics[width=0.6\linewidth]{images/4etapes_distrib.png}
+		\end{center}
+
 		\medskip
 		\medskip
-		
+
 		\textbf{Étape 3 : choix modal}
-		
+
 		La part de $T_{i,j}$ qui est faite par chaque mode de transport.
-		
+
+		\begin{center}
+			\includegraphics[width=0.6\linewidth]{images/4etapes_choix_modal.png}
+		\end{center}
+
 		\medskip
 		\medskip
-		
+
 		\textbf{Étape 4 : Assignation}
-		
+
 		Choix de l'itinéraire.
-		
-		[insérer l'image]
-		
-	\end{mdframed}
+
+		\begin{center}
+			\includegraphics[width=0.6\linewidth]{images/4etapes_affectation.png}
+		\end{center}
+
+	\end{encadre}
 
 	\newpage
 	
@@ -943,6 +977,7 @@
 			& + \frac{\text{taille\_envoi}_{i,j,v}}{2} \times V_s \times r \\
 			& + T_{i,j}^s \times \tau_v \times V_s \times r
 		\end{aligned}
+		\label{eq:clt}
 	\end{equation}
 	
 	Où  $\tau_v = \frac{ \sum_k\text{temps}_{v,k}}{\text{heure\_année}} $ correspond au temps de trajet entre $i$ et $j$ via la partie du trajet effectué avec le véhicule v en proportion de l'année ; $\text{q}_{i,j,v}$ à la taille optimale des envois entre $i$ et $j$ via la partie du trajet effectuée avec le véhicule v ; $K_v$ au coût d'embarquement et de débarquement ; $V_s$ à la valeur d'une tonne de marchandise du secteur $s$ et $r$ au taux de détention du stock, c'est-à-dire le coût annuel de garder une unité de valeur en stock, c'est-à-dire la somme du taux d'intérêt, du coût stockage, des coûts d'assurance et de l'obsolescence des biens transportés.
@@ -996,6 +1031,32 @@
 		\item Calcul à nouveau de Dijkstra avec comme poids les coûts post-congestion de l'affectation initiale pour les paires qui échangent des volumes supérieurs à $\text{SEUIL\_PAIRES\_CRITICITE}$ (=100t) pour trouver le nouveau chemin le plus court lorsqu'une arête est « supprimée »
 		\item Calcul du surcoût servant à classer les arêtes par ordre de criticité
 	\end{enumerate}
+	
+	\subsection{Analyse de sensibilité des paramètres}
+	\label{subsec:sensibilite}
+	
+	La méthode utilisée est celle d'une analyse via hypercube latin (HP) (voir \cref{enc:lhs}) sur les paramètres $\beta_s$, la valeur du temps et les taux de conversion $\frac{RWF}{tonne}$ où les incertitudes sont très grandes. 
+	
+	\begin{encadre}{enc:lhs}{Qu'est-ce qu'une analyse via hypercube latin ?}
+		L'objectif d'un HP est de couvrir un maximum de variance des paramètres en faisant tourner le modèle un minimum de fois. 
+		
+		Pour cela, on divise l'espace des possibles pour chaque paramètres en p (nombre de tirage) sous-ensemble. Par exemple, supposons que l'on cherche à faire varier un paramètre entre 2 et 5 et que l'on effectue 3 tirages. Chaque tirage utilisera une valeur aléatoire dans l'intervalle [2;3[ , [3;4[ ou [4;5], par exemple 2.1, 3.4 et 4.7. Chaque sous-intervalle n'est utilisé qu'une fois.
+		
+		Une fois cela fait pour chaque paramètre, on va associer aléatoirement les rangs des sous-intervalles de chaque paramètre (fig b de \ref{ex_lhs}) afin de ne pas se concentrer sur la diagonale (fig a de \ref{ex_lhs}). Dans notre exemple précédent, le rang du sous-intervalle [2;3[ est 1, celui de [3;4[ est 2 et celui de [4;5] est 3. Il est possible d'optimiser l'association des rangs des sous-intervalles afin de maximiser l'occupation de l'espace des possibles (fig c de \ref{ex_lhs}).
+		
+		[insérer ex_lhs]
+	\end{encadre}
+	
+	Concrètement, la première étape de notre analyse de sensibilité est de créer un hypercube latin de la dimension voulu, c'est-à-dire le nombre de paramètres étudiés multiplié par le nombre de tirages choisi (ici 20 tirages et 17 paramètres). L'intervalle initiale de chaque paramètre est [0;1]. Pour cela, nous avons utiliser le package lhs ([mettre la référence]).
+	\medskip
+	Une fois fait, nous avons redimentionné les paramètres afin qu'ils correspondent à l'intervalle [valeur de la simulation de référence ±30\%] en appliquant la formule : 
+	\begin{equation}
+		param_i = (1-amplitude_i) + u\times (2\times amplitude_i)
+	\end{equation}
+	Avec $param_i$ le paramètre i, $amplitude_i$ son amplitude (±30\%) et $u_i$ la valeur initiale depuis l'intervalle [0;1].
+	
+	Finalement, on relance le modèle complet 20 fois en utilisant les différentes valeurs des paramètres calculées via l'hypercube latin.
+	
 	
 	\newpage
 	
@@ -1309,33 +1370,160 @@
 	
 	\section{Tests de sensibilité}
 	\label{sec:sensibilite}
-	
-	Les paramètres du modèle ne sont pas tous également bien connus. Trois familles reposent sur du dire d'expert ou sur des ordres de grandeur empruntés à la littérature plutôt que sur une mesure directe~: les élasticités $\beta_s$ de la fonction de friction (section~\ref{subsubsec:friction}), les taux de conversion monnaie-tonne qui traduisent les grandeurs de la matrice de comptabilité sociale en tonnages, et la valeur du temps qui pondère la composante temporelle du coût généralisé (équation~\ref{eq:cout_temps}). Ce sont ces trois familles que nous soumettons à variation.
-	
-	\paragraph{Plan d'expérience.} Faire varier un paramètre à la fois, toutes choses égales par ailleurs, ne teste qu'une seule direction de l'espace des hypothèses et ne dit rien des compensations entre paramètres. Nous retenons donc un plan par \emph{hypercube latin}~: chaque axe du plan est découpé en autant d'intervalles équiprobables qu'il y a de tirages, et chaque intervalle n'est visité qu'une fois, ce qui couvre l'espace de façon homogène avec un petit nombre d'exécutions. Le plan compte dix-sept axes — un par élasticité sectorielle, un par valeur au tonne sectorielle, et un axe unique pour la valeur du temps, appliqué simultanément aux trois véhicules types — pour vingt tirages. Chaque axe est tiré sous la forme d'un multiplicateur de la valeur de référence, dans un intervalle de $\pm 30\%$. Cette amplitude est volontairement large~: il ne s'agit pas de refléter une incertitude statistique mesurée, dont nous ne disposons pas, mais de vérifier que les conclusions du modèle survivent à une révision substantielle de ses hypothèses les moins assurées. Chaque tirage donne lieu à une réexécution complète des modules de coûts, de distribution et d'affectation~; la géographie du réseau, qui ne dépend d'aucun de ces paramètres, est réutilisée telle quelle.
-	
-	\paragraph{Lecture des résultats.} Les tirages étant indépendants par construction, l'influence d'un paramètre sur un indicateur de sortie se lit directement dans la corrélation de rang de Spearman entre le multiplicateur tiré et l'indicateur obtenu. Nous présentons d'abord la dispersion d'ensemble des indicateurs agrégés autour du scénario de référence, puis l'attribution de cette dispersion aux différents paramètres, famille par famille.
-	
+
+	Les vingt tirages de l'hypercube latin décrit en section~\ref{subsec:sensibilite} font varier simultanément dix-sept paramètres dans un intervalle de $\pm$30\,\% autour de leur valeur de référence~: les huit élasticités $\beta_s$ de la fonction de friction (équation~\ref{eq:friction}), les huit taux de conversion $\frac{RWF}{tonne}$ et la valeur du temps (équation~\ref{eq:cout_temps}). Chaque tirage rejoue l'intégralité de la chaîne de calcul située en aval du réseau, de la construction des coûts généralisés à l'analyse de vulnérabilité. Le réseau lui-même n'est pas recalculé~: il ne dépend d'aucun des paramètres testés, et le figer garantit que les arêtes et les zones restent strictement comparables d'un tirage à l'autre.
+
+	L'exercice répond à deux questions distinctes. La première est celle de l'amplitude~: de combien les résultats du chapitre se déplacent-ils lorsque les paramètres les plus incertains se déplacent ? La seconde est celle de l'attribution~: lesquels de ces paramètres portent cette variation ? C'est la seconde qui importe le plus, car c'est elle qui indique où porter en priorité l'effort de calibration.
+
 	\subsection{Dispersion des indicateurs agrégés}
-	
-	[À développer avec résultats]
-	
+
+	Le tableau~\ref{tab:sens_indicateurs} rassemble, pour chaque sortie suivie, l'écart à la référence observé sur les vingt tirages. La figure~\ref{fig:sens_enveloppe} en donne la lecture graphique~: chaque point est un tirage, la ligne rouge la référence.
+
+	\begin{table}[H]
+		\centering
+		\caption{Dispersion des indicateurs agrégés sur les 20 tirages de l'hypercube latin}
+		\label{tab:sens_indicateurs}
+		\begin{tabular}{lrrrrlr}
+			\toprule
+			Indicateur & Min & Médiane & Max & Étendue & Paramètre dominant & $\rho$ \\
+			\midrule
+			Surcoût de la rupture    & $-14{,}7$ & $+3{,}8$ & $+27{,}8$ & 42,5 & Valeur du temps      & $0{,}67$ \\
+			Coût de transport total  & $-12{,}9$ & $+2{,}5$ & $+25{,}8$ & 38,7 & Valeur du temps      & $0{,}63$ \\
+			Tonnes-kilomètres réseau & $-7{,}2$  & $+1{,}5$ & $+19{,}4$ & 26,6 & RWF/t Chimie/pétrole & $-0{,}66$ \\
+			Tonnage déconnecté       & $-8{,}2$  & $+1{,}6$ & $+17{,}2$ & 25,4 & RWF/t Construction   & $-0{,}63$ \\
+			Tonnage total réseau     & $-5{,}6$  & $+0{,}8$ & $+19{,}3$ & 24,9 & RWF/t Chimie/pétrole & $-0{,}62$ \\
+			Longueur d'acheminement  & $-9{,}7$  & $+0{,}4$ & $+5{,}6$  & 15,3 & RWF/t Construction   & $0{,}80$ \\
+			Part du camion lourd     & $0{,}0$   & $0{,}0$  & $0{,}0$   & 0,0  & ---                  & --- \\
+			\bottomrule
+		\end{tabular}
+
+		\vspace{0.3em}
+		\parbox{\linewidth}{\footnotesize Écarts à la référence en \%, étendue en points. $\rho$ est la corrélation de rang de Spearman entre le paramètre dominant et l'indicateur. \\
+			Source : auteur}
+	\end{table}
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/sens_enveloppe_indicateurs.png}
+		\caption{Enveloppe d'incertitude des indicateurs agrégés — 20 tirages \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_enveloppe}
+	\end{figure}
+
+	Le premier constat est que le modèle amortit l'incertitude au lieu de l'amplifier. Des entrées tirées à $\pm$30\,\% produisent des sorties comprises entre $-14{,}7$\,\% et $+27{,}8$\,\%, et la plupart dans une fourchette bien plus étroite. Aucun effet de seuil, aucune divergence~: la chaîne de calcul se comporte de façon régulière sur tout le domaine exploré, ce qui est déjà une propriété à vérifier avant d'interpréter quoi que ce soit d'un modèle enchaînant autant d'étapes.
+
+	Les médianes sont toutes proches de zéro, entre $+0{,}4$ et $+3{,}8$ points. Le scénario de référence n'est donc pas un point atypique du nuage~: il se situe au centre de ce que produisent les hypothèses alternatives, et non sur l'un de ses bords. Les distributions sont en revanche systématiquement étirées vers le haut, l'écart maximal dépassant en valeur absolue l'écart minimal pour les six indicateurs qui varient. Cette asymétrie n'a rien de surprenant~: le tonnage s'obtient en divisant une valeur par un taux de conversion, et une division est convexe. Réduire un taux de 30\,\% ajoute plus de tonnes qu'une hausse de 30\,\% n'en retire.
+
+	La hiérarchie des dispersions est le résultat le plus important de ce tableau. Les deux indicateurs monétaires, le surcoût de la rupture et le coût de transport total, sont les plus dispersés, avec des étendues de 42,5 et 38,7 points. Les indicateurs physiques suivent à distance, entre 24,9 et 26,6 points. La longueur moyenne d'acheminement, qui décrit la géométrie des flux et non leur volume, est la plus stable de toutes avec 15,3 points. Autrement dit, l'incertitude sur les paramètres se transmet massivement aux chiffrages en RWF, beaucoup moins aux tonnages, et assez peu à la géographie des acheminements. C'est une raison de lire les cartes de ce chapitre avec plus de confiance que les montants qui les accompagnent.
+
+	La part du camion lourd fait exception~: elle vaut 100\,\% dans la référence comme dans les vingt tirages, et son étendue est rigoureusement nulle. Le choix du type de véhicule ne réagit donc pas du tout à une variation de $\pm$30\,\% de la valeur du temps. Ce n'est pas une propriété rassurante mais une limite~: elle signale que l'arbitrage entre véhicules est intégralement déterminé par la structure des coûts fixes et variables du paramétrage, et que le prix du temps n'y joue aucun rôle marginal. L'étape de choix modal du modèle (section~\ref{subsec:choix_modale}) est, en pratique, dégénérée.
+
 	\subsection{Paramètres de la fonction de friction}
 	\label{subsec:parametre_friction}
-	
-	[À développer avec résultats]
-	
+
+	La figure~\ref{fig:sens_heatmap} croise les dix-sept paramètres et les six sorties qui varient, chaque case portant la corrélation de rang entre l'un et l'autre.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.92\linewidth]{images/sens_heatmap_indices.png}
+		\caption{Influence de chaque paramètre sur chaque sortie — corrélations de rang de Spearman \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_heatmap}
+	\end{figure}
+
+	Les élasticités $\beta_s$ occupent la moitié basse de la figure, c'est-à-dire celle des paramètres les moins influents. Sur les quarante-huit croisements entre un $\beta$ et une sortie, un seul dépasse 0,50 en valeur absolue et la grande majorité reste sous 0,25. Cinq des huit élasticités --- celles de l'Agro-industrie, du Commerce, de la Chimie/pétrole, des Mines et des Cultures d'exportation --- n'exercent d'effet notable sur aucune sortie.
+
+	Ce résultat mérite d'être souligné, car les $\beta_s$ sont précisément les paramètres les plus fragiles du modèle~: ils ne proviennent d'aucune enquête et ont été produits à dire d'expert (section~\ref{subsubsec:donnees_fictives}). Le plan d'expérience montre qu'une erreur de 30\,\% sur ces valeurs inventées ne déplace pas sensiblement les résultats. La faiblesse de calibration la plus visible du travail n'est donc pas celle qui pèse le plus sur ses conclusions.
+
+	Deux exceptions se détachent néanmoins, et toutes deux s'expliquent par le même mécanisme. Le $\beta$ de la Construction affiche une corrélation de $-0{,}62$ avec la longueur moyenne d'acheminement, et celui des Manufactures de $+0{,}45$ avec les tonnes-kilomètres. Or ces deux secteurs sont les deux premiers du réseau en tonnage, avec respectivement 36,6\,\% et 18,5\,\% des tonnes, et ils occupent les deux extrémités de l'échelle des distances, 75 km pour la Construction contre 162 km pour les Manufactures (tableau~\ref{tab:tkm_secteur_ref}). Renforcer la friction de la Construction resserre encore les flux d'un secteur déjà local et lourd, ce qui raccourcit la moyenne nationale~; la relâcher pour les Manufactures étire des flux déjà longs, ce qui gonfle les tonnes-kilomètres. Les $\beta_s$ ne comptent donc que là où ils s'appliquent à une masse importante de fret dont la portée est atypique.
+
+	Cette conclusion vaut dans les limites du plan d'expérience. Elle porte sur un intervalle de $\pm$30\,\% autour de valeurs déjà jugées plausibles, et non sur la forme même de la fonction de friction (équation~\ref{eq:friction}), qui reste une hypothèse non testée ici.
+
 	\subsection{Valeur du temps}
-	
-	[À développer avec résultats]
-	
+
+	La valeur du temps est le paramètre dominant des deux indicateurs monétaires, avec des corrélations de $+0{,}63$ sur le coût de transport total et de $+0{,}67$ sur le surcoût de la rupture. Rien là que de très attendu~: ce paramètre entre linéairement dans la composante temporelle du coût généralisé (équation~\ref{eq:cout_temps}), donc dans le coût total.
+
+	L'information utile est ailleurs, dans la ligne correspondante de la figure~\ref{fig:sens_heatmap}. Face aux sorties physiques, la valeur du temps s'efface~: $+0{,}27$ sur les tonnes-kilomètres, $+0{,}17$ sur le tonnage total, et $-0{,}03$ sur la longueur d'acheminement, soit une absence complète d'effet. Elle déplace le niveau des coûts sans réorganiser les flux.
+
+	La raison tient à la manière dont ce prix est appliqué. Il est uniforme entre les trois véhicules et entre toutes les zones, limite déjà relevée en section~\ref{sec:limites}. Il translate donc la composante temporelle de tous les itinéraires dans des proportions voisines, sans modifier leur classement relatif~; or c'est ce classement, et lui seul, qui détermine le chemin retenu. Une valeur du temps différenciée par secteur ou par type de bien produirait vraisemblablement des reports d'itinéraire que ce paramétrage uniforme ne peut pas engendrer.
+
+	Deux conséquences en découlent. D'une part, les montants en RWF avancés dans ce chapitre --- le coût de transport de référence comme le surcoût de la crue centennale --- héritent directement de l'incertitude portant sur ce seul paramètre, alors que les cartes de trafic n'en héritent pas. D'autre part, le surcoût de la rupture y est encore plus sensible que le coût courant, à $0{,}67$ contre $0{,}63$. Cela se comprend~: la rupture allonge les temps de parcours et concentre le trafic dévié sur des itinéraires de contournement plus chargés, où la fonction BPR (section~\ref{subsubsec:BPR}) amplifie la seule composante temporelle du coût. Le prix du temps est donc doublement mobilisé dans le chiffrage d'un choc.
+
 	\subsection{Valeurs des taux de conversion monnaie-tonne}
-	
-	[À développer avec résultats]
-	
+
+	Les taux de conversion $\frac{RWF}{tonne}$ dominent l'ensemble des sorties physiques. La figure~\ref{fig:sens_tornado} les classe pour l'indicateur central du modèle, les tonnes-kilomètres affectées au réseau.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.8\linewidth]{images/sens_tornado_tkm.png}
+		\caption{Indices de sensibilité des tonnes-kilomètres affectées au réseau \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_tornado}
+	\end{figure}
+
+	Les trois paramètres les plus influents sont trois taux de conversion, et tous jouent négativement~: la Chimie/pétrole à $-0{,}66$, l'Agro-industrie à $-0{,}48$ et les Manufactures à $-0{,}47$. Le quatrième, le $\beta$ des Manufactures à $+0{,}45$, est la seule élasticité à se hisser en tête de ce classement, pour l'effet de masse exposé en section~\ref{subsec:parametre_friction}. Le signe négatif des taux est purement mécanique~: le tonnage s'obtient en divisant une valeur produite par le taux, si bien qu'un taux plus élevé convertit la même richesse en moins de tonnes à transporter.
+
+	La hiérarchie entre secteurs, elle, n'est pas mécanique~: elle combine le poids du secteur dans le fret et la distance sur laquelle il est acheminé. La Chimie/pétrole ne représente que 14,9\,\% des tonnes, mais elle les transporte sur 165 km en moyenne, la plus longue portée du modèle avec les Manufactures (tableau~\ref{tab:tkm_secteur_ref}). Elle pèse donc sur les tonnes-kilomètres bien au-delà de son tonnage. C'est le taux de conversion de ce secteur, et non celui de la Construction pourtant première en tonnage, qui commande l'indicateur central.
+
+	Le croisement le plus fort de tout le plan d'expérience est d'ailleurs d'une autre nature~: le taux de la Construction affiche une corrélation de $+0{,}80$ avec la longueur moyenne d'acheminement. Il ne s'agit d'aucun changement de comportement de transport mais d'un pur effet de composition. La Construction est le secteur le plus lourd et le plus local du modèle, avec 36,6\,\% des tonnes parcourant 75 km. Renchérir son taux de conversion retire des tonnes courtes de la moyenne nationale, qui s'allonge d'autant. La distance moyenne d'acheminement, présentée en section~\ref{subsec:affectation_ref} comme un indicateur de la structure des échanges, est donc en partie tributaire d'un paramètre de conversion, ce qui invite à ne pas la sur-interpréter.
+
+	La figure~\ref{fig:sens_divergence} porte le même exercice au niveau sectoriel.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/sens_divergence_sectorielle.png}
+		\caption{Volatilité du tonnage transporté par secteur — écart à la référence sur 20 tirages \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_divergence}
+	\end{figure}
+
+	Les huit secteurs de fret y présentent des étendues comprises entre 54,9 points pour la Construction et 65,3 points pour les Mines, soit deux à quatre fois la dispersion des indicateurs agrégés du tableau~\ref{tab:sens_indicateurs}. Le tonnage d'un secteur pris isolément peut ainsi s'écarter de $-25$\,\% à $+42$\,\% de sa valeur de référence.
+
+	Ce contraste entre le niveau sectoriel, très instable, et le niveau agrégé, nettement moins, tient à une compensation. Chaque tirage renchérit certains taux de conversion et en abaisse d'autres~; les tonnages sectoriels se déplacent alors en sens contraires et leur somme bouge beaucoup moins que ses composantes. Les médianes sectorielles confirment cette lecture~: à l'exception de la Construction, à $+7{,}3$ points, elles se tiennent toutes entre $-0{,}9$ et $+0{,}8$ point.
+
+	La conclusion opérationnelle est nette. Toute affirmation du mémoire portant sur la composition sectorielle du trafic, et notamment le renversement de hiérarchie entre tonnes et tonnes-kilomètres commenté en section~\ref{subsec:affectation_ref}, repose sur des taux de conversion dont l'incertitude est de loin le premier facteur de variation du modèle. C'est sur ces taux, et non sur les élasticités de la fonction de friction, que devrait porter en priorité l'effort de calibration d'un travail ultérieur~: les statistiques douanières rwandaises, qui renseignent conjointement valeurs et quantités des flux de commerce extérieur, en fourniraient une base directe pour les secteurs les plus échangés.
+
 	\subsection{Robustesse spatiale des flux}
-	
-	[À développer avec résultats]
+
+	Les indicateurs agrégés ne disent rien de la localisation des flux~: deux tirages peuvent produire le même tonnage national en le faisant circuler sur des axes différents. La figure~\ref{fig:sens_robustesse} calcule donc, arête par arête, le coefficient de variation du volume à travers les vingt tirages.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/sens_carte_robustesse.png}
+		\caption{Robustesse spatiale des flux — coefficient de variation du volume par arête sur 20 tirages \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_robustesse}
+	\end{figure}
+
+	La carte est très majoritairement verte, c'est-à-dire stable. L'ossature du réseau --- le corridor de Rusumo, les liaisons de Kigali vers les postes frontières du nord et de l'ouest, les axes structurants entre chefs-lieux --- porte les mêmes volumes, aux mêmes endroits, quels que soient les paramètres tirés. Les coefficients de variation élevés, jusqu'à 447\,\%, se concentrent sur quelques tronçons isolés dont le volume de référence est faible~: un flux marginal qui apparaît dans un tirage et disparaît dans le suivant produit mécaniquement un coefficient énorme sans que le trafic du pays en soit affecté. La géographie du fret produite par le modèle est donc robuste, y compris là où les montants qui l'accompagnent ne le sont pas.
+
+	Cette stabilité des arêtes ne se retrouve pas au niveau des zones. La figure~\ref{fig:sens_localisation} classe les quinze zones dont la part dans le tonnage national est la plus instable, en distinguant ce qu'elles expédient de ce qu'elles reçoivent.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/sens_localisation_zones.png}
+		\caption{Zones dont la part dans le tonnage national est la plus instable \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_localisation}
+	\end{figure}
+
+	La dissymétrie entre les deux panneaux est frappante et instructive. La production expédiée est nettement plus dispersée que la consommation reçue, la zone la plus instable, Karongi, voyant sa part varier sur 61 points d'écart à la référence. Cela découle directement de la construction du modèle. La consommation d'une zone est ventilée sur la population et la structure de la demande finale (section~\ref{subsubsec:affectation_conso}), grandeurs qui ne dépendent pas des paramètres testés. Sa production expédiée est en revanche calculée comme un excédent net, différence entre une production et une consommation locales (équation~\ref{eq:prod_i}), c'est-à-dire comme l'écart entre deux grandeurs du même ordre. Une variation modérée des taux de conversion se répercute donc de façon amplifiée sur cette différence.
+
+	Deux zones échappent à ce schéma~: les postes frontières de Rusumo et de Rubavu/Goma, plus instables en réception qu'en expédition. Ce sont les points d'entrée des importations, dont le tonnage dépend directement des taux de conversion appliqués aux secteurs les plus échangés (section~\ref{subsubsec:decompo_comex}), sans passer par le mécanisme d'excédent net qui régit les zones intérieures.
+
+	Reste la question qui commande la portée opérationnelle du mémoire~: le classement des axes critiques établi en section~\ref{subsec:vulneralibilite} survit-il à d'autres hypothèses de paramétrage ? La figure~\ref{fig:sens_criticite} reprend les vingt routes les plus critiques de la référence et suit leur rang dans chacun des vingt tirages.
+
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=\linewidth]{images/sens_stabilite_criticite.png}
+		\caption{Stabilité du classement de criticité des axes sur 20 tirages \\
+			\footnotesize Source : auteur}
+		\label{fig:sens_criticite}
+	\end{figure}
+
+	Le classement se révèle solide. Les vingt routes critiques de la référence figurent toutes au classement dans au moins quinze tirages sur vingt, et dix d'entre elles dans la totalité des tirages. Aucun axe n'est donc un artefact du paramétrage retenu. La liaison Ngoma--Rusumo, dont le tableau~\ref{tab:criticite} montrait qu'elle écrase le classement de référence, occupe le premier ou le deuxième rang dans les vingt tirages~; la deuxième route, un tronçon de la KK 3 Rd à Kigali, ne quitte jamais l'intervalle des rangs 2 à 3. La dispersion des rangs croît ensuite avec la position au classement, ce qui est attendu~: les criticités des routes de milieu de tableau sont proches les unes des autres, et un déplacement minime des tonnages suffit à les permuter.
+
+	Ce dernier résultat cadre la lecture de l'ensemble du chapitre. Le modèle identifie de façon stable \emph{où} se situent les vulnérabilités du réseau rwandais, et de façon beaucoup moins stable \emph{combien} elles coûtent. Le classement des axes critiques et la carte des corridors robustes peuvent être présentés comme des résultats~; les montants en RWF doivent l'être comme des ordres de grandeur assortis d'une fourchette allant d'environ $-15$ à $+28$\,\%.
 	
 	\newpage
 	
@@ -1344,6 +1532,7 @@
 	Les modèles entrée-sortie pour l'évaluation des impacts des catastrophes naturelles \cite{Miller2009, Leontief1936, Okuyama2007} constituent le cadre théorique fondamental de cette analyse. Les travaux récents de \cite{Carvalho2021} et \cite{Inoue2019} sur la propagation des chocs dans les chaînes d'approvisionnement ont également fortement influencé la conception de ce modèle.
 	
 	\section{Limites du travail}
+	\label{sec:limites}
 
 	Les choix de simplification qui rendent le modèle praticable ont des conséquences qu'il convient d'expliciter. Elles peuvent être regroupées en trois familles~: celles qui touchent à la représentation du réseau et des points d'échange, celles qui touchent à l'agrégation des grandeurs économiques, et celles qui touchent au comportement de transport et à l'affectation des flux.
 
@@ -1355,7 +1544,44 @@
 	
 	\section{Extensions futures et recommandations}
 	
-	[À développer]
+	\subsection{Extensions méthodologiques}
+	
+	\subsubsection{Couplage avec ESTEEM}
+	
+	L'extension prioritaire et la plus naturelle est celle du couplage avec le modèle macroéconomique multisectoriel de l'AFD : ESTEEM (voir \cref{enc:esteem}). Cette extension du modèle de fret présenté jusqu'à présent permettrait ainsi de pouvoir quantifier l'impact indirect sur les agrégats macroéconomiques, comme la production totale ou l'inflation, d'un choc spatialisé sur le réseau de transport de fret.
+	
+	L'idée serait de faire en sorte que les valeurs de la SAM nationale puissent varier de manière endogène. Cela permettrait un aller-retour entre l'impact du fret sur l'économie en général (fret $\to$ ESTEEM) puis celui de la variation de l'économie en général sur les volumes transportés (ESTEEM $\to$ fret).
+	
+	Ce deuxième mouvement semble plus complexe que le premier. En effet, il nécessite la prise en compte de la variabilité géographique de la diffusion de la variation des agrégats macroéconomiques. Pour ce faire, il semble intéressant de regarder du côté des modèles MRIO (MultiRegional Input-Output model) (\cite{Miller2009}) ou bien de changer d'approche et d'aller plutôt vers un modèle de type agent-based comme \cite{Colon2021}.
+	
+	Le premier mouvement (fret $\to$ ESTEEM), en plus d'être a priori plus simple à mettre en place, devrait être suffisant pour donner une estimation des ordres de grandeur de l'effet macroéconomique indirect d'un choc sur le réseau de fret. Voici une proposition de méthode qui pourrait être utilisé pour avoir des premiers résultats: 
+	\begin{itemize}
+		\item Dans le cas où la paire OD n'est pas déconnectée, on pourrait intégrer le surcoût du transport dans la fonction de prix.
+		\begin{equation}
+			p_t^d = (\mathbb{1}+\mu_t)\otimes (w+A^'p_t+\Delta cout_t)
+			\label{prix_esteem}
+		\end{equation}
+		Avec $p_t^d$ le prix ciblé par les entreprises, $\mathbb{1}$ la matrice identité, $\mu_t$ le taux de marge, $w$ le vecteur des salaires, $A$ la matrice des coefficients techniques, $p_t$ le vecteur des prix et $\Delta cout_t$ le surcoût de transport au temps t
+		
+		\item Dans le cas où la paire OD est déconnectée du reste du réseau, on peut retirer des inventaires la production qui transitait entre ces points. Les inventaires ($v_t$) dans ESTEEM entre dans la formule de la production totale ($x_t$) ainsi que dans celle du taux de marge ($\mu_t$), qui lui même entre dans l'équation des prix (cf \ref{prix_esteem}). Cela permettrait de modéliser en même temps l'effet macroéconomique du choc sur les prix de celui sur les quantités.
+	\end{itemize}
+	
+	\subsubsection{Extension du modèle de fret lui-même}
+	
+	Tout d'abord, le plus évident, il serait important dans un premier temps de faire un  travail de calibration approfondit du modèle afin de supprimer les données générées par LLM et remplacer certains proxy par des données plus pertinentes.
+	
+	\medskip
+	
+	Au delà de cette approfondissement du travail existant, il serait également intéressant de revenir sur certaines hypothèses simplificatrices limitant la portée des résultats du modèle présentées dans la section \ref{sec:limites}. 
+	\medskip
+	
+	D'un part, il serait intéressant de tenter d'utiliser le coût logistique total plutôt que le coût généralisé du transport comme poids dans le choix du chemin optimal. Cela permettrait d'augmenter le réalisme des choix effectivement fait par les entreprises de logistique, de rendre endogène aux coûts et aux volumes transportés la taille des colis et donc le nombre de véhicules impliquant une possible congestion du réseau routier. Cela permettrait également de casser l'hypothèse d'uniformité du prix du temps et de faire dépendre le chemin optimal du transport de marchandises du secteur de ces dernières.
+	
+	Cependant, cette modification se confronte à de nombreux obstables. D'une part, l'algorithme Djikstra nécessite que chaque arête est un coût définit. Or, dans le cas où on utiliserait le coût logistique total, aucune arête n'aurait un coût indépendant du chemin total choisit. De plus, la formule du coût logistique totale (\ref{eq:clt}) fait référence aux volumes transportés $T_{i,j}$ qui sont calculé eux-mêmes en fonction des coûts de transports (\ref{eq:gravitaire}). On est donc dans le cas d'un point fixe qui nécessiterait un algorithme récursif très coûteux en temps de calcul et dont la convergence n'est pas assurée.
+	
+	\medskip
+	
+	D'autre part, il serait également possible, et beaucoup plus facile, d'ajouter un nombre important d'entrepôts où un changement modal serait possible sans être eux même des points OD afin de rendre vraiment opérant la propriété de multimodalité du modèle. Pour continuer dans cette voie, il semble également intéressant d'ajouter d'autres modes de transport comme l'avion par exemple. 	
 	
 	\newpage
 	
