@@ -1691,7 +1691,7 @@
       \verb 10.1038/s41893-019-0351-x
       \endverb
     \endentry
-    \entry{ESTEEM}{report}{}{}
+    \entry{ESTEEM}{article}{}{}
       \name{author}{4}{}{%
         {{un=0,uniquepart=base,hash=f6ece7dfde4b4259593f4bf1be7ea2eb}{%
            family={Magacho},
@@ -1718,9 +1718,6 @@
            giveni={D\bibinitperiod},
            givenun=0}}%
       }
-      \list{institution}{1}{%
-        {Agence Française de Développement (AFD)}%
-      }
       \strng{namehash}{b5ae9d9a08685fb6264513ed38f77a22}
       \strng{fullhash}{49adb19b8295c4e140fbc836a5808ef4}
       \strng{fullhashraw}{49adb19b8295c4e140fbc836a5808ef4}
@@ -1735,9 +1732,15 @@
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
       \field{labeltitlesource}{title}
-      \field{title}{Carbon Tax Recycling: Fostering Reindustrialization in Financialized Developing Countries}
-      \field{type}{Document de travail}
+      \field{journaltitle}{Structural Change and Economic Dynamics}
+      \field{title}{Carbon tax recycling: Fostering reindustrialization in financialized developing economies}
+      \field{volume}{77}
       \field{year}{2026}
+      \field{pages}{1\bibrangedash 22}
+      \range{pages}{22}
+      \verb{doi}
+      \verb 10.1016/j.strueco.2025.12.008
+      \endverb
     \endentry
     \entry{Barrot2016}{article}{}{}
       \name{author}{2}{}{%
@@ -1905,8 +1908,8 @@
       \strng{authornamehash}{0b71f172740a60c38474608b95cf8600}
       \strng{authorfullhash}{0b71f172740a60c38474608b95cf8600}
       \strng{authorfullhashraw}{0b71f172740a60c38474608b95cf8600}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -1939,8 +1942,8 @@
       \strng{authornamehash}{b53634e8226ff6b3b6e290047a5cb42c}
       \strng{authorfullhash}{b53634e8226ff6b3b6e290047a5cb42c}
       \strng{authorfullhashraw}{b53634e8226ff6b3b6e290047a5cb42c}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2287,8 +2290,8 @@
       \strng{authornamehash}{d75b1c25901858e9d7cbfbb24d9dc0de}
       \strng{authorfullhash}{d75b1c25901858e9d7cbfbb24d9dc0de}
       \strng{authorfullhashraw}{d75b1c25901858e9d7cbfbb24d9dc0de}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2333,8 +2336,8 @@
       \strng{authornamehash}{a067da6837d3741dfeb0a84e1e6e7560}
       \strng{authorfullhash}{a067da6837d3741dfeb0a84e1e6e7560}
       \strng{authorfullhashraw}{a067da6837d3741dfeb0a84e1e6e7560}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2726,8 +2729,8 @@
       \strng{authornamehash}{af8e917d6ad2e74daaef971bd3189426}
       \strng{authorfullhash}{af8e917d6ad2e74daaef971bd3189426}
       \strng{authorfullhashraw}{af8e917d6ad2e74daaef971bd3189426}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2765,8 +2768,8 @@
       \strng{authornamehash}{0a7987a599decfe65f7e4db08494903c}
       \strng{authorfullhash}{0a7987a599decfe65f7e4db08494903c}
       \strng{authorfullhashraw}{0a7987a599decfe65f7e4db08494903c}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
