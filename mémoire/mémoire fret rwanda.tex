@@ -1579,17 +1579,17 @@
 		\medskip
 		\textbf{Le bloc des prix.} Les entreprises visent un prix formé par application d'un taux de marge $\mu_t$ au coût unitaire, somme des salaires et des consommations intermédiaires valorisées :
 		\begin{equation}
-			p_t^d = (\mathbb{1}+\mu_t)\otimes\left(w + A'p_t\right)
+			p_t^d = (\mathbf{1}+\mu_t)\otimes\left(w + A'p_t\right)
 			\label{eq:esteem_prix_cible}
 		\end{equation}
 		Le prix effectif rejoint cette cible progressivement, à la vitesse $\beta^p$, tandis que le taux de marge se tend dès que les stocks passent sous leur cible :
 		\begin{equation}
-			\dot{p}_t = \beta^p\left(p_t^d - p_t\right) \qquad \text{et} \qquad \mu_t = \mu_0 + \beta^\mu\left(v^d \oslash v_t - \mathbb{1}\right)
+			\dot{p}_t = \beta^p\left(p_t^d - p_t\right) \qquad \text{et} \qquad \mu_t = \mu_0 + \beta^\mu\left(v^d \oslash v_t - \mathbf{1}\right)
 			\label{eq:esteem_prix_marge}
 		\end{equation}
 		La demande finale réagit enfin aux prix relatifs avec une élasticité $\eta$, l'indice des prix étant la moyenne des prix sectoriels pondérée par la demande finale initiale :
 		\begin{equation}
-			y_t = y_0 \otimes \left(\frac{p_t}{IPC_t}\right)^{\eta} \qquad \text{avec} \qquad IPC_t = \frac{y_0'p_t}{y_0'\mathbb{1}}
+			y_t = y_0 \otimes \left(\frac{p_t}{IPC_t}\right)^{\eta} \qquad \text{avec} \qquad IPC_t = \frac{y_0'p_t}{y_0'\mathbf{1}}
 			\label{eq:esteem_demande}
 		\end{equation}
 
@@ -1597,7 +1597,7 @@
 		C'est le bouclage de ces deux blocs qui rend le couplage avec le fret intéressant. Une pénurie vide les stocks (équation~\ref{eq:esteem_stocks}), ce qui tend les marges (équation~\ref{eq:esteem_prix_marge}), donc les prix, donc déprime la demande finale (équation~\ref{eq:esteem_demande}), laquelle rétroagit sur la production. Un choc de transport peut ainsi être injecté par l'un ou l'autre bout, sur les coûts ou sur les stocks.
 
 		\medskip
-		{\footnotesize $\otimes$ et $\oslash$ désignent respectivement le produit et la division terme à terme, $\mathbb{1}$ le vecteur unitaire et $A'$ la transposée de la matrice des coefficients techniques.}
+		{\footnotesize $\otimes$ et $\oslash$ désignent respectivement le produit et la division terme à terme, $\mathbf{1}$ le vecteur unitaire et $A'$ la transposée de la matrice des coefficients techniques.}
 	\end{encadre}
 	
 	L'idée serait de faire en sorte que les valeurs de la SAM nationale puissent varier de manière endogène. Cela permettrait un aller-retour entre l'impact du fret sur l'économie en général (fret $\to$ ESTEEM) puis celui de la variation de l'économie en général sur les volumes transportés (ESTEEM $\to$ fret).
@@ -1608,10 +1608,10 @@
 	\begin{itemize}
 		\item Dans le cas où la paire OD n'est pas déconnectée, on pourrait intégrer le surcoût du transport dans la fonction de prix.
 		\begin{equation}
-			p_t^d = (\mathbb{1}+\mu_t)\otimes (w+A'p_t+\Delta cout_t)
+			p_t^d = (\mathbf{1}+\mu_t)\otimes (w+A'p_t+\Delta cout_t)
 			\label{prix_esteem}
 		\end{equation}
-		Avec $p_t^d$ le prix ciblé par les entreprises, $\mathbb{1}$ la matrice identité, $\mu_t$ le taux de marge, $w$ le vecteur des salaires, $A$ la matrice des coefficients techniques, $p_t$ le vecteur des prix et $\Delta cout_t$ le surcoût de transport au temps t
+		Avec $p_t^d$ le prix ciblé par les entreprises, $\mathbf{1}$ la matrice identité, $\mu_t$ le taux de marge, $w$ le vecteur des salaires, $A$ la matrice des coefficients techniques, $p_t$ le vecteur des prix et $\Delta cout_t$ le surcoût de transport au temps t
 		
 		\item Dans le cas où la paire OD est déconnectée du reste du réseau, on peut retirer des inventaires la production qui transitait entre ces points. Les inventaires ($v_t$) dans ESTEEM entre dans la formule de la production totale ($x_t$) ainsi que dans celle du taux de marge ($\mu_t$), qui lui même entre dans l'équation des prix (cf \ref{prix_esteem}). Cela permettrait de modéliser en même temps l'effet macroéconomique du choc sur les prix de celui sur les quantités.
 	\end{itemize}
