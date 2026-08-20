@@ -1,9 +1,9 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  20 AUG 2026 14:25
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  20 AUG 2026 14:29
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**"mémoire fret rwanda.tex"
-(./mémoire fret rwanda.tex
+**"mémoire fret rwanda.tex"
+(./mémoire fret rwanda.tex
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
 (/usr/local/texlive/2026/texmf-dist/tex/latex/base/report.cls
@@ -869,11 +869,11 @@ Package biblatex Warning: 'babel/polyglossia' detected but 'csquotes' missing.
 
 \@quotelevel=\count472
 \@quotereset=\count473
-(./mémoire fret rwanda.aux
+(./mémoire fret rwanda.aux
 Package babel Info: 'french' activates 'french' shorthands.
 (babel)             Reported on input line 13.
 )
-\openout1 = `"mémoire fret rwanda.aux"'.
+\openout1 = `"mémoire fret rwanda.aux"'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 71.
 LaTeX Font Info:    ... okay on input line 71.
@@ -952,9 +952,9 @@ e
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
 Package hyperref Info: Link coloring ON on input line 71.
-(./mémoire fret rwanda.out) (./mémoire fret rwanda.out)
+(./mémoire fret rwanda.out) (./mémoire fret rwanda.out)
 \@outlinefile=\write4
-\openout4 = `"mémoire fret rwanda.out"'.
+\openout4 = `"mémoire fret rwanda.out"'.
 
 Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: listings package is loaded.
@@ -969,12 +969,12 @@ File: french.lbx 2025/07/10 v3.21 biblatex localization (PK/MW)
 Package biblatex Info: Input encoding 'utf8' detected.
 Package biblatex Info: Automatic encoding selection.
 (biblatex)             Assuming data encoding 'utf8'.
-\openout3 = `"mémoire fret rwanda.bcf"'.
+\openout3 = `"mémoire fret rwanda.bcf"'.
 
 Package biblatex Info: Trying to load bibliographic data...
-Package biblatex Info: ... file '"mémoire fret rwanda".bbl' found.
+Package biblatex Info: ... file '"mémoire fret rwanda".bbl' found.
 
-(./mémoire fret rwanda.bbl)
+(./mémoire fret rwanda.bbl)
 Package biblatex Info: Reference section=0 on input line 71.
 Package biblatex Info: Reference segment=0 on input line 71.
  [1
@@ -990,7 +990,7 @@ been already used, duplicate ignored
 l.116 	\newpage
                 [1
 
-] (./mémoire fret rwanda.toc
+] (./mémoire fret rwanda.toc
 Package cleveref Info: loaded `french' language definitions on input line 1.
 LaTeX Font Info:    Trying to load font information for U+msa on input line 6.
 
@@ -1005,7 +1005,7 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 
 ])
 \tf@toc=\write5
-\openout5 = `"mémoire fret rwanda.toc"'.
+\openout5 = `"mémoire fret rwanda.toc"'.
 
 Package babel Info: 'french' activates 'french' shorthands.
 (babel)             Reported on input line 119.
@@ -1957,7 +1957,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[73] (./mémoire fret rwanda.aux
+[73] (./mémoire fret rwanda.aux
 Package cleveref Info: loaded `french' language definitions on input line 13.
 )
  ***********
@@ -1968,21 +1968,21 @@ L3 programming layer <2026-01-19>
 
 LaTeX Warning: There were undefined references.
 
-Package rerunfilecheck Info: File `"mémoire fret rwanda".out' has not changed.
-
+Package rerunfilecheck Info: File `"mémoire fret rwanda".out' has not changed
+.
 (rerunfilecheck)             Checksum: EA60418C6666E6C5B77FFC7C9404AB23;10173.
-Package logreq Info: Writing requests to '"mémoire fret rwanda".run.xml'.
-\openout1 = `"mémoire fret rwanda.run.xml"'.
+Package logreq Info: Writing requests to '"mémoire fret rwanda".run.xml'.
+\openout1 = `"mémoire fret rwanda.run.xml"'.
 
  ) 
 Here is how much of TeX's memory you used:
  27277 strings out of 467525
- 492321 string characters out of 5418983
- 1351695 words of memory out of 5000000
+ 492356 string characters out of 5418983
+ 1351700 words of memory out of 5000000
  55619 multiletter control sequences out of 15000+600000
  645523 words of font info for 86 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 76i,12n,81p,1755b,2535s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 76i,12n,81p,1756b,2535s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
 ></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb>
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb><
@@ -2008,7 +2008,7 @@ e/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb></usr/local/texlive/
 exmf-dist/fonts/type1/public/cm-super/sfrm1440.pfb></usr/local/texlive/2026/tex
 mf-dist/fonts/type1/public/cm-super/sfti1200.pfb></usr/local/texlive/2026/texmf
 -dist/fonts/type1/public/cm-super/sftt1200.pfb>
-Output written on "mémoire fret rwanda.pdf" (74 pages, 13617179 bytes).
+Output written on "mémoire fret rwanda.pdf" (74 pages, 13617179 bytes).
 PDF statistics:
  1212 PDF objects out of 1440 (max. 8388607)
  1011 compressed objects within 11 object streams
