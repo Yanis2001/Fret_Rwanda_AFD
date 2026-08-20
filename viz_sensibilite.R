@@ -663,6 +663,37 @@ if (!file.exists(f_gpkg)) {
     # CV exprimé en % pour la légende (tm_scale_continuous n'a pas d'équivalent
     # à scales::percent_format utilisé côté ggplot2).
     reseau_cv$cv_pct <- 100 * reseau_cv$cv_volume
+    max_cv <- max(reseau_cv$cv_pct, na.rm = TRUE)
+
+    # Palette ancrée au seuil CV = 100 % (écart-type égal à la moyenne) plutôt
+    # qu'un dégradé continu vert→rouge sur toute l'étendue : sous ce seuil, la
+    # dispersion entre tirages reste inférieure au niveau moyen du flux (zone
+    # jugée robuste, vert→jaune) ; au-delà, l'écart-type dépasse la moyenne, ce
+    # qui signale une instabilité franche (rouge→violet→noir, plus foncé à
+    # mesure qu'on s'éloigne du seuil). Construite comme un vecteur dense de
+    # 256 couleurs — plutôt que de chercher un paramètre de calage dans l'API
+    # de tmap — pour que le seuil tombe exactement à la bonne position quel
+    # que soit max_cv, qui varie d'un run de sensibilité à l'autre.
+    SEUIL_CV_ROBUSTESSE <- 100
+    n_bas  <- if (max_cv > SEUIL_CV_ROBUSTESSE) {
+      max(2, round(256 * SEUIL_CV_ROBUSTESSE / max_cv))
+    } else {
+      254
+    }
+    n_bas    <- min(n_bas, 254)
+    n_haut   <- 256 - n_bas
+    pal_bas  <- grDevices::colorRampPalette(c("#1A9850", "#FEE08B"))(n_bas)
+    pal_haut <- grDevices::colorRampPalette(c("#D73027", "#762A83", "#000000"))(n_haut)
+    palette_robustesse <- c(pal_bas, pal_haut)
+
+    # Graduations de la légende : toujours le seuil (100) et le maximum
+    # observé, plus les paliers de 100 en 100 entre les deux quand ils existent.
+    ticks_haut <- if (max_cv >= 200) {
+      seq(200, floor(max_cv / 100) * 100, by = 100)
+    } else {
+      numeric(0)
+    }
+    ticks_cv <- unique(c(0, SEUIL_CV_ROBUSTESSE, ticks_haut, round(max_cv)))
 
     carte_robustesse <- fond_carte() +
 
@@ -671,13 +702,16 @@ if (!file.exists(f_gpkg)) {
       tm_shape(reseau_geo) +
       tm_lines(col = "#DDDDDD", lwd = 0.3) +
 
-      # Arêtes empruntées, colorées par CV (vert = robuste, rouge = sensible
-      # aux hypothèses) et épaissies selon le volume moyen transporté.
+      # Arêtes empruntées, colorées par CV (vert-jaune = robuste, rouge→noir =
+      # sensible aux hypothèses au-delà du seuil de 100 %) et épaissies selon
+      # le volume moyen transporté.
       tm_shape(reseau_cv) +
       tm_lines(
         col        = "cv_pct",
         col.scale  = tm_scale_continuous(
-          values = c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
+          values = palette_robustesse,
+          limits = c(0, max_cv),
+          ticks  = ticks_cv
         ),
         col.legend = tm_legend(title = "Coef. de\nvariation (%)"),
         lwd        = "moy_volume",
@@ -688,8 +722,8 @@ if (!file.exists(f_gpkg)) {
       tm_title("Robustesse spatiale des flux face aux incertitudes de paramètres") +
       tm_credits(
         note_lecture(sprintf(
-          "l'arête la plus sensible a un coefficient de variation de %.0f %% sur les %d tirages.",
-          max(reseau_cv$cv_pct, na.rm = TRUE), length(res_scen)
+          "l'arête la plus sensible a un coefficient de variation de %.0f %% sur les %d tirages ; le rouge démarre au seuil de 100 %% (écart-type supérieur à la moyenne).",
+          max_cv, length(res_scen)
         )),
         position = tm_pos_out("center", "bottom", "left", "top"),
         size     = 0.65
