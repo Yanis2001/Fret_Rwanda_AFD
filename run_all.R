@@ -21,8 +21,30 @@
 token <- Sys.getenv("GITHUB_PAT")
 
 if (nchar(token) > 0) {
-  # Credential helper : transmet le token à Git sans mot de passe interactif
-  system("git config --global credential.helper '!f() { echo \"username=token\"; echo \"password=$GITHUB_PAT\"; }; f'")
+  # ── Identifiants Git persistants ────────────────────────────────────────────
+  # Le token est écrit une fois pour toutes dans ~/.git-credentials, fichier que
+  # Git relit seul à chaque push (credential helper "store"). On n'utilise pas
+  # de helper qui irait lire la variable $GITHUB_PAT au moment du push : le
+  # volet Git de RStudio lance git dans un processus qui n'hérite pas des
+  # variables de ~/.Renviron, le mot de passe arrivait donc vide et Git ouvrait
+  # la fenêtre "Username for 'https://github.com'" qui bloquait le push.
+  chemin_cred <- path.expand("~/.git-credentials")
+  lignes_cred <- if (file.exists(chemin_cred)) readLines(chemin_cred, warn = FALSE) else character(0)
+  # Suppression d'une éventuelle entrée github.com déjà présente (token périmé)
+  # avant d'écrire la nouvelle, sinon Git réutilise l'ancienne.
+  lignes_cred <- lignes_cred[!grepl("github\\.com", lignes_cred)]
+  # Format attendu par Git : https://<utilisateur>:<token>@<hôte>
+  # GitHub accepte n'importe quel nom d'utilisateur dès lors que le mot de passe
+  # est un PAT valide.
+  lignes_cred <- c(lignes_cred, paste0("https://token:", token, "@github.com"))
+  writeLines(lignes_cred, chemin_cred)
+  Sys.chmod(chemin_cred, "600")  # fichier lisible par le seul propriétaire
+
+  # On efface les helpers hérités d'une configuration antérieure : Git les
+  # interroge dans l'ordre et s'arrête au premier qui répond, y compris à vide.
+  system("git config --global --unset-all credential.helper || true")
+  system("git config --global credential.helper store")
+
   # Remotes : dépôt principal (fetch) + push simultané vers le dépôt principal
   # ET le miroir GEMMES-AFD.
   system("git remote set-url origin https://github.com/Yanis2001/Fret_Rwanda_AFD.git")
@@ -46,16 +68,16 @@ if (nchar(token) > 0) {
 # Remettre à FALSE après un reset pour bénéficier des caches (~30 min gagnés).
 RESET_CACHES     <- FALSE  # ← passer à TRUE pour tout recalculer depuis zéro
 
-RUN_PARAMETRES   <- TRUE   # 00 — < 1 min  — packages, DuckDB, palettes
-RUN_RESEAU       <- TRUE   # 01 — ~25 min  — réseau OSM, pentes, démographie
+RUN_PARAMETRES   <- TRUE   # 00 — ~1 min (jusqu'à ~15 min si les paquets doivent être (ré)installés) — packages, DuckDB, palettes
+RUN_RESEAU       <- TRUE   # 01 — ~27 min  — réseau OSM, pentes, démographie
 RUN_COUTS        <- TRUE   # 02 — < 1 min  — coûts, graphe multi-modal
-RUN_TRANSPORT    <- TRUE   # 03 — ~9 min  — OD, IO, gravitaire, projection RoW
-RUN_AFFECTATION  <- TRUE   # 04 — ~7,5 min   — affectation réseau, émissions, saturation
-RUN_VULNERAB     <- TRUE   # 05 — ~10 min  — vulnérabilité, criticité
+RUN_TRANSPORT    <- TRUE   # 03 — ~19 min  — OD, IO, gravitaire, projection RoW
+RUN_AFFECTATION  <- TRUE   # 04 — ~21 min   — affectation réseau, émissions, saturation
+RUN_VULNERAB     <- TRUE   # 05 — ~70 min (dont téléchargement du raster GloFAS si absent du cache ; sinon plus court) — vulnérabilité, criticité
 
 RUN_VIZ_RESEAU   <- TRUE   # viz — ~3 min  — cartes réseau / coûts / pentes
-RUN_VIZ_FRET     <- TRUE   # viz — ~8 min  — cartes fret / Sankey
-RUN_VIZ_VULNERAB <- TRUE   # viz — < 1 min  — cartes vulnérabilité / détours
+RUN_VIZ_FRET     <- TRUE   # viz — ~6 min  — cartes fret / Sankey
+RUN_VIZ_VULNERAB <- TRUE   # viz — ~1 min  — cartes vulnérabilité / détours
 
 # ==============================================================================
 # EXÉCUTION SÉQUENTIELLE
