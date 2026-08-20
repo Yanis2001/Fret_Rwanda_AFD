@@ -1555,6 +1555,50 @@
 	\subsubsection{Couplage avec ESTEEM}
 	
 	L'extension prioritaire et la plus naturelle est celle du couplage avec le modèle macroéconomique multisectoriel de l'AFD : ESTEEM (voir {\catcode`\:=12 \cref{enc:esteem}}). Cette extension du modèle de fret présenté jusqu'à présent permettrait ainsi de pouvoir quantifier l'impact indirect sur les agrégats macroéconomiques, comme la production totale ou l'inflation, d'un choc spatialisé sur le réseau de transport de fret.
+
+	\begin{encadre}{enc:esteem}{Qu'est-ce que le modèle ESTEEM ?}
+		ESTEEM est un modèle macroéconomique multisectoriel dynamique, mobilisé notamment par \cite{ESTEEM} pour étudier le recyclage d'une taxe carbone dans les économies en développement financiarisées. Il se distingue d'un modèle entrée-sortie classique sur un point décisif pour notre usage : il ne suppose jamais que l'offre égalise la demande instantanément. Les quantités et les prix s'ajustent progressivement, ce qui lui permet de produire des effets de court terme sur la production et sur l'inflation, là où le cadre de Leontief ne livre qu'un nouvel équilibre.
+
+		\medskip
+		\textbf{Le bloc des quantités.} Les entreprises produisent ce qu'elles anticipent de vendre, corrigé de l'écart entre leur cible d'inventaire $v^d$ et leur stock effectif $v_t$ :
+		\begin{equation}
+			x_t = x_t^e + v^d - v_t
+			\label{eq:esteem_prod}
+		\end{equation}
+		Les stocks absorbent l'écart entre ce qui est produit et la demande totale, cette dernière additionnant consommations intermédiaires et demande finale comme dans le système de Leontief :
+		\begin{equation}
+			\dot{v}_t = x_t - x_t^D \qquad \text{avec} \qquad x_t^D = A x_t + y_t
+			\label{eq:esteem_stocks}
+		\end{equation}
+		Les anticipations sont adaptatives : elles convergent vers la demande observée à une vitesse $\beta^y$.
+		\begin{equation}
+			\dot{x}_t^e = \beta^y \left(x^D - x_t^e\right)
+			\label{eq:esteem_anticip}
+		\end{equation}
+
+		\medskip
+		\textbf{Le bloc des prix.} Les entreprises visent un prix formé par application d'un taux de marge $\mu_t$ au coût unitaire, somme des salaires et des consommations intermédiaires valorisées :
+		\begin{equation}
+			p_t^d = (\mathbb{1}+\mu_t)\otimes\left(w + A'p_t\right)
+			\label{eq:esteem_prix_cible}
+		\end{equation}
+		Le prix effectif rejoint cette cible progressivement, à la vitesse $\beta^p$, tandis que le taux de marge se tend dès que les stocks passent sous leur cible :
+		\begin{equation}
+			\dot{p}_t = \beta^p\left(p_t^d - p_t\right) \qquad \text{et} \qquad \mu_t = \mu_0 + \beta^\mu\left(v^d \oslash v_t - \mathbb{1}\right)
+			\label{eq:esteem_prix_marge}
+		\end{equation}
+		La demande finale réagit enfin aux prix relatifs avec une élasticité $\eta$, l'indice des prix étant la moyenne des prix sectoriels pondérée par la demande finale initiale :
+		\begin{equation}
+			y_t = y_0 \otimes \left(\frac{p_t}{IPC_t}\right)^{\eta} \qquad \text{avec} \qquad IPC_t = \frac{y_0'p_t}{y_0'\mathbb{1}}
+			\label{eq:esteem_demande}
+		\end{equation}
+
+		\medskip
+		C'est le bouclage de ces deux blocs qui rend le couplage avec le fret intéressant. Une pénurie vide les stocks (équation~\ref{eq:esteem_stocks}), ce qui tend les marges (équation~\ref{eq:esteem_prix_marge}), donc les prix, donc déprime la demande finale (équation~\ref{eq:esteem_demande}), laquelle rétroagit sur la production. Un choc de transport peut ainsi être injecté par l'un ou l'autre bout, sur les coûts ou sur les stocks.
+
+		\medskip
+		{\footnotesize $\otimes$ et $\oslash$ désignent respectivement le produit et la division terme à terme, $\mathbb{1}$ le vecteur unitaire et $A'$ la transposée de la matrice des coefficients techniques.}
+	\end{encadre}
 	
 	L'idée serait de faire en sorte que les valeurs de la SAM nationale puissent varier de manière endogène. Cela permettrait un aller-retour entre l'impact du fret sur l'économie en général (fret $\to$ ESTEEM) puis celui de la variation de l'économie en général sur les volumes transportés (ESTEEM $\to$ fret).
 	
@@ -1564,7 +1608,7 @@
 	\begin{itemize}
 		\item Dans le cas où la paire OD n'est pas déconnectée, on pourrait intégrer le surcoût du transport dans la fonction de prix.
 		\begin{equation}
-			p_t^d = (\mathbb{1}+\mu_t)\otimes (w+A^'p_t+\Delta cout_t)
+			p_t^d = (\mathbb{1}+\mu_t)\otimes (w+A'p_t+\Delta cout_t)
 			\label{prix_esteem}
 		\end{equation}
 		Avec $p_t^d$ le prix ciblé par les entreprises, $\mathbb{1}$ la matrice identité, $\mu_t$ le taux de marge, $w$ le vecteur des salaires, $A$ la matrice des coefficients techniques, $p_t$ le vecteur des prix et $\Delta cout_t$ le surcoût de transport au temps t

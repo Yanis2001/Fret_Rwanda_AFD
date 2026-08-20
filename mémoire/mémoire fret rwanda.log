@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  20 AUG 2026 11:25
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  20 AUG 2026 12:04
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1808,41 +1808,8 @@ Chapitre 7.
 [61
 
 ]
+Package cleveref Info: loaded `french' language definitions on input line 1601.
 
-LaTeX Warning: Reference `enc:esteem' on page 1 undefined on input line 1557.
-
-! Missing { inserted.
-<to be read again> 
-                   ^
-l.1567 			p_t^d = (\mathbb{1}+\mu_t)\otimes (w+A^'
-                                                  p_t+\Delta cout_t)
-A left brace was mandatory here, so I've put one in.
-You might want to delete and/or insert some corrections
-so that I will find a matching right brace soon.
-(If you're confused by all this, try typing `I}' now.)
-
-! You can't use `\eqno' in math mode.
-\veqno ->\@kernel@eqno 
-                       \aftergroup \ignorespaces 
-l.1569 		\end{equation}
-                       
-Sorry, but I'm not programmed to handle this case;
-I'll just pretend that you didn't ask for it.
-If you're in the wrong mode, you might be able to
-return to the right one by typing `I}' or `I$' or `I\par'.
-
-! Missing } inserted.
-<inserted text> 
-                }
-l.1569 		\end{equation}
-                       
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-Package cleveref Info: loaded `french' language definitions on input line 1572.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1852,7 +1819,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [62]
-Package cleveref Info: loaded `french' language definitions on input line 1592.
+Package cleveref Info: loaded `french' language definitions on input line 1617.
 
 
 
@@ -1863,19 +1830,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [63]
-Chapitre 8.
-[64
-
-]
-Overfull \hbox (30.7774pt too wide) in paragraph at lines 1611--1611
-[][][]\T1/cmr/m/sc/12 Northern Corridor Transit and Transport Coordination Auth
-ority (NCTTCA)
- []
-
-[65
-
-]
-Package cleveref Info: loaded `french' language definitions on input line 1611.
+Package cleveref Info: loaded `french' language definitions on input line 1636.
 
 
 
@@ -1885,8 +1840,20 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[66]
-Package cleveref Info: loaded `french' language definitions on input line 1611.
+[64]
+Chapitre 8.
+[65
+
+]
+Overfull \hbox (30.7774pt too wide) in paragraph at lines 1655--1655
+[][][]\T1/cmr/m/sc/12 Northern Corridor Transit and Transport Coordination Auth
+ority (NCTTCA)
+ []
+
+[66
+
+]
+Package cleveref Info: loaded `french' language definitions on input line 1655.
 
 
 
@@ -1897,7 +1864,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [67]
-Package cleveref Info: loaded `french' language definitions on input line 1611.
+Package cleveref Info: loaded `french' language definitions on input line 1655.
 
 
 
@@ -1908,7 +1875,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [68]
-Package cleveref Info: loaded `french' language definitions on input line 1613.
+Package cleveref Info: loaded `french' language definitions on input line 1655.
 
 
 
@@ -1919,43 +1886,54 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [69]
+Package cleveref Info: loaded `french' language definitions on input line 1657.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[70]
 Chapitre 9.
-<images/local_routes_hors_geante.png, id=998, 332.24126pt x 129.48375pt>
+<images/local_routes_hors_geante.png, id=1015, 332.24126pt x 129.48375pt>
 File: images/local_routes_hors_geante.png Graphic file (type png)
 <use images/local_routes_hors_geante.png>
 Package pdftex.def Info: images/local_routes_hors_geante.png  used on input lin
-e 1624.
+e 1668.
 (pdftex.def)             Requested size: 218.51521pt x 85.16118pt.
-<images/types_routes_hors_geante.png, id=999, 360.34625pt x 196.735pt>
+<images/types_routes_hors_geante.png, id=1016, 360.34625pt x 196.735pt>
 File: images/types_routes_hors_geante.png Graphic file (type png)
 <use images/types_routes_hors_geante.png>
 Package pdftex.def Info: images/types_routes_hors_geante.png  used on input lin
-e 1632.
+e 1676.
 (pdftex.def)             Requested size: 218.51521pt x 119.2997pt.
 LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 1642.
+(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 1686.
 
-Overfull \hbox (24.7552pt too wide) in paragraph at lines 1650--1651
+Overfull \hbox (24.7552pt too wide) in paragraph at lines 1694--1695
 []\T1/cmtt/m/n/12 reseau_noeuds.gpkg \T1/cmr/m/n/12 ^^V n÷uds du ré-seau, avec 
 l'in-di-ca-teur d'en-tre-pôt (\T1/cmtt/m/n/12 is_warehouse\T1/cmr/m/n/12 ),
  []
 
-[70
+[71
 
  <./images/local_routes_hors_geante.png> <./images/types_routes_hors_geante.png
 >]
-Overfull \hbox (1.75087pt too wide) in paragraph at lines 1652--1653
+Overfull \hbox (1.75087pt too wide) in paragraph at lines 1696--1697
 \T1/cmr/m/n/12 cule (car-bu-rant, usure, temps, émis-sions de CO2/NOx/PM2.5 par
  tonne-kilomètre),
  []
 
 
-Overfull \hbox (5.9875pt too wide) in paragraph at lines 1675--1676
+Overfull \hbox (5.9875pt too wide) in paragraph at lines 1719--1720
 []\T1/cmtt/m/n/12 impact_od_<scenario>.csv \T1/cmr/m/n/12 ^^V com-pa-rai-son, p
 our chaque paire origine-destination,
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 1682.
+Package cleveref Info: loaded `french' language definitions on input line 1726.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1964,13 +1942,13 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[71]
-Overfull \hbox (10.61423pt too wide) in paragraph at lines 1690--1691
+[72]
+Overfull \hbox (10.61423pt too wide) in paragraph at lines 1734--1735
 [] []\T1/cmr/bx/n/12 L'Agence Fran-çaise de Dé-ve-lop-pe-ment[] \T1/cmr/m/n/12 
 L'Agence Fran-çaise de Dé-ve-lop-pe-ment (AFD)
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 1698.
+Package cleveref Info: loaded `french' language definitions on input line 1742.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1979,7 +1957,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[72] (./mÃ©moire fret rwanda.aux
+[73] (./mÃ©moire fret rwanda.aux
 Package cleveref Info: loaded `french' language definitions on input line 13.
 )
  ***********
@@ -1998,10 +1976,10 @@ Package logreq Info: Writing requests to '"mÃ©moire fret rwanda".run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 27238 strings out of 467525
- 491679 string characters out of 5418983
- 1350008 words of memory out of 5000000
- 55595 multiletter control sequences out of 15000+600000
+ 27265 strings out of 467525
+ 492201 string characters out of 5418983
+ 1350695 words of memory out of 5000000
+ 55613 multiletter control sequences out of 15000+600000
  643668 words of font info for 80 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  76i,12n,81p,1755b,2535s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -2014,7 +1992,7 @@ b></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb>
 usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></us
 r/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/l
 ocal/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/lo
-cal/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/loca
+cal/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/loca
 l/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/
 texlive/2026/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/lo
 cal/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/loca
@@ -2028,10 +2006,10 @@ e/2026/texmf-dist/fonts/type1/public/cm-super/sfrm0800.pfb></usr/local/texlive/
 /texmf-dist/fonts/type1/public/cm-super/sfrm1440.pfb></usr/local/texlive/2026/t
 exmf-dist/fonts/type1/public/cm-super/sfti1200.pfb></usr/local/texlive/2026/tex
 mf-dist/fonts/type1/public/cm-super/sftt1200.pfb>
-Output written on "mÃ©moire fret rwanda.pdf" (73 pages, 13624340 bytes).
+Output written on "mÃ©moire fret rwanda.pdf" (74 pages, 13631237 bytes).
 PDF statistics:
- 1180 PDF objects out of 1200 (max. 8388607)
- 986 compressed objects within 10 object streams
- 270 named destinations out of 1000 (max. 500000)
+ 1200 PDF objects out of 1200 (max. 8388607)
+ 1004 compressed objects within 11 object streams
+ 279 named destinations out of 1000 (max. 500000)
  542 words of extra memory for PDF output out of 10000 (max. 10000000)
 

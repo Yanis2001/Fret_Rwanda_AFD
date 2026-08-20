@@ -85,20 +85,20 @@
 \contentsline {section}{\numberline {7.2}Extensions futures et recommandations}{62}{section.7.2}%
 \contentsline {subsection}{\numberline {7.2.1}Extensions méthodologiques}{62}{subsection.7.2.1}%
 \contentsline {subsubsection}{Couplage avec ESTEEM}{62}{subsection.7.2.1}%
-\contentsline {subsubsection}{Extension du modèle de fret lui-même}{63}{equation.7.1}%
-\contentsline {chapter}{\numberline {8}Conclusion}{64}{chapter.8}%
-\contentsline {chapter}{Bibliographie}{65}{chapter*.33}%
-\contentsline {chapter}{\numberline {9}Annexes}{70}{chapter.9}%
-\contentsline {subsubsection}{Décomposition des routes non reliées à la composante géante}{70}{chapter.9}%
-\contentsline {subsubsection}{Quelques caractéristiques techniques du modèle}{70}{figure.caption.34}%
-\contentsline {subsubsection}{Fichiers exportés par le modèle (dossier \texttt {exports/})}{70}{figure.caption.34}%
-\contentsline {paragraph}{Réseau routier}{70}{figure.caption.34}%
-\contentsline {paragraph}{Matrice origine-destination et flux de fret}{71}{figure.caption.34}%
-\contentsline {paragraph}{Comptabilité économique et logistique}{71}{figure.caption.34}%
-\contentsline {paragraph}{Scénarios de choc et vulnérabilité (partie IX)}{71}{figure.caption.34}%
-\contentsline {paragraph}{Vérification et calibration}{71}{figure.caption.34}%
-\contentsline {paragraph}{Tests de sensibilité}{72}{figure.caption.34}%
-\contentsline {subsubsection}{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}{72}{figure.caption.34}%
-\contentsline {paragraph}{L'Agence Française de Développement}{72}{figure.caption.34}%
-\contentsline {paragraph}{Le département Économie (ECO)}{72}{figure.caption.34}%
-\contentsline {paragraph}{L'équipe GEMMES}{72}{figure.caption.34}%
+\contentsline {subsubsection}{Extension du modèle de fret lui-même}{64}{equation.7.7}%
+\contentsline {chapter}{\numberline {8}Conclusion}{65}{chapter.8}%
+\contentsline {chapter}{Bibliographie}{66}{chapter*.33}%
+\contentsline {chapter}{\numberline {9}Annexes}{71}{chapter.9}%
+\contentsline {subsubsection}{Décomposition des routes non reliées à la composante géante}{71}{chapter.9}%
+\contentsline {subsubsection}{Quelques caractéristiques techniques du modèle}{71}{figure.caption.34}%
+\contentsline {subsubsection}{Fichiers exportés par le modèle (dossier \texttt {exports/})}{71}{figure.caption.34}%
+\contentsline {paragraph}{Réseau routier}{71}{figure.caption.34}%
+\contentsline {paragraph}{Matrice origine-destination et flux de fret}{72}{figure.caption.34}%
+\contentsline {paragraph}{Comptabilité économique et logistique}{72}{figure.caption.34}%
+\contentsline {paragraph}{Scénarios de choc et vulnérabilité (partie IX)}{72}{figure.caption.34}%
+\contentsline {paragraph}{Vérification et calibration}{72}{figure.caption.34}%
+\contentsline {paragraph}{Tests de sensibilité}{73}{figure.caption.34}%
+\contentsline {subsubsection}{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}{73}{figure.caption.34}%
+\contentsline {paragraph}{L'Agence Française de Développement}{73}{figure.caption.34}%
+\contentsline {paragraph}{Le département Économie (ECO)}{73}{figure.caption.34}%
+\contentsline {paragraph}{L'équipe GEMMES}{73}{figure.caption.34}%

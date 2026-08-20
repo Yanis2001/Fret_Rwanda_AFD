@@ -1691,6 +1691,54 @@
       \verb 10.1038/s41893-019-0351-x
       \endverb
     \endentry
+    \entry{ESTEEM}{report}{}{}
+      \name{author}{4}{}{%
+        {{un=0,uniquepart=base,hash=f6ece7dfde4b4259593f4bf1be7ea2eb}{%
+           family={Magacho},
+           familyi={M\bibinitperiod},
+           given={Guilherme},
+           giveni={G\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=ae8bd78526c5612bde41aa298b833071}{%
+           family={Godin},
+           familyi={G\bibinitperiod},
+           given={Antoine},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=c3e4d2441d973125cb958b0191c1cec5}{%
+           family={Spinola},
+           familyi={S\bibinitperiod},
+           given={Danilo},
+           giveni={D\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=5860942098f4800ba4ee22edf35f3eb3}{%
+           family={Yilmaz},
+           familyi={Y\bibinitperiod},
+           given={Devrim},
+           giveni={D\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{institution}{1}{%
+        {Agence Française de Développement (AFD)}%
+      }
+      \strng{namehash}{b5ae9d9a08685fb6264513ed38f77a22}
+      \strng{fullhash}{49adb19b8295c4e140fbc836a5808ef4}
+      \strng{fullhashraw}{49adb19b8295c4e140fbc836a5808ef4}
+      \strng{bibnamehash}{b5ae9d9a08685fb6264513ed38f77a22}
+      \strng{authorbibnamehash}{b5ae9d9a08685fb6264513ed38f77a22}
+      \strng{authornamehash}{b5ae9d9a08685fb6264513ed38f77a22}
+      \strng{authorfullhash}{49adb19b8295c4e140fbc836a5808ef4}
+      \strng{authorfullhashraw}{49adb19b8295c4e140fbc836a5808ef4}
+      \field{sortinit}{6}
+      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Carbon Tax Recycling: Fostering Reindustrialization in Financialized Developing Countries}
+      \field{type}{Document de travail}
+      \field{year}{2026}
+    \endentry
     \entry{Barrot2016}{article}{}{}
       \name{author}{2}{}{%
         {{un=0,uniquepart=base,hash=f5da0b6d8d6a69752a402d10f6a50448}{%
@@ -1940,8 +1988,8 @@
       \strng{authornamehash}{c76c6987a3f502d782ccb2f1c609f883}
       \strng{authorfullhash}{c76c6987a3f502d782ccb2f1c609f883}
       \strng{authorfullhashraw}{c76c6987a3f502d782ccb2f1c609f883}
-      \field{sortinit}{6}
-      \field{sortinithash}{b33bc299efb3c36abec520a4c896a66d}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2333,8 +2381,8 @@
       \strng{editornamehash}{7c760a153321d2739781505792c7b334}
       \strng{editorfullhash}{7c760a153321d2739781505792c7b334}
       \strng{editorfullhashraw}{7c760a153321d2739781505792c7b334}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2764,8 +2812,8 @@
       \strng{authornamehash}{8a6f85a65f76eb844135664fb0e0fede}
       \strng{authorfullhash}{8a6f85a65f76eb844135664fb0e0fede}
       \strng{authorfullhashraw}{8a6f85a65f76eb844135664fb0e0fede}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
