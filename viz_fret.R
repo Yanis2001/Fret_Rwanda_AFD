@@ -500,10 +500,10 @@ carte_dominant <- fond_carte() +
   tm_lines(
     col        = "secteur_dominant_pct",
     col.scale  = tm_scale(values = palette_secteur_dominant_pct),
-    col.legend = tm_legend(title = "Secteur\ndominant"),
+    col.legend = tm_legend(title = "Secteur dominant\n(% = part du linéaire\ndominé par ce secteur)"),
     lwd        = 1.5
   ) +
-  
+
   tm_title("Secteur dominant par arête\n(secteur le plus représenté en tonnes)") +
   tm_credits(
     note_lecture(sprintf(

@@ -1329,11 +1329,6 @@ CENTRE_PERTURBATION_LAT <- -2.150   # Nord-Sud
 # Nombre d'arêtes candidates testées pour l'analyse de criticité
 N_TOP_ARETES_CRITIQUES <- 50
 
-# Pour accélérer le calcul de criticité, on ne recalcule que les paires OD avec un volume de fret
-# supérieur à un seuil (SEUIL_PAIRES_CRITICITE), ce qui exclut les paires
-# marginales qui ne changent pas le classement de criticité.
-SEUIL_PAIRES_CRITICITE <- 100   # tonnes 
-
 # Nombre d'arêtes critiques affichées sur la carte de criticité
 N_ARETES_AFFICHEES_CRITICITE <- 20
 

@@ -9,7 +9,7 @@
 #   → le scénario a changé (NOM_SCENARIO, OSM_IDS_PERTURBES_MANUEL,
 #     CENTRE_PERTURBATION_*, RAYON_PERTURBATION_M, SEUIL_RISQUE_RASTER)
 #   → DUREE_JOURS ou TYPE_EVENEMENT ont changé
-#   → N_TOP_ARETES_CRITIQUES ou SEUIL_PAIRES_CRITICITE ont changé
+#   → N_TOP_ARETES_CRITIQUES a changé
 #   → les flux de fret (persist_flux_fret.rds) ont changé
 #     → dans ce cas relancer aussi 03_transport.R puis 04_affectation.R
 #       avant 05_vulnerabilite.R
@@ -610,14 +610,18 @@ aretes_detour_sf <- aretes_reseau_sf %>%
 
 # Part du linéaire de détour par classe de surcoût, insérée dans la parenthèse
 # déjà utilisée pour la borne de surcoût (ex. "Faible (<10%, 23,4 % du
-# linéaire)") — même principe que pour la carte des pentes.
+# linéaire effectivement utilisé)") — même principe que pour la carte des
+# pentes. Le dénominateur est la somme des longueurs des seuls tronçons de
+# détour (aretes_detour_sf), et non le linéaire total du réseau : la
+# précision "effectivement utilisé" évite toute confusion avec ce second
+# dénominateur, bien plus grand.
 km_par_surcout <- aretes_detour_sf %>%
   st_drop_geometry() %>%
   group_by(classe_surcout, .drop = FALSE) %>%
   summarise(km = sum(length_km, na.rm = TRUE), .groups = "drop")
 
 labels_surcout_pct <- setNames(
-  sprintf("%s, %s %% du linéaire)",
+  sprintf("%s, %s %% du linéaire effectivement utilisé)",
           sub("\\)$", "", as.character(km_par_surcout$classe_surcout)),
           sub("\\.", ",", sprintf("%.1f", 100 * km_par_surcout$km / sum(km_par_surcout$km)))),
   as.character(km_par_surcout$classe_surcout)

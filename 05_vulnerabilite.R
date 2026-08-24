@@ -1041,8 +1041,8 @@ calculer_surcout_total <- function(indices_a_supprimer, poids_base, paires_imp) 
 }
 
 # ── Calcul de la criticité pour chaque arête candidate ────────────────────────
-# Paires importantes calculées une seule fois ici, avant la boucle.
-paires_importantes_crit <- which(flux_tonnes_total > SEUIL_PAIRES_CRITICITE, arr.ind = TRUE)
+# Paires OD à flux non nul calculées une seule fois ici, avant la boucle.
+paires_importantes_crit <- which(flux_tonnes_total > 0, arr.ind = TRUE)
 paires_importantes_crit <- paires_importantes_crit[
   paires_importantes_crit[, 1] != paires_importantes_crit[, 2], , drop = FALSE
 ]
@@ -1051,8 +1051,7 @@ paires_importantes_crit <- paires_importantes_crit[
 # (mode congestion) ou poids libres (repli), définis en IX.2 (poids_criticite_base).
 # Chaque appel en copie une version localement avec l'arête candidate coupée.
 
-cat("  Paires OD importantes (seuil :", SEUIL_PAIRES_CRITICITE, "t) :",
-    nrow(paires_importantes_crit), "\n")
+cat("  Paires OD à flux non nul :", nrow(paires_importantes_crit), "\n")
 cat("  Calcul de la criticité (", length(aretes_candidates),
     "arêtes × Dijkstra) — prend environ 2h...\n")
 
