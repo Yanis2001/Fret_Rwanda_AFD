@@ -664,6 +664,11 @@ if (!file.exists(f_gpkg)) {
     # à scales::percent_format utilisé côté ggplot2).
     reseau_cv$cv_pct <- 100 * reseau_cv$cv_volume
     max_cv <- max(reseau_cv$cv_pct, na.rm = TRUE)
+    # Borne haute de l'échelle, arrondie à l'entier supérieur : les graduations
+    # de la légende sont des entiers, et tmap refuse de dessiner une graduation
+    # située au-dessus de la limite de l'échelle. Caler la limite sur l'entier
+    # supérieur garantit que la dernière graduation y tombe toujours en dessous.
+    limite_cv <- ceiling(max_cv)
 
     # Palette ancrée au seuil CV = 100 % (écart-type égal à la moyenne) plutôt
     # qu'un dégradé continu vert→rouge sur toute l'étendue : sous ce seuil, la
@@ -675,8 +680,8 @@ if (!file.exists(f_gpkg)) {
     # de tmap — pour que le seuil tombe exactement à la bonne position quel
     # que soit max_cv, qui varie d'un run de sensibilité à l'autre.
     SEUIL_CV_ROBUSTESSE <- 100
-    n_bas  <- if (max_cv > SEUIL_CV_ROBUSTESSE) {
-      max(2, round(256 * SEUIL_CV_ROBUSTESSE / max_cv))
+    n_bas  <- if (limite_cv > SEUIL_CV_ROBUSTESSE) {
+      max(2, round(256 * SEUIL_CV_ROBUSTESSE / limite_cv))
     } else {
       254
     }
@@ -688,12 +693,16 @@ if (!file.exists(f_gpkg)) {
 
     # Graduations de la légende : toujours le seuil (100) et le maximum
     # observé, plus les paliers de 100 en 100 entre les deux quand ils existent.
-    ticks_haut <- if (max_cv >= 200) {
-      seq(200, floor(max_cv / 100) * 100, by = 100)
+    ticks_haut <- if (limite_cv >= 200) {
+      seq(200, floor(limite_cv / 100) * 100, by = 100)
     } else {
       numeric(0)
     }
-    ticks_cv <- unique(c(0, SEUIL_CV_ROBUSTESSE, ticks_haut, round(max_cv)))
+    # On ne garde que les graduations comprises dans l'échelle : quand le
+    # maximum observé est inférieur à 100 %, le seuil de robustesse lui-même
+    # sort de l'échelle et doit être écarté.
+    ticks_cv <- unique(c(0, SEUIL_CV_ROBUSTESSE, ticks_haut, limite_cv))
+    ticks_cv <- ticks_cv[ticks_cv <= limite_cv]
 
     carte_robustesse <- fond_carte() +
 
@@ -710,7 +719,7 @@ if (!file.exists(f_gpkg)) {
         col        = "cv_pct",
         col.scale  = tm_scale_continuous(
           values = palette_robustesse,
-          limits = c(0, max_cv),
+          limits = c(0, limite_cv),
           ticks  = ticks_cv
         ),
         col.legend = tm_legend(title = "Coef. de\nvariation (%)"),
@@ -826,9 +835,14 @@ if (is.null(zones_ref) || length(zones_scen) < 2) {
                               levels = c("Production expédiée", "Consommation reçue"))
 
   # ── FIGURE G : zones dont la part est la plus instable ────────────────────
-  # Les 91 zones ne tiennent pas sur un graphique lisible : on ne retient que
-  # les SENS_N_ZONES_VOLATILES dont la part varie le plus (étendue maximale
-  # entre les deux grandeurs), classées de la plus instable à la moins instable.
+  # Les 91 zones ne tiennent pas sur un graphique lisible : on n'en retient que
+  # les plus dispersées, et le classement est fait SÉPARÉMENT pour les deux
+  # grandeurs. Le graphique empile donc deux blocs : d'abord les
+  # SENS_N_ZONES_VOLATILES zones dont la part de PRODUCTION EXPÉDIÉE varie le
+  # plus (bleu), puis celles dont la part de CONSOMMATION REÇUE varie le plus
+  # (violet). Une zone peut apparaître dans les deux blocs si elle est instable
+  # des deux côtés. Classer par grandeur évite qu'une zone instable à
+  # l'expédition occupe une ligne vide de sens dans le bloc réception.
   # Plancher de poids : le classement se fait sur une dispersion RELATIVE, qui
   # récompense mécaniquement les zones minuscules (passer de 0,05 % à 0,15 % du
   # tonnage national est un écart de +200 % pour un déplacement de fret
@@ -838,25 +852,86 @@ if (is.null(zones_ref) || length(zones_scen) < 2) {
   zones_eligibles <- zones_ref$zone[parts_ref >= SENS_PART_MIN_ZONE]
   loc_long <- loc_long[loc_long$zone %in% zones_eligibles, , drop = FALSE]
 
+  # Étendue de l'écart à la référence, pour chaque couple (zone, grandeur) :
+  # c'est le critère de volatilité qui classe les zones à l'intérieur de son
+  # bloc, de la plus instable à la moins instable.
   etendue_zone <- loc_long |>
     dplyr::group_by(zone, grandeur) |>
     dplyr::summarise(etendue = diff(range(ecart_pct)), .groups = "drop") |>
-    dplyr::group_by(zone) |>
-    dplyr::summarise(etendue = max(etendue), .groups = "drop") |>
-    dplyr::arrange(dplyr::desc(etendue))
+    dplyr::arrange(grandeur, dplyr::desc(etendue))
 
-  zones_top <- utils::head(etendue_zone$zone, SENS_N_ZONES_VOLATILES)
-  loc_top   <- loc_long[loc_long$zone %in% zones_top, , drop = FALSE]
-  # Ordre des modalités : la plus volatile en HAUT du graphique. Avec un axe y
+  # Sélection des SENS_N_ZONES_VOLATILES premières zones DANS CHAQUE grandeur.
+  top_par_grandeur <- etendue_zone |>
+    dplyr::group_by(grandeur) |>
+    dplyr::slice_head(n = SENS_N_ZONES_VOLATILES) |>
+    dplyr::ungroup()
+
+  # Les deux blocs peuvent contenir la même zone : un simple facteur sur le nom
+  # de zone confondrait les deux lignes. On construit donc une clé d'axe unique
+  # « grandeur|zone », dont seul le nom de zone sera affiché en étiquette.
+  top_par_grandeur$cle <- paste(top_par_grandeur$grandeur, top_par_grandeur$zone, sep = "|")
+  loc_long$cle <- paste(loc_long$grandeur, loc_long$zone, sep = "|")
+  loc_top <- loc_long[loc_long$cle %in% top_par_grandeur$cle, , drop = FALSE]
+  # Ordre des modalités : la plus volatile en HAUT de son bloc. Avec un axe y
   # discret, le premier niveau se dessine en bas — on inverse donc l'ordre.
-  loc_top$zone <- factor(loc_top$zone, levels = rev(zones_top))
+  loc_top$cle <- factor(loc_top$cle, levels = rev(top_par_grandeur$cle))
 
-  gG <- ggplot(loc_top, aes(x = ecart_pct, y = zone)) +
+  # Solde net de la zone dans le scénario de RÉFÉRENCE, normalisé :
+  #   (expédié - reçu) / (expédié + reçu), compris entre -1 et +1.
+  # Positif = la zone expédie plus qu'elle ne reçoit (exportatrice nette de
+  # fret) ; négatif = l'inverse (importatrice nette). La normalisation par le
+  # tonnage total échangé rend la mesure comparable entre une grande et une
+  # petite zone. Ce solde est reporté entre crochets dans l'étiquette d'axe :
+  # il montre que la volatilité de la part expédiée frappe surtout des zones
+  # importatrices nettes, et celle de la part reçue des zones exportatrices
+  # nettes — dans les deux cas, c'est la plus PETITE des deux jambes de la zone
+  # qui bouge le plus en relatif.
+  zones_ref$solde_net <- (zones_ref$offre_niveau - zones_ref$demande_niveau) /
+                         (zones_ref$offre_niveau + zones_ref$demande_niveau)
+  # Table de correspondance nom de zone → étiquette affichée, construite une
+  # fois pour être appliquée à la clé d'axe « grandeur|zone ».
+  etiquette_zone <- stats::setNames(
+    sprintf("%s  [%s%s]", zones_ref$zone,
+            ifelse(zones_ref$solde_net >= 0, "+", "\u2212"),
+            format(round(abs(zones_ref$solde_net), 2), nsmall = 2, decimal.mark = ",", trim = TRUE)),
+    zones_ref$zone
+  )
+
+  # Couleurs des deux blocs : bleu pour la production expédiée, violet pour la
+  # consommation reçue (teinte claire pour la boîte, foncée pour le trait et
+  # les points de chaque tirage).
+  COUL_BLOC_TRAIT <- c("Production expédiée" = "#2171B5", "Consommation reçue" = "#6A51A3")
+  COUL_BLOC_FOND  <- c("Production expédiée" = "#BDD7E7", "Consommation reçue" = "#DADAEB")
+
+  # Zone la plus instable de chaque bloc, pour la note de lecture.
+  pire_offre   <- top_par_grandeur[top_par_grandeur$grandeur == "Production expédiée", ][1, ]
+  pire_demande <- top_par_grandeur[top_par_grandeur$grandeur == "Consommation reçue", ][1, ]
+
+  # Comptage du statut net à l'intérieur de chaque bloc : c'est le chiffre qui
+  # fait le constat dans la note de lecture (combien des zones les plus
+  # instables à l'expédition sont en réalité importatrices nettes, et
+  # inversement).
+  top_par_grandeur$solde_net <- zones_ref$solde_net[
+    match(top_par_grandeur$zone, zones_ref$zone)]
+  n_import_bloc_offre  <- sum(top_par_grandeur$solde_net[
+    top_par_grandeur$grandeur == "Production expédiée"] < 0)
+  n_export_bloc_demande <- sum(top_par_grandeur$solde_net[
+    top_par_grandeur$grandeur == "Consommation reçue"] > 0)
+
+  gG <- ggplot(loc_top, aes(x = ecart_pct, y = cle)) +
     geom_vline(xintercept = 0, linewidth = 0.6, color = "#B22222") +
-    geom_boxplot(fill = "#BDD7E7", color = "#4A6D80", linewidth = 0.35,
-                 outlier.shape = NA, alpha = 0.75, width = 0.6) +
-    geom_jitter(height = 0.14, width = 0, size = 1.5, alpha = 0.55, color = "#2171B5") +
-    facet_wrap(~ grandeur, ncol = 2) +
+    geom_boxplot(aes(fill = grandeur, color = grandeur),
+                 linewidth = 0.35, outlier.shape = NA, alpha = 0.75, width = 0.6) +
+    geom_jitter(aes(color = grandeur),
+                height = 0.14, width = 0, size = 1.5, alpha = 0.55) +
+    # Un bloc par grandeur, empilés verticalement ; space = "free_y" donne à
+    # chaque bloc une hauteur proportionnelle à son nombre de zones.
+    facet_grid(grandeur ~ ., scales = "free_y", space = "free_y") +
+    # L'étiquette d'axe reprend le nom de zone extrait de la clé, suivi de son
+    # solde net de référence entre crochets.
+    scale_y_discrete(labels = function(x) etiquette_zone[sub("^.*\\|", "", x)]) +
+    scale_fill_manual(values = COUL_BLOC_FOND, guide = "none") +
+    scale_color_manual(values = COUL_BLOC_TRAIT, guide = "none") +
     scale_x_continuous(labels = function(x) paste0(x, " %")) +
     labs(
       title    = "Où la localisation de l'activité dépend-elle des hypothèses ?",
@@ -864,22 +939,27 @@ if (is.null(zones_ref) || length(zones_scen) < 2) {
                          length(zones_scen)),
       x = "Écart à la référence de la part de la zone", y = NULL,
       caption = note_lecture(sprintf(
-        "les parts sont calculées sur la matrice origine-destination en tonnes ; raisonner en part neutralise la variation du tonnage national et isole les déplacements de localisation. Seules les %d zones pesant au moins %s %% du tonnage sont classées, et les %d plus instables sont représentées. La zone %s est la plus instable, avec une part qui s'étend sur %.0f points d'écart à la référence.",
+        "les parts sont calculées sur la matrice origine-destination en tonnes ; raisonner en part neutralise la variation du tonnage national et isole les déplacements de localisation. Seules les %d zones pesant au moins %s %% du tonnage sont classées. Le bloc du haut, en bleu, montre les %d zones dont la part de production expédiée varie le plus d'un tirage à l'autre ; le bloc du bas, en violet, les %d zones dont la part de consommation reçue varie le plus. Les deux classements sont indépendants : une zone peut figurer dans un seul bloc ou dans les deux. La part expédiée est la plus instable à %s, sur %.0f points d'écart à la référence ; la part reçue l'est à %s, sur %.0f points. Le nombre entre crochets est le solde net de la zone dans le scénario de référence, (expédié \u2212 reçu) / (expédié + reçu) : positif, la zone expédie plus qu'elle ne reçoit, négatif, elle reçoit plus qu'elle n'expédie. %d des %d zones du bloc bleu sont importatrices nettes et %d des %d zones du bloc violet exportatrices nettes : dans les deux cas, c'est la plus petite des deux jambes de la zone qui varie le plus en relatif, faute d'une base solide sur laquelle s'appuyer.",
         length(zones_eligibles), format(100 * SENS_PART_MIN_ZONE, decimal.mark = ","),
-        length(zones_top), etendue_zone$zone[1], etendue_zone$etendue[1]),
+        sum(top_par_grandeur$grandeur == "Production expédiée"),
+        sum(top_par_grandeur$grandeur == "Consommation reçue"),
+        pire_offre$zone, pire_offre$etendue,
+        pire_demande$zone, pire_demande$etendue,
+        n_import_bloc_offre, sum(top_par_grandeur$grandeur == "Production expédiée"),
+        n_export_bloc_demande, sum(top_par_grandeur$grandeur == "Consommation reçue")),
         largeur_car = 150)
     ) +
     theme_minimal(base_size = 12) +
     theme(
       plot.title       = element_text(face = "bold"),
       plot.subtitle    = element_text(color = "#666666"),
-      strip.text       = element_text(face = "bold"),
+      strip.text.y     = element_text(face = "bold", angle = 90),
       panel.grid.major.y = element_blank(),
       panel.grid.minor   = element_blank()
     ) +
     THEME_NOTE_LECTURE
   ggsave(file.path(DIR_SYNTHESE, "sensibilite_localisation_zones.png"),
-         gG, width = 13, height = 7.5, dpi = 300, bg = "white")
+         gG, width = 13, height = 9, dpi = 300, bg = "white")
   cat("  ✓ G. sensibilite_localisation_zones.png\n")
 
   # ── FIGURE H : carte de la volatilité de la localisation ──────────────────

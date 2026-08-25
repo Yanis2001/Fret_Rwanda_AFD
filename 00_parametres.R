@@ -1240,10 +1240,13 @@ SENS_LHS_GRAINE <- 123
 #   "..." → nom explicite, ex. "Inondation_RN1_Kigali_Huye".
 SENS_SCENARIO_VULNERAB <- NULL
 
-# Nombre de zones affichées dans le graphique de volatilité de la localisation
-# de l'offre et de la demande. Les 91 zones ne tiennent pas sur un graphique
-# lisible : on ne montre que les plus dispersées entre tirages.
-SENS_N_ZONES_VOLATILES <- 15
+# Nombre de zones affichées PAR GRANDEUR dans le graphique de volatilité de la
+# localisation de l'offre et de la demande. Les 91 zones ne tiennent pas sur un
+# graphique lisible : on ne montre que les plus dispersées entre tirages. Le
+# graphique empile deux blocs classés indépendamment — les zones dont la part
+# de production expédiée varie le plus, puis celles dont la part de
+# consommation reçue varie le plus — soit au plus 2 fois cette valeur en lignes.
+SENS_N_ZONES_VOLATILES <- 10
 
 # Part minimale du tonnage national qu'une zone doit porter pour entrer dans ce
 # classement. Le classement se fait sur une dispersion RELATIVE : sans plancher,
