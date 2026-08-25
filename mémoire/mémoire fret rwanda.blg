@@ -1,15 +1,15 @@
 [0] Config.pm:328> INFO - This is Biber 2.21
 [0] Config.pm:331> INFO - Logfile is 'mémoire fret rwanda.blg'
-[66] biber-darwin:342> INFO - === Thu Aug 20, 2026, 13:47:49
-[81] Biber.pm:421> INFO - Reading 'mémoire fret rwanda.bcf'
-[165] Biber.pm:1002> INFO - Found 64 citekeys in bib section 0
-[178] Biber.pm:4487> INFO - Processing section 0
-[185] Biber.pm:4678> INFO - Looking for bibtex file 'references.bib' for section 0
-[189] bibtex.pm:1713> INFO - LaTeX decoding ...
-[256] bibtex.pm:1519> INFO - Found BibTeX data source 'references.bib'
-[611] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'variable = shifted' with 'variable = non-ignorable'
-[611] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'normalization = NFD' with 'normalization = prenormalized'
-[611] Biber.pm:4307> INFO - Sorting list 'none/global//global/global/global' of type 'entry' with template 'none' and locale 'fr-FR'
-[611] Biber.pm:4313> INFO - No sort tailoring available for locale 'fr-FR'
-[654] bbl.pm:676> INFO - Writing 'mémoire fret rwanda.bbl' with encoding 'UTF-8'
-[687] bbl.pm:779> INFO - Output to mémoire fret rwanda.bbl
+[69] biber-darwin:342> INFO - === Mon Aug 24, 2026, 16:38:38
+[85] Biber.pm:421> INFO - Reading 'mémoire fret rwanda.bcf'
+[177] Biber.pm:1002> INFO - Found 84 citekeys in bib section 0
+[190] Biber.pm:4487> INFO - Processing section 0
+[198] Biber.pm:4678> INFO - Looking for bibtex file 'references.bib' for section 0
+[202] bibtex.pm:1713> INFO - LaTeX decoding ...
+[286] bibtex.pm:1519> INFO - Found BibTeX data source 'references.bib'
+[727] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'variable = shifted' with 'variable = non-ignorable'
+[728] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[728] Biber.pm:4307> INFO - Sorting list 'none/global//global/global/global' of type 'entry' with template 'none' and locale 'fr-FR'
+[728] Biber.pm:4313> INFO - No sort tailoring available for locale 'fr-FR'
+[780] bbl.pm:676> INFO - Writing 'mémoire fret rwanda.bbl' with encoding 'UTF-8'
+[822] bbl.pm:779> INFO - Output to mémoire fret rwanda.bbl

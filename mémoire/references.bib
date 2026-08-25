@@ -579,6 +579,25 @@
 	url     = {https://CRAN.R-project.org/package=geodata}
 }
 
+@Manual{Hollister2023elevatr,
+	author  = {Jeffrey Hollister and Tarak Shah and Jakub Nowosad and Alec L. Robitaille and Marcus W. Beck and Mike Johnson},
+	title   = {elevatr: Access Elevation Data from Various APIs},
+	year    = {2023},
+	note    = {R package version 0.99.0},
+	doi     = {10.5281/zenodo.8335450},
+	url     = {https://github.com/jhollist/elevatr/}
+}
+
+% Package R utilisé pour générer les plans d'expérience en hypercube latin
+% (échantillonnage des tests de sensibilité).
+@Manual{Carnell2024lhs,
+	author  = {Rob Carnell},
+	title   = {lhs: Latin Hypercube Samples},
+	year    = {2024},
+	note    = {R package version 1.2.0},
+	url     = {https://CRAN.R-project.org/package=lhs}
+}
+
 @misc{Anthropic2026Claude,
 	author       = {{Anthropic}},
 	title        = {Claude (Sonnet 4.6, Opus 4.8, Sonnet 5)},
@@ -751,6 +770,72 @@
 	doi       = {10.1108/9781786359537-006}
 }
 
+% Application : ASTRA, système de dynamique des systèmes cité par de Jong et al.
+% (2004) comme exemple de la famille « dynamique des systèmes » à l'étape de
+% génération (module macroéconomique alimentant un module d'économie régionale).
+@techreport{ASTRA2000,
+	author      = {{ASTRA Consortium}},
+	title       = {Final Report: Assessment of Transport Strategies},
+	institution = {University of Karlsruhe},
+	address     = {Karlsruhe},
+	year        = {2000}
+}
+
+% Application : modèle national italien, exemple de table entrée-sortie
+% multirégionale à coefficients élastiques citée par de Jong et al. (2004)
+% (17 secteurs, 20 régions) ; génération et distribution y sont simultanées.
+@inproceedings{Cascetta1997,
+	author       = {Cascetta, Ennio},
+	title        = {National modelling in {I}taly: simulation and evaluation models for the {I}talian {DSS}},
+	booktitle    = {Seminar on National Transport Models: The State of the Art},
+	address      = {Noordwijk},
+	year         = {1997}
+}
+
+% Application : revue des systèmes de prévision européens et nationaux, source de
+% de Jong et al. (2004) pour le modèle norvégien REGARD (28 secteurs) alimentant
+% le modèle de fret NEMO.
+@techreport{Expedite2000,
+	author      = {{EXPEDITE Consortium}},
+	title       = {Review of European and National Passenger and Freight Market Forecasting Systems},
+	type        = {Deliverable 2 pour la Commission européenne DG TREN},
+	institution = {Hague Consulting Group},
+	address     = {La Haye},
+	year        = {2000}
+}
+
+% Application : modèle de fret de la Région wallonne (WFTM), alimenté par le
+% modèle entrée-sortie belge à 17 secteurs cité par de Jong et al. (2004).
+@inproceedings{GeertsJourquin2000,
+	author       = {Geerts, Jean-Fran{\c c}ois and Jourquin, Bart},
+	title        = {Freight transportation planning on the {E}uropean multimodal network: the case of the {W}alloon region},
+	booktitle    = {Proceedings of the 6th {RSAI} World Congress},
+	address      = {Lugano},
+	year         = {2000}
+}
+
+% Application : résultats du modèle européen STREAMS, prédécesseur de SCENES,
+% cité par de Jong et al. (2004) parmi les modèles entrée-sortie multirégionaux.
+@inproceedings{Leitham1999,
+	author       = {Leitham, S. and Downing, J. and Martino, A. and Fiorelli, D.},
+	title        = {European transport forecasts for 2020: the {STREAMS} model results},
+	booktitle    = {European Transport Conference},
+	address      = {Cambridge},
+	year         = {1999}
+}
+
+% Application : modèle européen SCENES (33 secteurs, plus de 200 zones), exemple
+% de coefficients entrée-sortie élastiques au coût généralisé chez de Jong et al.
+% (2004).
+@techreport{Scenes2001,
+	author      = {{SCENES Consortium}},
+	title       = {{SCENES} Transport Forecasting Model: Calibration and Forecast Scenario Results},
+	type        = {Deliverable 7 pour la Commission européenne DG TREN},
+	institution = {SCENES Consortium},
+	address     = {Cambridge},
+	year        = {2001}
+}
+
 % --- Étape 2 : distribution ---
 
 % Application/méthode : montre que plusieurs procédures d'estimation de matrices
@@ -767,6 +852,40 @@
 	doi     = {10.1111/pirs.12581}
 }
 
+% Application : modèle néerlandais TEM-II, cité par de Jong et al. (2004) à la
+% fois comme application du modèle gravitaire à l'étape de distribution et comme
+% exemple de table entrée-sortie nationale convertie en tonnes puis régionalisée.
+@techreport{Tavasszy1994,
+	author      = {Tavasszy, L{\'o}r{\'a}nt A.},
+	title       = {Characteristics and Capabilities of {D}utch Freight Transportation Systems Models},
+	number      = {MR-382-EAC/VW},
+	institution = {RAND Europe},
+	address     = {Leiden},
+	year        = {1994}
+}
+
+% Application : modèle néerlandais SMILE, gravitaire à l'étape de distribution ;
+% il repose sur des tables « make and use » à 222 secteurs plutôt que sur une
+% table entrée-sortie classique.
+@inproceedings{Tavasszy1998,
+	author       = {Tavasszy, L{\'o}r{\'a}nt A. and van de Vlist, M. and Ruijgrok, C. and van de Rest, J.},
+	title        = {Scenario-wise analysis of transport and logistic systems with a {SMILE}},
+	booktitle    = {8th World Conference on Transport Research (WCTR)},
+	address      = {Anvers},
+	year         = {1998}
+}
+
+% Application : modèle européen NEAC, qui modélise la distribution conjointement
+% avec la production et l'attraction, à partir de la valeur ajoutée sectorielle
+% et du coût de transport, dans une formulation de type gravitaire.
+@inproceedings{ChenTardieu2000,
+	author       = {Chen, M. and Tardieu, P.},
+	title        = {The {NEAC} model, answering policy questions in a {E}uropean context},
+	booktitle    = {THINK-UP Seminar 1},
+	address      = {Paris},
+	year         = {2000}
+}
+
 % --- Étape 3 : choix modal ---
 
 % Application : logit pondéré de choix modal estimé sur données de fret de la
@@ -780,6 +899,121 @@
 	pages   = {1006--1015},
 	year    = {2009},
 	doi     = {10.1016/j.tre.2009.02.001}
+}
+
+% Application : modèle prototype de fret de la région de Portland (et structure
+% proposée pour Londres), exemple de l'approche par microsimulation chez de Jong
+% et al. (2004) : modèle entrée-sortie en amont, tournées de camions simulées en
+% aval par Monte-Carlo.
+@inproceedings{Neffendorf2001,
+	author       = {Neffendorf, H. and Wigan, M. and Donelly, R. and Williams, I. and Collop, M.},
+	title        = {The emerging form of freight modelling},
+	booktitle    = {European Transport Conference},
+	address      = {Cambridge},
+	year         = {2001}
+}
+
+% Application (famille 1, élasticités) : environnement d'analyse rapide des
+% politiques de fret néerlandaises, construit sur des élasticités reprises de
+% modèles plus détaillés.
+@techreport{Carrillo1996,
+	author      = {Carrillo, M. J.},
+	title       = {{PACE-FORWARD}: Policy Analytic and Computational Environment for {D}utch Freight Transport},
+	institution = {RAND Europe},
+	address     = {Leiden},
+	year        = {1996}
+}
+
+% Application (famille 1, élasticités) : méta-modèle européen agrégeant sous
+% forme d'élasticités les résultats de SCENES, de NEAC et de cinq modèles
+% nationaux, pour couvrir l'ensemble du transport intérieur européen.
+@techreport{Expedite2002,
+	author      = {{EXPEDITE Consortium}},
+	title       = {{EXPEDITE} Final Report},
+	type        = {Rapport pour la Commission européenne DG TREN},
+	institution = {RAND Europe},
+	address     = {Leiden},
+	year        = {2002}
+}
+
+% Application (famille 2, partage modal agrégé) : arbitrage entre voie d'eau et
+% route en Belgique, dont les auteurs déduisent une valorisation du temps de
+% transport des marchandises.
+@article{BlauwensVandeVoorde1988,
+	author  = {Blauwens, Gust and Van de Voorde, Eddy},
+	title   = {The valuation of time savings in commodity transport},
+	journal = {International Journal of Transport Economics},
+	volume  = {15},
+	number  = {1},
+	pages   = {77--87},
+	year    = {1988}
+}
+
+% Application (famille 3, néoclassique) : estimation d'une fonction de coût des
+% chargeurs américains dont est dérivée, par le lemme de Shephard, une fonction
+% de demande de transport de fret par mode.
+@article{FriedlaenderSpady1980,
+	author  = {Friedlaender, Ann F. and Spady, Richard H.},
+	title   = {A derived demand function for freight transportation},
+	journal = {The Review of Economics and Statistics},
+	volume  = {62},
+	number  = {3},
+	pages   = {432--441},
+	year    = {1980},
+	doi     = {10.2307/1927111}
+}
+
+% Application (famille 4, demande directe) : modèle à « mode abstrait », où un
+% mode est un vecteur de caractéristiques (temps, coût, fréquence) et non une
+% étiquette, ce qui permet en principe de prédire la demande d'un mode inexistant.
+@article{QuandtBaumol1966,
+	author  = {Quandt, Richard E. and Baumol, William J.},
+	title   = {The demand for abstract transport modes: theory and measurement},
+	journal = {Journal of Regional Science},
+	volume  = {6},
+	number  = {2},
+	pages   = {13--26},
+	year    = {1966},
+	doi     = {10.1111/j.1467-9787.1966.tb01311.x}
+}
+
+% Application (famille 5, partage modal désagrégé) : probit estimé par groupe de
+% marchandises sur le choix entre rail et route pour le fret interurbain
+% américain.
+@article{Winston1981,
+	author  = {Winston, Clifford},
+	title   = {A disaggregate model of the demand for intercity freight transportation},
+	journal = {Econometrica},
+	volume  = {49},
+	number  = {4},
+	pages   = {981--1006},
+	year    = {1981},
+	doi     = {10.2307/1912514}
+}
+
+% Application (famille 5, sous-famille à base de stocks) : choix modal fondé sur
+% le seul coût logistique total, une fois ajoutés au coût de transport ceux de
+% manutention et d'immobilisation des stocks.
+@article{Blauwens2001,
+	author  = {Blauwens, G. and Janssens, S. and Vernimmen, B. and Witlox, F.},
+	title   = {De keuze tussen vervoerswijzen op basis van het `total cost concept': een gevalstudie},
+	journal = {Tijdschrift Vervoerswetenschap},
+	volume  = {10},
+	number  = {3},
+	pages   = {28--32},
+	year    = {2001}
+}
+
+% Application (famille 7, réseau multimodal) : logiciel STAN, système interactif
+% d'affectation multimodale du fret à l'échelle stratégique, employé par les
+% modèles nationaux norvégien (NEMO) et suédois (SAMGODS).
+@article{Crainic1990,
+	author  = {Crainic, T. G. and Florian, M. and Guelat, J. and Spiess, H.},
+	title   = {Strategic planning of freight transportation: {STAN}, an interactive-graphic system},
+	journal = {Transportation Research Record},
+	volume  = {1283},
+	pages   = {97--124},
+	year    = {1990}
 }
 
 % --- Étape 4 : assignation ---
@@ -949,4 +1183,36 @@
   pages   = {53},
   year    = {2026},
   doi     = {10.3390/earth7020053}
+}
+
+% Tutoriel de référence sur les plans d'expérience en hypercube latin (Latin
+% hypercube sampling), utilisé pour l'échantillonnage des tests de sensibilité.
+@article{Viana2016,
+	author  = {Viana, Felipe A. C.},
+	title   = {A tutorial on Latin hypercube design of experiments},
+	journal = {Quality and Reliability Engineering International},
+	volume  = {32},
+	number  = {5},
+	pages   = {1975--1985},
+	year    = {2016},
+	doi     = {10.1002/qre.1924}
+}
+
+@article{Salinas2020,
+  author  = {Salinas, David and Flunkert, Valentin and Gasthaus, Jan and Januschowski, Tim},
+  title   = {{DeepAR}: Probabilistic forecasting with autoregressive recurrent networks},
+  journal = {International Journal of Forecasting},
+  volume  = {36},
+  number  = {3},
+  pages   = {1181--1191},
+  year    = {2020},
+  doi     = {10.1016/j.ijforecast.2019.07.001}
+}
+
+@online{MIGA2018Bugesera,
+  author  = {{Multilateral Investment Guarantee Agency (MIGA), World Bank Group}},
+  title   = {New Bugesera International Airport},
+  urldate = {2026-08-24},
+  year    = {2018},
+  url     = {https://www.miga.org/project/new-bugesera-international-airport}
 }

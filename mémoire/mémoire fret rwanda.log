@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  20 AUG 2026 14:29
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.9)  24 AUG 2026 17:22
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -875,25 +875,25 @@ Package babel Info: 'french' activates 'french' shorthands.
 )
 \openout1 = `"meÃÅmoire fret rwanda.aux"'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 71.
-LaTeX Font Info:    ... okay on input line 71.
-LaTeX Info: Redefining \degres on input line 71.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 77.
+LaTeX Font Info:    ... okay on input line 77.
+LaTeX Info: Redefining \degres on input line 77.
 
 (/usr/local/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
@@ -951,7 +951,7 @@ e
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
-Package hyperref Info: Link coloring ON on input line 71.
+Package hyperref Info: Link coloring ON on input line 77.
 (./meÃÅmoire fret rwanda.out) (./meÃÅmoire fret rwanda.out)
 \@outlinefile=\write4
 \openout4 = `"meÃÅmoire fret rwanda.out"'.
@@ -975,8 +975,8 @@ Package biblatex Info: Trying to load bibliographic data...
 Package biblatex Info: ... file '"meÃÅmoire fret rwanda".bbl' found.
 
 (./meÃÅmoire fret rwanda.bbl)
-Package biblatex Info: Reference section=0 on input line 71.
-Package biblatex Info: Reference segment=0 on input line 71.
+Package biblatex Info: Reference section=0 on input line 77.
+Package biblatex Info: Reference segment=0 on input line 77.
  [1
 
 {/usr/local/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/loc
@@ -987,7 +987,7 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has
 been already used, duplicate ignored
 <to be read again> 
                    \relax 
-l.116 	\newpage
+l.122 	\newpage
                 [1
 
 ] (./meÃÅmoire fret rwanda.toc
@@ -1008,8 +1008,8 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 \openout5 = `"meÃÅmoire fret rwanda.toc"'.
 
 Package babel Info: 'french' activates 'french' shorthands.
-(babel)             Reported on input line 119.
-Package cleveref Info: loaded `french' language definitions on input line 119.
+(babel)             Reported on input line 125.
+Package cleveref Info: loaded `french' language definitions on input line 125.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1022,26 +1022,26 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 
 ]
 Chapitre 2.
-<images/evol_hist_precip.png, id=266, 1052.93375pt x 440.64626pt>
+<images/evol_hist_precip.png, id=312, 1052.93375pt x 440.64626pt>
 File: images/evol_hist_precip.png Graphic file (type png)
 <use images/evol_hist_precip.png>
-Package pdftex.def Info: images/evol_hist_precip.png  used on input line 136.
+Package pdftex.def Info: images/evol_hist_precip.png  used on input line 142.
 (pdftex.def)             Requested size: 218.51521pt x 91.44247pt.
-<images/evol_prevue_precip.png, id=270, 537.00626pt x 642.4pt>
+<images/evol_prevue_precip.png, id=316, 537.00626pt x 642.4pt>
 File: images/evol_prevue_precip.png Graphic file (type png)
 <use images/evol_prevue_precip.png>
-Package pdftex.def Info: images/evol_prevue_precip.png  used on input line 144.
+Package pdftex.def Info: images/evol_prevue_precip.png  used on input line 150.
 
 (pdftex.def)             Requested size: 159.33821pt x 190.6042pt.
 
-Underfull \hbox (badness 2671) in paragraph at lines 146--146
+Underfull \hbox (badness 2671) in paragraph at lines 152--152
 \T1/cmr/m/n/12 l'Èvo-lu-tion des prÈ-ci-pi-ta-tions
  []
 
 [5
 
  <./images/evol_hist_precip.png> <./images/evol_prevue_precip.png>]
-Package cleveref Info: loaded `french' language definitions on input line 156.
+Package cleveref Info: loaded `french' language definitions on input line 162.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1055,18 +1055,18 @@ Chapitre 3.
 [7
 
 ]
-<images/carte_relief.png, id=303, 720.6925pt x 662.475pt>
+<images/carte_relief.png, id=350, 720.6925pt x 662.475pt>
 File: images/carte_relief.png Graphic file (type png)
 <use images/carte_relief.png>
-Package pdftex.def Info: images/carte_relief.png  used on input line 177.
+Package pdftex.def Info: images/carte_relief.png  used on input line 183.
 (pdftex.def)             Requested size: 318.66948pt x 292.92531pt.
 
-Overfull \hbox (46.56064pt too wide) in paragraph at lines 190--191
-\T1/cmr/m/sc/12 Coordination Authority (NCTTCA) [][][]\T1/cmr/m/n/12 2018[][] ;
- [][]\T1/cmr/m/sc/12 Ministry of Infrastructure (MININFRA)
+Overfull \hbox (34.54419pt too wide) in paragraph at lines 196--197
+\T1/cmr/m/sc/12 Transport Coordination Authority (NCTTCA) [][][]\T1/cmr/m/n/12 
+2018[][] ; [][]\T1/cmr/m/sc/12 Ministry of Infrastructure
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 191.
+Package cleveref Info: loaded `french' language definitions on input line 197.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.49998pt, for example:
@@ -1075,7 +1075,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [8 <./images/carte_relief.png>]
-Package cleveref Info: loaded `french' language definitions on input line 202.
+Package cleveref Info: loaded `french' language definitions on input line 210.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1085,7 +1085,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [9]
-Package cleveref Info: loaded `french' language definitions on input line 208.
+Package cleveref Info: loaded `french' language definitions on input line 214.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1099,7 +1099,7 @@ Chapitre 4.
 [11
 
 ]
-Package cleveref Info: loaded `french' language definitions on input line 242.
+Package cleveref Info: loaded `french' language definitions on input line 248.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1109,7 +1109,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [12]
-Package cleveref Info: loaded `french' language definitions on input line 253.
+Package cleveref Info: loaded `french' language definitions on input line 259.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1119,7 +1119,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [13]
-Package cleveref Info: loaded `french' language definitions on input line 265.
+Package cleveref Info: loaded `french' language definitions on input line 268.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1129,7 +1129,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [14]
-Package cleveref Info: loaded `french' language definitions on input line 284.
+Package cleveref Info: loaded `french' language definitions on input line 283.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1139,7 +1139,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [15]
-Package cleveref Info: loaded `french' language definitions on input line 295.
+Package cleveref Info: loaded `french' language definitions on input line 294.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1149,7 +1149,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [16]
-Package cleveref Info: loaded `french' language definitions on input line 302.
+Package cleveref Info: loaded `french' language definitions on input line 305.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1159,37 +1159,47 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [17]
-<images/4etapes_schema_reseau.png, id=427, 689.57625pt x 342.27875pt>
+Package cleveref Info: loaded `french' language definitions on input line 306.
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[18]
+<images/4etapes_schema_reseau.png, id=508, 689.57625pt x 342.27875pt>
 File: images/4etapes_schema_reseau.png Graphic file (type png)
 <use images/4etapes_schema_reseau.png>
 Package pdftex.def Info: images/4etapes_schema_reseau.png  used on input line 3
-07.
+11.
 (pdftex.def)             Requested size: 260.66911pt x 129.38309pt.
-<images/4etapes_prod_attrac.png, id=428, 659.46375pt x 341.275pt>
+<images/4etapes_prod_attrac.png, id=509, 659.46375pt x 341.275pt>
 File: images/4etapes_prod_attrac.png Graphic file (type png)
 <use images/4etapes_prod_attrac.png>
-Package pdftex.def Info: images/4etapes_prod_attrac.png  used on input line 318
+Package pdftex.def Info: images/4etapes_prod_attrac.png  used on input line 322
 .
 (pdftex.def)             Requested size: 260.66911pt x 134.89847pt.
-<images/4etapes_distrib.png, id=429, 664.4825pt x 339.2675pt>
+<images/4etapes_distrib.png, id=510, 664.4825pt x 339.2675pt>
 File: images/4etapes_distrib.png Graphic file (type png)
 <use images/4etapes_distrib.png>
-Package pdftex.def Info: images/4etapes_distrib.png  used on input line 329.
+Package pdftex.def Info: images/4etapes_distrib.png  used on input line 333.
 (pdftex.def)             Requested size: 260.66911pt x 133.0903pt.
-<images/4etapes_choix_modal.png, id=430, 663.47874pt x 339.2675pt>
+<images/4etapes_choix_modal.png, id=511, 663.47874pt x 339.2675pt>
 File: images/4etapes_choix_modal.png Graphic file (type png)
 <use images/4etapes_choix_modal.png>
-Package pdftex.def Info: images/4etapes_choix_modal.png  used on input line 340
+Package pdftex.def Info: images/4etapes_choix_modal.png  used on input line 344
 .
 (pdftex.def)             Requested size: 260.66911pt x 133.2922pt.
-<images/4etapes_affectation.png, id=431, 662.475pt x 339.2675pt>
+<images/4etapes_affectation.png, id=512, 662.475pt x 339.2675pt>
 File: images/4etapes_affectation.png Graphic file (type png)
 <use images/4etapes_affectation.png>
-Package pdftex.def Info: images/4etapes_affectation.png  used on input line 351
+Package pdftex.def Info: images/4etapes_affectation.png  used on input line 355
 .
 (pdftex.def)             Requested size: 260.66911pt x 133.4941pt.
-Package mdframed Info: Not enough space on this page on input line 354.
-Package cleveref Info: loaded `french' language definitions on input line 354.
+Package mdframed Info: Not enough space on this page on input line 358.
+Package cleveref Info: loaded `french' language definitions on input line 358.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1198,9 +1208,9 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[18 <./images/4etapes_schema_reseau.png> <./images/4etapes_prod_attrac.png> <./
+[19 <./images/4etapes_schema_reseau.png> <./images/4etapes_prod_attrac.png> <./
 images/4etapes_distrib.png>]
-Package cleveref Info: loaded `french' language definitions on input line 356.
+Package cleveref Info: loaded `french' language definitions on input line 360.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1209,22 +1219,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[19 <./images/4etapes_choix_modal.png> <./images/4etapes_affectation.png>]
+[20 <./images/4etapes_choix_modal.png> <./images/4etapes_affectation.png>]
 Chapitre 5.
-[20
+[21
 
 {/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc}]
-Package cleveref Info: loaded `french' language definitions on input line 435.
-
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[21]
-Package cleveref Info: loaded `french' language definitions on input line 476.
+Package cleveref Info: loaded `french' language definitions on input line 442.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1234,18 +1234,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [22]
-Overfull \hbox (2.18155pt too wide) in paragraph at lines 485--486
-[]\T1/cmr/m/n/12 Tout d'abord, ex-pli-quons ra-pi-de-ment com-ment fonc-tionnen
-t les don-nÈes gÈo-gra-phiques.
- []
+Package cleveref Info: loaded `french' language definitions on input line 480.
 
-<images/illustration_raster.png, id=469, 323.2075pt x 245.91875pt>
-File: images/illustration_raster.png Graphic file (type png)
-<use images/illustration_raster.png>
-Package pdftex.def Info: images/illustration_raster.png  used on input line 489
-.
-(pdftex.def)             Requested size: 273.14923pt x 207.84239pt.
-Package cleveref Info: loaded `french' language definitions on input line 497.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1253,19 +1243,39 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[23 <./images/illustration_raster.png>]
-<images/schema_graphe.png, id=482, 309.155pt x 174.6525pt>
+[23]
+Overfull \hbox (5.44466pt too wide) in paragraph at lines 489--490
+[]\T1/cmr/m/n/12 Tout d'abord, ex-pli-quons ra-pi-de-ment com-ment fonc-tionnen
+t des don-nÈes gÈo-gra-phiques.
+ []
+
+<images/illustration_raster.png, id=555, 323.2075pt x 245.91875pt>
+File: images/illustration_raster.png Graphic file (type png)
+<use images/illustration_raster.png>
+Package pdftex.def Info: images/illustration_raster.png  used on input line 493
+.
+(pdftex.def)             Requested size: 273.14923pt x 207.84239pt.
+Package cleveref Info: loaded `french' language definitions on input line 506.
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[24 <./images/illustration_raster.png>]
+<images/schema_graphe.png, id=570, 309.155pt x 174.6525pt>
 File: images/schema_graphe.png Graphic file (type png)
 <use images/schema_graphe.png>
-Package pdftex.def Info: images/schema_graphe.png  used on input line 510.
+Package pdftex.def Info: images/schema_graphe.png  used on input line 514.
 (pdftex.def)             Requested size: 218.51521pt x 123.44981pt.
-<images/carte_routes_hors_geante.png, id=483, 424.58624pt x 339.2675pt>
+<images/carte_routes_hors_geante.png, id=571, 424.58624pt x 339.2675pt>
 File: images/carte_routes_hors_geante.png Graphic file (type png)
 <use images/carte_routes_hors_geante.png>
 Package pdftex.def Info: images/carte_routes_hors_geante.png  used on input lin
-e 532.
+e 536.
 (pdftex.def)             Requested size: 273.14923pt x 218.26935pt.
-Package cleveref Info: loaded `french' language definitions on input line 537.
+Package cleveref Info: loaded `french' language definitions on input line 541.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1274,8 +1284,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[24 <./images/schema_graphe.png>]
-Package cleveref Info: loaded `french' language definitions on input line 553.
+[25 <./images/schema_graphe.png>]
+Package cleveref Info: loaded `french' language definitions on input line 557.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1284,8 +1294,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[25 <./images/carte_routes_hors_geante.png>]
-<images/prorata_air.png, id=501, 740.7675pt x 424.58624pt>
+[26 <./images/carte_routes_hors_geante.png>]
+<images/prorata_air.png, id=592, 740.7675pt x 424.58624pt>
 File: images/prorata_air.png Graphic file (type png)
 <use images/prorata_air.png>
 Package pdftex.def Info: images/prorata_air.png  used on input line 579.
@@ -1299,14 +1309,15 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[26 <./images/prorata_air.png>]
-Overfull \hbox (117.42165pt too wide) detected at line 629
-[][][][][][][][] \OT1/cmr/m/n/12 = ([][] \OMS/cmsy/m/n/12 ^^B [][] ^^B \OT1/cmr
-/m/n/12 (1 + [][] \OMS/cmsy/m/n/12 ^^B []\OT1/cmr/m/n/12 ) \OMS/cmsy/m/n/12 ^^B
- [][]\OT1/cmr/m/n/12 ) \OMS/cmsy/m/n/12 ^^B [][]
- []
+[27 <./images/prorata_air.png>]
+<images/carte_classes_geosociales.png, id=603, 2208.25pt x 1806.75pt>
+File: images/carte_classes_geosociales.png Graphic file (type png)
+<use images/carte_classes_geosociales.png>
+Package pdftex.def Info: images/carte_classes_geosociales.png  used on input li
+ne 609.
+(pdftex.def)             Requested size: 318.66948pt x 260.71767pt.
+Package cleveref Info: loaded `french' language definitions on input line 634.
 
-Package cleveref Info: loaded `french' language definitions on input line 647.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1314,34 +1325,9 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[27]
+[28 <./images/carte_classes_geosociales.png>]
+Package cleveref Info: loaded `french' language definitions on input line 675.
 
-LaTeX Warning: Command \' invalid in math mode on input line 651.
-
-
-LaTeX Warning: Command \' invalid in math mode on input line 651.
-
-Missing character: There is no … in font cmr12!
-Missing character: There is no È in font cmr12!
-Package cleveref Info: loaded `french' language definitions on input line 688.
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[28]
-
-LaTeX Warning: Reference `sec:structure_productive' on page 29 undefined on inp
-ut line 689.
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 696--697
-
- []
-
-Package cleveref Info: loaded `french' language definitions on input line 739.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1350,8 +1336,11 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [29]
-Package cleveref Info: loaded `french' language definitions on input line 781.
+Underfull \hbox (badness 10000) in paragraph at lines 712--713
 
+ []
+
+Package cleveref Info: loaded `french' language definitions on input line 723.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1360,7 +1349,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [30]
-Package cleveref Info: loaded `french' language definitions on input line 851.
+Package cleveref Info: loaded `french' language definitions on input line 769.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1370,7 +1359,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [31]
-Package cleveref Info: loaded `french' language definitions on input line 915.
+Package cleveref Info: loaded `french' language definitions on input line 824.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1380,12 +1369,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [32]
-Overfull \hbox (29.12363pt too wide) in paragraph at lines 930--931
-[]\T1/cmr/m/n/12 Le $[][]$ cor-res-pond ‡ l'Èqui-valent vÈ-hi-cule in-di-vi-due
-l du vÈ-hi-cule v, $[][]$
- []
+Package cleveref Info: loaded `french' language definitions on input line 907.
 
-Package cleveref Info: loaded `french' language definitions on input line 968.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1394,9 +1379,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [33]
-Package cleveref Info: loaded `french' language definitions on input line 1002.
+Overfull \hbox (29.12363pt too wide) in paragraph at lines 946--947
+[]\T1/cmr/m/n/12 Le $[][]$ cor-res-pond ‡ l'Èqui-valent vÈ-hi-cule in-di-vi-due
+l du vÈ-hi-cule v, $[][]$
+ []
 
-
+Package cleveref Info: loaded `french' language definitions on input line 953.
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
 (fancyhdr)                Make it at least 14.61858pt, for example:
@@ -1405,17 +1393,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [34]
-Overfull \hbox (83.6824pt too wide) in paragraph at lines 1031--1032
-\T1/cmr/m/n/12 ta-tion ini-tiale pour les paires qui Èchangent des vo-lumes su-
-pÈ-rieurs ‡ $[]$
- []
+Package cleveref Info: loaded `french' language definitions on input line 1010.
 
-<images/ex_lhs.png, id=606, 968.61874pt x 333.245pt>
-File: images/ex_lhs.png Graphic file (type png)
-<use images/ex_lhs.png>
-Package pdftex.def Info: images/ex_lhs.png  used on input line 1049.
-(pdftex.def)             Requested size: 412.72058pt x 141.9959pt.
-Package cleveref Info: loaded `french' language definitions on input line 1054.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1425,7 +1404,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [35]
-Package cleveref Info: loaded `french' language definitions on input line 1067.
+<images/ex_lhs.png, id=710, 968.61874pt x 333.245pt>
+File: images/ex_lhs.png Graphic file (type png)
+<use images/ex_lhs.png>
+Package pdftex.def Info: images/ex_lhs.png  used on input line 1041.
+(pdftex.def)             Requested size: 412.72058pt x 141.9959pt.
+Package cleveref Info: loaded `french' language definitions on input line 1046.
 
 
 
@@ -1435,18 +1419,34 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[36 <./images/ex_lhs.png>]
+[36]
+Package cleveref Info: loaded `french' language definitions on input line 1059.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[37 <./images/ex_lhs.png>]
 Chapitre 6.
-[37
+
+Overfull \hbox (22.61485pt too wide) in paragraph at lines 1087--1103
+ [][] 
+ []
+
+[38
 
 ]
-<images/ref_graphique_flux_secteurs.png, id=636, 794.97pt x 491.436pt>
-File: images/ref_graphique_flux_secteurs.png Graphic file (type png)
-<use images/ref_graphique_flux_secteurs.png>
-Package pdftex.def Info: images/ref_graphique_flux_secteurs.png  used on input 
-line 1124.
-(pdftex.def)             Requested size: 409.71692pt x 253.28358pt.
-Package cleveref Info: loaded `french' language definitions on input line 1129.
+<images/ref_offre_demande_brut_3entrepots.png, id=748, 794.97pt x 635.976pt>
+File: images/ref_offre_demande_brut_3entrepots.png Graphic file (type png)
+<use images/ref_offre_demande_brut_3entrepots.png>
+Package pdftex.def Info: images/ref_offre_demande_brut_3entrepots.png  used on 
+input line 1123.
+(pdftex.def)             Requested size: 455.24411pt x 364.20831pt.
+Package cleveref Info: loaded `french' language definitions on input line 1127.
 
 
 
@@ -1456,14 +1456,25 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[38]
-<images/ref_carte_trafic_fret.png, id=641, 3011.25pt x 2409.0pt>
+[39]
+Package cleveref Info: loaded `french' language definitions on input line 1134.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[40 <./images/ref_offre_demande_brut_3entrepots.png>]
+<images/ref_carte_trafic_fret.png, id=763, 3011.25pt x 2409.0pt>
 File: images/ref_carte_trafic_fret.png Graphic file (type png)
 <use images/ref_carte_trafic_fret.png>
 Package pdftex.def Info: images/ref_carte_trafic_fret.png  used on input line 1
-143.
+160.
 (pdftex.def)             Requested size: 409.71692pt x 327.77405pt.
-Package cleveref Info: loaded `french' language definitions on input line 1148.
+Package cleveref Info: loaded `french' language definitions on input line 1165.
 
 
 
@@ -1473,8 +1484,14 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[39 <./images/ref_graphique_flux_secteurs.png>]
-Package cleveref Info: loaded `french' language definitions on input line 1177.
+[41]
+<images/ref_sankey_flux_fret.png, id=771, 1011.78pt x 867.24pt>
+File: images/ref_sankey_flux_fret.png Graphic file (type png)
+<use images/ref_sankey_flux_fret.png>
+Package pdftex.def Info: images/ref_sankey_flux_fret.png  used on input line 11
+68.
+(pdftex.def)             Requested size: 409.71692pt x 351.19058pt.
+Package cleveref Info: loaded `french' language definitions on input line 1173.
 
 
 
@@ -1484,22 +1501,33 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[40 <./images/ref_carte_trafic_fret.png>]
-<images/ref_graphique_compo_secteurs_type_route.png, id=657, 794.97pt x 491.436
+[42 <./images/ref_carte_trafic_fret.png>]
+Package cleveref Info: loaded `french' language definitions on input line 1203.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.61858pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.61858pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
+
+[43 <./images/ref_sankey_flux_fret.png>]
+<images/ref_graphique_compo_secteurs_type_route.png, id=789, 794.97pt x 491.436
 pt>
 File: images/ref_graphique_compo_secteurs_type_route.png Graphic file (type png
 )
 <use images/ref_graphique_compo_secteurs_type_route.png>
 Package pdftex.def Info: images/ref_graphique_compo_secteurs_type_route.png  us
-ed on input line 1186.
+ed on input line 1209.
 (pdftex.def)             Requested size: 455.24411pt x 281.4337pt.
-<images/ref_carte_secteur_dominant.png, id=658, 3011.25pt x 2409.0pt>
+<images/ref_carte_secteur_dominant.png, id=790, 3011.25pt x 2409.0pt>
 File: images/ref_carte_secteur_dominant.png Graphic file (type png)
 <use images/ref_carte_secteur_dominant.png>
 Package pdftex.def Info: images/ref_carte_secteur_dominant.png  used on input l
-ine 1194.
+ine 1217.
 (pdftex.def)             Requested size: 386.96027pt x 309.54192pt.
-Package cleveref Info: loaded `french' language definitions on input line 1199.
+Package cleveref Info: loaded `french' language definitions on input line 1222.
 
 
 
@@ -1509,14 +1537,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[41 <./images/ref_graphique_compo_secteurs_type_route.png>]
-<images/ref_carte_saturation_reseau.png, id=665, 3011.25pt x 2409.0pt>
-File: images/ref_carte_saturation_reseau.png Graphic file (type png)
-<use images/ref_carte_saturation_reseau.png>
-Package pdftex.def Info: images/ref_carte_saturation_reseau.png  used on input 
-line 1208.
-(pdftex.def)             Requested size: 409.71692pt x 327.77405pt.
-Package cleveref Info: loaded `french' language definitions on input line 1213.
+[44 <./images/ref_graphique_compo_secteurs_type_route.png>]
+Package cleveref Info: loaded `french' language definitions on input line 1237.
 
 
 
@@ -1526,30 +1548,13 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[42 <./images/ref_carte_secteur_dominant.png>]
-<images/ref_graphique_validation_trc.png, id=674, 578.16pt x 491.436pt>
-File: images/ref_graphique_validation_trc.png Graphic file (type png)
-<use images/ref_graphique_validation_trc.png>
-Package pdftex.def Info: images/ref_graphique_validation_trc.png  used on input
- line 1222.
-(pdftex.def)             Requested size: 341.43307pt x 290.21468pt.
-Package cleveref Info: loaded `french' language definitions on input line 1227.
-
-
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[43 <./images/ref_carte_saturation_reseau.png>]
-<images/rupt_alea_glofas.png, id=683, 3011.25pt x 2409.0pt>
+[45 <./images/ref_carte_secteur_dominant.png>]
+<images/rupt_alea_glofas.png, id=806, 3011.25pt x 2409.0pt>
 File: images/rupt_alea_glofas.png Graphic file (type png)
 <use images/rupt_alea_glofas.png>
-Package pdftex.def Info: images/rupt_alea_glofas.png  used on input line 1241.
+Package pdftex.def Info: images/rupt_alea_glofas.png  used on input line 1242.
 (pdftex.def)             Requested size: 455.24411pt x 364.16481pt.
-Package cleveref Info: loaded `french' language definitions on input line 1245.
+Package cleveref Info: loaded `french' language definitions on input line 1275.
 
 
 
@@ -1559,42 +1564,14 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[44 <./images/ref_graphique_validation_trc.png>]
-Package cleveref Info: loaded `french' language definitions on input line 1277.
-
-
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[45 <./images/rupt_alea_glofas.png>]
-<images/rupt_graphique_surcouts.png, id=699, 794.97pt x 520.344pt>
-File: images/rupt_graphique_surcouts.png Graphic file (type png)
-<use images/rupt_graphique_surcouts.png>
-Package pdftex.def Info: images/rupt_graphique_surcouts.png  used on input line
- 1285.
-(pdftex.def)             Requested size: 455.24411pt x 297.98862pt.
-Package cleveref Info: loaded `french' language definitions on input line 1296.
-
-
-
-Package fancyhdr Warning: \headheight is too small (12.0pt): 
-(fancyhdr)                Make it at least 14.61858pt, for example:
-(fancyhdr)                \setlength{\headheight}{14.61858pt}.
-(fancyhdr)                You might also make \topmargin smaller:
-(fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
-
-[46 <./images/rupt_graphique_surcouts.png>]
-<images/rupt_carte_detours.png, id=707, 3011.25pt x 2409.0pt>
+[46 <./images/rupt_alea_glofas.png>]
+<images/rupt_carte_detours.png, id=818, 3011.25pt x 2409.0pt>
 File: images/rupt_carte_detours.png Graphic file (type png)
 <use images/rupt_carte_detours.png>
-Package pdftex.def Info: images/rupt_carte_detours.png  used on input line 1303
+Package pdftex.def Info: images/rupt_carte_detours.png  used on input line 1294
 .
 (pdftex.def)             Requested size: 455.24411pt x 364.16481pt.
-Package cleveref Info: loaded `french' language definitions on input line 1315.
+Package cleveref Info: loaded `french' language definitions on input line 1299.
 
 
 
@@ -1604,14 +1581,14 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[47 <./images/rupt_carte_detours.png>]
-<images/rupt_carte_reseau_degrade.png, id=714, 3011.25pt x 2409.0pt>
+[47]
+<images/rupt_carte_reseau_degrade.png, id=827, 3011.25pt x 2409.0pt>
 File: images/rupt_carte_reseau_degrade.png Graphic file (type png)
 <use images/rupt_carte_reseau_degrade.png>
 Package pdftex.def Info: images/rupt_carte_reseau_degrade.png  used on input li
-ne 1322.
+ne 1310.
 (pdftex.def)             Requested size: 455.24411pt x 364.16481pt.
-Package cleveref Info: loaded `french' language definitions on input line 1327.
+Package cleveref Info: loaded `french' language definitions on input line 1314.
 
 
 
@@ -1621,8 +1598,8 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
-[48]
-Package cleveref Info: loaded `french' language definitions on input line 1354.
+[48 <./images/rupt_carte_detours.png>]
+Package cleveref Info: loaded `french' language definitions on input line 1342.
 
 
 
@@ -1633,13 +1610,13 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [49 <./images/rupt_carte_reseau_degrade.png>]
-<images/rupt_carte_criticite_aretes.png, id=726, 3011.25pt x 2409.0pt>
+<images/rupt_carte_criticite_aretes.png, id=842, 3011.25pt x 2409.0pt>
 File: images/rupt_carte_criticite_aretes.png Graphic file (type png)
 <use images/rupt_carte_criticite_aretes.png>
 Package pdftex.def Info: images/rupt_carte_criticite_aretes.png  used on input 
-line 1361.
+line 1349.
 (pdftex.def)             Requested size: 455.24411pt x 364.16481pt.
-Package cleveref Info: loaded `french' language definitions on input line 1366.
+Package cleveref Info: loaded `french' language definitions on input line 1354.
 
 
 
@@ -1650,7 +1627,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [50]
-Package cleveref Info: loaded `french' language definitions on input line 1381.
+Package cleveref Info: loaded `french' language definitions on input line 1369.
 
 
 
@@ -1661,17 +1638,17 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [51 <./images/rupt_carte_criticite_aretes.png>]
-Overfull \hbox (59.87767pt too wide) in paragraph at lines 1392--1405
+Overfull \hbox (59.87767pt too wide) in paragraph at lines 1380--1393
  [][] 
  []
 
-<images/sens_enveloppe_indicateurs.png, id=744, 903.375pt x 491.436pt>
+<images/sens_enveloppe_indicateurs.png, id=860, 903.375pt x 491.436pt>
 File: images/sens_enveloppe_indicateurs.png Graphic file (type png)
 <use images/sens_enveloppe_indicateurs.png>
 Package pdftex.def Info: images/sens_enveloppe_indicateurs.png  used on input l
-ine 1413.
+ine 1401.
 (pdftex.def)             Requested size: 455.24411pt x 247.65956pt.
-Package cleveref Info: loaded `french' language definitions on input line 1418.
+Package cleveref Info: loaded `french' language definitions on input line 1406.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1681,7 +1658,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [52]
-Package cleveref Info: loaded `french' language definitions on input line 1426.
+Package cleveref Info: loaded `french' language definitions on input line 1414.
 
 
 
@@ -1692,13 +1669,13 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [53 <./images/sens_enveloppe_indicateurs.png>]
-<images/sens_heatmap_indices.png, id=758, 722.7pt x 635.976pt>
+<images/sens_heatmap_indices.png, id=874, 722.7pt x 635.976pt>
 File: images/sens_heatmap_indices.png Graphic file (type png)
 <use images/sens_heatmap_indices.png>
 Package pdftex.def Info: images/sens_heatmap_indices.png  used on input line 14
-34.
+22.
 (pdftex.def)             Requested size: 418.82375pt x 368.5655pt.
-Package cleveref Info: loaded `french' language definitions on input line 1445.
+Package cleveref Info: loaded `french' language definitions on input line 1433.
 
 
 
@@ -1709,12 +1686,12 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [54 <./images/sens_heatmap_indices.png>]
-<images/sens_tornado_tkm.png, id=773, 650.43pt x 635.976pt>
+<images/sens_tornado_tkm.png, id=890, 650.43pt x 635.976pt>
 File: images/sens_tornado_tkm.png Graphic file (type png)
 <use images/sens_tornado_tkm.png>
-Package pdftex.def Info: images/sens_tornado_tkm.png  used on input line 1464.
+Package pdftex.def Info: images/sens_tornado_tkm.png  used on input line 1452.
 (pdftex.def)             Requested size: 364.19667pt x 356.11502pt.
-Package cleveref Info: loaded `french' language definitions on input line 1469.
+Package cleveref Info: loaded `french' language definitions on input line 1457.
 
 
 
@@ -1725,7 +1702,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [55]
-Package cleveref Info: loaded `french' language definitions on input line 1475.
+Package cleveref Info: loaded `french' language definitions on input line 1463.
 
 
 
@@ -1736,13 +1713,13 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [56 <./images/sens_tornado_tkm.png>]
-<images/sens_divergence_sectorielle.png, id=787, 903.375pt x 491.436pt>
+<images/sens_divergence_sectorielle.png, id=904, 903.375pt x 491.436pt>
 File: images/sens_divergence_sectorielle.png Graphic file (type png)
 <use images/sens_divergence_sectorielle.png>
 Package pdftex.def Info: images/sens_divergence_sectorielle.png  used on input 
-line 1480.
+line 1468.
 (pdftex.def)             Requested size: 455.24411pt x 247.65956pt.
-Package cleveref Info: loaded `french' language definitions on input line 1495.
+Package cleveref Info: loaded `french' language definitions on input line 1483.
 
 
 
@@ -1753,19 +1730,19 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [57 <./images/sens_divergence_sectorielle.png>]
-<images/sens_carte_robustesse.png, id=796, 3011.25pt x 2409.0pt>
+<images/sens_carte_robustesse.png, id=913, 3011.25pt x 2409.0pt>
 File: images/sens_carte_robustesse.png Graphic file (type png)
 <use images/sens_carte_robustesse.png>
 Package pdftex.def Info: images/sens_carte_robustesse.png  used on input line 1
-498.
+486.
 (pdftex.def)             Requested size: 455.24411pt x 364.16481pt.
-<images/sens_localisation_zones.png, id=798, 939.51pt x 542.025pt>
+<images/sens_localisation_zones.png, id=915, 939.51pt x 542.025pt>
 File: images/sens_localisation_zones.png Graphic file (type png)
 <use images/sens_localisation_zones.png>
 Package pdftex.def Info: images/sens_localisation_zones.png  used on input line
- 1510.
+ 1498.
 (pdftex.def)             Requested size: 455.24411pt x 262.64195pt.
-Package cleveref Info: loaded `french' language definitions on input line 1515.
+Package cleveref Info: loaded `french' language definitions on input line 1503.
 
 
 
@@ -1776,14 +1753,17 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [58 <./images/sens_carte_robustesse.png>]
-<images/sens_stabilite_criticite.png, id=811, 794.97pt x 542.025pt>
+
+LaTeX Warning: Reference `subsec:vulneralibilite' on page 59 undefined on input
+ line 1508.
+
+<images/sens_stabilite_criticite.png, id=927, 794.97pt x 542.025pt>
 File: images/sens_stabilite_criticite.png Graphic file (type png)
 <use images/sens_stabilite_criticite.png>
 Package pdftex.def Info: images/sens_stabilite_criticite.png  used on input lin
-e 1524.
+e 1512.
 (pdftex.def)             Requested size: 455.24411pt x 310.40482pt.
-Package cleveref Info: loaded `french' language definitions on input line 1529.
-
+Package cleveref Info: loaded `french' language definitions on input line 1517.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1793,7 +1773,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.61858pt}.
 
 [59 <./images/sens_localisation_zones.png>]
-Package cleveref Info: loaded `french' language definitions on input line 1534.
+Package cleveref Info: loaded `french' language definitions on input line 1522.
 
 
 
@@ -1808,7 +1788,7 @@ Chapitre 7.
 [61
 
 ]
-Package cleveref Info: loaded `french' language definitions on input line 1601.
+Package cleveref Info: loaded `french' language definitions on input line 1589.
 
 
 
@@ -1819,7 +1799,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [62]
-Package cleveref Info: loaded `french' language definitions on input line 1613.
+Package cleveref Info: loaded `french' language definitions on input line 1601.
 
 
 
@@ -1830,7 +1810,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [63]
-Package cleveref Info: loaded `french' language definitions on input line 1636.
+Package cleveref Info: loaded `french' language definitions on input line 1624.
 
 
 
@@ -1845,7 +1825,7 @@ Chapitre 8.
 [65
 
 ]
-Overfull \hbox (30.7774pt too wide) in paragraph at lines 1655--1655
+Overfull \hbox (30.7774pt too wide) in paragraph at lines 1643--1643
 [][][]\T1/cmr/m/sc/12 Northern Corridor Transit and Transport Coordination Auth
 ority (NCTTCA)
  []
@@ -1853,7 +1833,7 @@ ority (NCTTCA)
 [66
 
 ]
-Package cleveref Info: loaded `french' language definitions on input line 1655.
+Package cleveref Info: loaded `french' language definitions on input line 1643.
 
 
 
@@ -1864,7 +1844,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [67]
-Package cleveref Info: loaded `french' language definitions on input line 1655.
+Package cleveref Info: loaded `french' language definitions on input line 1643.
 
 
 
@@ -1875,7 +1855,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [68]
-Package cleveref Info: loaded `french' language definitions on input line 1655.
+Package cleveref Info: loaded `french' language definitions on input line 1643.
 
 
 
@@ -1886,7 +1866,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [69]
-Package cleveref Info: loaded `french' language definitions on input line 1657.
+Package cleveref Info: loaded `french' language definitions on input line 1643.
 
 
 
@@ -1897,43 +1877,166 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
 [70]
+Package cleveref Info: loaded `french' language definitions on input line 1645.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[71]
 Chapitre 9.
-<images/local_routes_hors_geante.png, id=1019, 332.24126pt x 129.48375pt>
+<images/local_routes_hors_geante.png, id=1147, 332.24126pt x 129.48375pt>
 File: images/local_routes_hors_geante.png Graphic file (type png)
 <use images/local_routes_hors_geante.png>
 Package pdftex.def Info: images/local_routes_hors_geante.png  used on input lin
-e 1668.
+e 1656.
 (pdftex.def)             Requested size: 218.51521pt x 85.16118pt.
-<images/types_routes_hors_geante.png, id=1020, 360.34625pt x 196.735pt>
+<images/types_routes_hors_geante.png, id=1148, 360.34625pt x 196.735pt>
 File: images/types_routes_hors_geante.png Graphic file (type png)
 <use images/types_routes_hors_geante.png>
 Package pdftex.def Info: images/types_routes_hors_geante.png  used on input lin
-e 1676.
+e 1664.
 (pdftex.def)             Requested size: 218.51521pt x 119.2997pt.
-LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 1686.
+<images/carte_population_zones.png, id=1149, 3011.25pt x 2409.0pt>
+File: images/carte_population_zones.png Graphic file (type png)
+<use images/carte_population_zones.png>
+Package pdftex.def Info: images/carte_population_zones.png  used on input line 
+1676.
+(pdftex.def)             Requested size: 364.19667pt x 291.34654pt.
+[72
 
-Overfull \hbox (24.7552pt too wide) in paragraph at lines 1694--1695
+ <./images/local_routes_hors_geante.png> <./images/types_routes_hors_geante.png
+>]
+<images/carte_districts.png, id=1159, 3011.25pt x 2409.0pt>
+File: images/carte_districts.png Graphic file (type png)
+<use images/carte_districts.png>
+Package pdftex.def Info: images/carte_districts.png  used on input line 1687.
+(pdftex.def)             Requested size: 364.19667pt x 291.34654pt.
+Package cleveref Info: loaded `french' language definitions on input line 1692.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[73 <./images/carte_population_zones.png>]
+<images/ref_offre_composition_tonnes.png, id=1166, 1011.78pt x 852.786pt>
+File: images/ref_offre_composition_tonnes.png Graphic file (type png)
+<use images/ref_offre_composition_tonnes.png>
+Package pdftex.def Info: images/ref_offre_composition_tonnes.png  used on input
+ line 1702.
+(pdftex.def)             Requested size: 455.24411pt x 383.71112pt.
+Package cleveref Info: loaded `french' language definitions on input line 1707.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[74 <./images/carte_districts.png>]
+<images/ref_demande_composition_tonnes.png, id=1173, 1011.78pt x 852.786pt>
+File: images/ref_demande_composition_tonnes.png Graphic file (type png)
+<use images/ref_demande_composition_tonnes.png>
+Package pdftex.def Info: images/ref_demande_composition_tonnes.png  used on inp
+ut line 1710.
+(pdftex.def)             Requested size: 455.24411pt x 383.71112pt.
+Package cleveref Info: loaded `french' language definitions on input line 1715.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[75 <./images/ref_offre_composition_tonnes.png>]
+Package cleveref Info: loaded `french' language definitions on input line 1726.
+
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[76 <./images/ref_demande_composition_tonnes.png>]
+Overfull \hbox (53.47536pt too wide) in paragraph at lines 1759--1774
+ [][] 
+ []
+
+Package cleveref Info: loaded `french' language definitions on input line 1783.
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[77]
+Overfull \hbox (7.8009pt too wide) in paragraph at lines 1785--1786
+[] []\T1/cmr/bx/n/12 Pour-quoi ne pas sim-ple-ment re-prendre le chiffre de l'E
+ICV5 ?[] \T1/cmr/m/n/12 L'EICV5 (2016/17)
+ []
+
+<images/rupt_graphique_surcouts.png, id=1195, 794.97pt x 520.344pt>
+File: images/rupt_graphique_surcouts.png Graphic file (type png)
+<use images/rupt_graphique_surcouts.png>
+Package pdftex.def Info: images/rupt_graphique_surcouts.png  used on input line
+ 1794.
+(pdftex.def)             Requested size: 455.24411pt x 297.98862pt.
+Package cleveref Info: loaded `french' language definitions on input line 1799.
+
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[78]
+LaTeX Font Info:    Font shape `T1/cmtt/bx/n' in size <17.28> not available
+(Font)              Font shape `T1/cmtt/m/n' tried instead on input line 1803.
+
+Overfull \hbox (24.7552pt too wide) in paragraph at lines 1811--1812
 []\T1/cmtt/m/n/12 reseau_noeuds.gpkg \T1/cmr/m/n/12 ^^V n˜uds du rÈ-seau, avec 
 l'in-di-ca-teur d'en-tre-pÙt (\T1/cmtt/m/n/12 is_warehouse\T1/cmr/m/n/12 ),
  []
 
-[71
+Package cleveref Info: loaded `french' language definitions on input line 1813.
 
- <./images/local_routes_hors_geante.png> <./images/types_routes_hors_geante.png
->]
-Overfull \hbox (1.75087pt too wide) in paragraph at lines 1696--1697
+
+Package fancyhdr Warning: \headheight is too small (12.0pt): 
+(fancyhdr)                Make it at least 14.49998pt, for example:
+(fancyhdr)                \setlength{\headheight}{14.49998pt}.
+(fancyhdr)                You might also make \topmargin smaller:
+(fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
+
+[79 <./images/rupt_graphique_surcouts.png>]
+Overfull \hbox (1.75087pt too wide) in paragraph at lines 1813--1814
 \T1/cmr/m/n/12 cule (car-bu-rant, usure, temps, Èmis-sions de CO2/NOx/PM2.5 par
  tonne-kilomËtre),
  []
 
 
-Overfull \hbox (5.9875pt too wide) in paragraph at lines 1719--1720
+Overfull \hbox (5.9875pt too wide) in paragraph at lines 1836--1837
 []\T1/cmtt/m/n/12 impact_od_<scenario>.csv \T1/cmr/m/n/12 ^^V com-pa-rai-son, p
 our chaque paire origine-destination,
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 1726.
+Package cleveref Info: loaded `french' language definitions on input line 1844.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1942,13 +2045,13 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[72]
-Overfull \hbox (10.61423pt too wide) in paragraph at lines 1734--1735
+[80]
+Overfull \hbox (10.61423pt too wide) in paragraph at lines 1851--1852
 [] []\T1/cmr/bx/n/12 L'Agence Fran-Áaise de DÈ-ve-lop-pe-ment[] \T1/cmr/m/n/12 
 L'Agence Fran-Áaise de DÈ-ve-lop-pe-ment (AFD)
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 1742.
+Package cleveref Info: loaded `french' language definitions on input line 1859.
 
 
 Package fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1957,7 +2060,7 @@ Package fancyhdr Warning: \headheight is too small (12.0pt):
 (fancyhdr)                You might also make \topmargin smaller:
 (fancyhdr)                \addtolength{\topmargin}{-2.49998pt}.
 
-[73] (./meÃÅmoire fret rwanda.aux
+[81] (./meÃÅmoire fret rwanda.aux
 Package cleveref Info: loaded `french' language definitions on input line 13.
 )
  ***********
@@ -1970,19 +2073,19 @@ LaTeX Warning: There were undefined references.
 
 Package rerunfilecheck Info: File `"meÃÅmoire fret rwanda".out' has not changed
 .
-(rerunfilecheck)             Checksum: EA60418C6666E6C5B77FFC7C9404AB23;10173.
+(rerunfilecheck)             Checksum: 8A45418A11B999122C5142EF1818C977;13642.
 Package logreq Info: Writing requests to '"meÃÅmoire fret rwanda".run.xml'.
 \openout1 = `"meÃÅmoire fret rwanda.run.xml"'.
 
  ) 
 Here is how much of TeX's memory you used:
- 27277 strings out of 467525
- 492356 string characters out of 5418983
- 1351700 words of memory out of 5000000
- 55619 multiletter control sequences out of 15000+600000
- 645523 words of font info for 86 fonts, out of 8000000 for 9000
+ 27518 strings out of 467525
+ 499365 string characters out of 5418983
+ 1355201 words of memory out of 5000000
+ 55781 multiletter control sequences out of 15000+600000
+ 645836 words of font info for 87 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 76i,12n,81p,1756b,2535s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 76i,12n,79p,2567b,2535s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
 ></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb>
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb><
@@ -1991,27 +2094,30 @@ b></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb
 ></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb>
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></
 usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></us
-r/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/
-local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/loc
-al/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/loca
-l/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/
-texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/te
-xlive/2026/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/loca
-l/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/local/
-texlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb></usr/local/te
-xlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1728.pfb></usr/local/texl
-ive/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1000.pfb></usr/local/texliv
-e/2026/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb></usr/local/texlive/
-2026/texmf-dist/fonts/type1/public/cm-super/sfrm0800.pfb></usr/local/texlive/20
-26/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive/2026
-/texmf-dist/fonts/type1/public/cm-super/sfrm1200.pfb></usr/local/texlive/2026/t
-exmf-dist/fonts/type1/public/cm-super/sfrm1440.pfb></usr/local/texlive/2026/tex
-mf-dist/fonts/type1/public/cm-super/sfti1200.pfb></usr/local/texlive/2026/texmf
--dist/fonts/type1/public/cm-super/sftt1200.pfb>
-Output written on "meÃÅmoire fret rwanda.pdf" (74 pages, 13617179 bytes).
+r/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/
+local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/lo
+cal/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local
+/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/
+texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/te
+xlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texl
+ive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texliv
+e/2026/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/te
+xlive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/local/texl
+ive/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb></usr/local/texliv
+e/2026/texmf-dist/fonts/type1/public/cm-super/sfbx1728.pfb></usr/local/texlive/
+2026/texmf-dist/fonts/type1/public/cm-super/sfcc1000.pfb></usr/local/texlive/20
+26/texmf-dist/fonts/type1/public/cm-super/sfcc1200.pfb></usr/local/texlive/2026
+/texmf-dist/fonts/type1/public/cm-super/sfrm0800.pfb></usr/local/texlive/2026/t
+exmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive/2026/tex
+mf-dist/fonts/type1/public/cm-super/sfrm1200.pfb></usr/local/texlive/2026/texmf
+-dist/fonts/type1/public/cm-super/sfrm1440.pfb></usr/local/texlive/2026/texmf-d
+ist/fonts/type1/public/cm-super/sfti1200.pfb></usr/local/texlive/2026/texmf-dis
+t/fonts/type1/public/cm-super/sftt1200.pfb></usr/local/texlive/2026/texmf-dist/
+fonts/type1/public/cm-super/sftt1728.pfb>
+Output written on "meÃÅmoire fret rwanda.pdf" (82 pages, 21931857 bytes).
 PDF statistics:
- 1212 PDF objects out of 1440 (max. 8388607)
- 1011 compressed objects within 11 object streams
- 279 named destinations out of 1000 (max. 500000)
- 542 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 1416 PDF objects out of 1440 (max. 8388607)
+ 1191 compressed objects within 12 object streams
+ 357 named destinations out of 1000 (max. 500000)
+ 634 words of extra memory for PDF output out of 10000 (max. 10000000)
 
