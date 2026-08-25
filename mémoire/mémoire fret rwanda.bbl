@@ -2207,199 +2207,37 @@
       \verb https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/
       \endverb
     \endentry
-    \entry{Miller2009}{book}{}{}
-      \name{author}{2}{}{%
-        {{un=0,uniquepart=base,hash=608c448f286576678bafd9b83d12626a}{%
-           family={Miller},
-           familyi={M\bibinitperiod},
-           given={Ronald\bibnamedelima E.},
-           giveni={R\bibinitperiod\bibinitdelim E\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=07fb3345bb389928eec8d837aeff4645}{%
-           family={Blair},
-           familyi={B\bibinitperiod},
-           given={Peter\bibnamedelima D.},
-           giveni={P\bibinitperiod\bibinitdelim D\bibinitperiod},
-           givenun=0}}%
-      }
-      \list{publisher}{1}{%
-        {Cambridge University Press}%
-      }
-      \strng{namehash}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{fullhash}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{fullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{bibnamehash}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{authorbibnamehash}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{authornamehash}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{authorfullhash}{a0c9a18295a05fbf7662daef53ee0db7}
-      \strng{authorfullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{edition}{2}
-      \field{title}{Input-Output Analysis: Foundations and Extensions}
-      \field{year}{2009}
-    \endentry
-    \entry{Leontief1936}{article}{}{}
+    \entry{MIGA2018Bugesera}{online}{}{}
       \name{author}{1}{}{%
-        {{un=0,uniquepart=base,hash=7fba8a21a79da7f09bad272143e8adc7}{%
-           family={Leontief},
-           familyi={L\bibinitperiod},
-           given={Wassily},
-           giveni={W\bibinitperiod},
-           givenun=0}}%
+        {{un=0,uniquepart=base,hash=542ef3c6555fe9019d889fd9fbfbdb93}{%
+           family={{Multilateral Investment Guarantee Agency (MIGA), World Bank Group}},
+           familyi={M\bibinitperiod}}}%
       }
-      \strng{namehash}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{fullhash}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{fullhashraw}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{bibnamehash}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{authorbibnamehash}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{authornamehash}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{authorfullhash}{7fba8a21a79da7f09bad272143e8adc7}
-      \strng{authorfullhashraw}{7fba8a21a79da7f09bad272143e8adc7}
+      \strng{namehash}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{fullhash}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{fullhashraw}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{bibnamehash}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{authorbibnamehash}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{authornamehash}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{authorfullhash}{542ef3c6555fe9019d889fd9fbfbdb93}
+      \strng{authorfullhashraw}{542ef3c6555fe9019d889fd9fbfbdb93}
       \field{sortinit}{7}
       \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
       \field{labeltitlesource}{title}
-      \field{journaltitle}{Review of Economics and Statistics}
-      \field{number}{3}
-      \field{title}{Quantitative input and output relations in the economic system of the United States}
-      \field{volume}{18}
-      \field{year}{1936}
-      \field{pages}{105\bibrangedash 125}
-      \range{pages}{21}
-      \verb{doi}
-      \verb 10.2307/1927837
+      \field{title}{New Bugesera International Airport}
+      \field{urlday}{24}
+      \field{urlmonth}{8}
+      \field{urlyear}{2026}
+      \field{year}{2018}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://www.miga.org/project/new-bugesera-international-airport
       \endverb
-    \endentry
-    \entry{Okuyama2007}{article}{}{}
-      \name{author}{1}{}{%
-        {{un=0,uniquepart=base,hash=60ff8a181743217356c59ac4f263e604}{%
-           family={Okuyama},
-           familyi={O\bibinitperiod},
-           given={Yasuhide},
-           giveni={Y\bibinitperiod},
-           givenun=0}}%
-      }
-      \strng{namehash}{60ff8a181743217356c59ac4f263e604}
-      \strng{fullhash}{60ff8a181743217356c59ac4f263e604}
-      \strng{fullhashraw}{60ff8a181743217356c59ac4f263e604}
-      \strng{bibnamehash}{60ff8a181743217356c59ac4f263e604}
-      \strng{authorbibnamehash}{60ff8a181743217356c59ac4f263e604}
-      \strng{authornamehash}{60ff8a181743217356c59ac4f263e604}
-      \strng{authorfullhash}{60ff8a181743217356c59ac4f263e604}
-      \strng{authorfullhashraw}{60ff8a181743217356c59ac4f263e604}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{journaltitle}{Economic Systems Research}
-      \field{number}{2}
-      \field{title}{Economic modeling for disaster impact analysis: Past, present, and future}
-      \field{volume}{19}
-      \field{year}{2007}
-      \field{pages}{115\bibrangedash 124}
-      \range{pages}{10}
-      \verb{doi}
-      \verb 10.1080/09535310701328435
-      \endverb
-    \endentry
-    \entry{Carvalho2021}{article}{}{}
-      \name{author}{4}{}{%
-        {{un=0,uniquepart=base,hash=92331a0cd5cdb556a6fb551d7762c051}{%
-           family={Carvalho},
-           familyi={C\bibinitperiod},
-           given={Vasco\bibnamedelima M.},
-           giveni={V\bibinitperiod\bibinitdelim M\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=dd84a85646fa4fc0060208e8621ecea3}{%
-           family={Nirei},
-           familyi={N\bibinitperiod},
-           given={Makoto},
-           giveni={M\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=6288c7690bb6291af959ff22411ac985}{%
-           family={Saito},
-           familyi={S\bibinitperiod},
-           given={Yukiko\bibnamedelima U.},
-           giveni={Y\bibinitperiod\bibinitdelim U\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=36f43dd3d18c58095e5aa6bbc89a670c}{%
-           family={Tahbaz-Salehi},
-           familyi={T\bibinithyphendelim S\bibinitperiod},
-           given={Alireza},
-           giveni={A\bibinitperiod},
-           givenun=0}}%
-      }
-      \strng{namehash}{daf7a92727e21247a68096b5b9a4d108}
-      \strng{fullhash}{d1c370b465aab40a99c58ffbc2e30989}
-      \strng{fullhashraw}{d1c370b465aab40a99c58ffbc2e30989}
-      \strng{bibnamehash}{daf7a92727e21247a68096b5b9a4d108}
-      \strng{authorbibnamehash}{daf7a92727e21247a68096b5b9a4d108}
-      \strng{authornamehash}{daf7a92727e21247a68096b5b9a4d108}
-      \strng{authorfullhash}{d1c370b465aab40a99c58ffbc2e30989}
-      \strng{authorfullhashraw}{d1c370b465aab40a99c58ffbc2e30989}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{journaltitle}{Quarterly Journal of Economics}
-      \field{number}{2}
-      \field{title}{Supply chain disruptions: Evidence from the Great East Japan earthquake}
-      \field{volume}{136}
-      \field{year}{2021}
-      \field{pages}{1255\bibrangedash 1321}
-      \range{pages}{67}
-      \verb{doi}
-      \verb 10.1093/qje/qjaa044
-      \endverb
-    \endentry
-    \entry{Inoue2019}{article}{}{}
-      \name{author}{2}{}{%
-        {{un=0,uniquepart=base,hash=0b732bbf2c1d2e3ebdf72cc533449cd1}{%
-           family={Inoue},
-           familyi={I\bibinitperiod},
-           given={Hiroyasu},
-           giveni={H\bibinitperiod},
-           givenun=0}}%
-        {{un=0,uniquepart=base,hash=4e74010492c889baa46530718102989f}{%
-           family={Todo},
-           familyi={T\bibinitperiod},
-           given={Yasuyuki},
-           giveni={Y\bibinitperiod},
-           givenun=0}}%
-      }
-      \strng{namehash}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{fullhash}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{fullhashraw}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{bibnamehash}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{authorbibnamehash}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{authornamehash}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{authorfullhash}{99779bf4968713cd5f4aa0ea08fb431e}
-      \strng{authorfullhashraw}{99779bf4968713cd5f4aa0ea08fb431e}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
-      \field{extradatescope}{labelyear}
-      \field{labeldatesource}{}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{journaltitle}{Nature Sustainability}
-      \field{title}{Firm-level propagation of shocks through supply-chain networks}
-      \field{volume}{2}
-      \field{year}{2019}
-      \field{pages}{841\bibrangedash 847}
-      \range{pages}{7}
-      \verb{doi}
-      \verb 10.1038/s41893-019-0351-x
+      \verb{url}
+      \verb https://www.miga.org/project/new-bugesera-international-airport
       \endverb
     \endentry
     \entry{ESTEEM}{article}{}{}
@@ -2452,6 +2290,42 @@
       \verb{doi}
       \verb 10.1016/j.strueco.2025.12.008
       \endverb
+    \endentry
+    \entry{Miller2009}{book}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=608c448f286576678bafd9b83d12626a}{%
+           family={Miller},
+           familyi={M\bibinitperiod},
+           given={Ronald\bibnamedelima E.},
+           giveni={R\bibinitperiod\bibinitdelim E\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=07fb3345bb389928eec8d837aeff4645}{%
+           family={Blair},
+           familyi={B\bibinitperiod},
+           given={Peter\bibnamedelima D.},
+           giveni={P\bibinitperiod\bibinitdelim D\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {Cambridge University Press}%
+      }
+      \strng{namehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{fullhash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{fullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{bibnamehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authorbibnamehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authornamehash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authorfullhash}{a0c9a18295a05fbf7662daef53ee0db7}
+      \strng{authorfullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{edition}{2}
+      \field{title}{Input-Output Analysis: Foundations and Extensions}
+      \field{year}{2009}
     \endentry
     \entry{Barrot2016}{article}{}{}
       \name{author}{2}{}{%
@@ -2736,8 +2610,8 @@
       \strng{authornamehash}{c76c6987a3f502d782ccb2f1c609f883}
       \strng{authorfullhash}{c76c6987a3f502d782ccb2f1c609f883}
       \strng{authorfullhashraw}{c76c6987a3f502d782ccb2f1c609f883}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2779,8 +2653,8 @@
       \strng{authornamehash}{60687f0db553127521769061a9cf93f1}
       \strng{authorfullhash}{60687f0db553127521769061a9cf93f1}
       \strng{authorfullhashraw}{60687f0db553127521769061a9cf93f1}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2824,8 +2698,8 @@
       \strng{authornamehash}{4e6eada38fb231430ae537a23e64f1a4}
       \strng{authorfullhash}{4181c89681f6c7a77e2486faaf202b6f}
       \strng{authorfullhashraw}{4181c89681f6c7a77e2486faaf202b6f}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -3164,8 +3038,8 @@
       \strng{editornamehash}{7c760a153321d2739781505792c7b334}
       \strng{editorfullhash}{7c760a153321d2739781505792c7b334}
       \strng{editorfullhashraw}{7c760a153321d2739781505792c7b334}
-      \field{sortinit}{1}
-      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -3197,8 +3071,8 @@
       \strng{authornamehash}{3095595734d0db0ecfa1a9ba2107538a}
       \strng{authorfullhash}{3095595734d0db0ecfa1a9ba2107538a}
       \strng{authorfullhashraw}{3095595734d0db0ecfa1a9ba2107538a}
-      \field{sortinit}{1}
-      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -3237,8 +3111,8 @@
       \strng{authornamehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
       \strng{authorfullhash}{e699ba5bc03b19d99d12e4f0c08d1e04}
       \strng{authorfullhashraw}{e699ba5bc03b19d99d12e4f0c08d1e04}
-      \field{sortinit}{1}
-      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}

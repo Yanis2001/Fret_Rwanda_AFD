@@ -63,51 +63,50 @@
 \contentsline {subsubsection}{\numberline {6.1.2.3}Congestion et saturation}{45}{subsubsection.6.1.2.3}%
 \contentsline {section}{\numberline {6.2}Scénarios d'inondations}{45}{section.6.2}%
 \contentsline {subsection}{\numberline {6.2.1}Construction du scénario}{45}{subsection.6.2.1}%
-\contentsline {subsection}{\numberline {6.2.2}Analyse d'impacts et de vulnérabilité}{46}{subsection.6.2.2}%
-\contentsline {subsubsection}{\numberline {6.2.2.1}Une lecture par paires trompeuse}{46}{subsubsection.6.2.2.1}%
+\contentsline {subsection}{\numberline {6.2.2}Analyse d'impacts et de vulnérabilité}{47}{subsection.6.2.2}%
+\contentsline {subsubsection}{\numberline {6.2.2.1}Une lecture par paires trompeuse}{47}{subsubsection.6.2.2.1}%
 \contentsline {subsubsection}{\numberline {6.2.2.2}Coût agrégé et report de trafic}{47}{subsubsection.6.2.2.2}%
 \contentsline {subsubsection}{\numberline {6.2.2.3}L'enclave de Bugesera}{48}{subsubsection.6.2.2.3}%
 \contentsline {subsubsection}{\numberline {6.2.2.4}Criticité des axes}{49}{subsubsection.6.2.2.4}%
 \contentsline {subsubsection}{\numberline {6.2.2.5}Portée et limites de l'exercice}{51}{subsubsection.6.2.2.5}%
-\contentsline {section}{\numberline {6.3}Tests de sensibilité}{52}{section.6.3}%
+\contentsline {section}{\numberline {6.3}Tests de sensibilité}{51}{section.6.3}%
 \contentsline {subsection}{\numberline {6.3.1}Dispersion des indicateurs agrégés}{52}{subsection.6.3.1}%
-\contentsline {subsection}{\numberline {6.3.2}Paramètres de la fonction de friction}{54}{subsection.6.3.2}%
-\contentsline {subsection}{\numberline {6.3.3}Valeur du temps}{55}{subsection.6.3.3}%
-\contentsline {subsection}{\numberline {6.3.4}Valeurs des taux de conversion monnaie-tonne}{55}{subsection.6.3.4}%
-\contentsline {subsection}{\numberline {6.3.5}Robustesse spatiale des flux}{57}{subsection.6.3.5}%
-\contentsline {chapter}{\numberline {7}Discussion}{61}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Limites du travail}{61}{section.7.1}%
-\contentsline {paragraph}{Représentation du réseau et des points d'échange.}{61}{section.7.1}%
-\contentsline {paragraph}{Agrégation économique et sectorielle.}{61}{section.7.1}%
-\contentsline {paragraph}{Comportement de transport et affectation des flux.}{62}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Extensions futures et recommandations}{62}{section.7.2}%
-\contentsline {subsection}{\numberline {7.2.1}Extensions méthodologiques}{62}{subsection.7.2.1}%
-\contentsline {subsubsection}{\numberline {7.2.1.1}Couplage avec ESTEEM}{62}{subsubsection.7.2.1.1}%
-\contentsline {subsubsection}{\numberline {7.2.1.2}Extension du modèle de fret lui-même}{64}{subsubsection.7.2.1.2}%
-\contentsline {chapter}{\numberline {8}Conclusion}{65}{chapter.8}%
-\contentsline {chapter}{Bibliographie}{66}{chapter*.32}%
-\contentsline {chapter}{\numberline {9}Annexes}{72}{chapter.9}%
-\contentsline {section}{\numberline {9.1}Décomposition des routes non reliées à la composante géante}{72}{section.9.1}%
-\contentsline {section}{\numberline {9.2}Carte de la population par zone (polygones de Voronoï)}{73}{section.9.2}%
-\contentsline {section}{\numberline {9.3}Carte des districts du Rwanda}{74}{section.9.3}%
-\contentsline {section}{\numberline {9.4}Composition sectorielle de l'offre et de la demande par zone}{74}{section.9.4}%
-\contentsline {section}{\numberline {9.5}La part urbaine implicite de la SAM}{76}{section.9.5}%
-\contentsline {paragraph}{Le problème posé}{76}{section.9.5}%
-\contentsline {paragraph}{L'hypothèse retenue}{76}{section.9.5}%
-\contentsline {paragraph}{Le calcul}{77}{section.9.5}%
-\contentsline {paragraph}{Application aux données}{77}{equation.9.3}%
-\contentsline {paragraph}{Limite de la méthode}{78}{table.caption.38}%
-\contentsline {paragraph}{Pourquoi ne pas simplement reprendre le chiffre de l'EICV5~?}{78}{table.caption.38}%
-\contentsline {section}{\numberline {9.6}Distribution des surcoûts relatifs de transport par paire origine-destination}{78}{section.9.6}%
-\contentsline {section}{\numberline {9.7}Quelques caractéristiques techniques du modèle}{79}{section.9.7}%
-\contentsline {section}{\numberline {9.8}Fichiers exportés par le modèle (dossier \texttt {exports/})}{79}{section.9.8}%
-\contentsline {paragraph}{Réseau routier}{79}{section.9.8}%
-\contentsline {paragraph}{Matrice origine-destination et flux de fret}{80}{section.9.8}%
-\contentsline {paragraph}{Comptabilité économique et logistique}{80}{section.9.8}%
-\contentsline {paragraph}{Scénarios de choc et vulnérabilité (partie IX)}{80}{section.9.8}%
-\contentsline {paragraph}{Vérification et calibration}{80}{section.9.8}%
-\contentsline {paragraph}{Tests de sensibilité}{81}{section.9.8}%
-\contentsline {section}{\numberline {9.9}Présentation de l'AFD, du département ECO et de l'équipe GEMMES}{81}{section.9.9}%
-\contentsline {paragraph}{L'Agence Française de Développement}{81}{section.9.9}%
-\contentsline {paragraph}{Le département Économie (ECO)}{81}{section.9.9}%
-\contentsline {paragraph}{L'équipe GEMMES}{81}{section.9.9}%
+\contentsline {subsection}{\numberline {6.3.2}Influence différenciée des paramètres}{53}{subsection.6.3.2}%
+\contentsline {subsection}{\numberline {6.3.3}Robustesse spatiale des flux}{56}{subsection.6.3.3}%
+\contentsline {chapter}{\numberline {7}Discussion}{59}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Limites du travail}{59}{section.7.1}%
+\contentsline {paragraph}{Représentation du réseau et des points d'échange.}{59}{section.7.1}%
+\contentsline {paragraph}{Agrégation économique et sectorielle.}{59}{section.7.1}%
+\contentsline {paragraph}{Comportement de transport et affectation des flux.}{59}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Extensions futures et recommandations}{60}{section.7.2}%
+\contentsline {subsection}{\numberline {7.2.1}Extensions méthodologiques}{60}{subsection.7.2.1}%
+\contentsline {subsubsection}{\numberline {7.2.1.1}Couplage avec ESTEEM}{60}{subsubsection.7.2.1.1}%
+\contentsline {subsubsection}{\numberline {7.2.1.2}Extension du modèle de fret lui-même}{62}{subsubsection.7.2.1.2}%
+\contentsline {chapter}{\numberline {8}Conclusion}{63}{chapter.8}%
+\contentsline {chapter}{\numberline {9}Conclusion}{64}{chapter.9}%
+\contentsline {chapter}{Bibliographie}{65}{chapter*.31}%
+\contentsline {chapter}{\numberline {10}Annexes}{71}{chapter.10}%
+\contentsline {section}{\numberline {10.1}Décomposition des routes non reliées à la composante géante}{71}{section.10.1}%
+\contentsline {section}{\numberline {10.2}Carte de la population par zone (polygones de Voronoï)}{72}{section.10.2}%
+\contentsline {section}{\numberline {10.3}Carte des districts du Rwanda}{73}{section.10.3}%
+\contentsline {section}{\numberline {10.4}Composition sectorielle de l'offre et de la demande par zone}{73}{section.10.4}%
+\contentsline {section}{\numberline {10.5}La part urbaine implicite de la SAM}{75}{section.10.5}%
+\contentsline {paragraph}{Le problème posé}{75}{section.10.5}%
+\contentsline {paragraph}{L'hypothèse retenue}{75}{section.10.5}%
+\contentsline {paragraph}{Le calcul}{76}{section.10.5}%
+\contentsline {paragraph}{Application aux données}{76}{equation.10.3}%
+\contentsline {paragraph}{Limite de la méthode}{77}{table.caption.37}%
+\contentsline {paragraph}{Pourquoi ne pas simplement reprendre le chiffre de l'EICV5~?}{77}{table.caption.37}%
+\contentsline {section}{\numberline {10.6}Distribution des surcoûts relatifs de transport par paire origine-destination}{77}{section.10.6}%
+\contentsline {section}{\numberline {10.7}Quelques caractéristiques techniques du modèle}{78}{section.10.7}%
+\contentsline {section}{\numberline {10.8}Fichiers exportés par le modèle (dossier \texttt {exports/})}{78}{section.10.8}%
+\contentsline {paragraph}{Réseau routier}{78}{section.10.8}%
+\contentsline {paragraph}{Matrice origine-destination et flux de fret}{79}{section.10.8}%
+\contentsline {paragraph}{Comptabilité économique et logistique}{79}{section.10.8}%
+\contentsline {paragraph}{Scénarios de choc et vulnérabilité (partie IX)}{79}{section.10.8}%
+\contentsline {paragraph}{Vérification et calibration}{79}{section.10.8}%
+\contentsline {paragraph}{Tests de sensibilité}{80}{section.10.8}%
+\contentsline {section}{\numberline {10.9}Présentation de l'AFD, du département ECO et de l'équipe GEMMES}{80}{section.10.9}%
+\contentsline {paragraph}{L'Agence Française de Développement}{80}{section.10.9}%
+\contentsline {paragraph}{Le département Économie (ECO)}{80}{section.10.9}%
+\contentsline {paragraph}{L'équipe GEMMES}{80}{section.10.9}%
