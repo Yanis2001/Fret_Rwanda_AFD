@@ -33,12 +33,20 @@
 # PRÉREQUIS
 #   Un run de référence complet (run_all.R) doit avoir été exécuté au moins une
 #   fois : les tests de sensibilité repartent de ses fichiers persist et se
-#   comparent à ses exports.
+#   comparent à ses exports. Voir l'option LANCER_RUN_ALL ci-dessous pour
+#   enchaîner automatiquement ce run de référence avant la sensibilité.
 ################################################################################
 
 # ==============================================================================
 # 1. OPTIONS DU RUN
 # ==============================================================================
+
+# Lancer automatiquement run_all.R (run de référence complet) avant l'analyse
+# de sensibilité, dans la même session. Utile quand aucun run de référence n'a
+# encore été produit, ou qu'on veut le rafraîchir avant de comparer. FALSE par
+# défaut : si un run de référence récent existe déjà, le relancer coûte
+# ~2h pour rien.
+LANCER_RUN_ALL <- FALSE
 
 # Relancer le module 01 (réseau/zones) pour chaque scénario.
 # FALSE par défaut : la géographie ne dépend pas des paramètres testés (betas et
@@ -63,6 +71,22 @@ NETTOYER_PERSIST_SENSIBILITE <- TRUE
 
 # Produire automatiquement la synthèse comparative en fin de run.
 LANCER_VIZ_SYNTHESE <- TRUE
+
+# ==============================================================================
+# 1bis. RUN DE RÉFÉRENCE (optionnel)
+# ==============================================================================
+# Si LANCER_RUN_ALL est TRUE, on source run_all.R en entier : il produit les
+# fichiers persist et exports de référence dont dépend chaque scénario de
+# sensibilité (cf. PRÉREQUIS en tête de fichier). run_all.R gère lui-même sa
+# propre config (modules RUN_*, RESET_CACHES) et ferme sa connexion DuckDB en
+# fin de run ; 00_parametres.R en rouvre une nouvelle à l'étape suivante.
+# ==============================================================================
+
+if (LANCER_RUN_ALL) {
+  cat("\n→ LANCER_RUN_ALL = TRUE : exécution du run de référence (run_all.R)…\n")
+  source("run_all.R", local = FALSE)
+  cat("\n✓ Run de référence terminé — enchaînement sur l'analyse de sensibilité.\n")
+}
 
 # ==============================================================================
 # 2. CONSTRUCTION DU PLAN D'EXPÉRIENCE PAR HYPERCUBE LATIN
