@@ -2134,6 +2134,86 @@
       \verb https://CRAN.R-project.org/package=lhs
       \endverb
     \endentry
+    \entry{HeltonDavis2003}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=c77776a1e1de8ed85172f0757cb8e867}{%
+           family={Helton},
+           familyi={H\bibinitperiod},
+           given={Jon\bibnamedelima C.},
+           giveni={J\bibinitperiod\bibinitdelim C\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=ec68c0e1d11fcf58b6040c9b320365e3}{%
+           family={Davis},
+           familyi={D\bibinitperiod},
+           given={Freddie\bibnamedelima J.},
+           giveni={F\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{fullhash}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{fullhashraw}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{bibnamehash}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{authorbibnamehash}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{authornamehash}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{authorfullhash}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \strng{authorfullhashraw}{79cf1d53d04bdd2f33974b1a1f1ecfc3}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Reliability Engineering \& System Safety}
+      \field{number}{1}
+      \field{title}{Latin hypercube sampling and the propagation of uncertainty in analyses of complex systems}
+      \field{volume}{81}
+      \field{year}{2003}
+      \field{pages}{23\bibrangedash 69}
+      \range{pages}{47}
+      \verb{doi}
+      \verb 10.1016/S0951-8320(03)00058-9
+      \endverb
+    \endentry
+    \entry{ImanConover1979}{article}{}{}
+      \name{author}{2}{}{%
+        {{un=0,uniquepart=base,hash=44afe2babadf58e1b8dfd7409b406e2b}{%
+           family={Iman},
+           familyi={I\bibinitperiod},
+           given={Ronald\bibnamedelima L.},
+           giveni={R\bibinitperiod\bibinitdelim L\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f9f4256bee518e284db8e54994e5dd48}{%
+           family={Conover},
+           familyi={C\bibinitperiod},
+           given={W.\bibnamedelimi J.},
+           giveni={W\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{fullhash}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{fullhashraw}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{bibnamehash}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{authorbibnamehash}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{authornamehash}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{authorfullhash}{a4e4be015b17131982de6cd1d0d5645f}
+      \strng{authorfullhashraw}{a4e4be015b17131982de6cd1d0d5645f}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Technometrics}
+      \field{number}{4}
+      \field{title}{The use of the rank transform in regression}
+      \field{volume}{21}
+      \field{year}{1979}
+      \field{pages}{499\bibrangedash 509}
+      \range{pages}{11}
+      \verb{doi}
+      \verb 10.1080/00401706.1979.10489820
+      \endverb
+    \endentry
     \entry{Baugh2024}{report}{}{}
       \name{author}{7}{}{%
         {{un=0,uniquepart=base,hash=c079ac03ceee2e38f96963492a267a23}{%
@@ -2317,8 +2397,8 @@
       \strng{authornamehash}{a0c9a18295a05fbf7662daef53ee0db7}
       \strng{authorfullhash}{a0c9a18295a05fbf7662daef53ee0db7}
       \strng{authorfullhashraw}{a0c9a18295a05fbf7662daef53ee0db7}
-      \field{sortinit}{7}
-      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2653,8 +2733,8 @@
       \strng{authornamehash}{60687f0db553127521769061a9cf93f1}
       \strng{authorfullhash}{60687f0db553127521769061a9cf93f1}
       \strng{authorfullhashraw}{60687f0db553127521769061a9cf93f1}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -2698,8 +2778,8 @@
       \strng{authornamehash}{4e6eada38fb231430ae537a23e64f1a4}
       \strng{authorfullhash}{4181c89681f6c7a77e2486faaf202b6f}
       \strng{authorfullhashraw}{4181c89681f6c7a77e2486faaf202b6f}
-      \field{sortinit}{8}
-      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{sortinit}{9}
+      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -3071,8 +3151,8 @@
       \strng{authornamehash}{3095595734d0db0ecfa1a9ba2107538a}
       \strng{authorfullhash}{3095595734d0db0ecfa1a9ba2107538a}
       \strng{authorfullhashraw}{3095595734d0db0ecfa1a9ba2107538a}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}
@@ -3111,8 +3191,8 @@
       \strng{authornamehash}{e699ba5bc03b19d99d12e4f0c08d1e04}
       \strng{authorfullhash}{e699ba5bc03b19d99d12e4f0c08d1e04}
       \strng{authorfullhashraw}{e699ba5bc03b19d99d12e4f0c08d1e04}
-      \field{sortinit}{9}
-      \field{sortinithash}{0a5ebc79d83c96b6579069544c73c7d4}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
       \field{extradatescope}{labelyear}
       \field{labeldatesource}{}
       \field{labelnamesource}{author}

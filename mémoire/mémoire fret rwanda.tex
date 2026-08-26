@@ -1055,6 +1055,19 @@
 	
 	Finalement, on relance le modèle complet 20 fois en utilisant les différentes valeurs des paramètres calculées via l'hypercube latin.
 	
+	\medskip
+	Les vingt exécutions livrent, pour chaque tirage, un jeu de valeurs d'entrée et un jeu d'indicateurs de sortie. Il reste à relier les seconds aux premières. Comme l'hypercube latin tire chaque paramètre indépendamment des autres, la variation d'une sortie peut être attribuée à chaque entrée prise séparément. Nous mesurons cette influence par la corrélation de rang de Spearman entre le multiplicateur tiré pour un paramètre et la valeur de la sortie considérée, calculée sur l'ensemble des tirages. Ce coefficient est la corrélation de Pearson appliquée aux rangs des observations plutôt qu'à leurs valeurs~: il vaut $+1$ si la sortie croît systématiquement avec le paramètre, $-1$ si elle décroît systématiquement, et zéro en l'absence de relation monotone.
+	
+	Ce choix suit la pratique courante de l'analyse de sensibilité par échantillonnage, où les indices fondés sur les rangs sont l'outil usuel d'exploitation d'un plan par hypercube latin \parencite{HeltonDavis2003}, à la suite des travaux de \cite{ImanConover1979} sur la transformation par les rangs. Trois raisons le justifient ici.
+	
+	D'abord, les relations entre un paramètre et une sortie n'ont aucune raison d'être linéaires. La chaîne de calcul enchaîne une fonction de friction exponentielle (équation~\ref{eq:friction}), un équilibrage itératif de Furness (section~\ref{subsubsec:furness}) et une affectation au plus court chemin sur le réseau~; le tonnage s'obtient lui-même par division par un taux de conversion, opération convexe dont nous relevons plus loin les effets sur l'asymétrie des distributions. Une corrélation de Pearson mesurerait la qualité d'un ajustement linéaire qui n'a pas lieu d'être et sous-estimerait des dépendances pourtant systématiques. Spearman ne suppose que la monotonie, hypothèse nettement plus faible~: il demande seulement que la sortie aille toujours dans le même sens lorsque le paramètre augmente, sans rien imposer sur la forme de la relation.
+	
+	Ensuite, les indicateurs suivis n'ont ni les mêmes unités — tonnes-kilomètres, RWF, kilomètres, part — ni les mêmes ordres de grandeur. Le passage aux rangs efface ces échelles et rend les coefficients directement comparables d'une case à l'autre de la figure~\ref{fig:sens_heatmap}.
+	
+	Enfin, vingt tirages restent un effectif modeste. Un coefficient calculé sur les valeurs brutes y serait vulnérable à un tirage extrême, qui suffirait à dominer la covariance~; travailler sur les rangs borne l'influence de chaque observation et rend l'indice plus robuste à ce petit nombre.
+	
+	Cet indice mesure un effet marginal, celui d'un paramètre pris isolément, et non les interactions entre paramètres, que seule une décomposition de la variance de type Sobol permettrait d'isoler, au prix d'un nombre d'exécutions hors de portée ici. Une corrélation nulle signale donc l'absence d'effet propre monotone, et non l'absence de tout effet.
+	
 	
 	\newpage
 	
@@ -1407,7 +1420,7 @@
 	\subsection{Influence différenciée des paramètres}
 	\label{subsec:parametre_friction}
 
-	La figure~\ref{fig:sens_heatmap} croise les dix-sept paramètres et les six sorties qui varient, chaque case portant la corrélation de rang entre l'un et l'autre.
+	La figure~\ref{fig:sens_heatmap} croise les dix-sept paramètres et les six sorties qui varient, chaque case portant la corrélation de rang de Spearman entre l'un et l'autre, indice dont la construction et la justification sont exposées en section~\ref{subsec:sensibilite}.
 
 	\begin{figure}[H]
 		\centering
@@ -1504,13 +1517,28 @@
 
 	Pour réussir à finaliser l'étude dans le cadre temporel et de possibilité pratique qu'était le notre, un certain nombre de choix de simplication ont été effectués, représentant des limites reconnues de l'étude ci-présente. Elles peuvent être regroupées en trois familles~: celles qui touchent à la représentation du réseau et des points d'échange, celles qui touchent à l'agrégation des grandeurs économiques, et celles qui touchent au comportement de transport et à l'affectation des flux.
 
-	\paragraph{Représentation du réseau et des points d'échange.} Le graphe du réseau routier (section~\ref{subsubsec:reseau_routier}) est non orienté~: chaque route est supposée praticable dans les deux sens, ce qui réduit le nombre de calculs mais ignore d'éventuelles asymétries de circulation. Tous les entrepôts sont des points OD, si bien que le modèle ne peut pas représenter un changement modal à l'entrée d'une ville. 
+	\paragraph{Représentation du réseau et des points d'échange.}
+	\begin{itemize}
+		\item Le graphe du réseau routier (section~\ref{subsubsec:reseau_routier}) est non orienté~: chaque route est supposée praticable dans les deux sens, ce qui réduit le nombre de calculs mais ignore d'éventuelles asymétries de circulation.
+		\item Tous les entrepôts sont des points OD, si bien que le modèle ne peut pas représenter un changement modal à l'entrée d'une ville.
+	\end{itemize}
 
-	\paragraph{Agrégation économique et sectorielle.} L'excédent net d'un entrepôt $i$ est calculé comme $O_i - D_i$ (équation~\ref{eq:prod_i}), ce qui suppose une homogénéité des biens et services à l'intérieur de chaque secteur, discutable à ce niveau d'agrégation. La matrice des coefficients techniques $A$ est supposée identique pour tous les entrepôts, faute d'information sur l'hétérogénéité des systèmes techniques par point OD (section~\ref{subsubsec:affectation_conso}). Cette hypothèse pourrait éventuellement poser problème pour la représentation de Kigali dont on peut supposer que les technologies utilisées soient plus modernes et donc différentes de celles du reste du pays. Les taux d'exposition au commerce extérieur $\tau_{E,s}$ et $\tau_{M,s}$ sont eux aussi appliqués uniformément à l'ensemble des localisations, faute de données plus précises (section~\ref{subsubsec:decompo_comex}). C'est le cas également du prix du temps (équation~\ref{eq:cout_temps}). Enfin, le RWI utilisé pour pondérer l'allocation de la production locale (section~\ref{subsubsec:affectation_prod}) est utilisé comme un proxy grossier de la productivité.
+	\paragraph{Agrégation économique et sectorielle.}
+	\begin{itemize}
+		\item L'excédent net d'un entrepôt $i$ est calculé comme $O_i - D_i$ (équation~\ref{eq:prod_i}), ce qui suppose une homogénéité des biens et services à l'intérieur de chaque secteur, discutable à ce niveau d'agrégation.
+		\item La matrice des coefficients techniques $A$ est supposée identique pour tous les entrepôts, faute d'information sur l'hétérogénéité des systèmes techniques par point OD (section~\ref{subsubsec:affectation_conso}). Cette hypothèse pourrait éventuellement poser problème pour la représentation de Kigali dont on peut supposer que les technologies utilisées soient plus modernes et donc différentes de celles du reste du pays.
+		\item Les taux d'exposition au commerce extérieur $\tau_{E,s}$ et $\tau_{M,s}$ sont eux aussi appliqués uniformément à l'ensemble des localisations, faute de données plus précises (section~\ref{subsubsec:decompo_comex}). C'est le cas également du prix du temps (équation~\ref{eq:cout_temps}).
+		\item Le RWI utilisé pour pondérer l'allocation de la production locale (section~\ref{subsubsec:affectation_prod}) est utilisé comme un proxy grossier de la productivité.
+	\end{itemize}
 
-	\paragraph{Comportement de transport et affectation des flux.} Le choix du mode et du chemin optimal résulte de la seule minimisation du coût généralisé (section~\ref{subsubsec:cout_generalise}) et ne dépend pas du secteur transporté, alors que les exigences de manutention et la valeur du temps diffèrent en pratique d'un bien à l'autre. Ce coût ne couvre pas non plus l'ensemble des coûts logistiques~: le coût de détention du stock en transit, par exemple, n'entre pas dans le critère qui détermine l'itinéraire. Enfin, la congestion, telle que modélisée par la fonction BPR (section~\ref{subsubsec:BPR}), agit sur les temps de parcours et donc sur le choix d'itinéraire, mais pas sur les volumes échangés~: aucune rétroaction ne relie la congestion à la demande fixée en amont par la distribution gravitaire. On est ici dans le cas d'un point fixe qui nécessiterait de procéder par itération de l'ensemble du modèle, ce qui est une opération particulièrement couteuse en temps de calcul et sans garanties de convergences.
+	\paragraph{Comportement de transport et affectation des flux.}
+	\begin{itemize}
+		\item Le choix du mode et du chemin optimal résulte de la seule minimisation du coût généralisé (section~\ref{subsubsec:cout_generalise}) et ne dépend pas du secteur transporté, alors que les exigences de manutention et la valeur du temps diffèrent en pratique d'un bien à l'autre.
+		\item Ce coût ne couvre pas non plus l'ensemble des coûts logistiques~: le coût de détention du stock en transit, par exemple, n'entre pas dans le critère qui détermine l'itinéraire.
+		\item La congestion, telle que modélisée par la fonction BPR (section~\ref{subsubsec:BPR}), agit sur les temps de parcours et donc sur le choix d'itinéraire, mais pas sur les volumes échangés~: aucune rétroaction ne relie la congestion à la demande fixée en amont par la distribution gravitaire. On est ici dans le cas d'un point fixe qui nécessiterait de procéder par itération de l'ensemble du modèle, ce qui est une opération particulièrement couteuse en temps de calcul et sans garanties de convergences.
+	\end{itemize}
 	
-	\section{Extensions futures et recommandations}
+	\section{Extensions futures}
 	
 	Comme nous l'avons déjà dit, ce travail est un proof of concept produit pour entamer un travail de réflexion au sein de l'équipe GEMMES de l'AFD \footnote{voir annexe \ref{subsubsec:annexe_afd_gemmes} pour une présentation de l'équipe GEMMES et de l'AFD} des méthodes de modélisation du fret et des impacts des chocs environnementaux sur ce dernier. Il appelle donc bien sûr à être poursuivi par un certain nombre d'extensions futures. On peut cependant, d'or et déjà tirer de ce travail un certain nombre d'enseignements.
 	
@@ -1600,19 +1628,11 @@
 	\newpage
 	
 	\chapter{Conclusion}
-	
-	\chapter{Conclusion}
 
-Ce mémoire est parti d'un constat simple : si l'on veut évaluer finement la vulnérabilité d'une économie aux catastrophes naturelles, il faut représenter explicitement le transport, parce qu'il est un service de base au sens de Sraffa et que tout choc qui l'affecte se propage à l'ensemble du système productif. Cette exigence se heurte, dans un pays comme le Rwanda, à l'absence de toute matrice origine-destination de fret observée.
+Pour conclure, ce mémoire s'inscrit dans un projet de réflexion sur une modélisation spatialisée du fret à destination de l'équipe GEMMES de l'AFD afin de mieux pouvoir estimer les impacts de chocs écologiques et notamment hydrologiques sur les économies des pays partenaires de l'AFD. L'exemple du Rwanda a été utilisé pour illustrer le modèle.
 
-La réponse proposée est un modèle de fret spatialisé à quatre étapes, entièrement reconstruit à partir de sources publiques : un réseau routier OSM de 28\,145 nœuds et 35\,594 arêtes, 91 zones origine-destination issues d'un pavage de Voronoï pondéré par la population, une matrice de comptabilité sociale nationale spatialisée par la population et le RWI, un modèle gravitaire doublement contraint équilibré par l'algorithme de Furness, et une affectation à l'équilibre de Wardrop tenant compte de la congestion. Le modèle produit 11,5 millions de tonnes et 1,39 milliard de tonnes-kilomètres par an, pour un coût de transport de 61,3 milliards de RWF.
+ Pour se faire, un modèle en 4 étapes a été utilisé. Il est composé d'une affectation de la production et de la consommation via une régionalisation des flux de la SAM en proportion de la population, de l'emploi et de la richesse relative des régions modélisées, d'une distribution via un modèle gravitaire doublement contraint et d'un choix modale et d'assignation du trafic via le choix du plus court chemin au sein d'un graphe multimodale représentant le réseau rwandais, complété par la prise en compte de la congestion sur certaines routes.
 
-Trois résultats se dégagent. D'abord, la géographie du fret rwandais est commandée par les importations : trois des cinq premières zones du pays en tonnage traité sont des postes frontières, et la distance moyenne d'acheminement de 121 km, élevée au regard des dimensions du pays, s'explique par les trajets frontière-capitale. Ensuite, la vulnérabilité du réseau est très inégalement répartie : une crue centennale ne coupant que 0,59\,\% du linéaire isole intégralement le district de Bugesera, qui abrite pourtant une zone économique spéciale et le futur aéroport international, tandis que 57,7\,\% du tonnage ne subit qu'un surcoût inférieur à 10\,\%. Enfin, l'analyse de criticité fait apparaître une vulnérabilité structurelle indépendante de tout aléa : la liaison Ngoma--Rusumo, débouché du corridor central vers Dar es Salaam, présente une criticité douze fois supérieure à celle de l'axe suivant, faute d'itinéraire de substitution.
-
-Les tests de sensibilité délimitent la portée de ces résultats. Le classement des axes critiques et la structure spatiale des flux résistent à une variation de $\pm$30\,\% de dix-sept paramètres ; les montants monétaires, eux, varient dans une fourchette de plus de quarante points. Le modèle dit donc de façon fiable \emph{où} sont les fragilités du réseau, et de façon beaucoup plus incertaine \emph{combien} elles coûtent.
-
-Ce travail reste un \emph{proof of concept}. Sa valeur ne tient pas aux chiffres qu'il produit, encore tributaires de paramètres non calibrés, mais à la chaîne méthodologique qu'il rend disponible : une brique de fret spatialisée, sectorielle et sensible aux ruptures d'infrastructure, prête à être couplée au modèle ESTEEM pour estimer les effets de court terme d'un choc localisé sur la production et sur l'inflation. C'est ce couplage, plus que le raffinement du modèle de transport pris isolément, qui donnera à cet exercice sa portée macroéconomique.
-	
 	\newpage
 	
 	\chapter*{Bibliographie}
@@ -1631,6 +1651,18 @@ Ce travail reste un \emph{proof of concept}. Sa valeur ne tient pas aux chiffres
 		\newpage
 		
 		\chapter{Annexes}
+		
+		\section{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}
+		\label{subsubsec:annexe_afd_gemmes}
+		
+		\paragraph{L'Agence Française de Développement}
+		L'Agence Française de Développement (AFD) est un établissement public français qui met en œuvre la politique de développement et de solidarité internationale de la France. Elle finance, accompagne et accélère des projets en faveur du climat, de la biodiversité, de la paix, de l'éducation, de la santé ou encore de l'égalité femmes-hommes, dans les pays en développement, émergents et dans les Outre-mer français. Le groupe AFD, qui inclut sa filiale Proparco dédiée au secteur privé, intervient dans plus d'une centaine de pays via un réseau d'agences locales.
+		
+		\paragraph{Le département Économie (ECO)}
+		Au sein de l'AFD, le département Économie (ECO) réunit les chercheur.euses de l'institution chargés de produire des analyses, des recherches et des outils d'aide à la décision pour éclairer les stratégies de financement du développement. Ce département contribue à la fois à la recherche académique publiée par l'AFD (notes techniques, papiers de recherche, revue \textit{Question de Développement}) et à l'appui direct aux équipes opérationnelles, en apportant une expertise économique sur des sujets tels que le commerce international, les infrastructures, la macroéconomie ou l'évaluation d'impact des projets financés.
+		
+		\paragraph{L'équipe GEMMES}
+		Le programme GEMMES (General Monetary and Multisectoral Macrodynamics for the Ecological Shift) est une initiative de recherche du département ECO consacrée à la modélisation économique des interactions entre systèmes climatiques, environnementaux et économiques. L'équipe développe des modèles quantitatifs (GEMMES et ESTEEM), principalement dans une perspective post-keynésienne de type SFC, permettant une analyse macrofinancière des impacts du changement climatique et des politiques d'adaptation ou d'atténuation dans les pays partenaires de l'AFD. 
 
 		\section{Décomposition des routes non reliées à la composante géante}
 		\label{subsubsec:annexe_composante_geante}
@@ -1829,18 +1861,6 @@ Ce travail reste un \emph{proof of concept}. Sa valeur ne tient pas aux chiffres
 
 		\paragraph{Tests de sensibilité}
 		Le sous-dossier \texttt{sensibilite/} contient un répertoire par tirage de l'hypercube latin (\texttt{lhs\_01} à \texttt{lhs\_20}), chacun reproduisant l'intégralité des exports ci-dessus pour son jeu de paramètres. Le fichier \texttt{plan\_lhs.csv} liste, pour chaque tirage \texttt{lhs\_XX}, les multiplicateurs appliqués aux paramètres $\beta$ (fonction de friction), aux valeurs au tonne par secteur et à la valeur du temps.
-
-		\section{Présentation de l'AFD, du département ECO et de l'équipe GEMMES}
-		\label{subsubsec:annexe_afd_gemmes}
-
-		\paragraph{L'Agence Française de Développement}
-		L'Agence Française de Développement (AFD) est un établissement public français qui met en œuvre la politique de développement et de solidarité internationale de la France. Elle finance, accompagne et accélère des projets en faveur du climat, de la biodiversité, de la paix, de l'éducation, de la santé ou encore de l'égalité femmes-hommes, dans les pays en développement, émergents et dans les Outre-mer français. Le groupe AFD, qui inclut sa filiale Proparco dédiée au secteur privé, intervient dans plus d'une centaine de pays via un réseau d'agences locales.
-
-		\paragraph{Le département Économie (ECO)}
-		Au sein de l'AFD, le département Économie (ECO) réunit les chercheur.euses de l'institution chargés de produire des analyses, des recherches et des outils d'aide à la décision pour éclairer les stratégies de financement du développement. Ce département contribue à la fois à la recherche académique publiée par l'AFD (notes techniques, papiers de recherche, revue \textit{Question de Développement}) et à l'appui direct aux équipes opérationnelles, en apportant une expertise économique sur des sujets tels que le commerce international, les infrastructures, la macroéconomie ou l'évaluation d'impact des projets financés.
-
-		\paragraph{L'équipe GEMMES}
-		Le programme GEMMES (Gérer les Enjeux Macroéconomiques et de Modélisation Environnementale et Sociale) est une initiative de recherche du département ECO consacrée à la modélisation économique des interactions entre systèmes climatiques, environnementaux et économiques. L'équipe développe des modèles quantitatifs permettant d'évaluer les impacts macroéconomiques du changement climatique et des politiques d'adaptation ou d'atténuation dans les pays partenaires de l'AFD. 
 
 \end{document}
 

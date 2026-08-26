@@ -385,6 +385,11 @@ INPUT ./images/rupt_carte_reseau_degrade.png
 INPUT ./images/rupt_carte_reseau_degrade.png
 INPUT ./images/rupt_carte_reseau_degrade.png
 INPUT ./images/rupt_carte_reseau_degrade.png
+INPUT ./images/rupt_carte_criticite_aretes.png
+INPUT ./images/rupt_carte_criticite_aretes.png
+INPUT ./images/rupt_carte_criticite_aretes.png
+INPUT ./images/rupt_carte_criticite_aretes.png
+INPUT ./images/rupt_carte_criticite_aretes.png
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam10.tfm
@@ -393,11 +398,6 @@ INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam5
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm10.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm7.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm5.tfm
-INPUT ./images/rupt_carte_criticite_aretes.png
-INPUT ./images/rupt_carte_criticite_aretes.png
-INPUT ./images/rupt_carte_criticite_aretes.png
-INPUT ./images/rupt_carte_criticite_aretes.png
-INPUT ./images/rupt_carte_criticite_aretes.png
 INPUT ./images/sens_enveloppe_indicateurs.png
 INPUT ./images/sens_enveloppe_indicateurs.png
 INPUT ./images/sens_enveloppe_indicateurs.png
@@ -408,11 +408,6 @@ INPUT ./images/sens_heatmap_indices.png
 INPUT ./images/sens_heatmap_indices.png
 INPUT ./images/sens_heatmap_indices.png
 INPUT ./images/sens_heatmap_indices.png
-INPUT ./images/sens_tornado_tkm.png
-INPUT ./images/sens_tornado_tkm.png
-INPUT ./images/sens_tornado_tkm.png
-INPUT ./images/sens_tornado_tkm.png
-INPUT ./images/sens_tornado_tkm.png
 INPUT ./images/sens_divergence_sectorielle.png
 INPUT ./images/sens_divergence_sectorielle.png
 INPUT ./images/sens_divergence_sectorielle.png
@@ -454,6 +449,11 @@ INPUT ./images/carte_population_zones.png
 INPUT ./images/carte_population_zones.png
 INPUT ./images/carte_population_zones.png
 INPUT ./images/carte_population_zones.png
+INPUT ./images/carte_districts.png
+INPUT ./images/carte_districts.png
+INPUT ./images/carte_districts.png
+INPUT ./images/carte_districts.png
+INPUT ./images/carte_districts.png
 INPUT ./images/ref_offre_composition_tonnes.png
 INPUT ./images/ref_offre_composition_tonnes.png
 INPUT ./images/ref_offre_composition_tonnes.png
