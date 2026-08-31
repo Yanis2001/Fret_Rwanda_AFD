@@ -1132,7 +1132,8 @@ cat("  ✓ graphique_emissions_par_vehicule.png\n\n")
 cat("── Carte des districts administratifs ──────────────────────────────\n")
 
 districts_gadm <- tryCatch({
-  geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
+  # Frontières de districts du pays étudié (code ISO3 défini dans 00_parametres.R)
+  geodata::gadm(country = PAYS_ISO3, level = 2, path = tempdir()) %>%
     st_as_sf() %>%
     st_transform(crs = 32735) %>%
     select(district = NAME_2, province = NAME_1, geometry)

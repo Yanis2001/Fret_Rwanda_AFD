@@ -1373,6 +1373,24 @@ PROP_ROUTES_INONDEES_RASTER <- 1
 # Changer la graine = simuler un autre tirage du même événement.
 SEED_INONDATION <- 42
 
+# ── Valorisation des flux interrompus par une déconnexion ─────────────────────
+# Quand une perturbation coupe le dernier itinéraire entre deux zones, il n'y a
+# plus de surcoût de transport à mesurer : la marchandise ne circule tout
+# simplement plus. Le modèle chiffre alors ces flux à leur valeur EX ANTE, en
+# convertissant les tonnages de la paire origine-destination en RWF secteur par
+# secteur avec VALEUR_RWF_PAR_TONNE (les valeurs unitaires varient d'un facteur
+# 30 entre le ciment et le café : une valeur moyenne unique fausserait le
+# résultat selon la composition sectorielle de la liaison coupée).
+#
+# Ce paramètre est la part de cette valeur effectivement comptée comme perdue :
+#   1.0 → perte totale (hypothèse par défaut : sur la durée de l'événement,
+#         aucune substitution ne remplace le flux interrompu) ;
+#   < 1 → perte partielle, si l'on suppose qu'une fraction de la marchandise
+#         est réapprovisionnée autrement (stocks, production locale, informel).
+# Il n'agit que sur les paires classées "deconnecte" : les paires simplement
+# reroutées restent comptées en surcoût de transport, jamais en perte de valeur.
+PART_VALEUR_PERDUE_DECONNEXION <- 1.0
+
 
 cat("✓ Paramètres globaux chargés\n\n")
 
@@ -1604,6 +1622,20 @@ PALETTE_EMISSIONS <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
 # toujours accompagnée de sa légende. Centralisée ici pour que la carte des
 # arêtes et celle des zones partagent exactement le même code couleur.
 PALETTE_ROBUSTESSE <- c("#1A9850", "#91CF60", "#FEE08B", "#FC8D59", "#D73027")
+
+# Palette des deux POSTES DE COÛT d'un scénario de rupture (viz_vulnerabilite.R).
+# Les deux postes ne sont pas les degrés d'une même échelle mais deux mécanismes
+# différents, d'où deux teintes franchement distinctes et non un dégradé :
+#   orange — le transport a lieu, par un itinéraire plus long et plus cher ;
+#   noir   — le transport n'a plus lieu du tout, et la marchandise est comptée à
+#            sa valeur ex ante. Même code couleur que la classe « Déconnectée »
+#            des cartes de vulnérabilité, pour que l'œil fasse le lien.
+# Les noms doivent correspondre exactement aux libellés de la colonne poste de
+# bilan_couts (05_vulnerabilite.R).
+PALETTE_POSTE_COUT <- c(
+  "Report d'itinéraire" = "#FD8D3C",
+  "Flux interrompus"    = "#000000"
+)
 
 # ── Secteurs économiques (dans l'ordre de SECTEURS) ───────────────────────────
 # Centralisé ici pour garantir que chaque secteur a toujours la même couleur

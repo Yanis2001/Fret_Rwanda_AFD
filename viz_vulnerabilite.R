@@ -10,6 +10,7 @@
 #     CENTRE_PERTURBATION_*, RAYON_PERTURBATION_M, SEUIL_RISQUE_RASTER)
 #   → DUREE_JOURS ou TYPE_EVENEMENT ont changé
 #   → N_TOP_ARETES_CRITIQUES a changé
+#   → PART_VALEUR_PERDUE_DECONNEXION a changé (valorisation des flux coupés)
 #   → les flux de fret (persist_flux_fret.rds) ont changé
 #     → dans ce cas relancer aussi 03_transport.R puis 04_affectation.R
 #       avant 05_vulnerabilite.R
@@ -119,6 +120,11 @@ od_ref_map <- setNames(
 
 surcout_moyen_detour <- surcout_pondere_arete / pmax(volume_detourne_arete, 1)
 
+# Les coûts produits par 05_vulnerabilite.R sont des ÉQUIVALENTS ANNUELS : ils
+# supposent le réseau dégradé toute l'année. Ce facteur les ramène à la durée
+# réelle de l'événement, en supposant le fret réparti uniformément dans l'année.
+prorata_evenement <- DUREE_JOURS / 365
+
 ################################################################################
 # PARTIE IX.5 — CARTES ET EXPORTS
 #
@@ -127,6 +133,9 @@ surcout_moyen_detour <- surcout_pondere_arete / pmax(volume_detourne_arete, 1)
 #   Carte B — Arêtes critiques : classement des segments les plus sensibles
 #   Carte C — Surcoûts par zone : gradient de vulnérabilité économique
 #   Graphique — Distribution des surcoûts relatifs par type de route
+#   Graphique — Décomposition du coût par zone : report d'itinéraire (le fret
+#               circule, plus cher) vs flux interrompus (le fret ne circule plus,
+#               valorisé au prix ex ante des marchandises)
 #   Carte D — Nouvelles routes 
 #   Graphique — Report modal.
 ################################################################################
@@ -154,7 +163,7 @@ N_ARETES_AFFICHEES <- min(200, nrow(criticite_df))
 aretes_critiques_sf <- aretes_reseau_sf %>%
   filter(arete_idx %in% criticite_df$arete_idx[1:N_ARETES_AFFICHEES]) %>%
   left_join(
-    criticite_df %>% select(arete_idx, rang, surcout_pondere_k),
+    criticite_df %>% select(arete_idx, rang, surcout_pondere_k, valeur_perdue_k),
     by = "arete_idx"
   )
 
@@ -165,13 +174,24 @@ impact_par_zone_sf <- reseau %>%
   st_as_sf() %>%
   left_join(
     surcouts_par_zone %>%
-      select(Zone, pct_surcout_moyen, n_deconnexions, surcout_total_rwf),
+      select(Zone, pct_surcout_moyen, n_deconnexions, surcout_total_rwf,
+             report_pondere_rwf, valeur_perdue_rwf, cout_total_rwf,
+             tonnage_perdu_t),
     by = c("warehouse_name" = "Zone")
   ) %>%
   mutate(
     pct_surcout_moyen = replace_na(pct_surcout_moyen, 0),
     surcout_total_rwf = replace_na(surcout_total_rwf, 0),
     n_deconnexions    = replace_na(n_deconnexions, 0L),
+
+    # Postes de coût pondérés par les tonnages, en RWF par an (voir
+    # 05_vulnerabilite.R). Contrairement à surcout_total_rwf, qui cumule des
+    # coûts par tonne et ne sert qu'à classer les zones, ceux-ci se lisent comme
+    # des montants et s'additionnent.
+    report_pondere_rwf = replace_na(report_pondere_rwf, 0),
+    valeur_perdue_rwf  = replace_na(valeur_perdue_rwf,  0),
+    cout_total_rwf     = replace_na(cout_total_rwf,     0),
+    tonnage_perdu_t    = replace_na(tonnage_perdu_t,    0),
 
     # type simplifié de la zone ("Frontière" vs "Ville"), pour la légende
     # "Type" utilisée quand aucun surcoût n'est disponible (00_parametres.R).
@@ -398,12 +418,28 @@ carte_criticite <- fond_carte() +
   ) +
 
   tm_title(paste0("Arêtes critiques du réseau — ", NOM_SCENARIO,
-                  "\nTop ", N_ARETES_AFFICHEES, " par surcoût pondéré")) +
+                  "\nTop ", N_ARETES_AFFICHEES, " par surcoût de report d'itinéraire")) +
   tm_credits(
-    note_lecture(sprintf(
-      "le tronçon classé n°1 génère, à lui seul coupé, un surcoût pondéré de %s (milliers RWF×tonnes).",
-      format(round(aretes_critiques_sf$surcout_pondere_k[which.min(aretes_critiques_sf$rang)]), big.mark = " ")
-    )),
+    note_lecture(local({
+      i_premier <- which.min(aretes_critiques_sf$rang)
+      phrase <- sprintf(
+        "le tronçon classé n°1 génère, à lui seul coupé, un surcoût de report d'itinéraire de %s milliers de RWF par an.",
+        format(round(aretes_critiques_sf$surcout_pondere_k[i_premier]), big.mark = " ")
+      )
+      # Le classement n'ordonne que le report d'itinéraire. Quand la coupure
+      # déconnecte en plus des paires, leur coût n'est pas dans ce rang : on le
+      # signale explicitement pour éviter de lire la carte comme un classement
+      # du coût économique complet.
+      perte_k <- aretes_critiques_sf$valeur_perdue_k[i_premier]
+      if (!is.na(perte_k) && perte_k > 0) {
+        phrase <- paste0(
+          phrase,
+          sprintf(" Sa coupure interrompt en outre des flux valant %s milliers de RWF par an, coût qui n'entre pas dans ce classement.",
+                  format(round(perte_k), big.mark = " "))
+        )
+      }
+      phrase
+    })),
     position = tm_pos_out("center", "bottom", "left", "top"),
     size     = 0.65
   ) +
@@ -468,12 +504,24 @@ carte_vulnerabilite <- fond_carte() +
                   NOM_SCENARIO, " — Durée estimée : ",
                   DUREE_JOURS, " jours")) +
   tm_credits(
-    note_lecture(sprintf(
-      "la zone %s supporte le plus fort surcoût total, %s RWF sur les %d jours du scénario.",
-      str_remove(impact_par_zone_sf$warehouse_name[which.max(impact_par_zone_sf$surcout_total_rwf)], " - .*"),
-      format(round(max(impact_par_zone_sf$surcout_total_rwf)), big.mark = " "),
-      DUREE_JOURS
-    )),
+    note_lecture(local({
+      # Zone au coût économique le plus élevé, tous postes confondus. On sépare
+      # les deux composantes dans la phrase : sans cette ventilation, un montant
+      # élevé peut aussi bien signaler des détours coûteux qu'un enclavement.
+      i_max  <- which.max(impact_par_zone_sf$cout_total_rwf)
+      report <- impact_par_zone_sf$report_pondere_rwf[i_max] * prorata_evenement
+      perte  <- impact_par_zone_sf$valeur_perdue_rwf[i_max]  * prorata_evenement
+      sprintf(
+        paste0("la zone %s supporte le coût le plus élevé sur les %d jours du scénario : ",
+               "%s M RWF, dont %s M RWF de report d'itinéraire et %s M RWF de flux ",
+               "interrompus (marchandises valorisées à leur prix ex ante)."),
+        str_remove(impact_par_zone_sf$warehouse_name[i_max], " - .*"),
+        DUREE_JOURS,
+        format(round((report + perte) / 1e6, 1), big.mark = " "),
+        format(round(report / 1e6, 1), big.mark = " "),
+        format(round(perte  / 1e6, 1), big.mark = " ")
+      )
+    })),
     position = tm_pos_out("center", "bottom", "left", "top"),
     size     = 0.65
   ) +
@@ -556,6 +604,88 @@ ggsave(
   g_surcouts, width = 11, height = 7.2, dpi = 300
 )
 cat("  ✓ Graphique sauvegardé\n\n")
+
+# ── GRAPHIQUE : Décomposition du coût de la rupture par zone ──────────────────
+# Le graphique précédent ne montre que les paires reroutées : les paires
+# déconnectées, qui n'ont pas de surcoût relatif définissable, en sont absentes
+# par construction. Celui-ci rétablit l'équilibre en affichant côte à côte les
+# deux mécanismes par lesquels une rupture coûte de l'argent :
+#   • report d'itinéraire — le fret circule toujours, plus cher et plus loin ;
+#   • flux interrompus    — le fret ne circule plus, et vaut son prix ex ante
+#                           (tonnages convertis en RWF secteur par secteur).
+# Les deux postes sont disjoints par construction (une paire est reroutée OU
+# déconnectée), l'empilement se lit donc bien comme un total.
+cat("  Génération du graphique de décomposition des coûts...\n")
+
+N_ZONES_DECOMPOSITION <- 15
+
+# Passage au format long : une ligne par (zone, poste), attendu par le fill de
+# ggplot. Les montants sont ramenés à la durée réelle de l'événement et exprimés
+# en millions de RWF, échelle lisible pour un scénario de quelques semaines.
+decomposition_zones <- surcouts_par_zone %>%
+  slice_max(cout_total_rwf, n = N_ZONES_DECOMPOSITION, with_ties = FALSE) %>%
+  transmute(
+    Zone = make.unique(str_remove(Zone, " - .*"), sep = " "),
+    `Report d'itinéraire` = report_pondere_rwf * prorata_evenement / 1e6,
+    `Flux interrompus`    = valeur_perdue_rwf  * prorata_evenement / 1e6
+  ) %>%
+  pivot_longer(
+    cols      = c(`Report d'itinéraire`, `Flux interrompus`),
+    names_to  = "poste",
+    values_to = "montant_m_rwf"
+  ) %>%
+  mutate(poste = factor(poste, levels = names(PALETTE_POSTE_COUT)))
+
+# Totaux nationaux, repris dans le sous-titre et la note de lecture.
+report_total_m  <- sum(surcouts_par_zone$report_pondere_rwf, na.rm = TRUE) *
+                   prorata_evenement / 1e6
+perte_totale_m  <- sum(surcouts_par_zone$valeur_perdue_rwf,  na.rm = TRUE) *
+                   prorata_evenement / 1e6
+cout_total_m    <- report_total_m + perte_totale_m
+part_perte_pct  <- if (cout_total_m > 0) 100 * perte_totale_m / cout_total_m else 0
+
+g_decomposition <- decomposition_zones %>%
+  # reorder() classe les zones par coût total croissant : combiné à
+  # coord_flip(), cela place la zone la plus touchée en haut du graphique.
+  ggplot(aes(x = reorder(Zone, montant_m_rwf, FUN = sum),
+             y = montant_m_rwf, fill = poste)) +
+  geom_col(width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = PALETTE_POSTE_COUT, name = "Poste de coût") +
+  scale_y_continuous(labels = scales::label_number(big.mark = " ")) +
+  labs(
+    title    = paste0("Coût de la rupture par zone — ", NOM_SCENARIO),
+    subtitle = paste0(
+      DESCRIPTION_SCENARIO, "\nDurée estimée : ", DUREE_JOURS, " jours · ",
+      "coût national ", format(round(cout_total_m, 1), big.mark = " "),
+      " M RWF, dont ", round(part_perte_pct), " % de flux interrompus"
+    ),
+    x        = NULL,
+    y        = paste0("Coût sur ", DUREE_JOURS, " jours (millions de RWF)"),
+    caption  = note_lecture(sprintf(
+      paste0("les %d zones affichées sont les plus coûteuses du scénario. La partie orange mesure le ",
+             "renchérissement du transport pour un fret qui circule toujours ; la partie noire mesure la ",
+             "valeur des marchandises qui ne circulent plus, faute d'itinéraire, chiffrée aux prix ex ante ",
+             "du modèle (%s)."),
+      N_ZONES_DECOMPOSITION,
+      if (PART_VALEUR_PERDUE_DECONNEXION == 1) "perte supposée totale"
+      else sprintf("perte supposée de %d %% de la valeur",
+                   round(100 * PART_VALEUR_PERDUE_DECONNEXION))
+    ), largeur_car = 132)
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title      = element_text(face = "bold"),
+    plot.subtitle   = element_text(color = "#555555"),
+    panel.grid.major.y = element_blank()
+  ) +
+  THEME_NOTE_LECTURE
+
+ggsave(
+  file.path(DIR_CARTES, paste0("graphique_decomposition_couts_", NOM_SCENARIO, ".png")),
+  g_decomposition, width = 11, height = 7.2, dpi = 300
+)
+cat("  ✓ Graphique de décomposition sauvegardé\n\n")
 
 
 # ==============================================================================

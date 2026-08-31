@@ -53,6 +53,33 @@ rm(.geo, .ent, .mm, .map, .fret, .od_cache)
 
 cat("✓ Objets chargés\n\n")
 
+# ── Valeur ex ante du fret porté par chaque paire origine-destination ─────────
+# Chaque secteur a sa propre valeur unitaire (VALEUR_RWF_PAR_TONNE, défini dans
+# 00_parametres.R) : convertir un tonnage en RWF impose donc de le faire secteur
+# par secteur AVANT de sommer, faute de quoi une liaison chargée de ciment et
+# une liaison chargée de café seraient chiffrées au même prix.
+#
+#   valeur_flux_zone[i, j] = Σ_s flux_gravitaire[[s]][i, j] × VALEUR_RWF_PAR_TONNE[s]
+#
+# Le résultat est la valeur marchande annuelle du fret circulant de i vers j en
+# situation normale (RWF/an). Elle sert en IX.3 et IX.4 à chiffrer les flux
+# qu'une déconnexion interrompt : quand il n'existe plus aucun itinéraire, il
+# n'y a plus de surcoût de transport à mesurer, mais une valeur de marchandises
+# qui ne circule plus.
+valeur_flux_zone <- Reduce(`+`, lapply(
+  SECTEURS_FRET,
+  function(s) flux_gravitaire[[s]] * VALEUR_RWF_PAR_TONNE[[s]]
+))
+
+# Contrôle de cohérence : la matrice de valeur doit avoir exactement la même
+# forme que la matrice de tonnages, puisque les deux sont indexées par les mêmes
+# identifiants de zone (id_origine / id_destination) dans tout ce script.
+stopifnot(identical(dim(valeur_flux_zone), dim(flux_tonnes_total)))
+
+cat("✓ Valeur ex ante des flux OD :",
+    round(sum(valeur_flux_zone) / 1e9, 1), "mrd RWF/an sur",
+    format(round(sum(flux_tonnes_total)), big.mark = " "), "tonnes\n\n")
+
 ################################################################################
 # PARTIE IX — ANALYSE DE VULNÉRABILITÉ ET DE CONTOURNEMENT
 #
@@ -814,7 +841,39 @@ od_compare <- od_compare %>%
     # ── Surcoût monétaire pondéré par le tonnage ──────────────────────────────
     # cout_rwf est un coût par tonne : multiplié par le tonnage, il donne le
     # surcoût annuel réellement supporté sur cette liaison.
-    surcout_pondere_rwf = surcout_absolu_rwf * tonnage_paire
+    # Ce poste ne concerne QUE les paires reroutées : une paire déconnectée a un
+    # surcoût NA (aucun itinéraire de remplacement à chiffrer) et son coût est
+    # porté par valeur_perdue_rwf ci-dessous.
+    surcout_pondere_rwf = surcout_absolu_rwf * tonnage_paire,
+
+    # ── Valeur ex ante du fret porté par la paire ─────────────────────────────
+    # Lue dans valeur_flux_zone (calculée en tête de script : tonnages sectoriels
+    # × VALEUR_RWF_PAR_TONNE du secteur). cbind() sélectionne cellule par cellule
+    # les couples (origine, destination) de la table, comme pour tonnage_paire.
+    valeur_flux_paire_rwf = valeur_flux_zone[cbind(id_origine, id_destination)],
+
+    # ── Tonnage et valeur des flux interrompus ────────────────────────────────
+    # Une paire déconnectée perd la totalité de son flux : il n'existe plus
+    # d'itinéraire, donc plus de transport possible pendant l'événement. On
+    # chiffre ce flux au prix ex ante des marchandises, pondéré par
+    # PART_VALEUR_PERDUE_DECONNEXION (00_parametres.R) pour permettre de tester
+    # une substitution partielle. Les paires reroutées ou inchangées valent 0 :
+    # leur marchandise circule toujours, seul son acheminement coûte plus cher.
+    tonnage_perdu_t = if_else(
+      type_impact == "deconnecte", tonnage_paire, 0, missing = 0
+    ),
+    valeur_perdue_rwf = if_else(
+      type_impact == "deconnecte",
+      valeur_flux_paire_rwf * PART_VALEUR_PERDUE_DECONNEXION,
+      0,
+      missing = 0
+    ),
+
+    # ── Coût économique total de la paire ─────────────────────────────────────
+    # Somme des deux postes, qui sont mutuellement exclusifs par construction
+    # (report d'itinéraire OU perte du flux) : aucun risque de double comptage.
+    # coalesce() neutralise le NA du surcoût des paires déconnectées.
+    cout_total_rwf = coalesce(surcout_pondere_rwf, 0) + valeur_perdue_rwf
   )
 
 # ── Rapport global : surcoûts pondérés par le tonnage ─────────────────────────
@@ -828,6 +887,14 @@ pm25_surcout_total_g  <- sum(od_compare$pm25_surcout_g,  na.rm = TRUE)
 dist_surcout_total_km <- sum(od_compare$delta_distance_km, na.rm = TRUE)
 tkm_surcout_total     <- sum(od_compare$delta_tkm,         na.rm = TRUE)
 surcout_pondere_total <- sum(od_compare$surcout_pondere_rwf, na.rm = TRUE)
+
+# Valeur des flux que la perturbation interrompt : marchandises qui ne circulent
+# plus faute d'itinéraire, chiffrées à leur prix ex ante (cf. valeur_flux_zone).
+# C'est un poste de nature différente du surcoût ci-dessus, qui mesure lui un
+# transport toujours réalisé mais plus cher — d'où leur séparation systématique.
+valeur_perdue_total   <- sum(od_compare$valeur_perdue_rwf, na.rm = TRUE)
+tonnage_perdu_total   <- sum(od_compare$tonnage_perdu_t,   na.rm = TRUE)
+cout_rupture_total    <- surcout_pondere_total + valeur_perdue_total
 
 prorata <- DUREE_JOURS / 365
 
@@ -850,10 +917,66 @@ cat("  NOx  supplémentaire      :",
     format(round(nox_surcout_total_g / 1000), big.mark = " "), "kg/an\n")
 cat("  PM2.5 supplémentaire     :",
     format(round(pm25_surcout_total_g / 1000), big.mark = " "), "kg/an\n")
-cat("  ⚠ Paires déconnectées (surcoût non valorisé) :", n_paires_na,
-    "— soit", format(round(sum(od_compare$tonnage_paire[is.na(od_compare$co2_surcout_kg)])),
-                     big.mark = " "), "tonnes sans accès\n")
-cat("  → Le surcoût ci-dessus est donc une BORNE INFÉRIEURE.\n\n")
+cat("  Paires déconnectées       :", n_paires_na,
+    "— soit", format(round(tonnage_perdu_total), big.mark = " "),
+    "tonnes sans accès\n\n")
+
+# ── Décomposition du coût économique de la rupture ────────────────────────────
+# Les deux postes ne se recouvrent pas : une paire est soit reroutée (elle paie
+# un surcoût de transport), soit déconnectée (elle perd la valeur de son flux).
+# On les affiche séparément puis additionnés, pour que le lecteur sache toujours
+# quelle part du chiffre vient d'un détour et quelle part d'une interruption.
+cat("── Coût économique de la rupture (équivalent annuel) ──────────\n")
+cat("  Report d'itinéraire      :",
+    round(surcout_pondere_total / 1e9, 2), "mrd RWF/an |",
+    format(round(surcout_pondere_total * prorata / 1e6), big.mark = " "),
+    "M RWF sur", DUREE_JOURS, "jours\n")
+cat("  Flux interrompus         :",
+    round(valeur_perdue_total / 1e9, 2), "mrd RWF/an |",
+    format(round(valeur_perdue_total * prorata / 1e6), big.mark = " "),
+    "M RWF sur", DUREE_JOURS, "jours\n")
+cat("  ───────────────────────────────────────────────────────────\n")
+cat("  Coût total               :",
+    round(cout_rupture_total / 1e9, 2), "mrd RWF/an |",
+    format(round(cout_rupture_total * prorata / 1e6), big.mark = " "),
+    "M RWF sur", DUREE_JOURS, "jours\n")
+cat("  Part des flux interrompus :",
+    if (cout_rupture_total > 0)
+      paste0(round(100 * valeur_perdue_total / cout_rupture_total, 1), " %")
+    else "sans objet (aucun coût)", "\n")
+cat("  Hypothèse de valorisation : prix ex ante ×",
+    PART_VALEUR_PERDUE_DECONNEXION, "(PART_VALEUR_PERDUE_DECONNEXION)\n\n")
+
+# ── Table de bilan, une ligne par poste de coût ───────────────────────────────
+# Format long (un poste par ligne) plutôt que large : c'est celui qu'attendent
+# les graphiques en barres empilées de viz_vulnerabilite.R, et il reste lisible
+# si de nouveaux postes sont ajoutés plus tard (émissions monétisées, etc.).
+# Les montants sont donnés en équivalent annuel ET ramenés à la durée réelle de
+# l'événement, les deux lectures étant utilisées selon les tableaux du mémoire.
+bilan_couts <- tibble(
+  scenario        = NOM_SCENARIO,
+  duree_jours     = DUREE_JOURS,
+  poste           = factor(
+    c("Report d'itinéraire", "Flux interrompus"),
+    levels = c("Report d'itinéraire", "Flux interrompus")
+  ),
+  montant_rwf_an  = c(surcout_pondere_total, valeur_perdue_total),
+  montant_rwf_evt = montant_rwf_an * prorata,
+  # Tonnage concerné par chaque poste : celui qui subit un détour d'un côté,
+  # celui qui ne circule plus de l'autre. Les deux ensembles sont disjoints.
+  tonnes          = c(
+    sum(od_compare$tonnage_paire[od_compare$type_impact %in%
+          c("faible", "modere", "fort", "tres_fort")], na.rm = TRUE),
+    tonnage_perdu_total
+  ),
+  n_paires        = c(
+    sum(od_compare$type_impact %in% c("faible", "modere", "fort", "tres_fort")),
+    sum(od_compare$type_impact == "deconnecte", na.rm = TRUE)
+  ),
+  part_du_total   = if (cout_rupture_total > 0)
+                      montant_rwf_an / cout_rupture_total
+                    else NA_real_
+)
 
 # ── Sauvegarde dans DuckDB ────────────────────────────────────────────────────
 # On stocke la table de comparaison dans DuckDB pour des requêtes SQL ultérieures.
@@ -861,6 +984,7 @@ cat("  → Le surcoût ci-dessus est donc une BORNE INFÉRIEURE.\n\n")
 # plusieurs scénarios simultanément.
 nom_table_impact <- paste0("impact_", NOM_SCENARIO)
 duck_write(od_compare, nom_table_impact)
+duck_write(bilan_couts, paste0("bilan_couts_", NOM_SCENARIO))
 
 # ── Statistiques globales d'impact ────────────────────────────────────────────
 stats_impact <- od_compare %>%
@@ -870,6 +994,12 @@ stats_impact <- od_compare %>%
     pct_paires     = round(n() / nrow(od_compare) * 100, 1),
     surcout_moy    = round(mean(surcout_absolu_rwf,  na.rm = TRUE), 2),
     surcout_median = round(median(surcout_absolu_rwf, na.rm = TRUE), 2),
+    # Les deux postes de coût, en millions de RWF par an, pour lire d'un coup
+    # d'oeil laquelle des catégories d'impact porte le coût du scénario : les
+    # lignes de détour n'alimentent que report_mrwf, la ligne "deconnecte"
+    # n'alimente que perte_mrwf.
+    report_mrwf    = round(sum(surcout_pondere_rwf, na.rm = TRUE) / 1e6, 1),
+    perte_mrwf     = round(sum(valeur_perdue_rwf,   na.rm = TRUE) / 1e6, 1),
     .groups        = "drop"
   )
 
@@ -888,6 +1018,17 @@ surcouts_par_zone <- od_compare %>%
     n_paires_touchees  = n(),
     n_deconnexions     = sum(type_impact == "deconnecte"),
     pct_surcout_moyen  = round(mean(surcout_relatif_pct, na.rm = TRUE), 1),
+    # ── Coût économique supporté par la zone, en RWF/an ────────────────────────
+    # surcout_total_rwf ci-dessus additionne des coûts PAR TONNE : il classe les
+    # zones mais ne se lit pas comme un montant. Les trois colonnes suivantes
+    # sont, elles, pondérées par les tonnages échangés et donc additionnables :
+    #   report  — la marchandise circule toujours, par un itinéraire plus cher ;
+    #   perdue  — la marchandise ne circule plus, chiffrée à son prix ex ante ;
+    #   total   — somme des deux, les deux cas étant mutuellement exclusifs.
+    report_pondere_rwf = sum(surcout_pondere_rwf, na.rm = TRUE),
+    valeur_perdue_rwf  = sum(valeur_perdue_rwf,   na.rm = TRUE),
+    cout_total_rwf     = sum(cout_total_rwf,      na.rm = TRUE),
+    tonnage_perdu_t    = sum(tonnage_perdu_t,     na.rm = TRUE),
     .groups            = "drop"
   ) %>%
   arrange(desc(surcout_total_rwf))
@@ -903,6 +1044,12 @@ surcouts_par_destination <- od_compare %>%
   summarise(
     surcout_total_rwf = round(sum(surcout_absolu_rwf,  na.rm = TRUE), 1),
     n_deconnexions    = sum(type_impact == "deconnecte"),
+    # Mêmes postes qu'en origine : une zone peut être peu pénalisée à
+    # l'expédition et lourdement privée d'approvisionnement à la réception.
+    report_pondere_rwf = sum(surcout_pondere_rwf, na.rm = TRUE),
+    valeur_perdue_rwf  = sum(valeur_perdue_rwf,   na.rm = TRUE),
+    cout_total_rwf     = sum(cout_total_rwf,      na.rm = TRUE),
+    tonnage_perdu_t    = sum(tonnage_perdu_t,     na.rm = TRUE),
     .groups           = "drop"
   ) %>%
   arrange(desc(surcout_total_rwf))
@@ -983,7 +1130,10 @@ cat("  Arêtes candidates :", length(aretes_candidates),
 #   - Prend un vecteur d'indices d'arêtes physiques à supprimer
 #   - Construit un graphe temporaire avec ces arêtes bloquées (poids = Inf)
 #   - Recalcule les distances OD pour les paires les plus importantes
-#   - Retourne le surcoût total agrégé (en RWF)
+#   - Retourne les deux postes de coût que la coupure provoque, séparés :
+#       surcout        — report d'itinéraire des paires encore reliées (RWF/an)
+#       valeur_perdue  — valeur ex ante du fret des paires déconnectées (RWF/an)
+#     ainsi que le nombre de paires déconnectées.
 calculer_surcout_total <- function(indices_a_supprimer, poids_base, paires_imp) {
 
   # Graphe multimodal complet ; on route avec une COPIE des poids de base dans
@@ -1003,6 +1153,11 @@ calculer_surcout_total <- function(indices_a_supprimer, poids_base, paires_imp) 
 
   surcout_cumule <- 0
   n_deconnexions <- 0L
+  # Valeur ex ante du fret que la coupure de cette arête empêche de circuler.
+  # Poste distinct du surcoût : les paires concernées n'ont plus d'itinéraire du
+  # tout, il n'y a donc aucun détour à facturer, seulement une marchandise
+  # immobilisée.
+  valeur_perdue_cumulee <- 0
 
   for (i_u in origines_uniq) {
 
@@ -1024,12 +1179,20 @@ calculer_surcout_total <- function(indices_a_supprimer, poids_base, paires_imp) 
       cols_k         <- j_k + (seq_len(n_vehicules) - 1) * n_wh
       cout_degrade_k <- min(dists_u[, cols_k], na.rm = TRUE)
 
+      ref_k <- od_ref_map[paste0(i_u, "_", j_k)]
+
       if (is.infinite(cout_degrade_k)) {
         n_deconnexions <- n_deconnexions + 1L
+        # On ne chiffre la perte que si la paire était bien reliée AVANT la
+        # coupure : une paire déjà sans itinéraire sur le réseau intact (cas
+        # rare d'une composante isolée) ne doit rien imputer à l'arête testée.
+        if (!is.na(ref_k) && is.finite(ref_k)) {
+          valeur_perdue_cumulee <- valeur_perdue_cumulee +
+            valeur_flux_zone[i_u, j_k] * PART_VALEUR_PERDUE_DECONNEXION
+        }
         next
       }
 
-      ref_k <- od_ref_map[paste0(i_u, "_", j_k)]
       if (is.na(ref_k) || ref_k == 0) next
 
       surcout_cumule <- surcout_cumule +
@@ -1037,7 +1200,9 @@ calculer_surcout_total <- function(indices_a_supprimer, poids_base, paires_imp) 
     }
   }
 
-  list(surcout = surcout_cumule, n_deconnexions = n_deconnexions)
+  list(surcout        = surcout_cumule,
+       valeur_perdue  = valeur_perdue_cumulee,
+       n_deconnexions = n_deconnexions)
 }
 
 # ── Calcul de la criticité pour chaque arête candidate ────────────────────────
@@ -1058,6 +1223,9 @@ cat("  Calcul de la criticité (", length(aretes_candidates),
 criticite_df <- tibble(
   arete_idx         = aretes_candidates,
   surcout_pondere   = NA_real_,
+  # Valeur ex ante du fret que la coupure de l'arête empêche de circuler
+  # (RWF/an) : renseignée dès qu'une paire OD perd tout itinéraire.
+  valeur_perdue     = NA_real_,
   n_deconnexions_caus = NA_integer_
 )
 
@@ -1071,6 +1239,7 @@ pb_crit <- progress_bar$new(
 for (k in seq_along(aretes_candidates)) {
   resultat_k <- calculer_surcout_total(aretes_candidates[k], poids_criticite_base, paires_importantes_crit)
   criticite_df$surcout_pondere[k]     <- resultat_k$surcout
+  criticite_df$valeur_perdue[k]       <- resultat_k$valeur_perdue
   criticite_df$n_deconnexions_caus[k] <- resultat_k$n_deconnexions
   pb_crit$tick()
 }
@@ -1088,9 +1257,22 @@ criticite_df <- criticite_df %>%
   ) %>%
   arrange(desc(surcout_pondere)) %>%
   mutate(
+    # Le classement (rang) reste établi sur le seul surcoût de report
+    # d'itinéraire, pour rester comparable aux analyses de criticité existantes.
+    # Les deux colonnes suivantes ajoutent le second poste de coût, afin de
+    # repérer les arêtes dont la coupure ne renchérit pas le transport mais
+    # l'interrompt : leur surcout_pondere est faible alors que leur
+    # valeur_perdue est élevée.
     rang              = row_number(),
     longueur_km       = round(longueur_m / 1000, 2),
-    surcout_pondere_k = round(surcout_pondere / 1000, 1)   # En milliers RWF×tonnes
+    surcout_pondere_k = round(surcout_pondere / 1000, 1),   # Report d'itinéraire, milliers de RWF/an
+    valeur_perdue_k   = round(valeur_perdue   / 1000, 1),   # Flux interrompus, milliers de RWF/an
+    cout_total        = surcout_pondere + valeur_perdue,    # Coût économique complet, RWF/an
+    cout_total_k      = round(cout_total / 1000, 1),
+    # Rang alternatif, établi sur le coût économique complet : il fait remonter
+    # les arêtes d'accès unique (culs-de-sac) que le classement par surcoût seul
+    # laisse invisibles, faute d'itinéraire de remplacement à facturer.
+    rang_cout_total   = rank(-cout_total, ties.method = "first")
   )
 
 # ── Sauvegarde de la table de criticité dans DuckDB ───────────────────────────
@@ -1110,13 +1292,23 @@ criticite_routes_df <- criticite_df %>%
     longueur_km       = round(sum(longueur_m, na.rm = TRUE) / 1000, 2),
     volume_tonnes     = max(volume_tonnes, na.rm = TRUE),
     surcout_pondere   = max(surcout_pondere, na.rm = TRUE),
+    # Même règle du maximum pour les deux autres postes : couper un tronçon
+    # suffit à interrompre l'itinéraire, sommer compterait plusieurs fois la
+    # même coupure. Le total est repris du tronçon le plus coûteux de la route,
+    # et non recomposé à partir des maxima de chaque poste, qui peuvent tomber
+    # sur deux tronçons différents et donneraient une route fictive.
+    valeur_perdue     = max(valeur_perdue,  na.rm = TRUE),
+    cout_total        = max(cout_total,     na.rm = TRUE),
     n_deconnexions_caus = max(n_deconnexions_caus, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   arrange(desc(surcout_pondere)) %>%
   mutate(
     rang              = row_number(),
-    surcout_pondere_k = round(surcout_pondere / 1000, 1)   # En milliers RWF×tonnes
+    surcout_pondere_k = round(surcout_pondere / 1000, 1),   # Report d'itinéraire, milliers de RWF/an
+    valeur_perdue_k   = round(valeur_perdue   / 1000, 1),   # Flux interrompus, milliers de RWF/an
+    cout_total_k      = round(cout_total      / 1000, 1),
+    rang_cout_total   = rank(-cout_total, ties.method = "first")
   )
 
 duck_write(criticite_routes_df, paste0("criticite_routes_", NOM_SCENARIO))
@@ -1126,7 +1318,8 @@ print(
   criticite_routes_df %>%
     slice_head(n = 10) %>%
     select(rang, osm_id, name, road_type, n_troncons, longueur_km,
-           volume_tonnes, surcout_pondere_k, n_deconnexions_caus) %>%
+           volume_tonnes, surcout_pondere_k, valeur_perdue_k,
+           n_deconnexions_caus) %>%
     rename(Rang        = rang,
            OSM_ID      = osm_id,
            Nom         = name,
@@ -1134,11 +1327,44 @@ print(
            Troncons    = n_troncons,
            Long_km     = longueur_km,
            Vol_t       = volume_tonnes,
-           Criticite_k = surcout_pondere_k,
+           Report_k    = surcout_pondere_k,
+           Perte_k     = valeur_perdue_k,
            Deconnex    = n_deconnexions_caus
     )
 )
 cat("\n")
+
+# ── Classement alternatif : coût économique complet ───────────────────────────
+# Le classement ci-dessus n'ordonne que sur le report d'itinéraire. Une route
+# dont la coupure isole une zone n'y apparaît pas : elle ne génère aucun détour
+# facturable, précisément parce qu'il n'existe plus de détour. Ce second
+# classement, trié sur report + flux interrompus, la fait ressortir. On ne
+# l'affiche que si des déconnexions existent, sinon il reproduit le précédent.
+if (any(criticite_routes_df$valeur_perdue > 0, na.rm = TRUE)) {
+  cat("✓ Top 10 des routes par coût économique complet (report + flux interrompus) :\n")
+  print(
+    criticite_routes_df %>%
+      arrange(desc(cout_total)) %>%
+      slice_head(n = 10) %>%
+      select(rang_cout_total, rang, name, road_type,
+             surcout_pondere_k, valeur_perdue_k, cout_total_k,
+             n_deconnexions_caus) %>%
+      rename(Rang_total  = rang_cout_total,
+             Rang_report = rang,
+             Nom         = name,
+             Type        = road_type,
+             Report_k    = surcout_pondere_k,
+             Perte_k     = valeur_perdue_k,
+             Total_k     = cout_total_k,
+             Deconnex    = n_deconnexions_caus
+      )
+  )
+  cat("  (montants en milliers de RWF par an ; Rang_report = place au classement",
+      "par report seul)\n\n")
+} else {
+  cat("✓ Aucune arête candidate ne provoque de déconnexion :",
+      "le classement par coût complet est identique au précédent.\n\n")
+}
 
 
 # ── EXPORTS CSV et Parquet ────────────────────────────────────────────────────
@@ -1160,6 +1386,13 @@ dbExecute(con, paste0(
 dbExecute(con, paste0(
   "COPY (SELECT * FROM criticite_routes_", NOM_SCENARIO, ") TO '",
   file.path(DIR_EXPORTS, paste0("criticite_routes_", NOM_SCENARIO, ".csv")),
+  "' (FORMAT CSV, HEADER)"
+))
+
+# Export du bilan des coûts (report d'itinéraire vs flux interrompus)
+dbExecute(con, paste0(
+  "COPY (SELECT * FROM bilan_couts_", NOM_SCENARIO, ") TO '",
+  file.path(DIR_EXPORTS, paste0("bilan_couts_", NOM_SCENARIO, ".csv")),
   "' (FORMAT CSV, HEADER)"
 ))
 
@@ -1199,6 +1432,22 @@ cat("SURCOÛT MOYEN (paires affectées) :",
 cat("SURCOÛT RELATIF MOYEN            :",
     round(mean(od_compare$surcout_relatif_pct, na.rm = TRUE), 1), "%\n\n")
 
+# ── Coût économique de la rupture, ventilé par nature ─────────────────────────
+# Deux mécanismes distincts, jamais cumulés sur une même paire :
+#   report d'itinéraire — la marchandise circule, par un chemin plus long ;
+#   flux interrompus    — la marchandise ne circule plus, et vaut son prix ex ante.
+cat("COÛT ÉCONOMIQUE DE LA RUPTURE (sur", DUREE_JOURS, "jours) :\n")
+cat("  Report d'itinéraire       :",
+    format(round(surcout_pondere_total * prorata / 1e6), big.mark = " "),
+    "M RWF\n")
+cat("  Flux interrompus          :",
+    format(round(valeur_perdue_total * prorata / 1e6), big.mark = " "),
+    "M RWF  (", format(round(tonnage_perdu_total), big.mark = " "),
+    "tonnes valorisées au prix ex ante )\n")
+cat("  Total                     :",
+    format(round(cout_rupture_total * prorata / 1e6), big.mark = " "),
+    "M RWF\n\n")
+
 cat("ROUTES LES PLUS CRITIQUES (top 5) :\n")
 print(
   criticite_routes_df %>%
@@ -1215,8 +1464,10 @@ cat("  • carte_reseau_degrade_",   NOM_SCENARIO, ".png\n", sep = "")
 cat("  • carte_criticite_aretes_", NOM_SCENARIO, ".png\n", sep = "")
 cat("  • carte_vulnerabilite_zones_", NOM_SCENARIO, ".png\n", sep = "")
 cat("  • graphique_surcouts_",     NOM_SCENARIO, ".png\n", sep = "")
+cat("  • graphique_decomposition_couts_", NOM_SCENARIO, ".png\n", sep = "")
 cat("  • impact_od_",              NOM_SCENARIO, ".csv\n", sep = "")
 cat("  • criticite_aretes_",       NOM_SCENARIO, ".csv\n", sep = "")
+cat("  • bilan_couts_",            NOM_SCENARIO, ".csv\n", sep = "")
 
 # ==============================================================================
 # SAUVEGARDE INTER-SCRIPTS
@@ -1232,6 +1483,11 @@ saveRDS(
     aretes_perturbees_sf      = aretes_perturbees_sf,    
     fraction_perdue_zone      = fraction_perdue_zone,    
     surcouts_par_zone         = surcouts_par_zone,       
+    surcouts_par_destination  = surcouts_par_destination,
+    # Bilan du scénario, avec les deux postes de coût séparés (RWF/an et RWF sur
+    # la durée de l'événement). Sert aux visualisations et aux tableaux du
+    # mémoire, qui n'ont ainsi pas à recalculer les agrégats depuis od_compare.
+    bilan_couts               = bilan_couts,
     fraction_perdue_prov      = if (exists("fraction_perdue_prov")) fraction_perdue_prov else NULL,
     surcout_pondere_arete     = surcout_pondere_arete,
     volume_detourne_arete     = volume_detourne_arete,

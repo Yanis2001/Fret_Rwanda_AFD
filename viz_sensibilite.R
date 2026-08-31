@@ -139,13 +139,14 @@ lire_indicateurs <- function(dir_exp) {
 
   vol <- readr::read_csv(f_vol, show_col_types = FALSE)
 
-  # ── Surcoûts de la rupture (module 05) ────────────────────────────────────
-  # impact_od_<scenario>.csv donne, paire OD par paire OD, le surcoût de la
-  # rupture et le fait que la paire reste connectée. On en tire deux
-  # indicateurs agrégés, ajoutés aux sorties suivies : le surcoût pondéré par
-  # les tonnages (le chiffrage du chapitre de vulnérabilité) et le tonnage qui
-  # perd tout accès. Les deux valent NA si le scénario n'est pas disponible
-  # pour ce dossier : ils sont alors écartés des figures, sans bloquer le reste.
+  # ── Coûts de la rupture (module 05) ───────────────────────────────────────
+  # impact_od_<scenario>.csv donne, paire OD par paire OD, les deux postes de
+  # coût de la rupture et le fait que la paire reste connectée. On en tire
+  # quatre indicateurs agrégés, ajoutés aux sorties suivies : le surcoût de
+  # report d'itinéraire pondéré par les tonnages, la valeur ex ante des flux
+  # qu'aucun itinéraire ne dessert plus, la somme des deux, et le tonnage qui
+  # perd tout accès. Ils valent NA si le scénario n'est pas disponible pour ce
+  # dossier : ils sont alors écartés des figures, sans bloquer le reste.
   # ── Longueur moyenne d'acheminement ───────────────────────────────────────
   # Distance parcourue par une tonne moyenne, en km : somme des distances de
   # chaque paire origine-destination pondérée par le tonnage qui l'emprunte,
@@ -182,12 +183,24 @@ lire_indicateurs <- function(dir_exp) {
 
   surcout_tot <- NA_real_
   tonnage_dec <- NA_real_
+  # Valeur des flux qu'une déconnexion interrompt, chiffrée au prix ex ante par
+  # 05_vulnerabilite.R, et coût total de la rupture (report + flux interrompus).
+  # Ces deux indicateurs ne réagissent pas aux mêmes paramètres que le surcoût
+  # de report : la valeur perdue dépend d'abord des valeurs unitaires
+  # sectorielles (VALEUR_RWF_PAR_TONNE), tirées elles aussi dans le plan
+  # d'expérience, alors que le report dépend surtout de la structure du réseau.
+  perte_tot   <- NA_real_
+  cout_rupt   <- NA_real_
   if (!is.na(SCEN_VULN)) {
     f_imp <- file.path(dir_exp, paste0("impact_od_", SCEN_VULN, ".csv"))
     if (file.exists(f_imp)) {
       imp <- readr::read_csv(f_imp, show_col_types = FALSE)
       if ("surcout_pondere_rwf" %in% names(imp))
         surcout_tot <- sum(imp$surcout_pondere_rwf, na.rm = TRUE)
+      if ("valeur_perdue_rwf" %in% names(imp))
+        perte_tot <- sum(imp$valeur_perdue_rwf, na.rm = TRUE)
+      if ("cout_total_rwf" %in% names(imp))
+        cout_rupt <- sum(imp$cout_total_rwf, na.rm = TRUE)
       if (all(c("connecte", "tonnage_paire") %in% names(imp))) {
         # connecte est lu tantôt en logique, tantôt en texte "true"/"false"
         # selon le moteur d'écriture : on normalise avant de filtrer.
@@ -222,7 +235,12 @@ lire_indicateurs <- function(dir_exp) {
       # Coût de transport annuel total (comptabilité EOQ).
       `Coût transport total`   = cout_transport_tot,
       # Surcoût de la rupture, pondéré par les tonnages des paires touchées.
+      # Ne couvre que le report d'itinéraire : le fret circule toujours.
       `Surcoût rupture`        = surcout_tot,
+      # Valeur ex ante des flux qu'aucun itinéraire ne permet plus d'acheminer.
+      `Valeur flux interrompus` = perte_tot,
+      # Somme des deux postes ci-dessus : coût économique complet de la rupture.
+      `Coût total rupture`     = cout_rupt,
       # Tonnage des paires OD qui perdent tout accès pendant la rupture.
       `Tonnage déconnecté`     = tonnage_dec,
       # Distance moyenne parcourue par une tonne, en km.
