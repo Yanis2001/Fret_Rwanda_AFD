@@ -1963,8 +1963,9 @@ if (file.exists(NISR_CSV_PATH)) {
     cat("  Téléchargement des frontières de districts GADM...\n")
     
     pays_districts_gadm <- tryCatch({
-      
-      geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
+
+      # Frontières de districts du pays étudié (code ISO3 défini dans 00_parametres.R)
+      geodata::gadm(country = PAYS_ISO3, level = 2, path = tempdir()) %>%
         st_as_sf() %>%
         st_transform(crs = 32735) %>%
         # NAME_2 est le champ GADM contenant le nom du district en anglais.
@@ -3237,7 +3238,8 @@ cat("  Districts après nettoyage :", nrow(rphc5_emploi), "\n")
 if (!exists("pays_districts_gadm") || is.null(pays_districts_gadm)) {
   cat("  Retéléchargement des frontières GADM...\n")
   pays_districts_gadm <- tryCatch({
-    geodata::gadm(country = "RWA", level = 2, path = tempdir()) %>%
+    # Frontières de districts du pays étudié (code ISO3 défini dans 00_parametres.R)
+    geodata::gadm(country = PAYS_ISO3, level = 2, path = tempdir()) %>%
       st_as_sf() %>%
       st_transform(crs = 32735) %>%
       mutate(district_clean = iconv(str_to_lower(str_trim(NAME_2)),
