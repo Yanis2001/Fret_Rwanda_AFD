@@ -165,10 +165,15 @@ NOM_SCENARIO_MANUEL  <- NULL
 
 # ==============================================================================
 # Pays étudié
-# Utilisé dans les titres de cartes et messages console.
 # ==============================================================================
 
+# Nom courant du pays, utilisé dans les titres de cartes et les messages console.
 NOM_PAYS <- "Rwanda"
+
+# Code ISO 3166-1 alpha-3 du pays (3 lettres majuscules, ex. "RWA", "KEN",
+# "BDI"). Passé tel quel à geodata::gadm() pour télécharger les frontières
+# administratives (districts, provinces) dans 01_reseau.R et viz_reseau.R.
+PAYS_ISO3 <- "RWA"
 
 # ==============================================================================
 # TESTS DE SENSIBILITÉ — déclaration du scénario
